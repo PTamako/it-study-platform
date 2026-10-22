@@ -46,6 +46,33 @@ export default {
       }
     }
 
+
+    // 返回指定考试的练习题。source_type 会明确标记自编练习题，不冒充官方真题。
+    if (url.pathname === '/api/questions') {
+      const trackId = url.searchParams.get('track') || 'exam-sg'
+      const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 10)))
+      try {
+        const { results } = await env.DB.prepare(
+          `SELECT id, track_id, topic, difficulty, question_type, prompt,
+                  options_json, answer_json, explanation, source_type, source_reference, language
+           FROM questions WHERE track_id = ? ORDER BY id LIMIT ?`,
+        ).bind(trackId, limit).all()
+        return json({
+          items: results.map((row: Record<string, unknown>) => ({
+            ...row,
+            options: JSON.parse(String(row.options_json || '[]')),
+            answer: JSON.parse(String(row.answer_json || 'null')),
+            options_json: undefined,
+            answer_json: undefined,
+          })),
+        })
+      } catch {
+        return json({ error: '题库暂不可用，请确认已执行最新的 D1 迁移。' }, 503)
+      }
+    }
+
+    // 学习记录写入接口暂不开放；完成 Cloudflare Access 访问保护后再启用。
+
     return json({ error: '未找到对应接口' }, 404)
   },
 }
