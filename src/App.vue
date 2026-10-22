@@ -10,6 +10,7 @@ type ModuleId = 'home' | 'exam' | 'language' | 'dictionary'
 const activeModule = ref<ModuleId>('home')
 const searchText = ref('')
 const dictSourceLang = ref<'auto' | 'ja' | 'en' | 'zh'>('auto')
+const dictionaryView = ref<'search' | 'saved'>('search')
 const studyLanguage = ref<'ja' | 'en'>(readStored('zhixue:study-language', 'ja'))
 const selectedLanguageCategory = ref('全部')
 const completedLanguageCards = ref<string[]>(readStored('zhixue:completed-language-cards', []))
@@ -826,6 +827,13 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
         </template>
 
         <template v-else>
+          <section class="section-block dictionary-view-switch" aria-label="词典页面切换">
+            <div class="dictionary-view-tabs" role="tablist" aria-label="词典和生词本">
+              <button role="tab" :aria-selected="dictionaryView === 'search'" :class="{ chosen: dictionaryView === 'search' }" @click="dictionaryView = 'search'"><Search :size="16" /> 查词与 IT 术语</button>
+              <button role="tab" :aria-selected="dictionaryView === 'saved'" :class="{ chosen: dictionaryView === 'saved' }" @click="dictionaryView = 'saved'"><Bookmark :size="16" /> 我的生词本 <span class="saved-tab-count">{{ savedWords.length }}</span></button>
+            </div>
+          </section>
+          <template v-if="dictionaryView === 'search'">
           <section class="dictionary-search">
             <div class="dictionary-language-picker" role="group" aria-label="选择查询语言">
               <span>查询语言</span>
@@ -871,7 +879,8 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               <div v-else-if="lastSearchedTerm.trim().toLowerCase() === searchText.trim().toLowerCase() && displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>没有找到匹配词条</strong><p>可更换源语言，或用短词查询。若第三方词典暂时不可用，稍后可重试。</p></div>
             </div>
           </section>
-          <section class="section-block saved-vocabulary-block">
+          </template>
+          <section v-if="dictionaryView === 'saved'" class="section-block saved-vocabulary-block">
             <div class="section-heading"><div><div class="section-kicker">MY WORDS</div><h2>个人生词本</h2><p>收藏的词条会保存在这台设备的浏览器中。</p></div><span class="section-index">{{ savedWords.length }} 个收藏</span></div>
             <div v-if="savedVocabularyEntries.length" class="saved-vocabulary-list">
               <article v-for="entry in savedVocabularyEntries" :key="entry.term" class="saved-vocabulary-row">
