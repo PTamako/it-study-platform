@@ -362,8 +362,8 @@ async function hydrateCloudProgress() {
     ])
     if (progressResponse.ok) {
       const progress = await progressResponse.json() as { items?: Array<{ card_id: string; mastered: number }> }
-      const cloudMastered = (progress.items || []).filter(item => item.mastered).map(item => item.card_id)
-      completedLanguageCards.value = [...new Set([...completedLanguageCards.value, ...cloudMastered])]
+      // D1 is authoritative once it responds; unioning stale local state prevents unmarking a card.
+      completedLanguageCards.value = (progress.items || []).filter(item => item.mastered).map(item => item.card_id)
     }
     if (savedResponse.ok) {
       const saved = await savedResponse.json() as { items?: Array<{ term: string; language: string; entry: DictionaryEntry }> }
