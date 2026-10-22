@@ -243,7 +243,7 @@ function toggleSaved(term: string) {
 }
 
 // 使用浏览器内置语音，不调用付费语音接口；具体声音取决于设备和浏览器。
-function speak(text: string, lang: 'ja-JP' | 'en-US' = 'ja-JP') {
+function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
   if (typeof window.speechSynthesis === 'undefined') {
     window.alert('当前浏览器暂不支持语音播放。')
     return
@@ -516,7 +516,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' = 'ja-JP') {
                   <p>{{ entry.zh }}</p>
                   <p v-if="entry.example" class="dict-example">例句：{{ entry.example }}</p>
                 </div>
-                <div class="dict-actions"><button class="round-action" @click="speak(entry.term, entry.language === 'en' ? 'en-US' : 'ja-JP')" :aria-label="'播放' + entry.term"><Volume2 :size="17" /></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
+                <div class="dict-actions"><button class="round-action" @click="speak(entry.term, entry.language === 'en' ? 'en-US' : entry.language === 'zh' ? 'zh-CN' : 'ja-JP')" :aria-label="'播放' + entry.term"><Volume2 :size="17" /></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
               </article>
               <div v-if="displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>没有找到匹配词条</strong><p>输入普通单词或日常用语，再点击“查词”尝试在线查询。</p></div>
             </div>
