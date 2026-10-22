@@ -514,6 +514,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' = 'ja-JP') {
             </div>
           </section>
           <section class="notice-card dictionary-notice"><BookMarked :size="19" /><div><strong>个人生词本</strong><p>已收藏 {{ savedWords.length }} 个词条。收藏会保存在当前设备的浏览器中。</p></div></section>
+        </template>
 
         <footer class="footer"><span>知学 · 把每天的小进步，累积成自己的能力。</span><span>Vue 3 · TypeScript · Cloudflare</span></footer>
       </div>
