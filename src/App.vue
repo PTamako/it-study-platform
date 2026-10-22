@@ -33,6 +33,41 @@ function readStored<T>(key: string, fallback: T): T {
   }
 }
 const tasks = ref<StudyTask[]>(readStored('zhixue:tasks:' + todayKey, defaultTasks))
+type CloudDashboard = {
+  generated_from: string
+  exam: { attempted_questions: number; correct_answers: number; accuracy_percent: number | null }
+  practical: { completed_scenarios: number; average_score: number }
+  language: { mastered_cards: number; tracked_cards: number }
+  vocabulary: { saved_terms: number }
+  today: { tasks_completed: number; tasks_tracked: number }
+}
+const cloudDashboard = ref<CloudDashboard | null>(null)
+const cloudDashboardError = ref('')
+async function loadCloudDashboard() {
+  try {
+    const response = await fetch('/api/dashboard')
+    const data = await response.json() as CloudDashboard & { error?: string }
+    if (!response.ok) throw new Error(data.error || '云端学习统计暂不可用')
+    cloudDashboard.value = data
+    cloudDashboardError.value = ''
+  } catch (error) {
+    cloudDashboardError.value = error instanceof Error ? error.message : '云端学习统计暂不可用'
+  }
+}
+async function saveDailyTask(task: StudyTask) {
+  try {
+    const response = await fetch('/api/daily-tasks', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ task_id: task.id, study_date: todayKey, completed: task.done }),
+    })
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({})) as { error?: string }
+      cloudDashboardError.value = data.error || '每日任务云端保存失败'
+    } else {
+      void loadCloudDashboard()
+    }
+  } catch { cloudDashboardError.value = '网络异常：每日任务暂未同步到云端。' }
+}
 const examRecords = ref<ExamRecord[]>(readStored('zhixue:exam-records', []))
 const dailyGoalMinutes = ref(40)
 const completedMinutes = computed(() => tasks.value.filter(task => task.done).reduce((sum, task) => sum + task.minutes, 0))
@@ -293,9 +328,21 @@ async function loadLanguageCards() {
   }
 }
 function toggleLanguageCard(id: string) {
-  completedLanguageCards.value = completedLanguageCards.value.includes(id)
-    ? completedLanguageCards.value.filter(item => item !== id)
-    : [...completedLanguageCards.value, id]
+  const mastered = !completedLanguageCards.value.includes(id)
+  completedLanguageCards.value = mastered
+    ? [...completedLanguageCards.value, id]
+    : completedLanguageCards.value.filter(item => item !== id)
+  void fetch('/api/language-progress', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ card_id: id, mastered }),
+  }).then(async response => {
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({})) as { error?: string }
+      languageCardsError.value = data.error || '掌握进度未能保存到云端。'
+    } else {
+      void loadCloudDashboard()
+    }
+  }).catch(() => { languageCardsError.value = '网络异常：掌握进度暂未同步到云端。' })
 }
 watch(studyLanguage, value => {
   localStorage.setItem('zhixue:study-language', JSON.stringify(value))
@@ -303,7 +350,42 @@ watch(studyLanguage, value => {
   void loadLanguageCards()
 })
 watch(completedLanguageCards, value => localStorage.setItem('zhixue:completed-language-cards', JSON.stringify(value)), { deep: true })
-onMounted(() => { void loadExamTracks(); void loadLanguageCards() })
+async function hydrateCloudProgress() {
+  await Promise.all([loadCloudDashboard(), loadExamTracks(), loadLanguageCards()])
+  try {
+    const [progressResponse, savedResponse, taskResponse] = await Promise.all([
+      fetch('/api/language-progress'), fetch('/api/vocabulary/saved'), fetch('/api/dashboard'),
+    ])
+    if (progressResponse.ok) {
+      const progress = await progressResponse.json() as { items?: Array<{ card_id: string; mastered: number }> }
+      const cloudMastered = (progress.items || []).filter(item => item.mastered).map(item => item.card_id)
+      completedLanguageCards.value = [...new Set([...completedLanguageCards.value, ...cloudMastered])]
+    }
+    if (savedResponse.ok) {
+      const saved = await savedResponse.json() as { items?: Array<{ term: string; language: string; entry: DictionaryEntry }> }
+      for (const item of saved.items || []) {
+        if (!savedWords.value.includes(item.term)) savedWords.value = [...savedWords.value, item.term]
+        if (!savedDictionaryEntries.value.some(entry => entry.term === item.term)) {
+          savedDictionaryEntries.value = [...savedDictionaryEntries.value, item.entry]
+        }
+      }
+    }
+    // Dashboard query confirms the cloud API is reachable; task rows are keyed by date.
+    if (taskResponse.ok) {
+      const data = await taskResponse.json() as { today?: { tasks_completed: number; tasks_tracked: number } }
+      if (data.today?.tasks_tracked) {
+        // Daily task names are stable IDs; preserve the locally authored labels and hydrate completion flags.
+        const listResponse = await fetch('/api/daily-tasks?date=' + encodeURIComponent(todayKey))
+        if (listResponse.ok) {
+          const list = await listResponse.json() as { items?: Array<{ task_id: string; completed: number }> }
+          const states = new Map((list.items || []).map(item => [item.task_id, Boolean(item.completed)]))
+          tasks.value = tasks.value.map(task => ({ ...task, done: states.get(task.id) ?? task.done }))
+        }
+      }
+    }
+  } catch { /* local experience remains available if cloud sync is temporarily unavailable */ }
+}
+onMounted(() => { void hydrateCloudProgress() })
 
 type DictionaryEntry = {
   term: string
@@ -348,6 +430,11 @@ function toggleSaved(term: string) {
   if (savedWords.value.includes(term)) {
     savedWords.value = savedWords.value.filter(word => word !== term)
     savedDictionaryEntries.value = savedDictionaryEntries.value.filter(entry => entry.term !== term)
+    void fetch('/api/vocabulary/saved', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ term, action: 'remove' }),
+    }).then(response => { if (!response.ok) cloudDashboardError.value = '云端生词删除失败。'; else void loadCloudDashboard() })
+      .catch(() => { cloudDashboardError.value = '网络异常：生词删除未同步到云端。' })
     return
   }
   savedWords.value = [...savedWords.value, term]
@@ -355,6 +442,15 @@ function toggleSaved(term: string) {
     recentDictionaryEntries.value.find(item => item.term === term)
   if (entry && !savedDictionaryEntries.value.some(item => item.term === term)) {
     savedDictionaryEntries.value = [entry, ...savedDictionaryEntries.value]
+    void fetch('/api/vocabulary/saved', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ term, language: entry.language || 'auto', entry }),
+    }).then(async response => {
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({})) as { error?: string }
+        cloudDashboardError.value = data.error || '生词未能保存到云端。'
+      } else { void loadCloudDashboard() }
+    }).catch(() => { cloudDashboardError.value = '网络异常：生词暂未同步到云端。' })
   }
 }
 async function lookupDictionary() {
@@ -504,6 +600,15 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
 
 
           <section class="progress-dashboard">
+            <div class="section-heading"><div><div class="section-kicker">CLOUD LEARNING DATA</div><h2>云端学习数据</h2><p>以下统计来自 D1 已保存的答题、实战、生词收藏与课程进度；不是演示数字。</p></div><span class="source-pill">{{ cloudDashboard?.generated_from || '连接中' }}</span></div>
+            <p v-if="cloudDashboardError" class="dictionary-status dictionary-error">{{ cloudDashboardError }}</p>
+            <div v-if="cloudDashboard" class="metric-grid">
+              <div class="panel metric-card"><span class="metric-icon"><CheckCircle2 :size="18" /></span><small>云端答题</small><strong>{{ cloudDashboard.exam.attempted_questions }}</strong><span>{{ cloudDashboard.exam.accuracy_percent === null ? '暂无记录' : '正确率 ' + cloudDashboard.exam.accuracy_percent + '%' }}</span></div>
+              <div class="panel metric-card"><span class="metric-icon"><Target :size="18" /></span><small>实战演练</small><strong>{{ cloudDashboard.practical.completed_scenarios }}</strong><span>{{ cloudDashboard.practical.completed_scenarios ? '平均得分 ' + Math.round(cloudDashboard.practical.average_score) + ' 分' : '暂无记录' }}</span></div>
+              <div class="panel metric-card"><span class="metric-icon"><BookMarked :size="18" /></span><small>云端生词</small><strong>{{ cloudDashboard.vocabulary.saved_terms }}</strong><span>个已收藏词条</span></div>
+            </div>
+          </section>
+          <section class="progress-dashboard">
             <div class="section-heading"><div><div class="section-kicker">YOUR DAILY MOMENTUM</div><h2>今日进度</h2><p>完成任务后会自动保存到当前设备，明天开始新的每日计划。</p></div><span class="section-index">{{ completedMinutes }} / {{ dailyGoalMinutes }} 分钟</span></div>
             <div class="progress-overview">
               <div class="panel daily-progress-panel">
@@ -514,7 +619,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               <div class="panel task-panel">
                 <div class="panel-heading"><div><h3><ListChecks :size="16" /> 今日学习计划</h3><p>{{ tasks.filter(task => task.done).length }} / {{ tasks.length }} 项已完成</p></div></div>
                 <label v-for="task in tasks" :key="task.id" class="study-task" :class="{ completed: task.done }">
-                  <input v-model="task.done" type="checkbox" />
+                  <input v-model="task.done" type="checkbox" @change="saveDailyTask(task)" />
                   <span class="task-copy"><strong>{{ task.title }}</strong><small>{{ task.detail }}</small></span>
                   <span class="task-minutes">{{ task.minutes }} 分钟</span>
                 </label>
