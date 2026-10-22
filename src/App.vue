@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import {
   BookOpen, Languages, Search, Headphones, BriefcaseBusiness, GraduationCap,
   ChevronRight, Sparkles, Clock3, Flame, Bookmark, Volume2, ArrowRight,
-  ShieldCheck, BookMarked, Menu, X, CheckCircle2, CircleHelp,
+  ShieldCheck, BookMarked, Menu, X, CheckCircle2, CircleHelp, Target, TrendingUp, ListChecks, PlusCircle,
 } from 'lucide-vue-next'
 
 type ModuleId = 'home' | 'exam' | 'japanese' | 'english' | 'dictionary'
@@ -12,6 +12,63 @@ const searchText = ref('')
 const showMobileMenu = ref(false)
 const savedWords = ref<string[]>(['認証', 'authorization'])
 const activeLang = ref<'zh' | 'ja' | 'en'>('zh')
+
+type StudyTask = { id: string; title: string; detail: string; minutes: number; done: boolean }
+type ExamRecord = { date: string; correct: number; total: number; exam: string }
+const todayKey = new Date().toLocaleDateString('sv-SE')
+const defaultTasks: StudyTask[] = [
+  { id: 'sg-review', title: '复习 SG 日语关键词', detail: '法律 / 技术 / 管理术语', minutes: 15, done: false },
+  { id: 'sg-questions', title: '完成一组考试练习', detail: '建议 5 道题，逐题看解析', minutes: 15, done: false },
+  { id: 'language', title: '语言轻量练习', detail: '日语或英语任选一个方向', minutes: 10, done: false },
+]
+function readStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key)
+    return raw ? JSON.parse(raw) as T : fallback
+  } catch {
+    return fallback
+  }
+}
+const tasks = ref<StudyTask[]>(readStored('zhixue:tasks:' + todayKey, defaultTasks))
+const examRecords = ref<ExamRecord[]>(readStored('zhixue:exam-records', []))
+const dailyGoalMinutes = ref(40)
+const completedMinutes = computed(() => tasks.value.filter(task => task.done).reduce((sum, task) => sum + task.minutes, 0))
+const dailyPercent = computed(() => Math.min(100, Math.round(completedMinutes.value / dailyGoalMinutes.value * 100)))
+const totalAnswered = computed(() => examRecords.value.reduce((sum, record) => sum + record.total, 0))
+const totalCorrect = computed(() => examRecords.value.reduce((sum, record) => sum + record.correct, 0))
+const overallAccuracy = computed(() => totalAnswered.value ? Math.round(totalCorrect.value / totalAnswered.value * 100) : null)
+const latestRecord = computed(() => examRecords.value.length ? examRecords.value[examRecords.value.length - 1] : null)
+const curveRecords = computed(() => {
+  const days: { date: string; label: string; accuracy: number | null; count: number }[] = []
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    const key = d.toLocaleDateString('sv-SE')
+    const records = examRecords.value.filter(record => record.date === key)
+    const total = records.reduce((sum, record) => sum + record.total, 0)
+    const correct = records.reduce((sum, record) => sum + record.correct, 0)
+    days.push({ date: key, label: (d.getMonth() + 1) + '/' + d.getDate(), accuracy: total ? Math.round(correct / total * 100) : null, count: total })
+  }
+  return days
+})
+watch(tasks, value => localStorage.setItem('zhixue:tasks:' + todayKey, JSON.stringify(value)), { deep: true })
+watch(examRecords, value => localStorage.setItem('zhixue:exam-records', JSON.stringify(value)), { deep: true })
+function addExamRecord() {
+  const exam = window.prompt('记录哪项考试？例如 SG', 'SG')
+  if (!exam?.trim()) return
+  const totalRaw = window.prompt('本次共做了多少题？请输入题目总数')
+  if (totalRaw === null) return
+  const total = Number(totalRaw)
+  if (!Number.isInteger(total) || total <= 0) { window.alert('请填写大于 0 的整数题数。'); return }
+  const correctRaw = window.prompt('答对了多少题？', String(total))
+  if (correctRaw === null) return
+  const correct = Number(correctRaw)
+  if (!Number.isInteger(correct) || correct < 0 || correct > total) { window.alert('答对题数应为 0 到总题数之间的整数。'); return }
+  examRecords.value.push({ date: todayKey, correct, total, exam: exam.trim().toUpperCase() })
+}
+function removeExamRecords() {
+  if (window.confirm('确定清除本设备保存的全部考试成绩吗？此操作无法撤销。')) examRecords.value = []
+}
 
 const moduleInfo = {
   home: { title: '今天，学一点新的。', subtitle: '把考试、语言和专业知识，放进一个顺手的学习空间。' },
@@ -165,6 +222,44 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' = 'ja-JP') {
             </div>
           </section>
 
+
+          <section class="progress-dashboard">
+            <div class="section-heading"><div><div class="section-kicker">YOUR DAILY MOMENTUM</div><h2>今日进度</h2><p>完成任务后会自动保存到当前设备，明天开始新的每日计划。</p></div><span class="section-index">{{ completedMinutes }} / {{ dailyGoalMinutes }} 分钟</span></div>
+            <div class="progress-overview">
+              <div class="panel daily-progress-panel">
+                <div class="progress-title"><span class="metric-icon"><Target :size="18" /></span><div><strong>每日学习目标</strong><small>目标 {{ dailyGoalMinutes }} 分钟</small></div><b>{{ dailyPercent }}%</b></div>
+                <div class="big-progress-track"><span :style="{ width: dailyPercent + '%' }"></span></div>
+                <p>{{ completedMinutes >= dailyGoalMinutes ? '今日目标达成，做得不错！' : '再学习 ' + (dailyGoalMinutes - completedMinutes) + ' 分钟即可达成今日目标。' }}</p>
+              </div>
+              <div class="panel task-panel">
+                <div class="panel-heading"><div><h3><ListChecks :size="16" /> 今日学习计划</h3><p>{{ tasks.filter(task => task.done).length }} / {{ tasks.length }} 项已完成</p></div></div>
+                <label v-for="task in tasks" :key="task.id" class="study-task" :class="{ completed: task.done }">
+                  <input v-model="task.done" type="checkbox" />
+                  <span class="task-copy"><strong>{{ task.title }}</strong><small>{{ task.detail }}</small></span>
+                  <span class="task-minutes">{{ task.minutes }} 分钟</span>
+                </label>
+              </div>
+            </div>
+          </section>
+          <section class="progress-dashboard">
+            <div class="section-heading"><div><div class="section-kicker">MEASURE WHAT MATTERS</div><h2>学习成果一览</h2><p>正确率与曲线只根据你记录的练习成绩计算，不用虚构数据填充。</p></div><button class="text-link" @click="navigate('exam')">查看考试记录 <ArrowRight :size="14" /></button></div>
+            <div class="metric-grid">
+              <div class="panel metric-card"><span class="metric-icon"><CheckCircle2 :size="18" /></span><small>累计答题</small><strong>{{ totalAnswered }}</strong><span>道题</span></div>
+              <div class="panel metric-card"><span class="metric-icon"><Target :size="18" /></span><small>总体正确率</small><strong>{{ overallAccuracy === null ? '—' : overallAccuracy + '%' }}</strong><span>{{ overallAccuracy === null ? '记录首次练习后显示' : totalCorrect + ' 道答对' }}</span></div>
+              <div class="panel metric-card"><span class="metric-icon"><TrendingUp :size="18" /></span><small>最近一次练习</small><strong>{{ latestRecord ? Math.round(latestRecord.correct / latestRecord.total * 100) + '%' : '—' }}</strong><span>{{ latestRecord ? latestRecord.exam + ' · ' + latestRecord.date : '暂无历史成绩' }}</span></div>
+            </div>
+            <div class="panel curve-panel">
+              <div class="panel-heading"><div><h3>近 7 天正确率曲线</h3><p>按每天已记录的答题数加权计算；没有记录的日期会留空。</p></div><span class="curve-legend"><i></i>正确率</span></div>
+              <div v-if="examRecords.length" class="curve-chart">
+                <div v-for="day in curveRecords" :key="day.date" class="curve-column">
+                  <div class="curve-value">{{ day.accuracy === null ? '—' : day.accuracy + '%' }}</div>
+                  <div class="curve-bar-area"><span v-if="day.accuracy !== null" class="curve-bar" :style="{ height: Math.max(4, day.accuracy) + '%' }"></span><span v-else class="curve-empty"></span></div>
+                  <small>{{ day.label }}</small>
+                </div>
+              </div>
+              <div v-else class="curve-empty-state"><TrendingUp :size="24" /><strong>完成第一次练习，学习曲线就会开始生长</strong><p>进入考试备考，点击“记录一次练习成绩”即可开始积累历史记录。</p><button class="text-link" @click="navigate('exam')">去记录成绩 <ArrowRight :size="14" /></button></div>
+            </div>
+          </section>
           <section class="bottom-grid">
             <div class="panel recent-panel">
               <div class="panel-heading"><div><h3>最近查过的词</h3><p>把不熟悉的词，慢慢变成熟悉。</p></div><button class="text-link" @click="navigate('dictionary')">打开词典 <ArrowRight :size="14" /></button></div>
@@ -187,6 +282,33 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' = 'ja-JP') {
                 <span class="exam-code" :class="exam.color">{{ exam.code }}</span><span class="exam-info"><strong>{{ exam.name }}</strong><small>{{ exam.detail }}</small><span class="progress-track"><span :style="{ width: exam.progress + '%' }"></span></span></span><span class="exam-progress">{{ exam.progress ? exam.progress + '%' : '未开始' }}</span><ChevronRight :size="18" class="muted" />
               </button>
             </div>
+
+            <section class="exam-performance">
+              <div class="section-heading"><div><div class="section-kicker">YOUR SCORE HISTORY</div><h2>正确率与历史成绩</h2><p>正式题库接入前，可以手动记录练习成绩；记录会保存在当前设备。</p></div><button class="primary-button" @click="addExamRecord"><PlusCircle :size="16" /> 记录一次练习成绩</button></div>
+              <div class="metric-grid">
+                <div class="panel metric-card"><span class="metric-icon"><CheckCircle2 :size="18" /></span><small>累计答题</small><strong>{{ totalAnswered }}</strong><span>道题</span></div>
+                <div class="panel metric-card"><span class="metric-icon"><Target :size="18" /></span><small>总体正确率</small><strong>{{ overallAccuracy === null ? '—' : overallAccuracy + '%' }}</strong><span>{{ overallAccuracy === null ? '暂无成绩，记录后自动计算' : totalCorrect + ' 道答对' }}</span></div>
+                <div class="panel metric-card"><span class="metric-icon"><TrendingUp :size="18" /></span><small>考试记录</small><strong>{{ examRecords.length }}</strong><span>次练习</span></div>
+              </div>
+              <div class="panel curve-panel">
+                <div class="panel-heading"><div><h3>近 7 天正确率曲线</h3><p>每日答题正确率按题量加权计算，不存在记录的日期不绘制数据。</p></div><button v-if="examRecords.length" class="text-link" @click="removeExamRecords">清除记录</button></div>
+                <div v-if="examRecords.length" class="curve-chart">
+                  <div v-for="day in curveRecords" :key="day.date" class="curve-column">
+                    <div class="curve-value">{{ day.accuracy === null ? '—' : day.accuracy + '%' }}</div>
+                    <div class="curve-bar-area"><span v-if="day.accuracy !== null" class="curve-bar" :style="{ height: Math.max(4, day.accuracy) + '%' }"></span><span v-else class="curve-empty"></span></div>
+                    <small>{{ day.label }}</small>
+                  </div>
+                </div>
+                <div v-else class="curve-empty-state"><TrendingUp :size="24" /><strong>还没有历史成绩</strong><p>完成练习后，记录答对数和总题数，就能查看正确率与学习曲线。</p></div>
+                <div v-if="examRecords.length" class="history-list">
+                  <div v-for="(record, index) in [...examRecords].reverse()" :key="record.date + record.exam + index" class="history-row">
+                    <div><strong>{{ record.exam }} 练习</strong><small>{{ record.date }}</small></div>
+                    <span>{{ record.correct }} / {{ record.total }} 题</span>
+                    <strong class="history-accuracy">{{ Math.round(record.correct / record.total * 100) }}%</strong>
+                  </div>
+                </div>
+              </div>
+            </section>
             <div class="notice-card"><CircleHelp :size="19" /><div><strong>题库说明</strong><p>目前是平台框架阶段，尚未导入官方真题。接下来会先搭建 SG 的题目、答案解析、错题本与复习记录结构。</p></div></div>
           </section>
         </template>
