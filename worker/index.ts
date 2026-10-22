@@ -129,7 +129,8 @@ function englishDictionaryEntries(rows: LooseRecord[], zh: string, ja: string): 
       term: String(row.word || ''),
       phonetic,
       en: definitions.join('；') || '暂未获得详细英语释义',
-      zh: zh ? '中文参考：' + zh : '暂未获得中文翻译，请参考英语释义。',
+      zh: zh || '中文翻译暂时不可用，请参考英语释义。',
+      translationJa: ja || '',
       tag: partOfSpeech ? '英语词典 · ' + partOfSpeech : '英语词典',
       example,
       language: 'en',
@@ -200,7 +201,7 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
 
   const jishoKeyword = language === 'zh' ? ja : query
   const [jishoRows, englishRows] = await Promise.all([
-    jishoKeyword ? searchJisho(jishoKeyword) : Promise.resolve([]),
+    (language === 'ja' || language === 'zh') && jishoKeyword ? searchJisho(jishoKeyword) : Promise.resolve([]),
     language === 'en' ? searchEnglishDictionary(query) : Promise.resolve([]),
   ])
 
@@ -209,26 +210,25 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
 
   // Han-only input may be Chinese or Japanese kanji. We include translation and
   // Jisho results together so either use case can still return useful matches.
-  if (language === 'zh') {
-    if (ja || en) {
-      items.push({
-        term: ja || query,
-        en: en || '暂无英语翻译',
-        zh: '中文原词：' + query,
-        tag: '中日英翻译',
-        language: ja ? 'ja' : 'zh',
-        source: '在线翻译',
-      })
-    }
+  if (language === 'zh' && (ja || en)) {
+    items.push({
+      term: query,
+      en: en || '英语翻译暂时不可用',
+      zh: query,
+      translationJa: ja || '',
+      tag: '中日英互译',
+      language: 'zh',
+      source: '在线翻译',
+    })
   }
 
-  items.push(...jishoEntries(jishoRows, zh))
+  if (language === 'ja' || language === 'zh') items.push(...jishoEntries(jishoRows, zh))
 
   if (language === 'ja' && !items.length && (zh || en)) {
     items.push({ term: query, en: en || '暂无英语翻译', zh: zh || '暂无中文翻译', tag: '日中英翻译', language: 'ja', source: '在线翻译' })
   }
   if (language === 'en' && !items.length && (zh || ja)) {
-    items.push({ term: query, reading: ja ? '日语：' + ja : '', en: '暂未找到详细英语词典释义', zh: zh || '暂无中文翻译', tag: '英日中翻译', language: 'en', source: '在线翻译' })
+    items.push({ term: query, en: '暂未找到详细英语词典释义', zh: zh || '中文翻译暂时不可用', translationJa: ja || '', tag: '英日中翻译', language: 'en', source: '在线翻译' })
   }
 
   const seen = new Set<string>()
@@ -264,7 +264,11 @@ export default {
     if (url.pathname === '/api/tracks') {
       try {
         const { results } = await env.DB.prepare(
-          'SELECT id, kind, title, subtitle FROM study_tracks WHERE enabled = 1 ORDER BY kind, title',
+          `SELECT st.id, st.kind, st.title, st.subtitle,
+                  (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id) AS question_count
+           FROM study_tracks st
+           WHERE st.enabled = 1
+           ORDER BY st.kind, st.title`,
         ).all()
         return json({ items: results })
       } catch {
@@ -283,12 +287,16 @@ export default {
         return json({ items: [], error: 'lang 参数只支持 auto、ja、en、zh。' }, 400)
       }
       try {
-        const items = await lookupDictionary(query, requestedLanguage as 'auto' | 'ja' | 'en' | 'zh')
+        const items = await lookupDictionary(query, requestedLanguage as 'auto' | 'ja' | 'en' | 'zh', env.DB)
         return json({
           items,
           query,
-          providers: ['Jisho', 'Free Dictionary', 'MyMemory'],
-          note: '外部词典及机器翻译结果仅供学习参考；部分语言或词条可能没有返回结果。',
+          providers: items.some(item => item.technical)
+            ? ['知学 IT 术语库（D1）']
+            : ['Free Dictionary', 'Jisho', 'MyMemory', 'Google Translate（备用）'],
+          note: items.some(item => item.technical)
+            ? '优先显示专业词汇库中匹配的术语及中日英释义。'
+            : '普通词汇使用在线词典与机器翻译；第三方服务可能限流，所有译文仅供学习参考。',
         })
       } catch {
         return json({ items: [], error: '在线词典暂时不可用，请稍后重试。' }, 503)
