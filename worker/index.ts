@@ -34,7 +34,7 @@ async function translateText(text: string, source: string, target: string): Prom
     const url = new URL('https://api.mymemory.translated.net/get')
     url.searchParams.set('q', text)
     url.searchParams.set('langpair', source + '|' + target)
-    const response = await fetch(url.toString(), { headers: { accept: 'application/json' } })
+    const response = await fetch(url.toString(), { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(5000) })
     if (!response.ok) return ''
     const data = await response.json() as { responseData?: { translatedText?: string }; responseStatus?: number }
     if (data.responseStatus && data.responseStatus >= 400) return ''
@@ -65,7 +65,7 @@ async function searchEnglishDictionary(keyword: string): Promise<LooseRecord[]> 
   if (!/^[a-zA-Z][a-zA-Z '\u2019-]{0,79}$/.test(keyword)) return []
   try {
     const url = 'https://api.dictionaryapi.dev/api/v2/entries/en/' + encodeURIComponent(keyword)
-    const response = await fetch(url, { headers: { accept: 'application/json' } })
+    const response = await fetch(url, { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(5000) })
     if (!response.ok) return []
     const data = await response.json() as LooseRecord[]
     return Array.isArray(data) ? data.slice(0, 2) : []
