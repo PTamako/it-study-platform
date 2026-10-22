@@ -254,7 +254,7 @@ watch(savedDictionaryEntries, value => localStorage.setItem('zhixue:saved-dictio
 const savedVocabularyEntries = computed(() => savedWords.value.map(term =>
   savedDictionaryEntries.value.find(entry => entry.term === term) ||
   recentDictionaryEntries.value.find(entry => entry.term === term) ||
-  { term, zh: '再次查询该词后即可补全释义。', reading: '', language: 'ja' as const }
+  { term, zh: '再次查询该词后即可补全释义。', reading: '', translationJa: '', language: 'ja' as const }
 ))
 const filteredEntries = computed(() => {
   const q = searchText.value.trim().toLowerCase()
