@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import {
   BookOpen, Languages, Search, Headphones, BriefcaseBusiness, GraduationCap,
   ChevronRight, Sparkles, Clock3, Flame, Bookmark, Volume2, ArrowRight,
@@ -10,6 +10,9 @@ type ModuleId = 'home' | 'exam' | 'language' | 'dictionary'
 const activeModule = ref<ModuleId>('home')
 const searchText = ref('')
 const dictSourceLang = ref<'auto' | 'ja' | 'en' | 'zh'>('auto')
+const studyLanguage = ref<'ja' | 'en'>(readStored('zhixue:study-language', 'ja'))
+const selectedLanguageCategory = ref('全部')
+const completedLanguageCards = ref<string[]>(readStored('zhixue:completed-language-cards', []))
 const showMobileMenu = ref(false)
 const savedWords = ref<string[]>(readStored('zhixue:saved-words', ['認証', '認可']))
 const activeLang = ref<'zh' | 'ja' | 'en'>('zh')
@@ -83,18 +86,54 @@ const quizSubmitted = ref(false)
 const quizLoading = ref(false)
 const quizError = ref('')
 const quizCorrect = ref(0)
+type ExamTrack = { id: string; kind: string; title: string; subtitle: string; question_count: number }
+const examTracks = ref<ExamTrack[]>([])
+const selectedTrackId = ref('exam-sg')
+const tracksLoading = ref(false)
+const tracksError = ref('')
+const selectedTrack = computed(() => examTracks.value.find(track => track.id === selectedTrackId.value) || null)
 const quizStartedAt = ref(0)
 const quizFinished = ref(false)
 const currentQuestion = computed(() => quizQuestions.value[quizIndex.value] || null)
 const isLastQuestion = computed(() => quizIndex.value >= quizQuestions.value.length - 1)
+async function loadExamTracks() {
+  tracksLoading.value = true
+  tracksError.value = ''
+  try {
+    const response = await fetch('/api/tracks')
+    const data = await response.json() as { items?: ExamTrack[]; error?: string }
+    if (!response.ok) throw new Error(data.error || '考试列表加载失败')
+    examTracks.value = (data.items || []).filter(track => track.kind === 'exam')
+    if (!examTracks.value.some(track => track.id === selectedTrackId.value)) selectedTrackId.value = examTracks.value[0]?.id || ''
+  } catch (error) {
+    tracksError.value = error instanceof Error ? error.message : '考试列表加载失败，请稍后重试。'
+  } finally {
+    tracksLoading.value = false
+  }
+}
+function selectExam(track: ExamTrack) {
+  selectedTrackId.value = track.id
+  quizQuestions.value = []
+  quizIndex.value = 0
+  selectedOption.value = ''
+  quizSubmitted.value = false
+  quizCorrect.value = 0
+  quizFinished.value = false
+  quizError.value = ''
+}
 async function startPractice() {
+  if (!selectedTrack.value) { quizError.value = '尚未加载考试列表，请刷新页面后重试。'; return }
+  if (!selectedTrack.value.question_count) {
+    quizError.value = '该考试尚未接入题库。目前正式接入的是 SG；不会用其他考试题目代替。'
+    return
+  }
   quizLoading.value = true
   quizError.value = ''
   try {
-    const response = await fetch('/api/questions?track=exam-sg&limit=10')
+    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=10')
     const data = await response.json() as { items?: PracticeQuestion[]; error?: string }
     if (!response.ok) throw new Error(data.error || '题库加载失败')
-    if (!data.items?.length) throw new Error('当前还没有可练习的题目，请先完成 D1 数据库迁移。')
+    if (!data.items?.length) throw new Error('该考试目前没有可用题目，请刷新考试列表后重试。')
     quizQuestions.value = data.items
     quizIndex.value = 0
     selectedOption.value = ''
@@ -120,13 +159,7 @@ function nextPracticeQuestion() {
     quizSubmitted.value = false
     return
   }
-  const total = quizQuestions.value.length
-  examRecords.value.push({
-    date: todayKey,
-    correct: quizCorrect.value,
-    total,
-    exam: 'SG',
-  })
+  examRecords.value.push({ date: todayKey, correct: quizCorrect.value, total: quizQuestions.value.length, exam: selectedTrack.value?.title || selectedTrackId.value })
   quizFinished.value = true
 }
 
@@ -147,12 +180,10 @@ const modules = [
 ]
 
 const languageCategories = [
-  { title: '日常与情景会话', desc: '购物、出行、看病、生活沟通', icon: Languages },
-  { title: '职场与商务语言', desc: '会议、邮件、汇报、面试', icon: BriefcaseBusiness },
-  { title: '词汇与语法', desc: '词义、搭配、句型与易错点', icon: BookOpen },
-  { title: '听力与口语', desc: '跟读、听写、发音与角色扮演', icon: Headphones },
-  { title: '阅读与写作', desc: '短文理解、表达修改与写作', icon: BookMarked },
-  { title: '能力测评与复习', desc: '阶段检查、错题与间隔复习', icon: ShieldCheck },
+  { title: '全部', desc: '所有已发布的课程卡', icon: BookOpen },
+  { title: '日常与情景会话', desc: '生活中真实会用到的表达', icon: Languages },
+  { title: '职场与商务语言', desc: '工作沟通和礼貌表达', icon: BriefcaseBusiness },
+  { title: '词汇与语法', desc: '词义、搭配和句型', icon: BookMarked },
 ]
 
 const examTracks = [
@@ -160,6 +191,49 @@ const examTracks = [
   { code: 'FE', name: '基本信息技术者考试', detail: '基本情報技術者試験', progress: 0, color: 'blue' },
   { code: 'AP', name: '应用信息技术者考试', detail: '応用情報技術者試験', progress: 0, color: 'green' },
 ]
+
+type LanguageCard = {
+  id: string; language: 'ja' | 'en'; category: string; term: string; reading?: string;
+  meaning_zh: string; explanation: string; example: string; example_meaning_zh: string; source_type: string
+}
+const languageCards = ref<LanguageCard[]>([])
+const languageCardsLoading = ref(false)
+const languageCardsError = ref('')
+const visibleLanguageCards = computed(() => languageCards.value.filter(card =>
+  selectedLanguageCategory.value === '全部' || card.category === selectedLanguageCategory.value
+))
+const languageProgress = computed(() => {
+  const ids = languageCards.value.map(card => card.id)
+  const done = ids.filter(id => completedLanguageCards.value.includes(id)).length
+  return { done, total: ids.length, percent: ids.length ? Math.round(done / ids.length * 100) : 0 }
+})
+async function loadLanguageCards() {
+  languageCardsLoading.value = true
+  languageCardsError.value = ''
+  languageCards.value = []
+  try {
+    const response = await fetch('/api/language-cards?lang=' + encodeURIComponent(studyLanguage.value))
+    const data = await response.json() as { items?: LanguageCard[]; error?: string }
+    if (!response.ok) throw new Error(data.error || '语言学习内容加载失败')
+    languageCards.value = data.items || []
+  } catch (error) {
+    languageCardsError.value = error instanceof Error ? error.message : '语言学习内容加载失败，请稍后再试。'
+  } finally {
+    languageCardsLoading.value = false
+  }
+}
+function toggleLanguageCard(id: string) {
+  completedLanguageCards.value = completedLanguageCards.value.includes(id)
+    ? completedLanguageCards.value.filter(item => item !== id)
+    : [...completedLanguageCards.value, id]
+}
+watch(studyLanguage, value => {
+  localStorage.setItem('zhixue:study-language', JSON.stringify(value))
+  selectedLanguageCategory.value = '全部'
+  void loadLanguageCards()
+})
+watch(completedLanguageCards, value => localStorage.setItem('zhixue:completed-language-cards', JSON.stringify(value)), { deep: true })
+onMounted(() => { void loadExamTracks(); void loadLanguageCards() })
 
 type DictionaryEntry = {
   term: string
