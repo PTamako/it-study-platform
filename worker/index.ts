@@ -303,6 +303,23 @@ export default {
       }
     }
 
+    // Language lessons are stored in D1 and labeled as authored learning content.
+    if (url.pathname === '/api/language-cards') {
+      const language = url.searchParams.get('lang') || 'ja'
+      const category = url.searchParams.get('category') || ''
+      if (!['ja', 'en'].includes(language)) return json({ items: [], error: 'lang 只支持 ja 或 en。' }, 400)
+      try {
+        const { results } = await env.DB.prepare(
+          `SELECT id, language, category, term, reading, meaning_zh, explanation, example, example_meaning_zh, source_type
+           FROM language_cards WHERE language = ? AND (? = '' OR category = ?)
+           ORDER BY category, id`,
+        ).bind(language, category, category).all()
+        return json({ items: results })
+      } catch {
+        return json({ items: [], error: '语言课程尚未初始化，请先执行最新的 D1 迁移。' }, 503)
+      }
+    }
+
     // 返回指定考试的练习题。source_type 会明确标记自编练习题，不冒充官方真题。
     if (url.pathname === '/api/questions') {
       const trackId = url.searchParams.get('track') || 'exam-sg'
