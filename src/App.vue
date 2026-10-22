@@ -70,6 +70,65 @@ function removeExamRecords() {
   if (window.confirm('确定清除本设备保存的全部考试成绩吗？此操作无法撤销。')) examRecords.value = []
 }
 
+type PracticeOption = { id: string; text: string }
+type PracticeQuestion = {
+  id: string; track_id: string; topic: string; difficulty: string; prompt: string;
+  options: PracticeOption[]; answer: string; explanation: string; source_type: string; language: string
+}
+const quizQuestions = ref<PracticeQuestion[]>([])
+const quizIndex = ref(0)
+const selectedOption = ref('')
+const quizSubmitted = ref(false)
+const quizLoading = ref(false)
+const quizError = ref('')
+const quizCorrect = ref(0)
+const quizStartedAt = ref(0)
+const quizFinished = ref(false)
+const currentQuestion = computed(() => quizQuestions.value[quizIndex.value] || null)
+const isLastQuestion = computed(() => quizIndex.value >= quizQuestions.value.length - 1)
+async function startPractice() {
+  quizLoading.value = true
+  quizError.value = ''
+  try {
+    const response = await fetch('/api/questions?track=exam-sg&limit=10')
+    const data = await response.json() as { items?: PracticeQuestion[]; error?: string }
+    if (!response.ok) throw new Error(data.error || '题库加载失败')
+    if (!data.items?.length) throw new Error('当前还没有可练习的题目，请先完成 D1 数据库迁移。')
+    quizQuestions.value = data.items
+    quizIndex.value = 0
+    selectedOption.value = ''
+    quizSubmitted.value = false
+    quizCorrect.value = 0
+    quizFinished.value = false
+    quizStartedAt.value = Date.now()
+  } catch (error) {
+    quizError.value = error instanceof Error ? error.message : '题库加载失败，请稍后重试。'
+  } finally {
+    quizLoading.value = false
+  }
+}
+function submitPracticeAnswer() {
+  if (!currentQuestion.value || !selectedOption.value || quizSubmitted.value) return
+  quizSubmitted.value = true
+  if (selectedOption.value === currentQuestion.value.answer) quizCorrect.value += 1
+}
+function nextPracticeQuestion() {
+  if (!isLastQuestion.value) {
+    quizIndex.value += 1
+    selectedOption.value = ''
+    quizSubmitted.value = false
+    return
+  }
+  const total = quizQuestions.value.length
+  examRecords.value.push({
+    date: todayKey,
+    correct: quizCorrect.value,
+    total,
+    exam: 'SG',
+  })
+  quizFinished.value = true
+}
+
 const moduleInfo = {
   home: { title: '今天，学一点新的。', subtitle: '把考试、语言和专业知识，放进一个顺手的学习空间。' },
   exam: { title: '考试备考', subtitle: '按考试、科目和知识点组织练习，错题会自动进入复习清单。' },
@@ -283,6 +342,46 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' = 'ja-JP') {
               </button>
             </div>
 
+
+            <section class="practice-section">
+              <div class="section-heading"><div><div class="section-kicker">SG PRACTICE ROOM</div><h2>SG 练习题</h2><p>第一批 5 道自编示范题，用于搭建答题、判分和解析流程；不是官方真题。</p></div><span class="source-pill">自编练习题</span></div>
+              <div v-if="!quizQuestions.length || quizFinished" class="panel practice-start-card">
+                <template v-if="quizFinished">
+                  <div class="practice-result-icon"><CheckCircle2 :size="28" /></div>
+                  <div class="practice-result-score">{{ quizCorrect }} / {{ quizQuestions.length }}</div>
+                  <h3>本次练习完成</h3>
+                  <p>正确率 {{ Math.round(quizCorrect / quizQuestions.length * 100) }}%。本次成绩已加入当前设备的历史记录。</p>
+                  <button class="primary-button" @click="startPractice" :disabled="quizLoading">{{ quizLoading ? '正在加载…' : '再练一组' }} <ArrowRight :size="16" /></button>
+                </template>
+                <template v-else>
+                  <div class="practice-start-icon"><GraduationCap :size="25" /></div>
+                  <h3>准备好做一组 SG 练习了吗？</h3>
+                  <p>从 D1 读取题目，答题后显示正确答案、日语解释和错误选项辨析。</p>
+                  <button class="primary-button" @click="startPractice" :disabled="quizLoading">{{ quizLoading ? '正在加载题目…' : '开始练习（最多 10 题）' }} <ArrowRight :size="16" /></button>
+                  <p v-if="quizError" class="practice-error">{{ quizError }}</p>
+                </template>
+              </div>
+              <div v-else-if="currentQuestion" class="panel question-card">
+                <div class="question-topline"><span>第 {{ quizIndex + 1 }} / {{ quizQuestions.length }} 题</span><span class="source-pill">自编练习题</span></div>
+                <div class="question-progress"><span :style="{ width: ((quizIndex + 1) / quizQuestions.length * 100) + '%' }"></span></div>
+                <div class="question-topic">{{ currentQuestion.topic }}</div>
+                <h3 class="question-prompt">{{ currentQuestion.prompt }}</h3>
+                <div class="question-options">
+                  <button v-for="option in currentQuestion.options" :key="option.id" class="question-option" :class="{ selected: selectedOption === option.id, correct: quizSubmitted && option.id === currentQuestion.answer, incorrect: quizSubmitted && selectedOption === option.id && option.id !== currentQuestion.answer }" :disabled="quizSubmitted" @click="selectedOption = option.id">
+                    <span>{{ option.id.toUpperCase() }}</span><strong>{{ option.text }}</strong><CheckCircle2 v-if="quizSubmitted && option.id === currentQuestion.answer" :size="17" />
+                  </button>
+                </div>
+                <div v-if="quizSubmitted" class="answer-explanation" :class="{ right: selectedOption === currentQuestion.answer }">
+                  <strong>{{ selectedOption === currentQuestion.answer ? '回答正确！' : '这题答错了' }} 正确答案：{{ currentQuestion.answer.toUpperCase() }}</strong>
+                  <p>{{ currentQuestion.explanation }}</p>
+                </div>
+                <div class="question-actions">
+                  <span v-if="!quizSubmitted" class="question-hint">选择一个答案后提交</span><span v-else class="question-hint">当前得分：{{ quizCorrect }} / {{ quizIndex + 1 }}</span>
+                  <button v-if="!quizSubmitted" class="primary-button" :disabled="!selectedOption" @click="submitPracticeAnswer">提交答案 <ArrowRight :size="15" /></button>
+                  <button v-else class="primary-button" @click="nextPracticeQuestion">{{ isLastQuestion ? '查看本次成绩' : '下一题' }} <ArrowRight :size="15" /></button>
+                </div>
+              </div>
+            </section>
             <section class="exam-performance">
               <div class="section-heading"><div><div class="section-kicker">YOUR SCORE HISTORY</div><h2>正确率与历史成绩</h2><p>正式题库接入前，可以手动记录练习成绩；记录会保存在当前设备。</p></div><button class="primary-button" @click="addExamRecord"><PlusCircle :size="16" /> 记录一次练习成绩</button></div>
               <div class="metric-grid">
