@@ -140,7 +140,40 @@ function englishDictionaryEntries(rows: LooseRecord[], zh: string, ja: string): 
   }).filter((entry) => Boolean(entry.term && entry.en))
 }
 
-async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' = 'auto'): Promise<DictionaryApiEntry[]> {
+async function searchTechnicalVocabulary(db: D1Database, query: string): Promise<DictionaryApiEntry[]> {
+  const sql = `SELECT term, reading, meaning_zh, meaning_ja, meaning_en, example, source_module
+    FROM vocabulary
+    WHERE instr(lower(term), lower(?)) > 0
+       OR instr(lower(COALESCE(reading, '')), lower(?)) > 0
+       OR instr(lower(meaning_zh), lower(?)) > 0
+       OR instr(lower(meaning_ja), lower(?)) > 0
+       OR instr(lower(meaning_en), lower(?)) > 0
+    ORDER BY CASE WHEN lower(term) = lower(?) THEN 0 ELSE 1 END, term
+    LIMIT 8`
+  const { results } = await db.prepare(sql).bind(query, query, query, query, query, query).all()
+  return results.map((row: Record<string, unknown>) => ({
+    term: String(row.term || ''),
+    reading: String(row.reading || ''),
+    en: String(row.meaning_en || ''),
+    zh: String(row.meaning_zh || ''),
+    translationJa: String(row.meaning_ja || ''),
+    tag: 'IT 术语 · ' + String(row.source_module || '专业词汇'),
+    language: 'ja' as const,
+    source: '知学 IT 术语库（D1）',
+    example: String(row.example || ''),
+    technical: true,
+  })).filter(entry => Boolean(entry.term && (entry.zh || entry.en || entry.translationJa)))
+}
+
+async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' = 'auto', db?: D1Database): Promise<DictionaryApiEntry[]> {
+  if (db) {
+    try {
+      const technicalItems = await searchTechnicalVocabulary(db, query)
+      if (technicalItems.length) return technicalItems
+    } catch {
+      // If the glossary migration is pending, continue with online providers.
+    }
+  }
   const hasKana = /[\u3040-\u30ff]/.test(query)
   const hasCjk = /[\u3400-\u9fff]/.test(query)
   const language: 'ja' | 'en' | 'zh' = requestedLanguage === 'auto' ? (hasKana ? 'ja' : hasCjk ? 'zh' : 'en') : requestedLanguage
