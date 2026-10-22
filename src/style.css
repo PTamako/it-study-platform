@@ -176,3 +176,26 @@
 .dictionary-search-button{flex-shrink:0;border:0;border-radius:9px;padding:9px 13px;background:#5968df;color:#fff;font-size:11px;font-weight:700;white-space:nowrap}
 .dictionary-search-button:disabled{opacity:.6;cursor:wait}
 @media(max-width:760px){.language-card-list{grid-template-columns:1fr}.language-choice{gap:8px}.language-study-card{padding:15px}.language-progress{padding:15px 15px 23px!important}.language-progress-track{left:15px;right:15px}}
+
+/* D1-backed practical scenario workspace */
+.practical-section{margin-top:28px}
+.scenario-card{padding:clamp(16px,3vw,26px)}
+.scenario-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.scenario-toolbar label{display:flex;align-items:center;gap:9px;font-size:10px;color:#898da1}
+.scenario-toolbar select{max-width:100%;min-width:0;border:1px solid #e6e8f2;border-radius:9px;background:#fff;padding:9px 12px;color:#454a62;font-size:11px}
+.scenario-card>h3{font-size:19px;margin:8px 0 16px}
+.scenario-situation,.scenario-task{padding:14px 15px;border-radius:12px;background:#f7f8fc;margin:10px 0}
+.scenario-task{background:#f1f1ff}
+.scenario-situation strong,.scenario-task strong{font-size:11px;color:#656bd0}
+.scenario-situation p,.scenario-task p{font-size:12px;line-height:1.85;color:#5f6479;margin:7px 0 0;white-space:pre-line}
+.scenario-options{margin-top:16px}
+.scenario-feedback{margin-top:17px;padding:17px;border-radius:13px;background:#fff4f3;border:1px solid #f2d7d5}
+.scenario-feedback.right{background:#effaf4;border-color:#d4eddf}
+.scenario-score{font-size:32px;font-weight:800;color:#b65b60;margin-bottom:4px}
+.scenario-feedback.right .scenario-score{color:#31825e}
+.scenario-score small{font-size:13px;font-weight:600}
+.scenario-feedback>strong{font-size:12px;color:#9c555b}
+.scenario-feedback.right>strong{color:#287854}
+.scenario-feedback p{font-size:12px;line-height:1.9;color:#62677a;margin:9px 0 14px;white-space:pre-line}
+.scenario-feedback .primary-button{margin-top:2px}
+@media(max-width:560px){.scenario-toolbar{align-items:flex-start;flex-direction:column}.scenario-toolbar label{width:100%;align-items:flex-start;flex-direction:column}.scenario-toolbar select{width:100%;max-width:100%}.scenario-card>h3{font-size:17px}}
