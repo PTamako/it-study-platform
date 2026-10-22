@@ -10,7 +10,7 @@ type ModuleId = 'home' | 'exam' | 'japanese' | 'english' | 'dictionary'
 const activeModule = ref<ModuleId>('home')
 const searchText = ref('')
 const showMobileMenu = ref(false)
-const savedWords = ref<string[]>(readStored('zhixue:saved-words', ['認証', 'authorization']))
+const savedWords = ref<string[]>(readStored('zhixue:saved-words', ['認証', '認可']))
 const activeLang = ref<'zh' | 'ja' | 'en'>('zh')
 
 type StudyTask = { id: string; title: string; detail: string; minutes: number; done: boolean }
@@ -503,7 +503,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' = 'ja-JP') {
             <div class="dictionary-list">
               <article v-for="entry in displayedEntries" :key="entry.term + (entry.tag || '') + (entry.en || '')" class="dictionary-card">
                 <div class="dict-main">
-                  <div class="dict-term-row"><h3>{{ entry.term }}</h3><span v-if="entry.reading" class="reading">{{ entry.reading }}</span><span v-else-if="entry.phonetic" class="reading">{{ entry.phonetic }}</span><span class="dict-tag">{{ entry.tag }}</span><span v-if="entry.source" class="dict-source">{{ entry.source }}</span></div>
+                  <div class="dict-term-row"><h3>{{ entry.term }}</h3><span v-if="entry.reading" class="reading">{{ entry.reading }}</span><span v-if="entry.phonetic" class="reading">{{ entry.phonetic }}</span><span class="dict-tag">{{ entry.tag }}</span><span v-if="entry.source" class="dict-source">{{ entry.source }}</span></div>
                   <div class="dict-en">{{ entry.en }}</div>
                   <p>{{ entry.zh }}</p>
                   <p v-if="entry.example" class="dict-example">例句：{{ entry.example }}</p>
