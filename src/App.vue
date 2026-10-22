@@ -245,10 +245,17 @@ type DictionaryEntry = {
 const dictionaryEntries: DictionaryEntry[] = []
 const onlineEntries = ref<DictionaryEntry[]>([])
 const recentDictionaryEntries = ref<DictionaryEntry[]>(readStored('zhixue:recent-dictionary', []))
+const savedDictionaryEntries = ref<DictionaryEntry[]>(readStored('zhixue:saved-dictionary-entries', []))
 const dictionaryLoading = ref(false)
 const dictionaryError = ref('')
 const lastSearchedTerm = ref('')
 watch(recentDictionaryEntries, value => localStorage.setItem('zhixue:recent-dictionary', JSON.stringify(value)), { deep: true })
+watch(savedDictionaryEntries, value => localStorage.setItem('zhixue:saved-dictionary-entries', JSON.stringify(value)), { deep: true })
+const savedVocabularyEntries = computed(() => savedWords.value.map(term =>
+  savedDictionaryEntries.value.find(entry => entry.term === term) ||
+  recentDictionaryEntries.value.find(entry => entry.term === term) ||
+  { term, zh: '再次查询该词后即可补全释义。', reading: '', language: 'ja' as const }
+))
 const filteredEntries = computed(() => {
   const q = searchText.value.trim().toLowerCase()
   if (!q) return dictionaryEntries
@@ -260,6 +267,20 @@ const displayedEntries = computed(() => {
   const local = filteredEntries.value.filter((item) => !remote.some((result) => result.term.toLowerCase() === item.term.toLowerCase()))
   return [...remote, ...local]
 })
+
+function toggleSaved(term: string) {
+  if (savedWords.value.includes(term)) {
+    savedWords.value = savedWords.value.filter(word => word !== term)
+    savedDictionaryEntries.value = savedDictionaryEntries.value.filter(entry => entry.term !== term)
+    return
+  }
+  savedWords.value = [...savedWords.value, term]
+  const entry = displayedEntries.value.find(item => item.term === term) ||
+    recentDictionaryEntries.value.find(item => item.term === term)
+  if (entry && !savedDictionaryEntries.value.some(item => item.term === term)) {
+    savedDictionaryEntries.value = [entry, ...savedDictionaryEntries.value]
+  }
+}
 async function lookupDictionary() {
   const q = searchText.value.trim()
   if (!q) {
@@ -307,12 +328,6 @@ function navigate(id: ModuleId) {
   activeModule.value = id
   showMobileMenu.value = false
   searchText.value = ''
-}
-
-function toggleSaved(term: string) {
-  savedWords.value = savedWords.value.includes(term)
-    ? savedWords.value.filter((word) => word !== term)
-    : [...savedWords.value, term]
 }
 
 // 使用浏览器内置语音，不调用付费语音接口；具体声音取决于设备和浏览器。
@@ -624,7 +639,17 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               <div v-if="displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>没有找到匹配词条</strong><p>输入普通单词或日常用语，再点击“查词”尝试在线查询。</p></div>
             </div>
           </section>
-          <section class="notice-card dictionary-notice"><BookMarked :size="19" /><div><strong>个人生词本</strong><p>已收藏 {{ savedWords.length }} 个词条。收藏会保存在当前设备的浏览器中。</p></div></section>
+          <section class="section-block saved-vocabulary-block">
+            <div class="section-heading"><div><div class="section-kicker">MY WORDS</div><h2>个人生词本</h2><p>收藏的词条会保存在这台设备的浏览器中。</p></div><span class="section-index">{{ savedWords.length }} 个收藏</span></div>
+            <div v-if="savedVocabularyEntries.length" class="saved-vocabulary-list">
+              <article v-for="entry in savedVocabularyEntries" :key="entry.term" class="saved-vocabulary-row">
+                <div class="saved-vocabulary-copy"><strong>{{ entry.term }}</strong><small v-if="entry.reading">{{ entry.reading }}</small><p>{{ entry.zh }}</p><p v-if="entry.translationJa">日语：{{ entry.translationJa }}</p></div>
+                <button class="round-action" @click="speak(entry.term, entry.language === 'en' ? 'en-US' : entry.language === 'zh' ? 'zh-CN' : 'ja-JP')" :aria-label="'播放' + entry.term"><Volume2 :size="16" /></button>
+                <button class="saved-remove-button" @click="toggleSaved(entry.term)">取消收藏</button>
+              </article>
+            </div>
+            <div v-else class="empty-state"><BookMarked :size="25" /><strong>还没有收藏词条</strong><p>查询后点击结果卡片旁的书签按钮，即可保存并在这里复习。</p></div>
+          </section>
         </template>
 
         <footer class="footer"><span>知学 · 把每天的小进步，累积成自己的能力。</span><span>Vue 3 · TypeScript · Cloudflare</span></footer>
