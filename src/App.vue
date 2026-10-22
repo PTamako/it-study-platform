@@ -451,7 +451,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               </div>
             </div>
             <div class="panel daily-panel">
-              <div class="daily-icon"><Clock3 :size="19" /></div><div class="daily-copy"><div class="section-kicker">A SMALL DAILY GOAL</div><h3>给今天设一个小目标</h3><p>做 5 道题、听 3 分钟，或记住一个新词，都很好。</p><button class="text-link" @click="navigate('japanese')">开始轻量练习 <ArrowRight :size="14" /></button></div>
+              <div class="daily-icon"><Clock3 :size="19" /></div><div class="daily-copy"><div class="section-kicker">A SMALL DAILY GOAL</div><h3>给今天设一个小目标</h3><p>做 5 道题、听 3 分钟，或记住一个新词，都很好。</p><button class="text-link" @click="navigate('language')">开始轻量练习 <ArrowRight :size="14" /></button></div>
             </div>
           </section>
         </template>
@@ -541,21 +541,42 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
           </section>
         </template>
 
-        <template v-else-if="activeModule === 'japanese' || activeModule === 'english'">
-          <section class="language-banner" :class="activeModule">
-            <div><span class="banner-tag">{{ activeModule === 'japanese' ? '日本語 · JAPANESE' : 'ENGLISH · 英语' }}</span><h2>{{ activeModule === 'japanese' ? '让表达更自然，让理解更快。' : 'Speak with more confidence.' }}</h2><p>{{ activeModule === 'japanese' ? '从日常对话到职场沟通，积累真正用得上的表达。' : 'Practice everyday conversation, listening, pronunciation and IT English.' }}</p></div>
+        <template v-else-if="activeModule === 'language'">
+          <section class="language-banner" :class="studyLanguage === 'ja' ? 'japanese' : 'english'">
+            <div><span class="banner-tag">{{ studyLanguage === 'ja' ? '日本語 · JAPANESE' : 'ENGLISH · 英语' }}</span>
+              <h2>{{ studyLanguage === 'ja' ? '学会真实场景里会说的话。' : 'Build confidence one useful phrase at a time.' }}</h2>
+              <p>{{ studyLanguage === 'ja' ? '精选日常和职场表达，带读音、中文解释与实际例句。' : 'Practice daily and workplace English with examples, explanations and speech.' }}</p>
+            </div>
             <div class="banner-decoration"><Languages :size="64" stroke-width="1.1" /></div>
           </section>
-          <section class="section-block">
-            <div class="section-heading"><div><div class="section-kicker">LEARNING PATH</div><h2>选择一个练习方向</h2><p>日语和英语采用相同的分类结构，内容和发音规则则分别适配对应语言。</p></div></div>
-            <div class="category-grid">
-              <button v-for="(category, i) in languageCategories" :key="category.title" class="category-card" @click="searchText = category.title">
-                <span class="category-number">0{{ i + 1 }}</span><span class="category-icon"><component :is="category.icon" :size="20" /></span><h3>{{ category.title }}</h3><p>{{ category.desc }}</p><ArrowRight :size="16" class="category-arrow" />
-              </button>
+          <section class="section-block language-study-section">
+            <div class="language-choice" role="group" aria-label="选择学习语言">
+              <button :class="{ chosen: studyLanguage === 'ja' }" @click="studyLanguage = 'ja'"><span>日本語</span><small>日语学习</small></button>
+              <button :class="{ chosen: studyLanguage === 'en' }" @click="studyLanguage = 'en'"><span>English</span><small>英语学习</small></button>
             </div>
-          </section>
-          <section class="panel phrase-panel"><div class="panel-heading"><div><h3>{{ activeModule === 'japanese' ? '职场表达小练习' : 'Useful phrase of the day' }}</h3><p>先听一遍，再试着跟读。</p></div><span class="practice-badge">轻量练习</span></div>
-            <div class="phrase-content"><div><span class="phrase-label">{{ activeModule === 'japanese' ? '日本語' : 'ENGLISH' }}</span><h2>{{ activeModule === 'japanese' ? '確認してから、ご連絡します。' : 'I’ll check and get back to you.' }}</h2><p>{{ activeModule === 'japanese' ? '确认之后，我再联系您。' : '我确认一下，再回复你。' }}</p></div><button class="play-button" @click="speak(activeModule === 'japanese' ? '確認してから、ご連絡します。' : 'I’ll check and get back to you.', activeModule === 'japanese' ? 'ja-JP' : 'en-US')"><Volume2 :size="20" /> 听发音</button></div>
+            <div class="language-progress panel">
+              <div><strong>学习进度</strong><p>已标记掌握 {{ languageProgress.done }} / {{ languageProgress.total }} 张卡片</p></div>
+              <div class="language-progress-number">{{ languageProgress.percent }}%</div>
+              <div class="language-progress-track"><span :style="{ width: languageProgress.percent + '%' }"></span></div>
+            </div>
+            <div class="language-category-filter" role="group" aria-label="按学习类别筛选">
+              <button v-for="category in languageCategories" :key="category.title" :class="{ chosen: selectedLanguageCategory === category.title }" @click="selectedLanguageCategory = category.title">{{ category.title }}</button>
+            </div>
+            <p v-if="languageCardsLoading" class="dictionary-status">正在从学习内容库读取课程…</p>
+            <p v-else-if="languageCardsError" class="dictionary-status dictionary-error">{{ languageCardsError }} 请先应用最新的 D1 数据库迁移。</p>
+            <div v-else class="language-card-list">
+              <article v-for="card in visibleLanguageCards" :key="card.id" class="language-study-card" :class="{ completed: completedLanguageCards.includes(card.id) }">
+                <div class="language-card-top"><span class="dict-tag">{{ card.category }}</span><button class="language-done-button" @click="toggleLanguageCard(card.id)">{{ completedLanguageCards.includes(card.id) ? '已掌握 ✓' : '标记已掌握' }}</button></div>
+                <h3>{{ card.term }}</h3>
+                <p v-if="card.reading" class="language-reading">{{ card.reading }}</p>
+                <p class="language-meaning">{{ card.meaning_zh }}</p>
+                <p class="language-explanation">{{ card.explanation }}</p>
+                <div class="language-example"><strong>例句</strong><p>{{ card.example }}</p><span>{{ card.example_meaning_zh }}</span></div>
+                <button class="play-button" @click="speak(card.term, card.language === 'ja' ? 'ja-JP' : 'en-US')"><Volume2 :size="17" /> 听发音</button>
+                <small class="language-source">平台自编学习内容</small>
+              </article>
+              <div v-if="!languageCardsLoading && !languageCardsError && visibleLanguageCards.length === 0" class="empty-state"><BookOpen :size="25" /><strong>这个分类暂时没有已发布的课程</strong><p>可以切换分类或语言，已掌握状态会保存在当前设备。</p></div>
+            </div>
           </section>
         </template>
 
