@@ -1,0 +1,13 @@
+{
+  "name": "知学 · Personal Study Space",
+  "short_name": "知学",
+  "description": "个人考试备考、日语英语学习与 IT 词典",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f7ff",
+  "theme_color": "#f5f7ff",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
