@@ -9,6 +9,7 @@ import {
 type ModuleId = 'home' | 'exam' | 'japanese' | 'english' | 'dictionary'
 const activeModule = ref<ModuleId>('home')
 const searchText = ref('')
+const dictSourceLang = ref<'auto' | 'ja' | 'en' | 'zh'>('auto')
 const showMobileMenu = ref(false)
 const savedWords = ref<string[]>(readStored('zhixue:saved-words', ['認証', '認可']))
 const activeLang = ref<'zh' | 'ja' | 'en'>('zh')
@@ -209,7 +210,7 @@ async function lookupDictionary() {
   dictionaryError.value = ''
   onlineEntries.value = []
   try {
-    const response = await fetch('/api/dictionary?q=' + encodeURIComponent(q))
+    const response = await fetch('/api/dictionary?q=' + encodeURIComponent(q) + '&lang=' + encodeURIComponent(dictSourceLang.value))
     const data = await response.json() as { items?: DictionaryEntry[]; error?: string }
     if (!response.ok) throw new Error(data.error || '在线词典暂时不可用，请稍后再试。')
     onlineEntries.value = data.items || []
@@ -488,6 +489,13 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' = 'ja-JP') {
 
         <template v-else>
           <section class="dictionary-search">
+            <div class="dictionary-language-picker" role="group" aria-label="选择查询语言">
+              <span>查询语言</span>
+              <button type="button" :class="{ chosen: dictSourceLang === 'auto' }" @click="dictSourceLang = 'auto'">自动识别</button>
+              <button type="button" :class="{ chosen: dictSourceLang === 'ja' }" @click="dictSourceLang = 'ja'">日语</button>
+              <button type="button" :class="{ chosen: dictSourceLang === 'en' }" @click="dictSourceLang = 'en'">英语</button>
+              <button type="button" :class="{ chosen: dictSourceLang === 'zh' }" @click="dictSourceLang = 'zh'">中文</button>
+            </div>
             <div class="search-box">
               <Search :size="19" />
               <input v-model="searchText" :placeholder="searchPlaceholder" @keyup.enter="lookupDictionary" />
