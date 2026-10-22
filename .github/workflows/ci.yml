@@ -25,5 +25,8 @@ jobs:
       - name: Type-check and build frontend
         run: npm run build
 
+      - name: Validate local D1 migrations
+        run: npx wrangler d1 migrations apply it-study-platform-db --local
+
       - name: Bundle Worker without publishing
         run: npx wrangler deploy --dry-run
