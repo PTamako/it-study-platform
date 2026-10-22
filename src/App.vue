@@ -830,7 +830,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
           <section class="section-block dictionary-view-switch" aria-label="词典页面切换">
             <div class="dictionary-view-tabs" role="tablist" aria-label="词典和生词本">
               <button role="tab" :aria-selected="dictionaryView === 'search'" :class="{ chosen: dictionaryView === 'search' }" @click="dictionaryView = 'search'"><Search :size="16" /> 查词与 IT 术语</button>
-              <button role="tab" :aria-selected="dictionaryView === 'saved'" :class="{ chosen: dictionaryView === 'saved' }" @click="dictionaryView = 'saved'"><Bookmark :size="16" /> 我的生词本 <span class="saved-tab-count">{{ savedWords.length }}</span></button>
+              <button role="tab" class="saved-book-tab" :aria-selected="dictionaryView === 'saved'" :class="{ chosen: dictionaryView === 'saved' }" @click="dictionaryView = 'saved'"><BookMarked :size="17" /> <span>生词本</span><span class="saved-tab-count">{{ savedWords.length }}</span></button>
             </div>
           </section>
           <template v-if="dictionaryView === 'search'">
@@ -851,6 +851,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
             <p>日常日语、英语单词、中文词语和 IT 专业术语都可以查。输入后按回车或点击“查词”获取在线词典结果。</p>
             <p v-if="dictionaryLoading" class="dictionary-status">正在查询在线词典…</p>
             <p v-else-if="dictionaryError" class="dictionary-status dictionary-error">{{ dictionaryError }}</p>
+            <div v-if="!searchText.trim() && !dictionaryLoading" class="dictionary-quick-start"><span>试试查询</span><button @click="quickDictionarySearch('hello', 'en')">hello <small>英语</small></button><button @click="quickDictionarySearch('こんにちは', 'ja')">こんにちは <small>日语</small></button><button @click="quickDictionarySearch('認証', 'ja')">認証 <small>IT 术语</small></button><button @click="quickDictionarySearch('认证', 'zh')">认证 <small>中文</small></button></div>
           </section>
           <section class="section-block">
             <div class="section-heading"><div><div class="section-kicker">WORD BANK</div><h2>多语言词典</h2><p>中文释义 · 日语读音 · 英语解释 · 例句与发音</p></div><span class="section-index">{{ displayedEntries.length }} 个结果</span></div>
@@ -866,16 +867,6 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 </div>
                 <div class="dict-actions"><button class="round-action" @click="speak(entry.term, entry.language === 'en' ? 'en-US' : entry.language === 'zh' ? 'zh-CN' : 'ja-JP')" :aria-label="'播放' + entry.term"><Volume2 :size="17" /></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
               </article>
-              <div v-if="!searchText.trim() && !dictionaryLoading" class="dictionary-start-state">
-                <strong>选择一个词开始查询</strong>
-                <p>支持普通词汇中日英互译；命中专业词库时会优先显示 IT 术语的三语释义。</p>
-                <div class="dictionary-examples">
-                  <button @click="quickDictionarySearch('hello', 'en')"><strong>hello</strong><span>英语</span></button>
-                  <button @click="quickDictionarySearch('こんにちは', 'ja')"><strong>こんにちは</strong><span>日语</span></button>
-                  <button @click="quickDictionarySearch('認証', 'ja')"><strong>認証</strong><span>IT 术语</span></button>
-                  <button @click="quickDictionarySearch('认证', 'zh')"><strong>认证</strong><span>中文</span></button>
-                </div>
-              </div>
               <div v-else-if="lastSearchedTerm.trim().toLowerCase() === searchText.trim().toLowerCase() && displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>没有找到匹配词条</strong><p>可更换源语言，或用短词查询。若第三方词典暂时不可用，稍后可重试。</p></div>
             </div>
           </section>
