@@ -24,28 +24,42 @@ type DictionaryApiEntry = {
   example?: string
   language?: 'ja' | 'en' | 'zh'
   source?: string
+  translationJa?: string
+  technical?: boolean
 }
 
 type LooseRecord = Record<string, any>
 
-// 免费翻译服务；失败时返回空字符串，不影响其他词典源的结果。
+// MyMemory 优先；失败时尝试 Google 网页翻译端点。后者并非正式稳定 API，只作尽力回退。
 async function translateText(text: string, source: string, target: string): Promise<string> {
   try {
     const url = new URL('https://api.mymemory.translated.net/get')
     url.searchParams.set('q', text)
     url.searchParams.set('langpair', source + '|' + target)
+    const response = await fetch(url.toString(), { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(4000) })
+    if (response.ok) {
+      const data = await response.json() as { responseData?: { translatedText?: string }; responseStatus?: number }
+      const translated = data.responseData?.translatedText?.trim() || ''
+      if ((!data.responseStatus || data.responseStatus < 400) && translated && !/MYMEMORY WARNING|QUERY LENGTH LIMIT/i.test(translated)) return translated
+    }
+  } catch { /* try fallback provider */ }
+  try {
+    const url = new URL('https://translate.googleapis.com/translate_a/single')
+    url.searchParams.set('client', 'gtx')
+    url.searchParams.set('sl', source)
+    url.searchParams.set('tl', target)
+    url.searchParams.set('dt', 't')
+    url.searchParams.set('q', text)
     const response = await fetch(url.toString(), { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(5000) })
     if (!response.ok) return ''
-    const data = await response.json() as { responseData?: { translatedText?: string }; responseStatus?: number }
-    if (data.responseStatus && data.responseStatus >= 400) return ''
-    const translated = data.responseData?.translatedText?.trim() || ''
-    if (!translated || /MYMEMORY WARNING|QUERY LENGTH LIMIT/i.test(translated)) return ''
-    return translated
+    const payload = await response.json() as unknown
+    if (!Array.isArray(payload) || !Array.isArray(payload[0])) return ''
+    const segments = payload[0] as unknown[]
+    return segments.map(segment => Array.isArray(segment) ? String(segment[0] || '') : '').join('').trim()
   } catch {
     return ''
   }
 }
-
 // Jisho 提供日语词条、假名读音和英语释义；其接口是公开接口，可能偶尔不可用。
 async function searchJisho(keyword: string): Promise<LooseRecord[]> {
   if (!keyword.trim()) return []
