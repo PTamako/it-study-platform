@@ -22,8 +22,9 @@ npm run build
 
 ## Cloudflare 部署准备
 
-- D1 数据库结构位于 `migrations/0001_initial.sql`。
-- Worker 配置位于 `wrangler.toml`。部署前先创建自己的 D1 数据库，并把 `database_id` 占位值替换成真实 ID。
+- D1 数据库结构与初始学习模块位于 `migrations/0001_initial.sql`。
+- `wrangler.toml` 已配置本项目的 Cloudflare D1 数据库 ID。该 ID 不是密码，但请勿把 API Token 等访问凭据提交到仓库。
+- 首次部署前，请在项目目录执行 `npx wrangler d1 migrations apply it-study-platform-db --remote`，将表结构应用到远程 D1。
 - 本地密钥放在被 Git 忽略的 `.dev.vars` 文件中；线上密钥使用 Cloudflare Worker Secrets。
 - **不要**把密码、Token、API Key 写进前端代码或提交到 GitHub。
 
