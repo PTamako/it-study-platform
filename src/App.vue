@@ -14,7 +14,7 @@ const studyLanguage = ref<'ja' | 'en'>(readStored('zhixue:study-language', 'ja')
 const selectedLanguageCategory = ref('全部')
 const completedLanguageCards = ref<string[]>(readStored('zhixue:completed-language-cards', []))
 const showMobileMenu = ref(false)
-const savedWords = ref<string[]>(readStored('zhixue:saved-words', ['認証', '認可']))
+const savedWords = ref<string[]>(readStored('zhixue:saved-words', []))
 const activeLang = ref<'zh' | 'ja' | 'en'>('zh')
 
 type StudyTask = { id: string; title: string; detail: string; minutes: number; done: boolean }
@@ -165,7 +165,7 @@ function nextPracticeQuestion() {
 
 const moduleInfo = {
   home: { title: '今天，学一点新的。', subtitle: '把考试、语言和专业知识，放进一个顺手的学习空间。' },
-  exam: { title: '考试备考', subtitle: '按考试、科目和知识点组织练习，错题会自动进入复习清单。' },
+  exam: { title: '考试备考', subtitle: '选择已启用的考试；题库已接入的考试才能开始练习。当前已接入 SG。' },
   language: { title: '语言学习', subtitle: '选择日语或英语，按实际学习内容练习表达、理解和发音。' },
   dictionary: { title: '多语言词典', subtitle: '把中文、日语、英语和 IT 术语连起来，随查随记。' },
 } as const
@@ -242,11 +242,7 @@ type DictionaryEntry = {
   translationJa?: string
   technical?: boolean
 }
-const dictionaryEntries: DictionaryEntry[] = [
-  { term: '認証', reading: 'にんしょう', en: 'Authentication', zh: '认证：确认“你是谁”', tag: '安全基础', language: 'ja', source: '内置词条' },
-  { term: '認可', reading: 'にんか', en: 'Authorization', zh: '授权：确认“你可以做什么”', tag: '安全基础', language: 'ja', source: '内置词条' },
-  { term: '多要素認証', reading: 'たようそにんしょう', en: 'Multi-factor authentication (MFA)', zh: '多因素认证：结合不同类别的验证因素', tag: 'SG 高频', language: 'ja', source: '内置词条' },
-]
+const dictionaryEntries: DictionaryEntry[] = []
 const onlineEntries = ref<DictionaryEntry[]>([])
 const recentDictionaryEntries = ref<DictionaryEntry[]>(readStored('zhixue:recent-dictionary', []))
 const dictionaryLoading = ref(false)
@@ -476,7 +472,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
             <div class="exam-list">
               <button v-for="exam in examTracks" :key="exam.id" class="exam-card" :class="{ 'exam-card-selected': selectedTrackId === exam.id }" @click="selectExam(exam)">
                 <span class="exam-code" :class="exam.id.endsWith('sg') ? 'purple' : exam.id.endsWith('fe') ? 'blue' : 'green'">{{ exam.id.split('-').pop()?.toUpperCase() }}</span>
-                <span class="exam-info"><strong>{{ exam.title }}</strong><small>{{ exam.subtitle }}</small><span class="progress-track"><span :style="{ width: exam.question_count ? '100%' : '0%' }"></span></span></span>
+                <span class="exam-info"><strong>{{ exam.title }}</strong><small>{{ exam.subtitle }}</small></span>
                 <span class="exam-progress">{{ exam.question_count ? exam.question_count + ' 道可练习' : '题库尚未接入' }}</span><ChevronRight :size="18" class="muted" />
               </button>
               <div v-if="!tracksLoading && !tracksError && examTracks.length === 0" class="empty-state"><GraduationCap :size="25" /><strong>暂无已启用的考试</strong><p>请先在 D1 学习模块表中启用考试。</p></div>
