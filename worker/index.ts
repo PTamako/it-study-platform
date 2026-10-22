@@ -52,7 +52,7 @@ async function searchJisho(keyword: string): Promise<LooseRecord[]> {
   try {
     const url = new URL('https://jisho.org/api/v1/search/words')
     url.searchParams.set('keyword', keyword)
-    const response = await fetch(url.toString(), { headers: { accept: 'application/json' } })
+    const response = await fetch(url.toString(), { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(5000) })
     if (!response.ok) return []
     const data = await response.json() as { data?: LooseRecord[] }
     return Array.isArray(data.data) ? data.data.slice(0, 8) : []
