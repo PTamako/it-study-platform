@@ -139,18 +139,40 @@ function englishDictionaryEntries(rows: LooseRecord[], zh: string, ja: string): 
   }).filter((entry) => Boolean(entry.term && entry.en))
 }
 
-async function searchTechnicalVocabulary(db: D1Database, query: string): Promise<DictionaryApiEntry[]> {
-  const sql = `SELECT term, reading, meaning_zh, meaning_ja, meaning_en, example, source_module
-    FROM vocabulary
-    WHERE instr(lower(term), lower(?)) > 0
-       OR instr(lower(COALESCE(reading, '')), lower(?)) > 0
-       OR instr(lower(meaning_zh), lower(?)) > 0
-       OR instr(lower(meaning_ja), lower(?)) > 0
-       OR instr(lower(meaning_en), lower(?)) > 0
-    ORDER BY CASE WHEN lower(term) = lower(?) THEN 0 ELSE 1 END, term
-    LIMIT 8`
-  const { results } = await db.prepare(sql).bind(query, query, query, query, query, query).all()
-  return results.map((row: Record<string, unknown>) => ({
+async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Promise<DictionaryApiEntry[]> {
+  const query = rawQuery.trim()
+  if (!query) return []
+  const select = `SELECT term, reading, meaning_zh, meaning_ja, meaning_en, example, source_module
+    FROM vocabulary`
+  const exactResult = await db.prepare(
+    `${select}
+     WHERE lower(term) = lower(?)
+        OR lower(COALESCE(reading, '')) = lower(?)
+        OR lower(meaning_zh) = lower(?)
+        OR lower(meaning_ja) = lower(?)
+        OR lower(meaning_en) = lower(?)
+     ORDER BY term
+     LIMIT 8`,
+  ).bind(query, query, query, query, query).all()
+  let results = exactResult.results as Record<string, unknown>[]
+  if (!results.length) {
+    // Avoid matching common tiny strings like "it" inside every English definition.
+    // Allow shorter Chinese/Japanese fragments because their characters encode more information.
+    const isCjk = /[\u3400-\u9fff\u3040-\u30ff]/.test(query)
+    if (query.length < (isCjk ? 2 : 3)) return []
+    const partialResult = await db.prepare(
+      `${select}
+       WHERE instr(lower(term), lower(?)) > 0
+          OR instr(lower(COALESCE(reading, '')), lower(?)) > 0
+          OR instr(lower(meaning_zh), lower(?)) > 0
+          OR instr(lower(meaning_ja), lower(?)) > 0
+          OR instr(lower(meaning_en), lower(?)) > 0
+       ORDER BY CASE WHEN lower(term) = lower(?) THEN 0 ELSE 1 END, term
+       LIMIT 8`,
+    ).bind(query, query, query, query, query, query).all()
+    results = partialResult.results as Record<string, unknown>[]
+  }
+  return results.map((row) => ({
     term: String(row.term || ''),
     reading: String(row.reading || ''),
     en: String(row.meaning_en || ''),
@@ -220,13 +242,40 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
     })
   }
 
-  if (language === 'ja' || language === 'zh') items.push(...jishoEntries(jishoRows, zh))
+  if (language === 'ja') items.push(...jishoEntries(jishoRows, zh))
 
-  if (language === 'ja' && !items.length && (zh || en)) {
-    items.push({ term: query, en: en || '暂无英语翻译', zh: zh || '暂无中文翻译', tag: '日中英翻译', language: 'ja', source: '在线翻译' })
-  }
-  if (language === 'en' && !items.length && (zh || ja)) {
-    items.push({ term: query, en: '暂未找到详细英语词典释义', zh: zh || '中文翻译暂时不可用', translationJa: ja || '', tag: '英日中翻译', language: 'en', source: '在线翻译' })
+  if (!items.length) {
+    if (language === 'ja') {
+      items.push({
+        term: query,
+        en: en || '英语翻译暂时不可用',
+        zh: zh || '中文翻译暂时不可用',
+        tag: '日中英互译',
+        language: 'ja',
+        source: '在线翻译',
+      })
+    } else if (language === 'en') {
+      items.push({
+        term: query,
+        en: '暂未找到详细英语词典释义',
+        zh: zh || '中文翻译暂时不可用',
+        translationJa: ja || '日语翻译暂时不可用',
+        tag: '英日中互译',
+        language: 'en',
+        source: '在线翻译',
+      })
+    } else {
+      // Show the submitted Chinese term and the status of each translation even if both providers fail.
+      items.push({
+        term: query,
+        en: en || '英语翻译暂时不可用',
+        zh: query,
+        translationJa: ja || '日语翻译暂时不可用',
+        tag: '中日英互译',
+        language: 'zh',
+        source: '在线翻译',
+      })
+    }
   }
 
   const seen = new Set<string>()
