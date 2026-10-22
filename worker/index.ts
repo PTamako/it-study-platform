@@ -221,7 +221,7 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
 
   const jishoKeyword = language === 'zh' ? ja : query
   const [jishoRows, englishRows] = await Promise.all([
-    (language === 'ja' || language === 'zh') && jishoKeyword ? searchJisho(jishoKeyword) : Promise.resolve([]),
+    language === 'ja' && jishoKeyword ? searchJisho(jishoKeyword) : Promise.resolve([]),
     language === 'en' ? searchEnglishDictionary(query) : Promise.resolve([]),
   ])
 
@@ -340,10 +340,19 @@ export default {
           query,
           providers: items.some(item => item.technical)
             ? ['知学 IT 术语库（D1）']
-            : ['Free Dictionary', 'Jisho', 'MyMemory', 'Google Translate（备用）'],
+            : (() => {
+                const sourceLanguage = requestedLanguage === 'auto'
+                  ? (/[\u3040-\u30ff]/.test(query) ? 'ja' : /[\u3400-\u9fff]/.test(query) ? 'zh' : 'en')
+                  : requestedLanguage
+                return sourceLanguage === 'en'
+                  ? ['Free Dictionary', 'MyMemory', 'Google Translate（备用）']
+                  : sourceLanguage === 'ja'
+                    ? ['Jisho', 'MyMemory', 'Google Translate（备用）']
+                    : ['MyMemory', 'Google Translate（备用）']
+              })(),
           note: items.some(item => item.technical)
             ? '优先显示专业词汇库中匹配的术语及中日英释义。'
-            : '普通词汇使用在线词典与机器翻译；第三方服务可能限流，所有译文仅供学习参考。',
+            : '按输入语言调用相应词典，缺失的目标语言会尝试机器翻译；第三方可能限流，译文仅供参考。',
         })
       } catch {
         return json({ items: [], error: '在线词典暂时不可用，请稍后重试。' }, 503)
