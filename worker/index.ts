@@ -294,7 +294,7 @@ export default {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: { 'allow': 'GET, POST, OPTIONS' } })
     }
-    const isWriteEndpoint = url.pathname === '/api/attempts' || url.pathname === '/api/scenario-attempts'
+    const isWriteEndpoint = ['/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/vocabulary/saved', '/api/daily-tasks'].includes(url.pathname)
     if (request.method !== 'GET' && !(request.method === 'POST' && isWriteEndpoint)) {
       return json({ error: '不支持此请求方法' }, 405)
     }
@@ -376,6 +376,112 @@ export default {
       } catch {
         return json({ items: [], error: '语言课程尚未初始化，请先执行最新的 D1 迁移。' }, 503)
       }
+    }
+
+    // Dashboard 汇总只从 D1 的实际答题、实战和课程进度生成；无记录时返回 0。
+    if (url.pathname === '/api/dashboard' && request.method === 'GET') {
+      try {
+        const [attempts, scenarios, language, saved, tasks] = await Promise.all([
+          env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(is_correct), 0) AS correct FROM study_attempts').first() as Promise<Record<string, unknown>>,
+          env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(AVG(score), 0) AS average_score FROM scenario_attempts').first() as Promise<Record<string, unknown>>,
+          env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(mastered), 0) AS mastered FROM language_card_progress').first() as Promise<Record<string, unknown>>,
+          env.DB.prepare('SELECT COUNT(*) AS total FROM saved_vocabulary_entries').first() as Promise<Record<string, unknown>>,
+          env.DB.prepare("SELECT COUNT(*) AS total, COALESCE(SUM(completed), 0) AS completed FROM daily_task_completions WHERE study_date = date('now')").first() as Promise<Record<string, unknown>>,
+        ])
+        const total = Number(attempts?.total || 0)
+        const correct = Number(attempts?.correct || 0)
+        return json({
+          generated_from: 'D1',
+          exam: { attempted_questions: total, correct_answers: correct, accuracy_percent: total ? Math.round(correct / total * 100) : null },
+          practical: { completed_scenarios: Number(scenarios?.total || 0), average_score: Number(scenarios?.average_score || 0) },
+          language: { mastered_cards: Number(language?.mastered || 0), tracked_cards: Number(language?.total || 0) },
+          vocabulary: { saved_terms: Number(saved?.total || 0) },
+          today: { tasks_completed: Number(tasks?.completed || 0), tasks_tracked: Number(tasks?.total || 0) },
+        })
+      } catch {
+        return json({ error: '学习统计尚未初始化，请先应用最新 D1 迁移。' }, 503)
+      }
+    }
+
+    // 读取与更新课程掌握状态。
+    if (url.pathname === '/api/language-progress') {
+      if (request.method === 'GET') {
+        try {
+          const { results } = await env.DB.prepare('SELECT card_id, mastered, updated_at FROM language_card_progress ORDER BY updated_at DESC').all()
+          return json({ items: results })
+        } catch {
+          return json({ items: [], error: '课程进度表尚未初始化。' }, 503)
+        }
+      }
+      let body: Record<string, unknown>
+      try { body = await request.json() as Record<string, unknown> }
+      catch { return json({ error: '请求体必须是 JSON。' }, 400) }
+      const cardId = String(body.card_id || '').trim()
+      const mastered = body.mastered === true || body.mastered === 1
+      if (!cardId) return json({ error: '缺少 card_id。' }, 400)
+      try {
+        const card = await env.DB.prepare('SELECT id FROM language_cards WHERE id = ?').bind(cardId).first()
+        if (!card) return json({ error: '课程卡片不存在。' }, 404)
+        await env.DB.prepare(
+          'INSERT INTO language_card_progress (card_id, mastered, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(card_id) DO UPDATE SET mastered = excluded.mastered, updated_at = CURRENT_TIMESTAMP',
+        ).bind(cardId, mastered ? 1 : 0).run()
+        return json({ ok: true, card_id: cardId, mastered })
+      } catch {
+        return json({ error: '课程进度保存失败，请确认已应用最新 D1 迁移。' }, 503)
+      }
+    }
+
+    // 生词本存储词条快照，避免第三方词典后续变化导致收藏内容消失。
+    if (url.pathname === '/api/vocabulary/saved') {
+      if (request.method === 'GET') {
+        try {
+          const { results } = await env.DB.prepare('SELECT term, language, entry_json, saved_at FROM saved_vocabulary_entries ORDER BY saved_at DESC LIMIT 200').all()
+          return json({ items: results.map((row: Record<string, unknown>) => ({
+            term: row.term, language: row.language, saved_at: row.saved_at,
+            entry: JSON.parse(String(row.entry_json || '{}')),
+          })) })
+        } catch {
+          return json({ items: [], error: '生词本表尚未初始化。' }, 503)
+        }
+      }
+      let body: Record<string, unknown>
+      try { body = await request.json() as Record<string, unknown> }
+      catch { return json({ error: '请求体必须是 JSON。' }, 400) }
+      const term = String(body.term || '').trim()
+      const action = String(body.action || 'save')
+      if (!term || term.length > 100) return json({ error: 'term 必填且不能超过 100 个字符。' }, 400)
+      if (action === 'remove') {
+        try {
+          await env.DB.prepare('DELETE FROM saved_vocabulary_entries WHERE term = ?').bind(term).run()
+          return json({ ok: true, term, saved: false })
+        } catch { return json({ error: '删除生词失败。' }, 503) }
+      }
+      const entry = body.entry
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return json({ error: '保存词条时必须提供 entry 对象。' }, 400)
+      const language = ['auto', 'ja', 'en', 'zh'].includes(String(body.language)) ? String(body.language) : 'auto'
+      try {
+        await env.DB.prepare(
+          'INSERT INTO saved_vocabulary_entries (term, language, entry_json, saved_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(term) DO UPDATE SET language = excluded.language, entry_json = excluded.entry_json, saved_at = CURRENT_TIMESTAMP',
+        ).bind(term, language, JSON.stringify(entry)).run()
+        return json({ ok: true, term, saved: true })
+      } catch { return json({ error: '保存生词失败，请确认已应用最新 D1 迁移。' }, 503) }
+    }
+
+    // 每日任务状态按日期写入 D1。
+    if (url.pathname === '/api/daily-tasks' && request.method === 'POST') {
+      let body: Record<string, unknown>
+      try { body = await request.json() as Record<string, unknown> }
+      catch { return json({ error: '请求体必须是 JSON。' }, 400) }
+      const taskId = String(body.task_id || '').trim()
+      const studyDate = String(body.study_date || '')
+      if (!taskId || !/^\\d{4}-\\d{2}-\\d{2}$/.test(studyDate)) return json({ error: 'task_id 或 study_date 格式无效。' }, 400)
+      const completed = body.completed === true || body.completed === 1
+      try {
+        await env.DB.prepare(
+          'INSERT INTO daily_task_completions (task_id, study_date, completed, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(task_id, study_date) DO UPDATE SET completed = excluded.completed, updated_at = CURRENT_TIMESTAMP',
+        ).bind(taskId, studyDate, completed ? 1 : 0).run()
+        return json({ ok: true, task_id: taskId, study_date: studyDate, completed })
+      } catch { return json({ error: '每日任务保存失败，请确认已应用最新 D1 迁移。' }, 503) }
     }
 
     // 返回指定考试的真实实战情境。题目与评分规则从 D1 读取。
