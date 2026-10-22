@@ -6,7 +6,7 @@ import {
   ShieldCheck, BookMarked, Menu, X, CheckCircle2, CircleHelp, Target, TrendingUp, ListChecks, PlusCircle,
 } from 'lucide-vue-next'
 
-type ModuleId = 'home' | 'exam' | 'japanese' | 'english' | 'dictionary'
+type ModuleId = 'home' | 'exam' | 'language' | 'dictionary'
 const activeModule = ref<ModuleId>('home')
 const searchText = ref('')
 const dictSourceLang = ref<'auto' | 'ja' | 'en' | 'zh'>('auto')
@@ -133,8 +133,7 @@ function nextPracticeQuestion() {
 const moduleInfo = {
   home: { title: '今天，学一点新的。', subtitle: '把考试、语言和专业知识，放进一个顺手的学习空间。' },
   exam: { title: '考试备考', subtitle: '按考试、科目和知识点组织练习，错题会自动进入复习清单。' },
-  japanese: { title: '日语学习', subtitle: '从真实场景出发，练习自然表达、职场沟通与听说读写。' },
-  english: { title: '英语学习', subtitle: '练听力、发音、表达与 IT 英语，逐步说得更自然。' },
+  language: { title: '语言学习', subtitle: '选择日语或英语，按实际学习内容练习表达、理解和发音。' },
   dictionary: { title: '多语言词典', subtitle: '把中文、日语、英语和 IT 术语连起来，随查随记。' },
 } as const
 
@@ -142,10 +141,9 @@ const currentInfo = computed(() => moduleInfo[activeModule.value])
 const searchPlaceholder = computed(() => activeModule.value === 'dictionary' ? '查词、查缩写，例如 MFA / 認証…' : '搜索考试、课程、知识点…')
 
 const modules = [
-  { id: 'exam' as const, title: '考试备考', en: 'EXAM PREP', desc: 'SG · FE · AP · 自定义考试', icon: GraduationCap, tone: 'lavender', count: '按知识点练习' },
-  { id: 'japanese' as const, title: '日语学习', en: 'JAPANESE', desc: '会话 · 敬语 · 语法 · 听力', icon: Languages, tone: 'peach', count: '适合日常与职场' },
-  { id: 'english' as const, title: '英语学习', en: 'ENGLISH', desc: '口语 · 发音 · 阅读 · 写作', icon: Headphones, tone: 'mint', count: '循序渐进地练习' },
-  { id: 'dictionary' as const, title: '词典与 IT 术语', en: 'DICTIONARY', desc: '中日英词义 · 例句 · 缩写', icon: BookMarked, tone: 'blue', count: '建立个人生词本' },
+  { id: 'exam' as const, title: '考试备考', en: 'EXAM PREP', desc: '按已接入考试选择目标与练习', icon: GraduationCap, tone: 'lavender', count: '题量以题库数据为准' },
+  { id: 'language' as const, title: '语言学习', en: 'LANGUAGE', desc: '日语 / 英语 · 例句 · 发音 · 复习', icon: Languages, tone: 'peach', count: '选择语言开始学习' },
+  { id: 'dictionary' as const, title: '词典与 IT 术语', en: 'DICTIONARY', desc: '中日英互译 · 专业词库 · 生词本', icon: BookMarked, tone: 'blue', count: '普通词汇与技术词汇' },
 ]
 
 const languageCategories = [
