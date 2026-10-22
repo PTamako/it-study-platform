@@ -187,7 +187,7 @@ function toggleSaved(term: string) {
 
 // 使用浏览器内置语音，不调用付费语音接口；具体声音取决于设备和浏览器。
 function speak(text: string, lang: 'ja-JP' | 'en-US' = 'ja-JP') {
-  if (!('speechSynthesis' in window)) {
+  if (typeof window.speechSynthesis === 'undefined') {
     window.alert('当前浏览器暂不支持语音播放。')
     return
   }
