@@ -20,13 +20,60 @@ npm run typecheck
 npm run build
 ```
 
-## Cloudflare 部署准备
+## Cloudflare Workers 部署（前端 + API）
 
-- D1 数据库结构与初始学习模块位于 `migrations/0001_initial.sql`。
-- `wrangler.toml` 已配置本项目的 Cloudflare D1 数据库 ID。该 ID 不是密码，但请勿把 API Token 等访问凭据提交到仓库。
-- 首次部署前，请在项目目录执行 `npx wrangler d1 migrations apply it-study-platform-db --remote`，将表结构应用到远程 D1。
+本项目不依赖单独的 Pages 项目。Cloudflare Workers Static Assets 会与 Worker API 一起部署：
+
+- 前端构建目录：`dist/`
+- Worker 入口：`worker/index.ts`
+- 静态资源绑定：`ASSETS`
+- API 路由：`/api/*` 由 Worker 处理；其他请求由静态资源托管处理。
+- Vue 单页应用启用 SPA fallback，刷新前端页面路径时回退到 `index.html`。
+
+### 首次部署
+
+1. 在项目根目录安装依赖并构建前端：
+
+   ```sh
+   npm ci
+   npm run build
+   ```
+
+2. 登录 Cloudflare（如尚未授权）：
+
+   ```sh
+   npx wrangler login
+   ```
+
+3. 将表结构和初始学习模块应用到远程 D1：
+
+   ```sh
+   npx wrangler d1 migrations apply it-study-platform-db --remote
+   ```
+
+4. 部署前端静态资源与 Worker API：
+
+   ```sh
+   npx wrangler deploy
+   ```
+
+### 通过 Cloudflare 控制台连接 GitHub 自动部署
+
+在 Cloudflare 的 Workers & Pages / Workers Builds 创建 Worker Git 部署，连接 `PTamako/it-study-platform`。构建命令使用 `npm run build`，部署命令使用 `npx wrangler deploy`。Wrangler 会读取仓库根目录的 `wrangler.toml`。
+
+部署前先完成一次远程 D1 迁移。Git 自动部署本身不会自动执行 SQL migration。
+
+- `wrangler.toml` 中已配置 Cloudflare D1 数据库 ID。该 ID 不是密码，但请勿把 API Token 等访问凭据提交到仓库。
 - 本地密钥放在被 Git 忽略的 `.dev.vars` 文件中；线上密钥使用 Cloudflare Worker Secrets。
 - **不要**把密码、Token、API Key 写进前端代码或提交到 GitHub。
+
+## 部署后验证
+
+将下面的 `<WORKER_URL>` 替换为 Cloudflare 分配的 Worker 地址：
+
+- `<WORKER_URL>/`：应显示学习平台页面。
+- `<WORKER_URL>/api/health`：D1 初始化成功后应返回 `ok: true`。
+- `<WORKER_URL>/api/tracks`：应返回学习模块列表。
 
 ## 题库真实性
 
