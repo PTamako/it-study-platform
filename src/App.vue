@@ -15,7 +15,6 @@ const selectedLanguageCategory = ref('全部')
 const completedLanguageCards = ref<string[]>(readStored('zhixue:completed-language-cards', []))
 const showMobileMenu = ref(false)
 const savedWords = ref<string[]>(readStored('zhixue:saved-words', []))
-const activeLang = ref<'zh' | 'ja' | 'en'>('zh')
 
 type StudyTask = { id: string; title: string; detail: string; minutes: number; done: boolean }
 type ExamRecord = { date: string; correct: number; total: number; exam: string }
@@ -322,6 +321,11 @@ function clearDictionarySearch() {
   lastSearchedTerm.value = ''
   dictionaryError.value = ''
 }
+function quickDictionarySearch(term: string, language: 'ja' | 'en' | 'zh') {
+  searchText.value = term
+  dictSourceLang.value = language
+  void lookupDictionary()
+}
 watch(savedWords, value => localStorage.setItem('zhixue:saved-words', JSON.stringify(value)), { deep: true })
 
 function navigate(id: ModuleId) {
@@ -372,11 +376,6 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
         <button class="mobile-brand" @click="navigate('home')"><span class="brand-mark"><BookOpen :size="20" /></span><strong>知学</strong></button>
         <div class="breadcrumb"><span>我的空间</span><ChevronRight :size="14" /><strong>{{ activeModule === 'home' ? '学习首页' : currentInfo.title }}</strong></div>
         <div class="top-actions">
-          <div class="lang-switch" aria-label="界面语言">
-            <button :class="{ chosen: activeLang === 'zh' }" @click="activeLang = 'zh'">中</button>
-            <button :class="{ chosen: activeLang === 'ja' }" @click="activeLang = 'ja'">日</button>
-            <button :class="{ chosen: activeLang === 'en' }" @click="activeLang = 'en'">EN</button>
-          </div>
           <button class="icon-button mobile-menu-button" @click="showMobileMenu = !showMobileMenu" :aria-label="showMobileMenu ? '关闭菜单' : '打开菜单'"><X v-if="showMobileMenu" :size="19" /><Menu v-else :size="19" /></button>
         </div>
       </header>
@@ -495,7 +494,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
 
 
             <section class="practice-section">
-              <div class="section-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2><p>题目根据上方所选考试读取；未接入题库的考试不会展示假题。</p></div><span class="source-pill">自编练习题</span></div>
+              <div class="section-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2><p>题目根据上方所选考试读取；未接入题库的考试不会展示假题。</p></div><span class="source-pill">{{ selectedTrack?.question_count ? selectedTrack.question_count + ' 道可练习' : '题库待接入' }}</span></div>
               <div v-if="!quizQuestions.length || quizFinished" class="panel practice-start-card">
                 <template v-if="quizFinished">
                   <div class="practice-result-icon"><CheckCircle2 :size="28" /></div>
@@ -636,7 +635,17 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 </div>
                 <div class="dict-actions"><button class="round-action" @click="speak(entry.term, entry.language === 'en' ? 'en-US' : entry.language === 'zh' ? 'zh-CN' : 'ja-JP')" :aria-label="'播放' + entry.term"><Volume2 :size="17" /></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
               </article>
-              <div v-if="displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>没有找到匹配词条</strong><p>输入普通单词或日常用语，再点击“查词”尝试在线查询。</p></div>
+              <div v-if="!searchText.trim() && !dictionaryLoading" class="dictionary-start-state">
+                <strong>选择一个词开始查询</strong>
+                <p>支持普通词汇中日英互译；命中专业词库时会优先显示 IT 术语的三语释义。</p>
+                <div class="dictionary-examples">
+                  <button @click="quickDictionarySearch('hello', 'en')"><strong>hello</strong><span>英语</span></button>
+                  <button @click="quickDictionarySearch('こんにちは', 'ja')"><strong>こんにちは</strong><span>日语</span></button>
+                  <button @click="quickDictionarySearch('認証', 'ja')"><strong>認証</strong><span>IT 术语</span></button>
+                  <button @click="quickDictionarySearch('认证', 'zh')"><strong>认证</strong><span>中文</span></button>
+                </div>
+              </div>
+              <div v-else-if="lastSearchedTerm.trim().toLowerCase() === searchText.trim().toLowerCase() && displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>没有找到匹配词条</strong><p>可更换源语言，或用短词查询。若第三方词典暂时不可用，稍后可重试。</p></div>
             </div>
           </section>
           <section class="section-block saved-vocabulary-block">
