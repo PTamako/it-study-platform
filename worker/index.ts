@@ -219,9 +219,10 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
     ])
   }
 
-  const jishoKeyword = language === 'zh' ? ja : query
+  // 只有日语原文才查 Jisho，避免把翻译出来的近似词误当成用户原词。
+  const jishoKeyword = query
   const [jishoRows, englishRows] = await Promise.all([
-    language === 'ja' && jishoKeyword ? searchJisho(jishoKeyword) : Promise.resolve([]),
+    language === 'ja' ? searchJisho(jishoKeyword) : Promise.resolve([]),
     language === 'en' ? searchEnglishDictionary(query) : Promise.resolve([]),
   ])
 
