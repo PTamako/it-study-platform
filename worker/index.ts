@@ -291,11 +291,13 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
 
-    // 初始版本只提供只读接口；未开放写入，减少误操作与安全风险。
     if (request.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: { 'allow': 'GET, OPTIONS' } })
+      return new Response(null, { status: 204, headers: { 'allow': 'GET, POST, OPTIONS' } })
     }
-    if (request.method !== 'GET') return json({ error: '不支持此请求方法' }, 405)
+    const isWriteEndpoint = url.pathname === '/api/attempts' || url.pathname === '/api/scenario-attempts'
+    if (request.method !== 'GET' && !(request.method === 'POST' && isWriteEndpoint)) {
+      return json({ error: '不支持此请求方法' }, 405)
+    }
 
     // 健康检查同时检查 D1 是否能正常查询。
     if (url.pathname === '/api/health') {
@@ -373,6 +375,86 @@ export default {
         return json({ items: results })
       } catch {
         return json({ items: [], error: '语言课程尚未初始化，请先执行最新的 D1 迁移。' }, 503)
+      }
+    }
+
+    // 返回指定考试的真实实战情境。题目与评分规则从 D1 读取。
+    if (url.pathname === '/api/scenarios' && request.method === 'GET') {
+      const trackId = url.searchParams.get('track') || 'exam-sg'
+      try {
+        const { results } = await env.DB.prepare(
+          `SELECT id, track_id, title, category, difficulty, situation, task,
+                  options_json, source_type
+           FROM practical_scenarios WHERE track_id = ? ORDER BY id`,
+        ).bind(trackId).all()
+        return json({ items: results.map((row: Record<string, unknown>) => ({
+          ...row,
+          options: JSON.parse(String(row.options_json || '[]')),
+          options_json: undefined,
+        })) })
+      } catch {
+        return json({ items: [], error: '实战情境库尚未初始化，请先执行最新的 D1 迁移。' }, 503)
+      }
+    }
+
+    // 答题记录保存到 D1；此个人版尚未配置账号认证，不应存放敏感个人信息。
+    if (url.pathname === '/api/attempts' && request.method === 'POST') {
+      let body: Record<string, unknown>
+      try { body = await request.json() as Record<string, unknown> }
+      catch { return json({ error: '请求体必须是 JSON。' }, 400) }
+      const questionId = String(body.question_id || '').trim()
+      const answer = body.answer
+      const duration = Math.max(0, Math.min(86400, Math.floor(Number(body.duration_seconds) || 0)))
+      if (!questionId || answer === undefined) return json({ error: '缺少 question_id 或 answer。' }, 400)
+      try {
+        const question = await env.DB.prepare('SELECT id, answer_json FROM questions WHERE id = ?').bind(questionId).first() as Record<string, unknown> | null
+        if (!question) return json({ error: '题目不存在。' }, 404)
+        let expected: unknown
+        try { expected = JSON.parse(String(question.answer_json)) } catch { expected = null }
+        const correct = JSON.stringify(expected) === JSON.stringify(answer)
+        const attemptId = crypto.randomUUID()
+        await env.DB.prepare(
+          'INSERT INTO study_attempts (id, question_id, user_answer_json, is_correct, duration_seconds) VALUES (?, ?, ?, ?, ?)',
+        ).bind(attemptId, questionId, JSON.stringify(answer), correct ? 1 : 0, duration).run()
+        return json({ ok: true, attempt_id: attemptId, correct, answer: expected }, 201)
+      } catch {
+        return json({ error: '答题记录保存失败，请确认 D1 迁移已完成。' }, 503)
+      }
+    }
+
+    // 实战任务由服务端按 D1 中的评分规则判分，保存分数和反馈。
+    if (url.pathname === '/api/scenario-attempts' && request.method === 'POST') {
+      let body: Record<string, unknown>
+      try { body = await request.json() as Record<string, unknown> }
+      catch { return json({ error: '请求体必须是 JSON。' }, 400) }
+      const scenarioId = String(body.scenario_id || '').trim()
+      const selectedOption = String(body.selected_option || '').trim()
+      const duration = Math.max(0, Math.min(86400, Math.floor(Number(body.duration_seconds) || 0)))
+      if (!scenarioId || !selectedOption) return json({ error: '缺少 scenario_id 或 selected_option。' }, 400)
+      try {
+        const scenario = await env.DB.prepare(
+          'SELECT id, track_id, options_json, scoring_json, best_option, explanation FROM practical_scenarios WHERE id = ?',
+        ).bind(scenarioId).first() as Record<string, unknown> | null
+        if (!scenario) return json({ error: '实战任务不存在。' }, 404)
+        const options = JSON.parse(String(scenario.options_json || '[]')) as Array<{id: string; text: string}>
+        if (!options.some(option => option.id === selectedOption)) return json({ error: '所选选项不属于此任务。' }, 400)
+        const scoring = JSON.parse(String(scenario.scoring_json || '{}')) as Record<string, number>
+        const score = Math.max(0, Math.min(100, Math.floor(Number(scoring[selectedOption] ?? 0))))
+        const attemptId = crypto.randomUUID()
+        await env.DB.prepare(
+          'INSERT INTO scenario_attempts (id, scenario_id, track_id, selected_option, score, feedback, duration_seconds) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        ).bind(attemptId, scenarioId, String(scenario.track_id), selectedOption, score, String(scenario.explanation || ''), duration).run()
+        return json({
+          ok: true,
+          attempt_id: attemptId,
+          score,
+          selected_option: selectedOption,
+          best_option: String(scenario.best_option),
+          correct: selectedOption === String(scenario.best_option),
+          feedback: String(scenario.explanation || ''),
+        }, 201)
+      } catch {
+        return json({ error: '实战结果保存失败，请确认 D1 迁移已完成。' }, 503)
       }
     }
 
