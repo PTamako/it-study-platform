@@ -1,8 +1,8 @@
-name = "it-study-platform-api"
+name = "it-study-platform"
 main = "worker/index.ts"
 compatibility_date = "2026-10-22"
 
-# 将 Vue/Vite 构建生成的 dist 目录与 Worker API 一起部署。
+# 唯一主 Worker：前端静态资源与 API 共用该服务，避免 CLI 再创建 it-study-platform-api。
 [assets]
 directory = "./dist"
 binding = "ASSETS"
