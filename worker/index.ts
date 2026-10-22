@@ -209,7 +209,7 @@ export default {
         await env.DB.prepare('SELECT 1 AS ok').first()
         return json({ ok: true, service: 'it-study-platform', database: '已连接' })
       } catch {
-        return json({ ok: false, service: 'it-study-platform-api', database: '暂不可用' }, 503)
+        return json({ ok: false, service: 'it-study-platform', database: '暂不可用' }, 503)
       }
     }
 
