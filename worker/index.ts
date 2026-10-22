@@ -135,8 +135,6 @@ function englishDictionaryEntries(rows: LooseRecord[], zh: string, ja: string): 
       example,
       language: 'en',
       source: 'Free Dictionary',
-      // 保留日语译文，作为额外学习提示；对应字段在卡片的中文释义中展示。
-      ...(ja ? { reading: '日语：' + ja } : {}),
     }
   }).filter((entry) => Boolean(entry.term && entry.en))
 }
