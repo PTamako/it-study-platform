@@ -2,6 +2,14 @@ name = "it-study-platform-api"
 main = "worker/index.ts"
 compatibility_date = "2026-10-22"
 
+# 将 Vue/Vite 构建生成的 dist 目录与 Worker API 一起部署。
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+# API 请求先交给 Worker，其他静态资源由 Cloudflare 直接托管。
+run_worker_first = ["/api/*"]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "it-study-platform-db"
