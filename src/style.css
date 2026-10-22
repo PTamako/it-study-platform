@@ -199,3 +199,12 @@
 .scenario-feedback p{font-size:12px;line-height:1.9;color:#62677a;margin:9px 0 14px;white-space:pre-line}
 .scenario-feedback .primary-button{margin-top:2px}
 @media(max-width:560px){.scenario-toolbar{align-items:flex-start;flex-direction:column}.scenario-toolbar label{width:100%;align-items:flex-start;flex-direction:column}.scenario-toolbar select{width:100%;max-width:100%}.scenario-card>h3{font-size:17px}}
+
+/* Clear, reachable dictionary views: search and saved vocabulary are separate tabs. */
+.dictionary-view-switch{margin-top:4px;margin-bottom:14px}
+.dictionary-view-tabs{display:flex;gap:8px;flex-wrap:wrap;padding:5px;border:1px solid #e9ebf5;border-radius:14px;background:#fff}
+.dictionary-view-tabs button{display:flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:10px 15px;border:0;border-radius:10px;background:transparent;color:#777c91;font-size:12px;font-weight:700}
+.dictionary-view-tabs button.chosen{background:#eeefff;color:#4f5ed3}
+.saved-tab-count{display:inline-grid;place-items:center;min-width:21px;height:21px;padding:0 5px;border-radius:999px;background:#e3e5ff;color:#4f5ed3;font-size:10px}
+.saved-vocabulary-block{margin-top:12px}
+@media(max-width:560px){.dictionary-view-tabs{display:grid;grid-template-columns:1fr 1fr}.dictionary-view-tabs button{padding:10px 8px;font-size:11px}}
