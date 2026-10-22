@@ -470,7 +470,7 @@ export default {
     // 读取指定日期的每日任务完成状态。
     if (url.pathname === '/api/daily-tasks' && request.method === 'GET') {
       const studyDate = url.searchParams.get('date') || new Date().toISOString().slice(0, 10)
-      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(studyDate)) return json({ items: [], error: 'date 格式应为 YYYY-MM-DD。' }, 400)
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(studyDate)) return json({ items: [], error: 'date 格式应为 YYYY-MM-DD。' }, 400)
       try {
         const { results } = await env.DB.prepare(
           'SELECT task_id, study_date, completed, updated_at FROM daily_task_completions WHERE study_date = ? ORDER BY task_id',
@@ -486,7 +486,7 @@ export default {
       catch { return json({ error: '请求体必须是 JSON。' }, 400) }
       const taskId = String(body.task_id || '').trim()
       const studyDate = String(body.study_date || '')
-      if (!taskId || !/^\\d{4}-\\d{2}-\\d{2}$/.test(studyDate)) return json({ error: 'task_id 或 study_date 格式无效。' }, 400)
+      if (!taskId || !/^\d{4}-\d{2}-\d{2}$/.test(studyDate)) return json({ error: 'task_id 或 study_date 格式无效。' }, 400)
       const completed = body.completed === true || body.completed === 1
       try {
         await env.DB.prepare(
