@@ -384,7 +384,7 @@ export default {
         const [attempts, scenarios, language, saved, tasks] = await Promise.all([
           env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(is_correct), 0) AS correct FROM study_attempts').first() as Promise<Record<string, unknown>>,
           env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(AVG(score), 0) AS average_score FROM scenario_attempts').first() as Promise<Record<string, unknown>>,
-          env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(mastered), 0) AS mastered FROM language_card_progress').first() as Promise<Record<string, unknown>>,
+          env.DB.prepare('SELECT (SELECT COUNT(*) FROM language_cards) AS total, COALESCE((SELECT SUM(mastered) FROM language_card_progress), 0) AS mastered').first() as Promise<Record<string, unknown>>,
           env.DB.prepare('SELECT COUNT(*) AS total FROM saved_vocabulary_entries').first() as Promise<Record<string, unknown>>,
           env.DB.prepare("SELECT COUNT(*) AS total, COALESCE(SUM(completed), 0) AS completed FROM daily_task_completions WHERE study_date = date('now')").first() as Promise<Record<string, unknown>>,
         ])
@@ -465,6 +465,18 @@ export default {
         ).bind(term, language, JSON.stringify(entry)).run()
         return json({ ok: true, term, saved: true })
       } catch { return json({ error: '保存生词失败，请确认已应用最新 D1 迁移。' }, 503) }
+    }
+
+    // 读取指定日期的每日任务完成状态。
+    if (url.pathname === '/api/daily-tasks' && request.method === 'GET') {
+      const studyDate = url.searchParams.get('date') || new Date().toISOString().slice(0, 10)
+      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(studyDate)) return json({ items: [], error: 'date 格式应为 YYYY-MM-DD。' }, 400)
+      try {
+        const { results } = await env.DB.prepare(
+          'SELECT task_id, study_date, completed, updated_at FROM daily_task_completions WHERE study_date = ? ORDER BY task_id',
+        ).bind(studyDate).all()
+        return json({ items: results })
+      } catch { return json({ items: [], error: '每日任务表尚未初始化。' }, 503) }
     }
 
     // 每日任务状态按日期写入 D1。
