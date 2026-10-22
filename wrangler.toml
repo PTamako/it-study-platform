@@ -1,0 +1,12 @@
+name = "it-study-platform-api"
+main = "worker/index.ts"
+compatibility_date = "2026-10-22"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "it-study-platform-db"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[vars]
+APP_ENV = "production"
