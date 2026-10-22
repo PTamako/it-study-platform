@@ -186,12 +186,6 @@ const languageCategories = [
   { title: '词汇与语法', desc: '词义、搭配和句型', icon: BookMarked },
 ]
 
-const examTracks = [
-  { code: 'SG', name: '信息安全管理考试', detail: '情報セキュリティマネジメント試験', progress: 0, color: 'purple' },
-  { code: 'FE', name: '基本信息技术者考试', detail: '基本情報技術者試験', progress: 0, color: 'blue' },
-  { code: 'AP', name: '应用信息技术者考试', detail: '応用情報技術者試験', progress: 0, color: 'green' },
-]
-
 type LanguageCard = {
   id: string; language: 'ja' | 'en'; category: string; term: string; reading?: string;
   meaning_zh: string; explanation: string; example: string; example_meaning_zh: string; source_type: string
@@ -465,15 +459,20 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
         <template v-else-if="activeModule === 'exam'">
           <section class="section-block module-page-section">
             <div class="section-heading"><div><div class="section-kicker">YOUR EXAM ROADMAP</div><h2>选择要准备的考试</h2><p>题库会明确标注官方来源、授权题目或练习题，不混淆真题与生成题。</p></div><span class="section-index">EXAM</span></div>
+            <p v-if="tracksLoading" class="dictionary-status">正在读取 D1 中已启用的考试…</p>
+            <p v-else-if="tracksError" class="dictionary-status dictionary-error">{{ tracksError }}</p>
             <div class="exam-list">
-              <button v-for="exam in examTracks" :key="exam.code" class="exam-card" @click="searchText = exam.code">
-                <span class="exam-code" :class="exam.color">{{ exam.code }}</span><span class="exam-info"><strong>{{ exam.name }}</strong><small>{{ exam.detail }}</small><span class="progress-track"><span :style="{ width: exam.progress + '%' }"></span></span></span><span class="exam-progress">{{ exam.progress ? exam.progress + '%' : '未开始' }}</span><ChevronRight :size="18" class="muted" />
+              <button v-for="exam in examTracks" :key="exam.id" class="exam-card" :class="{ 'exam-card-selected': selectedTrackId === exam.id }" @click="selectExam(exam)">
+                <span class="exam-code" :class="exam.id.endsWith('sg') ? 'purple' : exam.id.endsWith('fe') ? 'blue' : 'green'">{{ exam.id.split('-').pop()?.toUpperCase() }}</span>
+                <span class="exam-info"><strong>{{ exam.title }}</strong><small>{{ exam.subtitle }}</small><span class="progress-track"><span :style="{ width: exam.question_count ? '100%' : '0%' }"></span></span></span>
+                <span class="exam-progress">{{ exam.question_count ? exam.question_count + ' 道可练习' : '题库尚未接入' }}</span><ChevronRight :size="18" class="muted" />
               </button>
+              <div v-if="!tracksLoading && !tracksError && examTracks.length === 0" class="empty-state"><GraduationCap :size="25" /><strong>暂无已启用的考试</strong><p>请先在 D1 学习模块表中启用考试。</p></div>
             </div>
 
 
             <section class="practice-section">
-              <div class="section-heading"><div><div class="section-kicker">SG PRACTICE ROOM</div><h2>SG 练习题</h2><p>第一批 5 道自编示范题，用于搭建答题、判分和解析流程；不是官方真题。</p></div><span class="source-pill">自编练习题</span></div>
+              <div class="section-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2><p>题目根据上方所选考试读取；未接入题库的考试不会展示假题。</p></div><span class="source-pill">自编练习题</span></div>
               <div v-if="!quizQuestions.length || quizFinished" class="panel practice-start-card">
                 <template v-if="quizFinished">
                   <div class="practice-result-icon"><CheckCircle2 :size="28" /></div>
@@ -484,14 +483,15 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 </template>
                 <template v-else>
                   <div class="practice-start-icon"><GraduationCap :size="25" /></div>
-                  <h3>准备好做一组 SG 练习了吗？</h3>
-                  <p>从 D1 读取题目，答题后显示正确答案、日语解释和错误选项辨析。</p>
-                  <button class="primary-button" @click="startPractice" :disabled="quizLoading">{{ quizLoading ? '正在加载题目…' : '开始练习（最多 10 题）' }} <ArrowRight :size="16" /></button>
+                  <h3>准备好开始练习了吗？</h3>
+                  <p v-if="selectedTrack?.question_count">从 D1 读取 {{ selectedTrack.title }} 题目，提交后查看正确答案与解析。</p>
+                  <p v-else>你可以选择不同考试。目前只有 SG 已接入题目；其他考试准备好题库后才会开放练习。</p>
+                  <button class="primary-button" @click="startPractice" :disabled="quizLoading || !selectedTrack || selectedTrack.question_count === 0">{{ quizLoading ? '正在加载题目…' : selectedTrack?.question_count ? '开始练习（最多 10 题）' : '当前暂无可练习题目' }} <ArrowRight :size="16" /></button>
                   <p v-if="quizError" class="practice-error">{{ quizError }}</p>
                 </template>
               </div>
               <div v-else-if="currentQuestion" class="panel question-card">
-                <div class="question-topline"><span>第 {{ quizIndex + 1 }} / {{ quizQuestions.length }} 题</span><span class="source-pill">自编练习题</span></div>
+                <div class="question-topline"><span>{{ selectedTrack?.title || '考试练习' }} · 第 {{ quizIndex + 1 }} / {{ quizQuestions.length }} 题</span><span class="source-pill">{{ currentQuestion?.source_type === 'generated' ? '自编练习题' : currentQuestion?.source_type === 'official' ? '官方题目' : currentQuestion?.source_type === 'licensed' ? '授权题目' : '个人题目' }}</span></div>
                 <div class="question-progress"><span :style="{ width: ((quizIndex + 1) / quizQuestions.length * 100) + '%' }"></span></div>
                 <div class="question-topic">{{ currentQuestion.topic }}</div>
                 <h3 class="question-prompt">{{ currentQuestion.prompt }}</h3>
