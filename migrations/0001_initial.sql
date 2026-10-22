@@ -63,3 +63,12 @@ CREATE TABLE IF NOT EXISTS vocabulary_relations (
 CREATE INDEX IF NOT EXISTS idx_questions_track_topic ON questions(track_id, topic);
 CREATE INDEX IF NOT EXISTS idx_attempts_question_date ON study_attempts(question_id, answered_at);
 CREATE INDEX IF NOT EXISTS idx_vocabulary_review ON vocabulary(next_review_at);
+
+-- 初始化常用学习模块；这些是模块目录，不是虚构的考试题目。
+INSERT OR IGNORE INTO study_tracks (id, kind, title, subtitle) VALUES
+  ('exam-sg', 'exam', '信息安全管理考试（SG）', '情報セキュリティマネジメント試験'),
+  ('exam-fe', 'exam', '基本信息技术者考试（FE）', '基本情報技術者試験'),
+  ('exam-ap', 'exam', '应用信息技术者考试（AP）', '応用情報技術者試験'),
+  ('language-ja', 'language', '日语学习', '日常会话、职场表达、词汇语法、听说读写'),
+  ('language-en', 'language', '英语学习', '日常会话、职场表达、词汇语法、听说读写'),
+  ('dictionary-it', 'dictionary', '多语言词典与 IT 术语', '中文、日语、英语词条与专业术语');
