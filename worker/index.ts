@@ -126,10 +126,10 @@ function englishDictionaryEntries(rows: LooseRecord[], zh: string, ja: string): 
   }).filter((entry) => Boolean(entry.term && entry.en))
 }
 
-async function lookupDictionary(query: string): Promise<DictionaryApiEntry[]> {
+async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' = 'auto'): Promise<DictionaryApiEntry[]> {
   const hasKana = /[\u3040-\u30ff]/.test(query)
   const hasCjk = /[\u3400-\u9fff]/.test(query)
-  const language: 'ja' | 'en' | 'zh' = hasKana ? 'ja' : hasCjk ? 'zh' : 'en'
+  const language: 'ja' | 'en' | 'zh' = requestedLanguage === 'auto' ? (hasKana ? 'ja' : hasCjk ? 'zh' : 'en') : requestedLanguage
   let zh = ''
   let ja = ''
   let en = ''
@@ -231,8 +231,12 @@ export default {
       const query = (url.searchParams.get('q') || '').trim()
       if (!query) return json({ items: [], error: '请提供要查询的词语。' }, 400)
       if (query.length > 100) return json({ items: [], error: '查询内容不能超过 100 个字符。' }, 400)
+      const requestedLanguage = url.searchParams.get('lang') || 'auto'
+      if (!['auto', 'ja', 'en', 'zh'].includes(requestedLanguage)) {
+        return json({ items: [], error: 'lang 参数只支持 auto、ja、en、zh。' }, 400)
+      }
       try {
-        const items = await lookupDictionary(query)
+        const items = await lookupDictionary(query, requestedLanguage as 'auto' | 'ja' | 'en' | 'zh')
         return json({
           items,
           query,
