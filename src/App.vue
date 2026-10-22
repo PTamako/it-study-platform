@@ -185,6 +185,7 @@ async function submitScenario() {
       correct: Boolean(data.correct),
       feedback: String(data.feedback || ''),
     }
+    void loadCloudDashboard()
   } catch (error) {
     scenariosError.value = error instanceof Error ? error.message : '实战结果保存失败，请稍后重试。'
   } finally {
@@ -260,6 +261,8 @@ function submitPracticeAnswer() {
     if (!response.ok) {
       const data = await response.json().catch(() => ({})) as { error?: string }
       quizError.value = data.error || '本次答题已显示，但保存到学习记录失败。'
+    } else {
+      void loadCloudDashboard()
     }
   }).catch(() => { quizError.value = '网络异常：本次答题结果尚未保存到云端。' })
 }
