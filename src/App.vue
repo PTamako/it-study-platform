@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import {
   BookOpen, Languages, Search, Headphones, BriefcaseBusiness, GraduationCap,
   ChevronRight, Sparkles, Clock3, Flame, Bookmark, Volume2, ArrowRight,
-  ShieldCheck, Code2, BookMarked, Menu, X, CheckCircle2, CircleHelp,
+  ShieldCheck, BookMarked, Menu, X, CheckCircle2, CircleHelp,
 } from 'lucide-vue-next'
 
 type ModuleId = 'home' | 'exam' | 'japanese' | 'english' | 'dictionary'
