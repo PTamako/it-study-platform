@@ -98,7 +98,7 @@ const languageCategories = [
 ]
 
 const examTracks = [
-  { code: 'SG', name: '信息安全管理考试', detail: '情報セキュリティマネジメント試験', progress: 24, color: 'purple' },
+  { code: 'SG', name: '信息安全管理考试', detail: '情報セキュリティマネジメント試験', progress: 0, color: 'purple' },
   { code: 'FE', name: '基本信息技术者考试', detail: '基本情報技術者試験', progress: 0, color: 'blue' },
   { code: 'AP', name: '应用信息技术者考试', detail: '応用情報技術者試験', progress: 0, color: 'green' },
 ]
