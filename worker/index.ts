@@ -142,7 +142,7 @@ function englishDictionaryEntries(rows: LooseRecord[], zh: string, ja: string): 
 async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Promise<DictionaryApiEntry[]> {
   const query = rawQuery.trim()
   if (!query) return []
-  const select = `SELECT term, reading, meaning_zh, meaning_ja, meaning_en, example, source_module
+  const select = `SELECT term, language, reading, meaning_zh, meaning_ja, meaning_en, example, source_module
     FROM vocabulary`
   const exactResult = await db.prepare(
     `${select}
@@ -156,8 +156,8 @@ async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Prom
   ).bind(query, query, query, query, query).all()
   let results = exactResult.results as Record<string, unknown>[]
   if (!results.length) {
-    // Avoid matching common tiny strings like "it" inside every English definition.
-    // Allow shorter Chinese/Japanese fragments because their characters encode more information.
+    // Avoid matching tiny strings like "it" inside every English definition.
+    // CJK words are information-dense, so short Chinese/Japanese queries remain searchable.
     const isCjk = /[\u3400-\u9fff\u3040-\u30ff]/.test(query)
     if (query.length < (isCjk ? 2 : 3)) return []
     const partialResult = await db.prepare(
@@ -179,7 +179,7 @@ async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Prom
     zh: String(row.meaning_zh || ''),
     translationJa: String(row.meaning_ja || ''),
     tag: 'IT 术语 · ' + String(row.source_module || '专业词汇'),
-    language: 'ja' as const,
+    language: String(row.language || 'ja') as 'ja' | 'en' | 'zh',
     source: '知学 IT 术语库（D1）',
     example: String(row.example || ''),
     technical: true,
