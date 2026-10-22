@@ -6,7 +6,7 @@
 
 - **考试备考**：已搭建 SG 第一批 5 道自编示范练习题的答题流程，支持选择答案、即时判分、日语解释、正确选项提示和本次得分；示范题不是官方真题。后续可扩展 FE、AP 等考试，并区分官方真题、授权题目、生成练习题和个人题目。
 - **日语与英语**：采用相同的六类学习结构，分别适配语法、读音和发音规则。
-- **词典与 IT 术语**：管理中日英术语、例句、缩写和个人生词本。
+- **多语言词典**：日常日语、普通英语、中文与 IT 术语同一入口查询；支持自动识别/手动选择查询语言、在线词义/翻译、发音、结果来源与本地生词收藏。在线词典依赖第三方公开接口，部分词条可能没有结果。
 - **学习计划与今日进度**：每日任务清单、目标分钟数、完成比例；任务完成状态按日期保存在当前设备。
 - **考试统计与历史成绩**：手动记录每次练习的考试名称、答对数和总题数，自动计算总体正确率、累计答题量，并展示近 7 天正确率曲线和历史记录。无成绩时显示空状态，不生成虚假数据。
 - **PWA**：支持通过 iPhone Safari 的“分享 → 添加到主屏幕”安装为类 App 入口。
@@ -61,7 +61,7 @@ npm run build
 
 ### 通过 Cloudflare 控制台连接 GitHub 自动部署
 
-在 Cloudflare 的 Workers & Pages / Workers Builds 创建 Worker Git 部署，连接 `PTamako/it-study-platform`。构建命令使用 `npm run build`，部署命令使用 `npx wrangler deploy`。Wrangler 会读取仓库根目录的 `wrangler.toml`。
+在 Cloudflare Workers Builds 中只保留一个关联此仓库的生产部署。`wrangler.toml` 的 `name` 固定为 `it-study-platform`，因此本地 `npx wrangler deploy` 与 Git 自动部署都应更新同一个 Worker，而不是另建 `it-study-platform-api`。部署配置变更后，先构建，再部署，并验证主站和 API。若 Cloudflare 中仍留有历史 `it-study-platform-api` Worker，验证主 Worker 正常前请不要删除；确认无流量后再从控制台停用或删除旧服务。
 
 部署前先完成一次远程 D1 迁移。Git 自动部署本身不会自动执行 SQL migration。
 
@@ -76,6 +76,8 @@ npm run build
 - `<WORKER_URL>/`：应显示学习平台页面。
 - `<WORKER_URL>/api/health`：D1 初始化成功后应返回 `ok: true`。
 - `<WORKER_URL>/api/tracks`：应返回学习模块列表。
+- `<WORKER_URL>/api/dictionary?q=hello&lang=en`：应返回在线英文字典结果；如第三方服务未响应，可能返回空结果。
+- `<WORKER_URL>/api/dictionary?q=こんにちは&lang=ja`：应返回日语词条/翻译结果。
 
 ## 题库真实性
 
