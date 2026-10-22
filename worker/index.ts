@@ -207,7 +207,7 @@ export default {
     if (url.pathname === '/api/health') {
       try {
         await env.DB.prepare('SELECT 1 AS ok').first()
-        return json({ ok: true, service: 'it-study-platform-api', database: '已连接' })
+        return json({ ok: true, service: 'it-study-platform', database: '已连接' })
       } catch {
         return json({ ok: false, service: 'it-study-platform-api', database: '暂不可用' }, 503)
       }
