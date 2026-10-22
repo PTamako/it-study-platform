@@ -95,6 +95,68 @@ const quizStartedAt = ref(0)
 const quizFinished = ref(false)
 const currentQuestion = computed(() => quizQuestions.value[quizIndex.value] || null)
 const isLastQuestion = computed(() => quizIndex.value >= quizQuestions.value.length - 1)
+
+type ScenarioOption = { id: string; text: string }
+type PracticalScenario = {
+  id: string; track_id: string; title: string; category: string; difficulty: string;
+  situation: string; task: string; options: ScenarioOption[]; source_type: string
+}
+const scenarios = ref<PracticalScenario[]>([])
+const scenariosLoading = ref(false)
+const scenariosError = ref('')
+const selectedScenarioId = ref('')
+const selectedScenarioOption = ref('')
+const scenarioSubmitting = ref(false)
+const scenarioResult = ref<{ score: number; best_option: string; correct: boolean; feedback: string } | null>(null)
+const currentScenario = computed(() => scenarios.value.find(item => item.id === selectedScenarioId.value) || scenarios.value[0] || null)
+async function loadScenarios() {
+  if (!selectedTrack.value) { scenarios.value = []; return }
+  scenariosLoading.value = true
+  scenariosError.value = ''
+  scenarioResult.value = null
+  selectedScenarioOption.value = ''
+  try {
+    const response = await fetch('/api/scenarios?track=' + encodeURIComponent(selectedTrack.value.id))
+    const data = await response.json() as { items?: PracticalScenario[]; error?: string }
+    if (!response.ok) throw new Error(data.error || '实战任务加载失败')
+    scenarios.value = data.items || []
+    selectedScenarioId.value = scenarios.value[0]?.id || ''
+  } catch (error) {
+    scenariosError.value = error instanceof Error ? error.message : '实战任务加载失败，请稍后重试。'
+    scenarios.value = []
+  } finally {
+    scenariosLoading.value = false
+  }
+}
+async function submitScenario() {
+  if (!currentScenario.value || !selectedScenarioOption.value || scenarioSubmitting.value || scenarioResult.value) return
+  scenarioSubmitting.value = true
+  scenariosError.value = ''
+  try {
+    const response = await fetch('/api/scenario-attempts', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        scenario_id: currentScenario.value.id,
+        selected_option: selectedScenarioOption.value,
+        duration_seconds: 0,
+      }),
+    })
+    const data = await response.json() as { score?: number; best_option?: string; correct?: boolean; feedback?: string; error?: string }
+    if (!response.ok) throw new Error(data.error || '实战结果保存失败')
+    scenarioResult.value = {
+      score: Number(data.score || 0),
+      best_option: String(data.best_option || ''),
+      correct: Boolean(data.correct),
+      feedback: String(data.feedback || ''),
+    }
+  } catch (error) {
+    scenariosError.value = error instanceof Error ? error.message : '实战结果保存失败，请稍后重试。'
+  } finally {
+    scenarioSubmitting.value = false
+  }
+}
+watch(selectedTrackId, () => { void loadScenarios() })
 async function loadExamTracks() {
   tracksLoading.value = true
   tracksError.value = ''
@@ -150,6 +212,21 @@ function submitPracticeAnswer() {
   if (!currentQuestion.value || !selectedOption.value || quizSubmitted.value) return
   quizSubmitted.value = true
   if (selectedOption.value === currentQuestion.value.answer) quizCorrect.value += 1
+  // 真实答题记录写入 D1；本地分数仍即时显示，保存失败会提示而不丢失当前答题流程。
+  void fetch('/api/attempts', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      question_id: currentQuestion.value.id,
+      answer: selectedOption.value,
+      duration_seconds: quizStartedAt.value ? Math.floor((Date.now() - quizStartedAt.value) / 1000) : 0,
+    }),
+  }).then(async response => {
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({})) as { error?: string }
+      quizError.value = data.error || '本次答题已显示，但保存到学习记录失败。'
+    }
+  }).catch(() => { quizError.value = '网络异常：本次答题结果尚未保存到云端。' })
 }
 function nextPracticeQuestion() {
   if (!isLastQuestion.value) {
@@ -531,6 +608,44 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                   <button v-if="!quizSubmitted" class="primary-button" :disabled="!selectedOption" @click="submitPracticeAnswer">提交答案 <ArrowRight :size="15" /></button>
                   <button v-else class="primary-button" @click="nextPracticeQuestion">{{ isLastQuestion ? '查看本次成绩' : '下一题' }} <ArrowRight :size="15" /></button>
                 </div>
+              </div>
+            </section>
+            <section class="section-block practical-section">
+              <div class="section-heading"><div><div class="section-kicker">PRACTICAL SCENARIOS</div><h2>实战演练</h2><p>在模拟的工作场景中做出决策，系统按数据库里的评分规则判分并保存结果。</p></div><span class="source-pill">情境练习 · 非官方真题</span></div>
+              <p v-if="scenariosLoading" class="dictionary-status">正在从 D1 加载实战任务…</p>
+              <p v-else-if="scenariosError" class="dictionary-status dictionary-error">{{ scenariosError }}</p>
+              <div v-else-if="!scenarios.length" class="panel practice-start-card">
+                <div class="practice-start-icon"><Target :size="25" /></div><h3>该考试暂时没有实战任务</h3>
+                <p>目前实战情境先接入 SG。其他考试需要分别准备对应的任务和评分规则。</p>
+              </div>
+              <div v-else-if="currentScenario" class="panel scenario-card">
+                <div class="scenario-toolbar">
+                  <label>选择任务
+                    <select v-model="selectedScenarioId" @change="selectedScenarioOption = ''; scenarioResult = null">
+                      <option v-for="scenario in scenarios" :key="scenario.id" :value="scenario.id">{{ scenario.title }}</option>
+                    </select>
+                  </label>
+                  <span class="source-pill">{{ currentScenario.category }}</span>
+                </div>
+                <h3>{{ currentScenario.title }}</h3>
+                <div class="scenario-situation"><strong>情境</strong><p>{{ currentScenario.situation }}</p></div>
+                <div class="scenario-task"><strong>你的任务</strong><p>{{ currentScenario.task }}</p></div>
+                <div class="question-options scenario-options">
+                  <button v-for="option in currentScenario.options" :key="option.id" class="question-option" :class="{ selected: selectedScenarioOption === option.id, correct: scenarioResult && option.id === scenarioResult.best_option, incorrect: scenarioResult && selectedScenarioOption === option.id && !scenarioResult.correct }" :disabled="!!scenarioResult" @click="selectedScenarioOption = option.id">
+                    <span>{{ option.id.toUpperCase() }}</span><strong>{{ option.text }}</strong><CheckCircle2 v-if="scenarioResult && option.id === scenarioResult.best_option" :size="17" />
+                  </button>
+                </div>
+                <div v-if="scenarioResult" class="scenario-feedback" :class="{ right: scenarioResult.correct }">
+                  <div class="scenario-score">{{ scenarioResult.score }}<small> / 100</small></div>
+                  <strong>{{ scenarioResult.correct ? '判断正确' : '复盘一下决策' }} · 最优选项 {{ scenarioResult.best_option.toUpperCase() }}</strong>
+                  <p>{{ scenarioResult.feedback }}</p>
+                  <button class="primary-button" @click="scenarioResult = null; selectedScenarioOption = ''">重新演练 <ArrowRight :size="15" /></button>
+                </div>
+                <div v-else class="question-actions">
+                  <span class="question-hint">提交后由 Worker 根据 D1 评分规则判定并保存。</span>
+                  <button class="primary-button" :disabled="!selectedScenarioOption || scenarioSubmitting" @click="submitScenario">{{ scenarioSubmitting ? '正在判定…' : '提交决策并复盘' }} <ArrowRight :size="15" /></button>
+                </div>
+                <small class="language-source">情境与评分规则：平台自编学习材料，存储于 D1。</small>
               </div>
             </section>
             <section class="exam-performance">
