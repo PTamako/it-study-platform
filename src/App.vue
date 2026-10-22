@@ -515,6 +515,100 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' = 'ja-JP') {
           </section>
           <section class="notice-card dictionary-notice"><BookMarked :size="19" /><div><strong>个人生词本</strong><p>已收藏 {{ savedWords.length }} 个词条。收藏会保存在当前设备的浏览器中。</p></div></section>
         </template>
+                <template v-else>
+                  <div class="practice-start-icon"><GraduationCap :size="25" /></div>
+                  <h3>准备好做一组 SG 练习了吗？</h3>
+                  <p>从 D1 读取题目，答题后显示正确答案、日语解释和错误选项辨析。</p>
+                  <button class="primary-button" @click="startPractice" :disabled="quizLoading">{{ quizLoading ? '正在加载题目…' : '开始练习（最多 10 题）' }} <ArrowRight :size="16" /></button>
+                  <p v-if="quizError" class="practice-error">{{ quizError }}</p>
+                </template>
+              </div>
+              <div v-else-if="currentQuestion" class="panel question-card">
+                <div class="question-topline"><span>第 {{ quizIndex + 1 }} / {{ quizQuestions.length }} 题</span><span class="source-pill">自编练习题</span></div>
+                <div class="question-progress"><span :style="{ width: ((quizIndex + 1) / quizQuestions.length * 100) + '%' }"></span></div>
+                <div class="question-topic">{{ currentQuestion.topic }}</div>
+                <h3 class="question-prompt">{{ currentQuestion.prompt }}</h3>
+                <div class="question-options">
+                  <button v-for="option in currentQuestion.options" :key="option.id" class="question-option" :class="{ selected: selectedOption === option.id, correct: quizSubmitted && option.id === currentQuestion.answer, incorrect: quizSubmitted && selectedOption === option.id && option.id !== currentQuestion.answer }" :disabled="quizSubmitted" @click="selectedOption = option.id">
+                    <span>{{ option.id.toUpperCase() }}</span><strong>{{ option.text }}</strong><CheckCircle2 v-if="quizSubmitted && option.id === currentQuestion.answer" :size="17" />
+                  </button>
+                </div>
+                <div v-if="quizSubmitted" class="answer-explanation" :class="{ right: selectedOption === currentQuestion.answer }">
+                  <strong>{{ selectedOption === currentQuestion.answer ? '回答正确！' : '这题答错了' }} 正确答案：{{ currentQuestion.answer.toUpperCase() }}</strong>
+                  <p>{{ currentQuestion.explanation }}</p>
+                </div>
+                <div class="question-actions">
+                  <span v-if="!quizSubmitted" class="question-hint">选择一个答案后提交</span><span v-else class="question-hint">当前得分：{{ quizCorrect }} / {{ quizIndex + 1 }}</span>
+                  <button v-if="!quizSubmitted" class="primary-button" :disabled="!selectedOption" @click="submitPracticeAnswer">提交答案 <ArrowRight :size="15" /></button>
+                  <button v-else class="primary-button" @click="nextPracticeQuestion">{{ isLastQuestion ? '查看本次成绩' : '下一题' }} <ArrowRight :size="15" /></button>
+                </div>
+              </div>
+            </section>
+            <section class="exam-performance">
+              <div class="section-heading"><div><div class="section-kicker">YOUR SCORE HISTORY</div><h2>正确率与历史成绩</h2><p>正式题库接入前，可以手动记录练习成绩；记录会保存在当前设备。</p></div><button class="primary-button" @click="addExamRecord"><PlusCircle :size="16" /> 记录一次练习成绩</button></div>
+              <div class="metric-grid">
+                <div class="panel metric-card"><span class="metric-icon"><CheckCircle2 :size="18" /></span><small>累计答题</small><strong>{{ totalAnswered }}</strong><span>道题</span></div>
+                <div class="panel metric-card"><span class="metric-icon"><Target :size="18" /></span><small>总体正确率</small><strong>{{ overallAccuracy === null ? '—' : overallAccuracy + '%' }}</strong><span>{{ overallAccuracy === null ? '暂无成绩，记录后自动计算' : totalCorrect + ' 道答对' }}</span></div>
+                <div class="panel metric-card"><span class="metric-icon"><TrendingUp :size="18" /></span><small>考试记录</small><strong>{{ examRecords.length }}</strong><span>次练习</span></div>
+              </div>
+              <div class="panel curve-panel">
+                <div class="panel-heading"><div><h3>近 7 天正确率曲线</h3><p>每日答题正确率按题量加权计算，不存在记录的日期不绘制数据。</p></div><button v-if="examRecords.length" class="text-link" @click="removeExamRecords">清除记录</button></div>
+                <div v-if="examRecords.length" class="curve-chart">
+                  <div v-for="day in curveRecords" :key="day.date" class="curve-column">
+                    <div class="curve-value">{{ day.accuracy === null ? '—' : day.accuracy + '%' }}</div>
+                    <div class="curve-bar-area"><span v-if="day.accuracy !== null" class="curve-bar" :style="{ height: Math.max(4, day.accuracy) + '%' }"></span><span v-else class="curve-empty"></span></div>
+                    <small>{{ day.label }}</small>
+                  </div>
+                </div>
+                <div v-else class="curve-empty-state"><TrendingUp :size="24" /><strong>还没有历史成绩</strong><p>完成练习后，记录答对数和总题数，就能查看正确率与学习曲线。</p></div>
+                <div v-if="examRecords.length" class="history-list">
+                  <div v-for="(record, index) in [...examRecords].reverse()" :key="record.date + record.exam + index" class="history-row">
+                    <div><strong>{{ record.exam }} 练习</strong><small>{{ record.date }}</small></div>
+                    <span>{{ record.correct }} / {{ record.total }} 题</span>
+                    <strong class="history-accuracy">{{ Math.round(record.correct / record.total * 100) }}%</strong>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <div class="notice-card"><CircleHelp :size="19" /><div><strong>题库说明</strong><p>目前是平台框架阶段，尚未导入官方真题。接下来会先搭建 SG 的题目、答案解析、错题本与复习记录结构。</p></div></div>
+          </section>
+        </template>
+
+        <template v-else-if="activeModule === 'japanese' || activeModule === 'english'">
+          <section class="language-banner" :class="activeModule">
+            <div><span class="banner-tag">{{ activeModule === 'japanese' ? '日本語 · JAPANESE' : 'ENGLISH · 英语' }}</span><h2>{{ activeModule === 'japanese' ? '让表达更自然，让理解更快。' : 'Speak with more confidence.' }}</h2><p>{{ activeModule === 'japanese' ? '从日常对话到职场沟通，积累真正用得上的表达。' : 'Practice everyday conversation, listening, pronunciation and IT English.' }}</p></div>
+            <div class="banner-decoration"><Languages :size="64" stroke-width="1.1" /></div>
+          </section>
+          <section class="section-block">
+            <div class="section-heading"><div><div class="section-kicker">LEARNING PATH</div><h2>选择一个练习方向</h2><p>日语和英语采用相同的分类结构，内容和发音规则则分别适配对应语言。</p></div></div>
+            <div class="category-grid">
+              <button v-for="(category, i) in languageCategories" :key="category.title" class="category-card" @click="searchText = category.title">
+                <span class="category-number">0{{ i + 1 }}</span><span class="category-icon"><component :is="category.icon" :size="20" /></span><h3>{{ category.title }}</h3><p>{{ category.desc }}</p><ArrowRight :size="16" class="category-arrow" />
+              </button>
+            </div>
+          </section>
+          <section class="panel phrase-panel"><div class="panel-heading"><div><h3>{{ activeModule === 'japanese' ? '职场表达小练习' : 'Useful phrase of the day' }}</h3><p>先听一遍，再试着跟读。</p></div><span class="practice-badge">轻量练习</span></div>
+            <div class="phrase-content"><div><span class="phrase-label">{{ activeModule === 'japanese' ? '日本語' : 'ENGLISH' }}</span><h2>{{ activeModule === 'japanese' ? '確認してから、ご連絡します。' : 'I’ll check and get back to you.' }}</h2><p>{{ activeModule === 'japanese' ? '确认之后，我再联系您。' : '我确认一下，再回复你。' }}</p></div><button class="play-button" @click="speak(activeModule === 'japanese' ? '確認してから、ご連絡します。' : 'I’ll check and get back to you.', activeModule === 'japanese' ? 'ja-JP' : 'en-US')"><Volume2 :size="20" /> 听发音</button></div>
+          </section>
+        </template>
+
+        <template v-else>
+          <section class="dictionary-search">
+            <div class="search-box"><Search :size="19" /><input v-model="searchText" :placeholder="searchPlaceholder" @keyup.enter="activeLang = activeLang" /><button v-if="searchText" class="clear-search" @click="searchText = ''">清空</button></div>
+            <p>支持日语汉字、假名、英文术语与中文释义搜索。当前展示的是明确标注的内置示例词条。</p>
+          </section>
+          <section class="section-block">
+            <div class="section-heading"><div><div class="section-kicker">WORD BANK</div><h2>词条与 IT 专业术语</h2><p>中文理解 · 日语读音 · 英文术语 · 关联知识</p></div><span class="section-index">{{ filteredEntries.length }} 个词条</span></div>
+            <div class="dictionary-list">
+              <article v-for="entry in filteredEntries" :key="entry.term" class="dictionary-card">
+                <div class="dict-main"><div class="dict-term-row"><h3>{{ entry.term }}</h3><span class="reading">{{ entry.reading }}</span><span class="dict-tag">{{ entry.tag }}</span></div><div class="dict-en">{{ entry.en }}</div><p>{{ entry.zh }}</p></div>
+                <div class="dict-actions"><button class="round-action" @click="speak(entry.term)" :aria-label="'播放' + entry.term"><Volume2 :size="17" /></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" @click="toggleSaved(entry.term)" :aria-label="'收藏' + entry.term"><Bookmark :size="17" /></button></div>
+              </article>
+              <div v-if="filteredEntries.length === 0" class="empty-state"><Search :size="25" /><strong>没有找到匹配词条</strong><p>可以换个关键词，或之后把新词加入个人词典。</p></div>
+            </div>
+          </section>
+          <section class="notice-card dictionary-notice"><BookMarked :size="19" /><div><strong>个人生词本</strong><p>已收藏 {{ savedWords.length }} 个词条。当前收藏暂存在本页面状态中；后续会接入持久化存储和跨模块复习。</p></div></section>
+        </template>
 
         <footer class="footer"><span>知学 · 把每天的小进步，累积成自己的能力。</span><span>Vue 3 · TypeScript · Cloudflare</span></footer>
       </div>
