@@ -114,3 +114,19 @@
  .question-actions .primary-button{align-self:stretch;justify-content:center}
  .practice-start-card{padding:24px 16px}
 }
+
+
+/* Online multilingual dictionary */
+.dictionary-search-button{flex-shrink:0;border:0;border-radius:9px;padding:9px 13px;background:#5968df;color:#fff;font-size:11px;font-weight:700;white-space:nowrap}
+.dictionary-search-button:hover:not(:disabled){background:#4857cc}
+.dictionary-search-button:disabled{opacity:.6;cursor:wait}
+.dictionary-status{margin-top:10px!important;padding:9px 11px;border-radius:9px;background:#f5f5ff;color:#666bd0!important;line-height:1.65}
+.dictionary-status.dictionary-error{background:#fff5f5;color:#b45863!important}
+.dict-source{font-size:9px;color:#7f879a;border:1px solid #eceef5;border-radius:5px;padding:3px 6px;background:#fafbfe}
+.dict-example{padding-top:7px;border-top:1px solid #f0f1f6;color:#72778d!important}
+@media(max-width:560px){
+ .dictionary-search .search-box{gap:7px;padding:0 8px}
+ .dictionary-search-button{padding:8px 9px;font-size:10px}
+ .dictionary-search .search-box>svg{flex-shrink:0}
+ .dictionary-search .search-box input{font-size:11px}
+}
