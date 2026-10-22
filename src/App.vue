@@ -239,6 +239,8 @@ type DictionaryEntry = {
   example?: string
   language?: 'ja' | 'en' | 'zh'
   source?: string
+  translationJa?: string
+  technical?: boolean
 }
 const dictionaryEntries: DictionaryEntry[] = [
   { term: '認証', reading: 'にんしょう', en: 'Authentication', zh: '认证：确认“你是谁”', tag: '安全基础', language: 'ja', source: '内置词条' },
@@ -246,9 +248,11 @@ const dictionaryEntries: DictionaryEntry[] = [
   { term: '多要素認証', reading: 'たようそにんしょう', en: 'Multi-factor authentication (MFA)', zh: '多因素认证：结合不同类别的验证因素', tag: 'SG 高频', language: 'ja', source: '内置词条' },
 ]
 const onlineEntries = ref<DictionaryEntry[]>([])
+const recentDictionaryEntries = ref<DictionaryEntry[]>(readStored('zhixue:recent-dictionary', []))
 const dictionaryLoading = ref(false)
 const dictionaryError = ref('')
 const lastSearchedTerm = ref('')
+watch(recentDictionaryEntries, value => localStorage.setItem('zhixue:recent-dictionary', JSON.stringify(value)), { deep: true })
 const filteredEntries = computed(() => {
   const q = searchText.value.trim().toLowerCase()
   if (!q) return dictionaryEntries
@@ -281,6 +285,13 @@ async function lookupDictionary() {
     if (!response.ok) throw new Error(data.error || '在线词典暂时不可用，请稍后再试。')
     onlineEntries.value = data.items || []
     lastSearchedTerm.value = q
+    if (onlineEntries.value.length) {
+      const stamped = onlineEntries.value.filter(entry => entry.term).slice(0, 3)
+      recentDictionaryEntries.value = [
+        ...stamped,
+        ...recentDictionaryEntries.value.filter(old => !stamped.some(entry => entry.term === old.term)),
+      ].slice(0, 12)
+    }
     if (!onlineEntries.value.length) dictionaryError.value = data.error || '没有找到匹配词条。试试单个单词、日语假名或常见表达。'
   } catch (error) {
     dictionaryError.value = error instanceof Error ? error.message : '查询失败，请检查网络后重试。'
@@ -445,10 +456,11 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
           <section class="bottom-grid">
             <div class="panel recent-panel">
               <div class="panel-heading"><div><h3>最近查过的词</h3><p>把不熟悉的词，慢慢变成熟悉。</p></div><button class="text-link" @click="navigate('dictionary')">打开词典 <ArrowRight :size="14" /></button></div>
-              <div v-for="entry in dictionaryEntries.slice(0, 2)" :key="entry.term" class="word-row">
-                <div class="word-letter">{{ entry.term.slice(0,1) }}</div><div class="word-details"><strong>{{ entry.term }} <small>{{ entry.reading }}</small></strong><span>{{ entry.en }}</span></div>
-                <button class="round-action" @click="speak(entry.term)" aria-label="播放发音"><Volume2 :size="17" /></button>
+              <div v-for="entry in recentDictionaryEntries.slice(0, 2)" :key="entry.term" class="word-row">
+                <div class="word-letter">{{ entry.term.slice(0,1) }}</div><div class="word-details"><strong>{{ entry.term }} <small>{{ entry.reading || entry.phonetic || '' }}</small></strong><span>{{ entry.zh }}</span></div>
+                <button class="round-action" @click="speak(entry.term, entry.language === 'en' ? 'en-US' : entry.language === 'zh' ? 'zh-CN' : 'ja-JP')" aria-label="播放发音"><Volume2 :size="17" /></button>
               </div>
+              <div v-if="recentDictionaryEntries.length === 0" class="recent-dictionary-empty">查过的词会显示在这里，方便继续复习。</div>
             </div>
             <div class="panel daily-panel">
               <div class="daily-icon"><Clock3 :size="19" /></div><div class="daily-copy"><div class="section-kicker">A SMALL DAILY GOAL</div><h3>给今天设一个小目标</h3><p>做 5 道题、听 3 分钟，或记住一个新词，都很好。</p><button class="text-link" @click="navigate('language')">开始轻量练习 <ArrowRight :size="14" /></button></div>
@@ -606,8 +618,10 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 <div class="dict-main">
                   <div class="dict-term-row"><h3>{{ entry.term }}</h3><span v-if="entry.reading" class="reading">{{ entry.reading }}</span><span v-if="entry.phonetic" class="reading">{{ entry.phonetic }}</span><span class="dict-tag">{{ entry.tag }}</span><span v-if="entry.source" class="dict-source">{{ entry.source }}</span></div>
                   <div class="dict-en">{{ entry.en }}</div>
-                  <p>{{ entry.zh }}</p>
+                  <p class="dictionary-translation-zh">中文：{{ entry.zh || '暂无中文翻译' }}</p>
+                  <p v-if="entry.translationJa" class="dictionary-translation-ja">日语：{{ entry.translationJa }}</p>
                   <p v-if="entry.example" class="dict-example">例句：{{ entry.example }}</p>
+                  <p v-if="entry.technical" class="dictionary-tech-note">来自 IT 专业词汇库</p>
                 </div>
                 <div class="dict-actions"><button class="round-action" @click="speak(entry.term, entry.language === 'en' ? 'en-US' : entry.language === 'zh' ? 'zh-CN' : 'ja-JP')" :aria-label="'播放' + entry.term"><Volume2 :size="17" /></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
               </article>
