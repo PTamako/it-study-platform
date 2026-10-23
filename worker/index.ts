@@ -388,7 +388,7 @@ function englishDictionaryEntries(rows: LooseRecord[], _zh: string, ja: string):
 }
 
 async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Promise<DictionaryApiEntry[]> {
-  const query = rawQuery.normalize('NFKC').trim().replace(/\\s+/g, ' ')
+  const query = rawQuery.normalize('NFKC').trim().replace(/\s+/g, ' ')
   if (!query) return []
   const select = `SELECT term, language, reading, meaning_zh, meaning_ja, meaning_en, example, source_module, aliases
     FROM vocabulary`
