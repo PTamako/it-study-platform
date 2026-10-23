@@ -567,7 +567,7 @@ export default {
       }
       if (remaining) chunks.push(remaining)
       try {
-        const translatedChunks = await Promise.all(chunks.map(chunk => translateText(chunk, source, 'zh')))
+        const translatedChunks = await Promise.all(chunks.map(chunk => translateText(chunk, source, 'zh-CN')))
         if (translatedChunks.some(value => !value.trim())) {
           return json({ error: '在线翻译暂时不可用，请稍后重试。' }, 503)
         }
