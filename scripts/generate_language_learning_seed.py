@@ -40,17 +40,40 @@ def zhstrings(x):
  walk(x)
  return list(dict.fromkeys(z for z in out if z))
 def zhmap(db):
- c=sqlite3.connect(f"file:{db}?mode=ro",uri=True); tables={r[0] for r in c.execute("select name from sqlite_master where type='table'")}
+ c=sqlite3.connect(f"file:{db}?mode=ro",uri=True)
+ tables={r[0] for r in c.execute("select name from sqlite_master where type='table'")}
  if "zh_defs" not in tables:raise RuntimeError("Tomoshi DB has no zh_defs: "+str(sorted(tables)[:50]))
+ aliases={}
+ if "entries" in tables:
+  ecols=[r[1] for r in c.execute("pragma table_info(entries)")]
+  def epick(candidates):return next((x for x in candidates if x in ecols),None)
+  pk=epick(["id","entry_id","jmdict_id","ent_seq"])
+  jidcol=epick(["jmdict_id","ent_seq"])
+  jsoncol=epick(["data","entry_json","json","content","entry"])
+  if pk and jidcol:
+   for key,jid in c.execute(f'SELECT "{pk}","{jidcol}" FROM entries'):
+    if jid is not None:
+     aliases[str(key)]=str(jid);aliases[str(jid)]=str(jid)
+  elif pk and jsoncol:
+   for key,raw in c.execute(f'SELECT "{pk}","{jsoncol}" FROM entries'):
+    try:obj=json.loads(raw) if isinstance(raw,str) else raw
+    except Exception:obj={}
+    if isinstance(obj,dict):
+     jid=obj.get("jmdict_id") or obj.get("ent_seq") or obj.get("id")
+     if jid is not None:
+      aliases[str(key)]=str(jid);aliases[str(jid)]=str(jid)
  cols=[r[1] for r in c.execute("pragma table_info(zh_defs)")]
- key=next((x for x in ["entry_id","jmdict_id","id_entry","word_id"] if x in cols),None)
+ key=next((x for x in ["jmdict_id","ent_seq","entry_id","id_entry","word_id"] if x in cols),None)
  dat=next((x for x in ["data","glosses","definition","text","content","json"] if x in cols),None)
  if not key or not dat:raise RuntimeError("Unexpected zh_defs schema "+str(cols))
  out={}
  for i,d in c.execute(f'SELECT "{key}","{dat}" FROM zh_defs'):
+  canonical=aliases.get(str(i),str(i))
   vals=zhstrings(d)
-  if vals:out.setdefault(str(i),[]).extend(vals)
- c.close();return {k:list(dict.fromkeys(v)) for k,v in out.items()}
+  if vals:out.setdefault(canonical,[]).extend(vals)
+ c.close()
+ print("Tomoshi zh_defs key sample:", list(out.keys())[:3], "mapped OpenJLPT ID 1198180:", "1198180" in out)
+ return {k:list(dict.fromkeys(v)) for k,v in out.items()}
 def english_data(p):
  rows=[]; translations={}
  with p.open(encoding="utf-8-sig",newline="") as f:
@@ -85,8 +108,13 @@ def japanese_data(zmap,trans):
    if not w or not reading or w in seen:continue
    gloss=zmap.get(str(item.get("jmdict_id") or ""),[])
    if not gloss:
+    stopwords={"a","an","the","to","be","is","are","was","were","of","for","in","on","at","by","with","and","or","not","as","from","into","than","that","this","it","its"}
     for g in item.get("meanings",[]):
-     gloss.extend(trans[t] for t in re.findall(r"[A-Za-z][A-Za-z'-]*",str(g).lower()) if t in trans)
+     tokens=[t for t in re.findall(r"[A-Za-z][A-Za-z'-]*",str(g).lower()) if t not in stopwords]
+     mapped=[trans[t] for t in tokens if t in trans]
+     if mapped:
+      gloss.extend(mapped[:2])
+      break
    gloss=list(dict.fromkeys(norm(x) for x in gloss if norm(x)))
    if not gloss:continue
    ex=item.get("examples") or []
