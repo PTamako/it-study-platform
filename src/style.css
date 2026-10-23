@@ -354,3 +354,9 @@
 .question-category-button.active{border-color:#9384c8;background:#f4f0ff;color:#5e4b9a}
 .question-category-button.active span{background:#e3dcfb;color:#58449b}
 @media(max-width:560px){.question-category-section{padding:12px}.question-category-heading{align-items:flex-start;flex-direction:column;gap:3px}.question-category-filters{gap:7px}.question-category-button{font-size:11px;padding:7px 9px}}
+
+
+/* Clear, compact labels for the two pronunciation modes in the English/Japanese dictionary. */
+.pronunciation-button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;width:39px;height:39px;border-radius:10px;background:#f7f8ff;color:#5e6adb}
+.pronunciation-button span{font-size:8px;font-weight:800;line-height:1;letter-spacing:.2px}
+.pronunciation-button:hover{background:#eff0ff;border-color:#dfe2ff}
