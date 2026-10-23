@@ -110,7 +110,7 @@ test('language learning cards and active-recall cards have original/example play
 
 test('every dictionary result and saved word exposes both English and Japanese playback controls', () => {
   const start = app.indexOf('<div class="dictionary-list">')
-  const end = app.indexOf('<section v-if="dictionaryView === \'saved\'">')
+  const end = app.indexOf('saved-vocabulary-block', start)
   const dictionaryResults = app.slice(start, end)
   assert.ok(start >= 0 && end > start, 'dictionary result template should be found')
   assert.ok(dictionaryResults.includes('@click="speakDictionaryEnglish(entry)"'))
