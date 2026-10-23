@@ -1020,6 +1020,17 @@ function clearDictionarySearch() {
   lastSearchedTerm.value = ''
   dictionaryError.value = ''
 }
+function setDictionaryLanguage(language: 'auto' | 'ja' | 'en' | 'it') {
+  if (dictSourceLang.value === language) return
+  dictSourceLang.value = language
+  dictionaryRequestId += 1
+  dictionaryLoading.value = false
+  onlineEntries.value = []
+  lastSearchedTerm.value = ''
+  dictionaryError.value = ''
+  speechStatus.value = ''
+  speechStatusTarget.value = ''
+}
 function quickDictionarySearch(term: string, language: 'ja' | 'en' | 'it') {
   searchText.value = term
   dictSourceLang.value = language
@@ -1618,10 +1629,10 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
           <section class="dictionary-search">
             <div class="dictionary-language-picker" role="group" aria-label="选择查询语言">
               <span>查询语言</span>
-              <button type="button" :class="{ chosen: dictSourceLang === 'auto' }" @click="dictSourceLang = 'auto'">自动识别</button>
-              <button type="button" :class="{ chosen: dictSourceLang === 'en' }" @click="dictSourceLang = 'en'">英语</button>
-              <button type="button" :class="{ chosen: dictSourceLang === 'ja' }" @click="dictSourceLang = 'ja'">日语</button>
-              <button type="button" :class="{ chosen: dictSourceLang === 'it' }" @click="dictSourceLang = 'it'">IT 术语（离线）</button>
+              <button type="button" :class="{ chosen: dictSourceLang === 'auto' }" @click="setDictionaryLanguage('auto')">自动识别</button>
+              <button type="button" :class="{ chosen: dictSourceLang === 'en' }" @click="setDictionaryLanguage('en')">英语</button>
+              <button type="button" :class="{ chosen: dictSourceLang === 'ja' }" @click="setDictionaryLanguage('ja')">日语</button>
+              <button type="button" :class="{ chosen: dictSourceLang === 'it' }" @click="setDictionaryLanguage('it')">IT 术语（离线）</button>
             </div>
             <div class="search-box">
               <Search :size="19" />
