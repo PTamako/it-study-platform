@@ -1060,6 +1060,55 @@ export default {
       }
     }
 
+    // SG 模拟考试按官方题型结构组卷：科目 A 48 题、科目 B 12 题。
+    // B 类优先依据 question_type/topic 的显式科目或案例标记，再使用明确的案例措辞识别；数量不足则返回 409，不用普通知识题凑数。
+    if (url.pathname === '/api/mock-exam-questions' && request.method === 'GET') {
+      const trackId = (url.searchParams.get('track') || 'exam-sg').trim().slice(0, 80)
+      const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
+      const source = ['all', 'official', 'generated'].includes(requestedSource) ? requestedSource : 'all'
+      try {
+        const { results } = await env.DB.prepare(
+          `SELECT id, track_id, topic, difficulty, question_type, prompt,
+                  options_json, answer_json, explanation, source_type, source_reference, language
+           FROM questions
+           WHERE track_id = ? AND (? = 'all' OR source_type = ?)`
+        ).bind(trackId, source, source).all()
+        const isSectionB = (row: Record<string, unknown>) => {
+          const type = String(row.question_type || '').toLowerCase()
+          const topic = String(row.topic || '').toLowerCase()
+          const prompt = String(row.prompt || '').toLowerCase()
+          if (/(section[_ -]?b|科目\s*[bＢ]|case[_ -]?study|case[_ -]?based|scenario|ケーススタディ|事例問題)/i.test(type + ' ' + topic)) return true
+          return /(次の状況|次の事例|以下の状況|以下の事例|状況を読んで|事例を読んで|ケーススタディ|あなたが担当者|情報セキュリティ管理者として|委託先.*(管理|選定|監督)|インシデント.*(発生|対応)).test(prompt)
+        }
+        const decode = (row: Record<string, unknown>, section: 'A' | 'B') => ({
+          ...row,
+          exam_section: section,
+          options: JSON.parse(String(row.options_json || '[]')),
+          answer: JSON.parse(String(row.answer_json || 'null')),
+          options_json: undefined,
+          answer_json: undefined,
+        })
+        const sectionB = (results as Record<string, unknown>[]).filter(isSectionB)
+        const sectionA = (results as Record<string, unknown>[]).filter(row => !isSectionB(row))
+        if (sectionA.length < 48 || sectionB.length < 12) {
+          return json({
+            error: `当前题库可识别科目 A ${sectionA.length} 题、科目 B ${sectionB.length} 题；真实组卷需要至少 48 道 A 类和 12 道 B 类题。请补充明确标注的案例题后再模拟考试。`,
+            section_counts: { A: sectionA.length, B: sectionB.length },
+          }, 409)
+        }
+        const shuffle = <T,>(rows: T[]) => [...rows].sort(() => Math.random() - 0.5)
+        const items = [
+          ...shuffle(sectionA).slice(0, 48).map(row => decode(row, 'A')),
+          ...shuffle(sectionB).slice(0, 12).map(row => decode(row, 'B')),
+        ]
+        const shuffledItems = shuffle(items)
+        return json({ items: shuffledItems, section_counts: { A: 48, B: 12 }, total: 60, duration_minutes: 120 })
+      } catch (error) {
+        if (error instanceof Response) throw error
+        return json({ error: '模拟考试组卷失败，请确认题库迁移已完成。' }, 503)
+      }
+    }
+
     // 返回指定考试的练习题。source_type 会明确标记自编练习题，不冒充官方真题。
     if (url.pathname === '/api/questions') {
       const trackId = url.searchParams.get('track') || 'exam-sg'
