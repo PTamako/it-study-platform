@@ -10,7 +10,7 @@
 - **语言学习**：统一入口后选择日语或英语，从 `language_cards` 表读取课程卡片，支持分类筛选、读音、中文解释、例句、浏览器发音及本地掌握进度。当前内容为平台自编学习资料，已明确标注，不冒充官方课程。
 - **中日英互译与 IT 术语词典**：优先检索 D1 `vocabulary` 术语表，提供中日英释义、日语读音与例句；未命中时调用在线英语/日语词典和机器翻译。对“展开/收起、保存、取消、搜索、设置”等常用 UI 词增加 Worker 离线中日英兜底，即使外部翻译源限流也尽量给出结果。在线翻译使用 MyMemory 与 Google 双主机备用，并缓存成功译文 6 小时，以降低重复查询和短暂上游故障的影响；首次遇到上游限流或网络拦截时仍可能失败。对未覆盖的词不捏造结果。支持手动选择源语言、发音、结果来源、最近查询与本地生词收藏。
 - **学习计划与今日进度**：每日任务清单、目标分钟数、完成比例；任务完成状态按日期保存在当前设备。
-- **实战演练**：`practical_scenarios` 保存情境、选项和评分规则，`/api/scenarios` 返回任务，`POST /api/scenario-attempts` 在 Worker 端判分并把结果保存到 `scenario_attempts`。SG 情景库已分批补充访问控制、钓鱼与事件响应、生产变更、漏洞修补、日志完整性、供应链数据处理等场景；具体数量以 D1 返回为准。所有内容均为平台自编材料，不是官方真题。
+- **实战训练**：独立页面模块读取 `practical_scenarios`，显示情境、选项、分数和复盘反馈；`/api/scenarios` 返回任务，`POST /api/scenario-attempts` 在 Worker 端判分并把结果保存到 `scenario_attempts`。迁移 `0017_sg_practical_scenarios_pack.sql` 再增补 25 个情境，覆盖第三方账号、勒索软件、云共享、MFA、备份恢复、漏洞修补、个人信息误发、审计日志、数据脱敏、开发密钥、环境隔离等。内容为平台原创情境，不冒充官方真题。
 - **考试统计与历史成绩**：练习题答案写入 `study_attempts`；实战分数写入 `scenario_attempts`。首页旧的手动成绩与每日任务仍然保存在浏览器 localStorage，不应与云端答题记录混为一谈。
 - **PWA**：支持通过 iPhone Safari 的“分享 → 添加到主屏幕”安装为类 App 入口。
 
@@ -50,7 +50,7 @@ npm run build
    npx wrangler login
    ```
 
-3. 将全部表结构、SG 自编练习题、扩充后的技术词库、语言卡片、SG 练习题和实战情境应用到远程 D1（会按迁移编号依序执行，包括 `0007`、`0008`、`0009`、`0010`、`0011`、`0012`、`0013`、`0014`）：
+3. 将全部表结构、SG 自编练习题、扩充后的技术词库、语言卡片、SG 练习题和实战情境应用到远程 D1（会按迁移编号依序执行，包括 `0007`、`0008`、`0009`、`0010`、`0011`、`0012`、`0013`、`0014`、`0015`、`0016`、`0017`）：
 
    ```sh
    npx wrangler d1 migrations apply it-study-platform-db --remote
@@ -128,6 +128,7 @@ SG 题库在界面上只保留两个分类：
 
 - `migrations/0014_sg_question_bank_pack_2.sql`: 22 original prediction questions.
 - `migrations/0015_sg_prediction_pack_3.sql`: 56 additional original prediction questions (stable IDs, `source_type='generated'`, Japanese prompts/options and Chinese explanations).
-- `migrations/0016_sg_official_2025_public_questions.sql`: 15 verified official questions from the 2025 IPA public SG paper, keyed to the official answer sheet; each record is marked `source_type='official'` and references the source PDF.
-- Mock exam behavior: exactly 60 unique questions, 2 points per question (120 points total), 90-minute limit; no repeated-question padding. Unanswered questions are recorded as incorrect when the exam is submitted, so they can appear in the wrong-question review.
+- `migrations/0016_sg_official_2025_public_questions.sql`: 15 official-source questions from the 2025 IPA public SG paper, mapped to the published answer key and referencing the source PDF.
+- `migrations/0017_sg_practical_scenarios_pack.sql`: 25 additional authored practical scenarios. The `practical` page was missing from the module registry/template even though loading/submission APIs already existed; this migration plus the UI entry exposes the end-to-end flow.
+- Mock exam behavior: exactly 60 unique questions, 2 points per question (120 points total), 120-minute limit; no repeated-question padding. Unanswered questions are recorded as incorrect when the exam is submitted, so they can appear in the wrong-question review.
 - Historical questions must be imported from verifiable IPA source documents with the official answer key; links alone do not count as imported questions. The 500-question historical target is not yet met and must not be presented as complete until verified question records exist in D1.
