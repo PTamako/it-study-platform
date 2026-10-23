@@ -50,7 +50,7 @@ npm run build
    npx wrangler login
    ```
 
-3. 将全部表结构、SG 自编练习题、扩充后的技术词库、语言卡片、SG 练习题和实战情境应用到远程 D1（会按迁移编号依序执行，包括 `0007`、`0008`、`0009`、`0010`、`0011`、`0012`、`0013`、`0014`、`0015`、`0016`、`0017`）：
+3. 将全部表结构、SG 自编练习题、扩充后的技术词库、语言卡片、SG 练习题和实战情境应用到远程 D1（会按迁移编号依序执行，包括 `0007`、`0008`、`0009`、`0010`、`0011`、`0012`、`0013`、`0014`、`0015`、`0016`、`0017`、`0018`、`0019`、`0020`）：
 
    ```sh
    npx wrangler d1 migrations apply it-study-platform-db --remote
@@ -130,5 +130,10 @@ SG 题库在界面上只保留两个分类：
 - `migrations/0015_sg_prediction_pack_3.sql`: 56 additional original prediction questions (stable IDs, `source_type='generated'`, Japanese prompts/options and Chinese explanations).
 - `migrations/0016_sg_official_2025_public_questions.sql`: 15 official-source questions from the 2025 IPA public SG paper, mapped to the published answer key and referencing the source PDF.
 - `migrations/0017_sg_practical_scenarios_pack.sql`: 25 additional authored practical scenarios. The `practical` page was missing from the module registry/template even though loading/submission APIs already existed; this migration plus the UI entry exposes the end-to-end flow.
+- `migrations/0018_sg_official_2026_public_questions.sql`: 15 questions from IPA's FY2026 public SG paper, with answers mapped to the official answer key.
+- `migrations/0019_sg_official_2024_public_questions.sql`: 15 questions from IPA's FY2024 public SG paper, with answers mapped to the official answer key.
+- `migrations/0020_sg_official_2023_public_questions.sql`: 15 questions from IPA's FY2023 public SG paper, with answers mapped to the official answer key.
+
+The 2023–2026 public-paper batch now has 60 official question records across four years. This is still only the public subset of each year's 60-question CBT exam; the 500-historical-question goal requires the legacy 2016–2019 papers and additional verified records.
 - Mock exam behavior: exactly 60 unique questions, 2 points per question (120 points total), 120-minute limit; no repeated-question padding. Unanswered questions are recorded as incorrect when the exam is submitted, so they can appear in the wrong-question review.
 - Historical questions must be imported from verifiable IPA source documents with the official answer key; links alone do not count as imported questions. The 500-question historical target is not yet met and must not be presented as complete until verified question records exist in D1.
