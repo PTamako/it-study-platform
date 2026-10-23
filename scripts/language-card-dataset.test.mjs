@@ -14,7 +14,8 @@ test('language seed migration contains exactly 3,000 Japanese and 3,000 English 
   assert.match(migration, /source_type/)
   assert.match(migration, /licensed/)
   assert.match(migration, /JLPT N5/)
-  assert.match(migration, /Oxford 3000/)
+  assert.match(migration, /英语核心词汇（1–1000）/)
+  assert.match(migration, /英语扩展词汇（2001–3000）/)
 })
 
 test('language seed migration has no duplicate stable IDs', () => {
