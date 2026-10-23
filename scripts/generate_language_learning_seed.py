@@ -73,7 +73,7 @@ def english_data(p):
   if k in seen:continue
   rank=len(cards)+1
   cat="英语核心词汇（1–1000）" if rank<=1000 else "英语进阶词汇（1001–2000）" if rank<=2000 else "英语扩展词汇（2001–3000）"
-  cards.append(dict(id="en-ecdict-"+hashlib.sha1(k.encode()).hexdigest()[:16],language="en",category=cat,term=w,reading=phon,meaning_zh=z,explanation=definition[:1000],example="",example_meaning_zh="",source_type="licensed"));seen.add(k)
+  cards.append(dict(id="en-ecdict-"+hashlib.sha1(k.encode()).hexdigest()[:16],language="en",category=cat,term=w,reading=phon,meaning_zh=z,explanation=definition[:1000],example="",example_meaning_zh="",example_source_url="",source_type="licensed"));seen.add(k)
   if len(cards)==3000:break
  return cards,translations
 def japanese_data(zmap,trans):
@@ -90,7 +90,7 @@ def japanese_data(zmap,trans):
    gloss=list(dict.fromkeys(norm(x) for x in gloss if norm(x)))
    if not gloss:continue
    ex=item.get("examples") or []
-   cards.append(dict(id="ja-openjlpt-"+str(item.get("id") or hashlib.sha1(w.encode()).hexdigest()[:12]),language="ja",category="JLPT "+str(item.get("level") or level).upper(),term=w,reading=reading,meaning_zh="；".join(gloss[:3]),explanation="JLPT 社区参考等级，并非官方公布词表。",example=norm(ex[0].get("ja")) if ex else "",example_meaning_zh="",source_type="licensed"));seen.add(w)
+   cards.append(dict(id="ja-openjlpt-"+str(item.get("id") or hashlib.sha1(w.encode()).hexdigest()[:12]),language="ja",category="JLPT "+str(item.get("level") or level).upper(),term=w,reading=reading,meaning_zh="；".join(gloss[:3]),explanation="JLPT 社区参考等级，并非官方公布词表。",example=norm(ex[0].get("ja")) if ex else "",example_meaning_zh="",example_source_url=("https://tatoeba.org/sentences/show/"+str(ex[0].get("tatoeba_id"))) if ex and ex[0].get("tatoeba_id") else "",source_type="licensed"));seen.add(w)
    if len(cards)==3000:return cards
  return cards
 def write(cards):
@@ -99,8 +99,8 @@ def write(cards):
   if len(group)!=3000:raise RuntimeError(f"Need 3000 {lang} cards, got {len(group)}")
   if len({x["term"].casefold() for x in group})!=3000:raise RuntimeError(f"Duplicate {lang} headwords")
  if len({x["id"] for x in cards})!=6000:raise RuntimeError("Duplicate card IDs")
- cols=["id","language","category","term","reading","meaning_zh","explanation","example","example_meaning_zh","source_type"]
- lines=["-- Generated from pinned, attributed open datasets; do not hand-edit.","-- OpenJLPT + Tomoshi dictionary/JMdict: CC BY-SA 4.0; ECDICT: MIT.","-- See docs/language-learning-data-sources.md for attribution and modifications."]
+ cols=["id","language","category","term","reading","meaning_zh","explanation","example","example_meaning_zh","example_source_url","source_type"]
+ lines=["-- Generated from pinned, attributed open datasets; do not hand-edit.","-- OpenJLPT + Tomoshi dictionary/JMdict: CC BY-SA 4.0; Tatoeba examples: CC BY 2.0 FR; ECDICT: MIT.","-- See docs/language-learning-data-sources.md for attribution and modifications.","ALTER TABLE language_cards ADD COLUMN example_source_url TEXT NOT NULL DEFAULT '';"]
  for start in range(0,6000,100):
   lines += ["INSERT OR IGNORE INTO language_cards","("+", ".join(cols)+")","VALUES"]
   lines.append("  "+",\n  ".join("("+", ".join(q(x[k]) for k in cols)+")" for x in cards[start:start+100])+";")
