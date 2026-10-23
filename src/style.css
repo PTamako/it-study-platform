@@ -325,3 +325,5 @@
 @media(max-width:560px) {
  .language-practice-actions .language-review-again,.language-practice-actions .language-review-remembered { grid-column:1 / -1; width:100%; }
 }
+
+

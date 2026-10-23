@@ -1018,7 +1018,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
             </div>
 
             <section class="practice-section">
-              <div class="section-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2><p>从题库中抽题，提交后立即查看答案与解析。</p></div><span class="source-pill">{{ '总题量 ' + (selectedTrack?.question_count || 0) + ' / 1,100 · 真题 ' + (selectedTrack?.official_question_count || 0) + ' / 448 · 预测 ' + (selectedTrack?.prediction_question_count || 0) + ' / 652' }}</span></div>
+              <div class="section-heading practice-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2><p>从题库中抽题，提交后立即查看答案与解析。</p></div></div>
               <div class="question-source-filters" role="group" aria-label="题目来源筛选">
                 <button v-for="filter in questionSourceFilters" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" @click="selectQuestionSource(filter.id)">{{ filter.label }}（{{ filter.id === 'official' ? (selectedTrack?.official_question_count || 0) : (selectedTrack?.prediction_question_count || 0) }}）</button>
               </div>
@@ -1106,44 +1106,6 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                   </div>
                 </article>
                 <p v-if="mockError" class="practice-error">{{ mockError }}</p>
-              </div>
-            </section>
-            <section class="section-block practical-section">
-              <div class="section-heading"><div><div class="section-kicker">PRACTICAL SCENARIOS</div><h2>实战演练</h2><p>在模拟的工作场景中做出决策，系统按数据库里的评分规则判分并保存结果。</p></div><span class="source-pill">情境练习 · 非官方真题</span></div>
-              <p v-if="scenariosLoading" class="dictionary-status">正在从 D1 加载实战任务…</p>
-              <p v-else-if="scenariosError" class="dictionary-status dictionary-error">{{ scenariosError }}</p>
-              <div v-else-if="!scenarios.length" class="panel practice-start-card">
-                <div class="practice-start-icon"><Target :size="25" /></div><h3>该考试暂时没有实战任务</h3>
-                <p>目前实战情境先接入 SG。其他考试需要分别准备对应的任务和评分规则。</p>
-              </div>
-              <div v-else-if="currentScenario" class="panel scenario-card">
-                <div class="scenario-toolbar">
-                  <label>选择任务
-                    <select v-model="selectedScenarioId" @change="selectedScenarioOption = ''; scenarioResult = null">
-                      <option v-for="scenario in scenarios" :key="scenario.id" :value="scenario.id">{{ scenario.title }}</option>
-                    </select>
-                  </label>
-                  <span class="source-pill">{{ currentScenario.category }}</span>
-                </div>
-                <h3>{{ currentScenario.title }}</h3>
-                <div class="scenario-situation"><strong>情境</strong><p>{{ currentScenario.situation }}</p></div>
-                <div class="scenario-task"><strong>你的任务</strong><p>{{ currentScenario.task }}</p></div>
-                <div class="question-options scenario-options">
-                  <button v-for="option in currentScenario.options" :key="option.id" class="question-option" :class="{ selected: selectedScenarioOption === option.id, correct: scenarioResult && option.id === scenarioResult.best_option, incorrect: scenarioResult && selectedScenarioOption === option.id && !scenarioResult.correct }" :disabled="!!scenarioResult" @click="selectedScenarioOption = option.id">
-                    <span>{{ option.id.toUpperCase() }}</span><strong>{{ option.text }}</strong><CheckCircle2 v-if="scenarioResult && option.id === scenarioResult.best_option" :size="17" />
-                  </button>
-                </div>
-                <div v-if="scenarioResult" class="scenario-feedback" :class="{ right: scenarioResult.correct }">
-                  <div class="scenario-score">{{ scenarioResult.score }}<small> / 100</small></div>
-                  <strong>{{ scenarioResult.correct ? '判断正确' : '复盘一下决策' }} · 最优选项 {{ scenarioResult.best_option.toUpperCase() }}</strong>
-                  <p>{{ scenarioResult.feedback }}</p>
-                  <button class="primary-button" @click="scenarioResult = null; selectedScenarioOption = ''">重新演练 <ArrowRight :size="15" /></button>
-                </div>
-                <div v-else class="question-actions">
-                  <span class="question-hint">提交后由 Worker 根据 D1 评分规则判定并保存。</span>
-                  <button class="primary-button" :disabled="!selectedScenarioOption || scenarioSubmitting" @click="submitScenario">{{ scenarioSubmitting ? '正在判定…' : '提交决策并复盘' }} <ArrowRight :size="15" /></button>
-                </div>
-                <small class="language-source">情境与评分规则：平台自编学习材料，存储于 D1。</small>
               </div>
             </section>
             <section class="exam-performance">
