@@ -1,5 +1,10 @@
 -- 追加 SG / IT パスポート学習で頻出する専門語彙。内容は平台自编学习资料，不冒充官方真题。
 -- 本地 D1 词库支持日英关键词、日语读音、中文辅助释义、日语定义和考试/工作例句。
+UPDATE vocabulary SET aliases = 'TLS|Transport Layer Security|传输层安全|トランスポートレイヤーセキュリティ' WHERE id = 'it-term-tls';
+UPDATE vocabulary SET aliases = 'CA|certificate authority|证书颁发机构|認証機関' WHERE id = 'sg-v007-ca';
+UPDATE vocabulary SET aliases = 'ACID|atomicity consistency isolation durability|事务特性|トランザクション特性' WHERE id = 'sg-v007-acid';
+UPDATE vocabulary SET aliases = 'PDCA|plan do check act|计划执行检查改进|PDCAサイクル' WHERE id = 'sg-v007-pdca';
+
 INSERT OR IGNORE INTO vocabulary
 (id, term, language, reading, meaning_zh, meaning_ja, meaning_en, example, source_module, mastery, aliases)
 VALUES
@@ -7,9 +12,7 @@ VALUES
 ('it-local-hotp','HOTP','ja','ほっぷ','基于计数器的一次性密码：根据共享密钥和递增计数器生成验证码。','共有鍵とカウンター値を用いてワンタイムパスワードを生成する方式。','HMAC-based One-Time Password (HOTP) generates codes from a shared secret and a counter.','HOTPでは利用者と認証側のカウンター同期に注意する。','身份验证与访问控制',0,'HMAC-based one-time password|counter-based otp|カウンターベースワンタイムパスワード'),
 ('it-local-rbac','ロールベースアクセス制御','ja','ろーるべーすあくせすせいぎょ','基于角色的访问控制：根据用户角色集中分配权限。','利用者に割り当てた役割（ロール）に基づいてアクセス権を管理する方式。','Role-Based Access Control (RBAC) assigns permissions through roles.','管理者と一般利用者に異なるロールを割り当てる。','身份验证与访问控制',0,'RBAC|role based access control|基于角色的访问控制|ロールベースアクセスコントロール'),
 ('it-local-acl','アクセス制御リスト','ja','あくせすせいぎょりすと','访问控制列表：列出主体对资源可执行的操作权限。','資源ごとに、誰がどの操作を実行できるかを一覧で定義する仕組み。','An Access Control List (ACL) lists which subjects may perform actions on a resource.','共有フォルダーのACLで読み取り権限を制限する。','身份验证与访问控制',0,'ACL|access control list|访问控制列表|アクセスコントロールリスト'),
-('it-local-tls','TLS','ja','てぃーえるえす','传输层安全协议：用于保护网络通信的机密性和完整性，并验证通信端点。','通信の暗号化や完全性の保護、通信相手の認証に用いるプロトコル。','Transport Layer Security (TLS) protects communications with encryption and integrity checks.','HTTPSではTLSを利用して通信を保護する。','网络与密码技术',0,'transport layer security|传输层安全|トランスポートレイヤーセキュリティ'),
 ('it-local-pki','公開鍵基盤','ja','こうかいかきばん','公钥基础设施：通过证书、证书颁发机构和相关流程管理公钥及其可信关系。','公開鍵証明書、認証局（CA）などを用いて公開鍵の信頼性を管理する仕組み。','Public Key Infrastructure (PKI) manages trust in public keys using certificates and certificate authorities.','PKIで発行された証明書の有効期限と失効状態を確認する。','网络与密码技术',0,'PKI|public key infrastructure|公钥基础设施|公開鍵インフラ'),
-('it-local-ca','認証局','ja','にんしょうきょく','证书颁发机构：验证申请并签发数字证书的可信机构。','申請内容を確認し、公開鍵証明書を発行する信頼された機関。','A Certificate Authority (CA) issues digital certificates after validating requests.','ブラウザは信頼する認証局の証明書チェーンを検証する。','网络与密码技术',0,'CA|certificate authority|证书颁发机构|認証機関'),
 ('it-local-waf','Webアプリケーションファイアウォール','ja','うぇぶあぷりけーしょんふぁいあうぉーる','Web 应用防火墙：分析 HTTP 请求并按规则拦截常见 Web 攻击。','HTTP通信を検査し、ルールに基づいてWebアプリケーションへの攻撃を検知・遮断する仕組み。','A Web Application Firewall (WAF) inspects HTTP traffic to detect and block web attacks.','WAFのルールを調整し、誤検知と攻撃遮断のバランスを確認する。','Web安全',0,'WAF|web application firewall|Web应用防火墙|ウェブアプリケーションファイアウォール'),
 ('it-local-ids','侵入検知システム','ja','しんにゅうけんちしすてむ','入侵检测系统：监视活动并识别可能的未授权访问或攻击。','ネットワークやホストの活動を監視し、不正侵入の兆候を検知するシステム。','An Intrusion Detection System (IDS) monitors activity for signs of intrusion.','IDSのアラートをログと照合して調査する。','安全监控',0,'IDS|intrusion detection system|入侵检测系统|侵入検知システム'),
 ('it-local-ips','侵入防止システム','ja','しんにゅうぼうししすてむ','入侵防御系统：检测可疑流量并主动阻断符合规则的攻击。','不正な通信を検知し、設定したルールに従って遮断するシステム。','An Intrusion Prevention System (IPS) detects and blocks suspicious traffic.','IPSの遮断設定を変更する前に影響範囲を確認する。','安全监控',0,'IPS|intrusion prevention system|入侵防御系统|侵入防止システム'),
@@ -19,10 +22,8 @@ VALUES
 ('it-local-dns','ドメインネームシステム','ja','どめいんねーむしすてむ','域名系统：将域名等名称解析为 IP 地址等记录的分布式系统。','ドメイン名に対応するIPアドレスなどの情報を分散管理し、名前解決を行う仕組み。','The Domain Name System (DNS) resolves domain names to records such as IP addresses.','DNSのAレコードとAAAAレコードの違いを確認する。','网络基础',0,'DNS|domain name system|域名系统|ドメイン名システム'),
 ('it-local-rest','REST','ja','れすと','表述性状态转移：以资源为中心设计网络 API 的架构风格。','リソースをURIで表し、HTTPメソッドなどを利用して操作するAPI設計のアーキテクチャスタイル。','Representational State Transfer (REST) is an architectural style for resource-oriented network APIs.','REST APIではリソースとHTTPメソッドの役割を明確にする。','Web开发',0,'representational state transfer|REST API|RESTful|表述性状态转移'),
 ('it-local-crud','CRUD','ja','しーあーるゆーでぃー','增删改查：创建、读取、更新和删除数据的四类基本操作。','データに対する作成・読み取り・更新・削除の基本操作。','CRUD stands for Create, Read, Update, and Delete.','この画面では顧客データのCRUD操作を実装する。','数据库与开发',0,'create read update delete|增删改查|作成読み取り更新削除'),
-('it-local-acid','ACID特性','ja','あしっどとくせい','事务 ACID 特性：原子性、一致性、隔离性和持久性。','トランザクションが満たすべき原子性・一貫性・独立性・永続性の性質。','ACID describes transaction Atomicity, Consistency, Isolation, and Durability.','決済処理ではACID特性を満たすトランザクション設計が重要だ。','数据库',0,'ACID|atomicity consistency isolation durability|事务特性|トランザクション特性'),
 ('it-local-rto','目標復旧時間','ja','もくひょうふっきゅうじかん','目标恢复时间：业务中断后，允许恢复服务的最长目标时间。','障害発生からサービスを復旧させるまでの目標時間。','Recovery Time Objective (RTO) is the target time for restoring a service after disruption.','重要システムのRTOを定め、復旧訓練で達成可能性を確認する。','业务连续性与风险管理',0,'RTO|recovery time objective|目标恢复时间|復旧時間目標'),
 ('it-local-rpo','目標復旧時点','ja','もくひょうふっきゅうじてん','目标恢复点：故障后可接受的数据丢失范围，以时间点或时间跨度表示。','障害発生時に、どの時点までのデータを復旧するかを示す目標。','Recovery Point Objective (RPO) defines the acceptable data-loss window measured in time.','RPOを短くするにはバックアップ頻度や複製方式の検討が必要だ。','业务连续性与风险管理',0,'RPO|recovery point objective|目标恢复点|復旧時点目標'),
-('it-local-pdca','PDCAサイクル','ja','ぴーでぃーしーえーさいくる','持续改进循环：计划、执行、检查、改进并重复迭代。','Plan・Do・Check・Actを繰り返し、業務や品質を継続的に改善する手法。','The PDCA cycle repeats Plan, Do, Check, and Act for continual improvement.','監査結果をPDCAサイクルに反映して再発防止を進める。','管理与改进',0,'PDCA|plan do check act|计划执行检查改进|PDCAサイクル'),
 ('it-local-sdlc','ソフトウェア開発ライフサイクル','ja','そふとうぇあかいはつらいふさいくる','软件开发生命周期：从需求、设计、实现、测试到发布和维护的全过程。','要件定義から設計・実装・テスト・リリース・保守までの開発工程全体。','The Software Development Life Cycle (SDLC) covers requirements, design, implementation, testing, release, and maintenance.','SDLCの各工程で成果物とレビュー基準を明確にする。','软件开发管理',0,'SDLC|software development life cycle|软件开发生命周期|開発ライフサイクル'),
 ('it-local-agile','アジャイル開発','ja','あじゃいるかいはつ','敏捷开发：通过短周期迭代、持续反馈和逐步交付来适应变化。','短い反復と継続的なフィードバックを通じて、変化に対応しながら開発する手法。','Agile development delivers software iteratively and adapts through continuous feedback.','アジャイル開発ではスプリントごとに成果を確認する。','软件开发管理',0,'agile|agile development|敏捷开发|アジャイル'),
 ('it-local-scrum','スクラム','ja','すくらむ','Scrum：通过固定时长迭代、明确职责和定期活动组织产品开发的敏捷框架。','スプリント、役割、イベント、成果物を用いて複雑な製品開発を進めるフレームワーク。','Scrum is an Agile framework using timeboxed sprints, defined accountabilities, and regular events.','スクラムではスプリントレビューで成果を確認する。','软件开发管理',0,'scrum framework|敏捷框架|スクラムフレームワーク'),
