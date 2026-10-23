@@ -958,6 +958,8 @@ function toggleSaved(term: string) {
   }
 }
 async function lookupDictionary() {
+  speechStatus.value = ''
+  speechStatusTarget.value = ''
   const q = searchText.value.trim()
   if (!q) {
     dictionaryError.value = '请先输入英语单词、日语词语或 IT 缩写。'
@@ -993,6 +995,8 @@ async function lookupDictionary() {
   }
 }
 function clearDictionarySearch() {
+  speechStatus.value = ''
+  speechStatusTarget.value = ''
   searchText.value = ''
   onlineEntries.value = []
   lastSearchedTerm.value = ''
@@ -1024,7 +1028,8 @@ function speakJapaneseQuestion(text: string) {
   // Use the same synchronous path as the dictionary play buttons to avoid Safari activation loss.
   speak(text, 'ja-JP')
 }
-function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
+function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', statusTarget = '') {
+  speechStatusTarget.value = statusTarget
   const spokenText = text.trim()
   if (!spokenText) {
     speechStatus.value = '没有可播放的文字。'
@@ -1089,7 +1094,7 @@ function speakDictionaryEnglish(entry: DictionaryEntry) {
     speechStatus.value = '该词暂未收录可靠的英语对应词，无法播放英语发音。'
     return
   }
-  speak(term, 'en-US')
+  speak(term, 'en-US', entry.term)
 }
 
 function speakDictionaryJapanese(entry: DictionaryEntry) {
@@ -1099,7 +1104,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
     speechStatus.value = '该词暂未收录日语假名读音。可以先播放英语原音；IT 术语词库会逐步补齐读音。'
     return
   }
-  speak(text, 'ja-JP')
+  speak(text, 'ja-JP', entry.term)
 }
 </script>
 
