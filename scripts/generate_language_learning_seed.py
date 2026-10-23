@@ -111,7 +111,7 @@ def zhmap(db):
   for form in forms_by_key.get(str(i),set()) | forms_by_key.get(canonical,set()):
    out.setdefault(form,[]).extend(vals)
  c.close()
- print("Tomoshi gloss key sample:",list(out.keys())[:3],"JMdict ID 1198180:", "1198180" in out,"headword 会う:", "会う" in out)
+ print("Tomoshi gloss key sample:",list(out.keys())[:3],"JMdict ID 1198180:", "1198180" in out,"headword 会う:", "会う" in out,"reading あう:", "あう" in out,"headword 青:", "青" in out,"reading あお:", "あお" in out)
  return {k:list(dict.fromkeys(v)) for k,v in out.items()}
 def english_data(p):
  rows=[]; translations={}
@@ -145,7 +145,7 @@ def japanese_data(zmap,trans):
   for item in json.loads(p.read_text(encoding="utf-8")):
    w,reading=norm(item.get("word")),norm(item.get("reading"))
    if not w or not reading or w in seen:continue
-   gloss=zmap.get(str(item.get("jmdict_id") or ""),[]) or zmap.get(word,[])
+   gloss=zmap.get(str(item.get("jmdict_id") or ""),[]) or zmap.get(w,[]) or zmap.get(reading,[])
    if not gloss:
     stopwords={"a","an","the","to","be","is","are","was","were","of","for","in","on","at","by","with","and","or","not","as","from","into","than","that","this","it","its"}
     for g in item.get("meanings",[]):
