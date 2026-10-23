@@ -414,9 +414,6 @@ async function startQuestionReview(mode: 'wrong' | 'due' | 'practice') {
     quizLoading.value = false
   }
 }
-async function startWrongReview() {
-  await startQuestionReview('wrong')
-}
 async function startPractice() {
   if (!selectedTrack.value) { quizError.value = '尚未加载考试列表，请刷新页面后重试。'; return }
   if (!selectedTrack.value.question_count) {
