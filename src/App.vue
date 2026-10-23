@@ -193,24 +193,25 @@ const mockRemainingSeconds = computed(() => mockStarted.value && !mockSubmitted.
 const mockCorrectCount = computed(() => mockQuestions.value.filter(question => mockAnswers.value[question.id] === question.answer).length)
 const mockAnsweredCount = computed(() => Object.values(mockAnswers.value).filter(Boolean).length)
 const mockAccuracy = computed(() => mockQuestions.value.length ? Math.round(mockCorrectCount.value / mockQuestions.value.length * 100) : 0)
+const mockScore = computed(() => mockCorrectCount.value * 2)
 function formatMockTime(seconds: number) {
   return String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0')
 }
 async function startMockExam() {
-  if (!selectedTrack.value || !selectedTrack.value.question_count) {
-    mockError.value = '当前考试没有可用题目，暂时无法开始模拟考试。'
+  if (!selectedTrack.value || selectedTrack.value.question_count < 60) {
+    mockError.value = '正式模拟考试固定为 60 题。当前可用题量不足 60 道，请先完成题库导入后再开始。'
     return
   }
   mockLoading.value = true
   mockError.value = ''
   try {
-    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=30')
+    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=60&mode=random')
     const data = await response.json() as { items?: PracticeQuestion[]; error?: string }
     if (!response.ok) throw new Error(data.error || '模拟考试题目加载失败')
-    if (!data.items?.length) throw new Error('题库目前没有可用题目。')
-    mockQuestions.value = data.items
+    if (!data.items || data.items.length < 60) throw new Error('正式模拟考试需要 60 道题，当前实际加载 ' + (data.items?.length || 0) + ' 道；不会用重复题目补足数量。')
+    mockQuestions.value = data.items.slice(0, 60)
     mockAnswers.value = {}
-    mockDurationMinutes.value = Math.max(1, Math.ceil(data.items.length * 1.5))
+    mockDurationMinutes.value = 90
     mockStartedAt.value = Date.now()
     mockDeadline.value = mockStartedAt.value + mockDurationMinutes.value * 60 * 1000
     mockNow.value = mockStartedAt.value
@@ -234,14 +235,14 @@ async function finishMockExam(autoSubmit = false) {
   if (mockTimer) { clearInterval(mockTimer); mockTimer = undefined }
   const total = mockQuestions.value.length
   const correct = mockCorrectCount.value
-  examRecords.value.push({ date: todayKey, correct, total, exam: (selectedTrack.value?.title || selectedTrackId.value) + ' 模拟考试' })
+  examRecords.value.push({ date: todayKey, correct, total, exam: (selectedTrack.value?.title || selectedTrackId.value) + ' 模拟考试（' + (correct * 2) + '/120分）' })
   const unanswered = total - mockAnsweredCount.value
   if (autoSubmit) mockError.value = '时间到，系统已自动交卷。未作答题目按答错计。'
   else mockError.value = unanswered ? '已交卷。未作答的 ' + unanswered + ' 题按答错计。' : ''
-  const attempts = mockQuestions.value.filter(question => mockAnswers.value[question.id])
+  const attempts = mockQuestions.value
   const results = await Promise.allSettled(attempts.map(question => fetch('/api/attempts', {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ question_id: question.id, answer: mockAnswers.value[question.id], duration_seconds: Math.max(0, Math.floor((Date.now() - mockStartedAt.value) / 1000)) }),
+    body: JSON.stringify({ question_id: question.id, answer: mockAnswers.value[question.id] || '', duration_seconds: Math.max(0, Math.floor((Date.now() - mockStartedAt.value) / 1000)) }),
   })))
   if (results.some(result => result.status === 'rejected' || (result.status === 'fulfilled' && !result.value.ok))) {
     mockError.value = (mockError.value ? mockError.value + ' ' : '') + '部分答题记录未能同步到云端。'
@@ -1034,17 +1035,17 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               </div>
             </section>
             <section class="section-block mock-exam-section">
-              <div class="section-heading"><div><div class="section-kicker">TIMED MOCK EXAM</div><h2>限时模拟考试</h2><p>随机抽取最多 30 道当前考试题。交卷或时间结束前，不显示正确答案与解析。</p></div><span class="source-pill">限时 · 独立计分</span></div>
+              <div class="section-heading"><div><div class="section-kicker">TIMED MOCK EXAM</div><h2>限时模拟考试</h2><p>随机抽取 60 道题，每题 2 分、满分 120 分，限时 90 分钟。交卷或时间结束前，不显示正确答案与解析。</p></div><span class="source-pill">限时 · 独立计分</span></div>
               <div v-if="!mockStarted && !mockSubmitted" class="panel practice-start-card">
                 <div class="practice-start-icon"><Clock3 :size="25" /></div><h3>模拟真实考试节奏</h3>
-                <p>当前题库有 {{ selectedTrack?.question_count || 0 }} 道可用题目；本场最多抽取 30 道，系统按题量设置时间，每题约 90 秒。</p>
+                <p>当前题库有 {{ selectedTrack?.question_count || 0 }} 道可用题目。正式模拟固定 60 题、每题 2 分、满分 120 分、限时 90 分钟；题量不足时不会用重复题补足。</p>
                 <button class="primary-button" @click="startMockExam" :disabled="mockLoading || !selectedTrack?.question_count">{{ mockLoading ? '正在准备题目…' : '开始限时模拟' }} <ArrowRight :size="16" /></button>
                 <p v-if="mockError" class="practice-error">{{ mockError }}</p>
               </div>
               <div v-else-if="mockSubmitted" class="panel practice-start-card">
                 <div class="practice-result-icon"><CheckCircle2 :size="28" /></div>
-                <div class="practice-result-score">{{ mockCorrectCount }} / {{ mockQuestions.length }}</div>
-                <h3>模拟考试已交卷</h3><p>正确率 {{ mockAccuracy }}% · 已作答 {{ mockAnsweredCount }} / {{ mockQuestions.length }} 题。</p>
+                <div class="practice-result-score">{{ mockScore }} / 120 分</div>
+                <h3>模拟考试已交卷</h3><p>答对 {{ mockCorrectCount }} / 60 题 · 正确率 {{ mockAccuracy }}% · 已作答 {{ mockAnsweredCount }} / 60 题。</p>
                 <p v-if="mockError" class="practice-error">{{ mockError }}</p>
                 <div class="mock-review-list">
                   <article v-for="(question, index) in mockQuestions" :key="question.id" class="mock-review-item">
