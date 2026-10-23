@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   BookOpen, Languages, Search, BriefcaseBusiness, GraduationCap,
   ChevronRight, Sparkles, Clock3, Flame, Bookmark, Volume2, ArrowRight,
@@ -131,6 +131,79 @@ const quizStartedAt = ref(0)
 const quizFinished = ref(false)
 const currentQuestion = computed(() => quizQuestions.value[quizIndex.value] || null)
 const isLastQuestion = computed(() => quizIndex.value >= quizQuestions.value.length - 1)
+
+// 限时模拟考试：独立于逐题练习，交卷前不展示答案和解析。
+const mockQuestions = ref<PracticeQuestion[]>([])
+const mockAnswers = ref<Record<string, string>>({})
+const mockStarted = ref(false)
+const mockSubmitted = ref(false)
+const mockLoading = ref(false)
+const mockError = ref('')
+const mockDeadline = ref(0)
+const mockNow = ref(Date.now())
+const mockDurationMinutes = ref(30)
+let mockTimer: ReturnType<typeof setInterval> | undefined
+const mockRemainingSeconds = computed(() => mockStarted.value && !mockSubmitted.value
+  ? Math.max(0, Math.ceil((mockDeadline.value - mockNow.value) / 1000))
+  : 0)
+const mockCorrectCount = computed(() => mockQuestions.value.filter(question => mockAnswers.value[question.id] === question.answer).length)
+const mockAnsweredCount = computed(() => Object.values(mockAnswers.value).filter(Boolean).length)
+const mockAccuracy = computed(() => mockQuestions.value.length ? Math.round(mockCorrectCount.value / mockQuestions.value.length * 100) : 0)
+function formatMockTime(seconds: number) {
+  return String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0')
+}
+async function startMockExam() {
+  if (!selectedTrack.value || !selectedTrack.value.question_count) {
+    mockError.value = '当前考试没有可用题目，暂时无法开始模拟考试。'
+    return
+  }
+  mockLoading.value = true
+  mockError.value = ''
+  try {
+    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=30')
+    const data = await response.json() as { items?: PracticeQuestion[]; error?: string }
+    if (!response.ok) throw new Error(data.error || '模拟考试题目加载失败')
+    if (!data.items?.length) throw new Error('题库目前没有可用题目。')
+    mockQuestions.value = data.items
+    mockAnswers.value = {}
+    mockDurationMinutes.value = Math.max(1, Math.ceil(data.items.length * 1.5))
+    mockDeadline.value = Date.now() + mockDurationMinutes.value * 60 * 1000
+    mockNow.value = Date.now()
+    mockStarted.value = true
+    mockSubmitted.value = false
+    if (mockTimer) clearInterval(mockTimer)
+    mockTimer = setInterval(() => {
+      mockNow.value = Date.now()
+      if (mockRemainingSeconds.value <= 0) void finishMockExam(true)
+    }, 500)
+  } catch (error) {
+    mockError.value = error instanceof Error ? error.message : '模拟考试启动失败，请稍后重试。'
+  } finally {
+    mockLoading.value = false
+  }
+}
+async function finishMockExam(autoSubmit = false) {
+  if (!mockStarted.value || mockSubmitted.value) return
+  mockSubmitted.value = true
+  mockStarted.value = false
+  if (mockTimer) { clearInterval(mockTimer); mockTimer = undefined }
+  const total = mockQuestions.value.length
+  const correct = mockCorrectCount.value
+  examRecords.value.push({ date: todayKey, correct, total, exam: (selectedTrack.value?.title || selectedTrackId.value) + ' 模拟考试' })
+  const unanswered = total - mockAnsweredCount.value
+  if (autoSubmit) mockError.value = '时间到，系统已自动交卷。未作答题目按答错计。'
+  else mockError.value = unanswered ? '已交卷。未作答的 ' + unanswered + ' 题按答错计。' : ''
+  const attempts = mockQuestions.value.filter(question => mockAnswers.value[question.id])
+  const results = await Promise.allSettled(attempts.map(question => fetch('/api/attempts', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ question_id: question.id, answer: mockAnswers.value[question.id], duration_seconds: Math.max(0, Math.floor((mockDurationMinutes.value * 60) - mockRemainingSeconds.value)) }),
+  })))
+  if (results.some(result => result.status === 'rejected' || (result.status === 'fulfilled' && !result.value.ok))) {
+    mockError.value = (mockError.value ? mockError.value + ' ' : '') + '部分答题记录未能同步到云端。'
+  }
+  void loadCloudDashboard()
+}
+onUnmounted(() => { if (mockTimer) clearInterval(mockTimer) })
 
 type ScenarioOption = { id: string; text: string }
 type PracticalScenario = {
@@ -717,6 +790,48 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                   <button v-if="!quizSubmitted" class="primary-button" :disabled="!selectedOption" @click="submitPracticeAnswer">提交答案 <ArrowRight :size="15" /></button>
                   <button v-else class="primary-button" @click="nextPracticeQuestion">{{ isLastQuestion ? '查看本次成绩' : '下一题' }} <ArrowRight :size="15" /></button>
                 </div>
+              </div>
+            </section>
+            <section class="section-block mock-exam-section">
+              <div class="section-heading"><div><div class="section-kicker">TIMED MOCK EXAM</div><h2>限时模拟考试</h2><p>随机抽取最多 30 道当前考试题。交卷或时间结束前，不显示正确答案与解析。</p></div><span class="source-pill">限时 · 独立计分</span></div>
+              <div v-if="!mockStarted && !mockSubmitted" class="panel practice-start-card">
+                <div class="practice-start-icon"><Clock3 :size="25" /></div><h3>模拟真实考试节奏</h3>
+                <p>当前题库有 {{ selectedTrack?.question_count || 0 }} 道可用题目；本场最多抽取 30 道，系统按题量设置时间，每题约 90 秒。</p>
+                <button class="primary-button" @click="startMockExam" :disabled="mockLoading || !selectedTrack?.question_count">{{ mockLoading ? '正在准备题目…' : '开始限时模拟' }} <ArrowRight :size="16" /></button>
+                <p v-if="mockError" class="practice-error">{{ mockError }}</p>
+              </div>
+              <div v-else-if="mockSubmitted" class="panel practice-start-card">
+                <div class="practice-result-icon"><CheckCircle2 :size="28" /></div>
+                <div class="practice-result-score">{{ mockCorrectCount }} / {{ mockQuestions.length }}</div>
+                <h3>模拟考试已交卷</h3><p>正确率 {{ mockAccuracy }}% · 已作答 {{ mockAnsweredCount }} / {{ mockQuestions.length }} 题。</p>
+                <p v-if="mockError" class="practice-error">{{ mockError }}</p>
+                <div class="mock-review-list">
+                  <article v-for="(question, index) in mockQuestions" :key="question.id" class="mock-review-item">
+                    <div class="question-topic">第 {{ index + 1 }} 题 · {{ question.topic }}</div>
+                    <strong>{{ question.prompt }}</strong>
+                    <p>你的答案：{{ question.options.find(option => option.id === mockAnswers[question.id])?.text || '未作答' }}</p>
+                    <p>正确答案：{{ question.options.find(option => option.id === question.answer)?.text || question.answer }}</p>
+                    <p class="answer-explanation">{{ question.explanation }}</p>
+                  </article>
+                </div>
+                <button class="primary-button" @click="mockSubmitted = false; mockQuestions = []; mockAnswers = {}; mockError = ''">结束复盘 <ArrowRight :size="16" /></button>
+              </div>
+              <div v-else class="mock-exam-active">
+                <div class="panel mock-timer-panel">
+                  <div><small>剩余时间</small><strong :class="{ 'mock-time-warning': mockRemainingSeconds <= 60 }">{{ formatMockTime(mockRemainingSeconds) }}</strong></div>
+                  <div><small>已作答</small><strong>{{ mockAnsweredCount }} / {{ mockQuestions.length }}</strong></div>
+                  <button class="primary-button" @click="finishMockExam(false)">交卷并查看结果</button>
+                </div>
+                <article v-for="(question, index) in mockQuestions" :key="question.id" class="panel question-card mock-question-card">
+                  <div class="question-topline"><span>第 {{ index + 1 }} / {{ mockQuestions.length }} 题 · {{ question.topic }}</span><span class="source-pill">{{ question.source_type === 'generated' ? '自编练习题' : question.source_type === 'official' ? '官方题目' : question.source_type === 'licensed' ? '授权题目' : '个人题目' }}</span></div>
+                  <h3 class="question-prompt">{{ question.prompt }}</h3>
+                  <div class="question-options">
+                    <button v-for="option in question.options" :key="option.id" class="question-option" :class="{ selected: mockAnswers[question.id] === option.id }" @click="mockAnswers[question.id] = option.id">
+                      <span>{{ option.id.toUpperCase() }}</span><strong>{{ option.text }}</strong>
+                    </button>
+                  </div>
+                </article>
+                <p v-if="mockError" class="practice-error">{{ mockError }}</p>
               </div>
             </section>
             <section class="section-block practical-section">
