@@ -1,4 +1,4 @@
--- SG prediction pack 3: 50 original, distinct practice questions.
+-- SG prediction pack 3: 56 original, distinct practice questions.
 -- These are authored predictions, not IPA past questions. Stable IDs keep reruns idempotent.
 INSERT OR IGNORE INTO questions
   (id, track_id, topic, difficulty, question_type, prompt, options_json, answer_json, explanation, source_type, source_reference, language)
