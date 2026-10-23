@@ -508,7 +508,7 @@ export default {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: { 'allow': 'GET, POST, OPTIONS' } })
     }
-    const isWriteEndpoint = ['/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks'].includes(url.pathname)
+    const isWriteEndpoint = ['/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history'].includes(url.pathname)
     if (request.method !== 'GET' && !(request.method === 'POST' && isWriteEndpoint)) {
       return json({ error: '不支持此请求方法' }, 405)
     }
@@ -814,6 +814,7 @@ export default {
         const { results } = await env.DB.prepare(
           `SELECT q.id, q.track_id, q.topic, q.difficulty, q.question_type, q.prompt,
                   q.options_json, q.answer_json, q.explanation, q.source_type, q.source_reference, q.language,
+                  q.exam_section, q.exam_section_method,
                   COALESCE(s.review_count, 0) AS review_count,
                   COALESCE(s.correct_streak, 0) AS correct_streak,
                   COALESCE(s.last_result, 'again') AS last_result,
@@ -1060,7 +1061,91 @@ export default {
       }
     }
 
-    // 返回指定考试的练习题。source_type 会明确标记自编练习题，不冒充官方真题。
+    // SG A/B 分类统计：区分题型标签与分类依据，供验收时检查规则推定比例。
+    if (url.pathname === '/api/question-classification-stats' && request.method === 'GET') {
+      const trackId = (url.searchParams.get('track') || 'exam-sg').trim().slice(0, 80)
+      const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
+      const source = ['all', 'official', 'generated'].includes(requestedSource) ? requestedSource : 'all'
+      try {
+        const { results } = await env.DB.prepare(
+          `SELECT COALESCE(exam_section, 'unclassified') AS exam_section,
+                  COALESCE(exam_section_method, 'unclassified') AS method,
+                  COUNT(*) AS question_count
+           FROM questions
+           WHERE track_id = ? AND (? = 'all' OR source_type = ?)
+           GROUP BY COALESCE(exam_section, 'unclassified'),
+                    COALESCE(exam_section_method, 'unclassified')
+           ORDER BY exam_section, method`,
+        ).bind(trackId, source, source).all()
+        const counts = { A: 0, B: 0, unclassified: 0, explicit: 0, inferred: 0 }
+        for (const row of results as Record<string, unknown>[]) {
+          const count = Number(row.question_count || 0)
+          if (row.exam_section === 'A') counts.A += count
+          else if (row.exam_section === 'B') counts.B += count
+          else counts.unclassified += count
+          if (row.method === 'explicit') counts.explicit += count
+          else if (row.method === 'case_pattern' || row.method === 'default_a') counts.inferred += count
+        }
+        return json({ track: trackId, source, counts, breakdown: results })
+      } catch {
+        return json({ error: 'A/B 分类统计暂不可用，请确认已执行题型分类迁移 0071。' }, 503)
+      }
+    }
+
+    // SG 模拟考试只按数据库持久化的 A/B 分类组卷，不在请求时临时猜题型。
+    if (url.pathname === '/api/mock-exam-questions' && request.method === 'GET') {
+      const trackId = (url.searchParams.get('track') || 'exam-sg').trim().slice(0, 80)
+      const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
+      const source = ['all', 'official', 'generated'].includes(requestedSource) ? requestedSource : 'all'
+      try {
+        const { results } = await env.DB.prepare(
+          `SELECT id, track_id, topic, difficulty, question_type, prompt,
+                  options_json, answer_json, explanation, source_type, source_reference, language,
+                  exam_section, exam_section_method
+           FROM questions
+           WHERE track_id = ? AND (? = 'all' OR source_type = ?)`,
+        ).bind(trackId, source, source).all()
+        const rows = results as Record<string, unknown>[]
+        const sectionA = rows.filter(row => row.exam_section === 'A')
+        const sectionB = rows.filter(row => row.exam_section === 'B')
+        const unclassified = rows.filter(row => row.exam_section !== 'A' && row.exam_section !== 'B').length
+        if (sectionA.length < 48 || sectionB.length < 12) {
+          return json({
+            error: `A/B 分类题量不足：科目 A ${sectionA.length} 题、科目 B ${sectionB.length} 题、待复核 ${unclassified} 题；组卷需要至少 48 道 A 类和 12 道 B 类题。请先核对分类统计并补齐标签。`,
+            section_counts: { A: sectionA.length, B: sectionB.length, unclassified },
+          }, 409)
+        }
+        const decode = (row: Record<string, unknown>) => ({
+          ...row,
+          options: JSON.parse(String(row.options_json || '[]')),
+          answer: JSON.parse(String(row.answer_json || 'null')),
+          options_json: undefined,
+          answer_json: undefined,
+        })
+        const shuffle = <T,>(rows: T[]) => {
+          const shuffled = [...rows]
+          for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1))
+            ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+          }
+          return shuffled
+        }
+        const items = [
+          ...shuffle(sectionA).slice(0, 48).map(decode),
+          ...shuffle(sectionB).slice(0, 12).map(decode),
+        ]
+        return json({
+          items: shuffle(items),
+          section_counts: { A: 48, B: 12 },
+          total: 60,
+          duration_minutes: 120,
+        })
+      } catch {
+        return json({ error: '模拟考试组卷失败，请确认题型分类迁移已应用。' }, 503)
+      }
+    }
+
+    // 返回指定考试的练习题。source_type 会明确标记自编练习题，不冒充官方真题.
     if (url.pathname === '/api/questions') {
       const trackId = url.searchParams.get('track') || 'exam-sg'
       const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 10)))
@@ -1077,7 +1162,8 @@ export default {
         ).bind(trackId, topic, topic, source, source).first() as { total?: number } | null
         const { results } = await env.DB.prepare(
           `SELECT id, track_id, topic, difficulty, question_type, prompt,
-                  options_json, answer_json, explanation, source_type, source_reference, language
+                  options_json, answer_json, explanation, source_type, source_reference, language,
+                  exam_section, exam_section_method
            FROM questions
            WHERE track_id = ? AND (? = '' OR topic = ?)
              AND (? = 'all' OR source_type = ?)

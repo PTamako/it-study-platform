@@ -18,7 +18,7 @@ const showMobileMenu = ref(false)
 const savedWords = ref<string[]>(readStored('zhixue:saved-words', []))
 
 type StudyTask = { id: string; title: string; detail: string; minutes: number; done: boolean }
-type ExamRecord = { date: string; correct: number; total: number; exam: string }
+type ExamRecord = { id?: string; date: string; correct: number; total: number; exam: string }
 const todayKey = new Date().toLocaleDateString('sv-SE')
 const defaultTasks: StudyTask[] = [
   { id: 'sg-review', title: '复习 SG 日语关键词', detail: '法律 / 技术 / 管理术语', minutes: 15, done: false },
@@ -129,6 +129,24 @@ async function syncExamHistory() {
     examHistorySyncStarted = false
   }
 }
+async function saveExamRecord(record: ExamRecord) {
+  const savedRecord = { ...record, id: record.id || crypto.randomUUID() }
+  examRecords.value.push(savedRecord)
+  try {
+    const response = await fetch('/api/exam-history', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(savedRecord),
+    })
+    const data = await response.json().catch(() => ({})) as { error?: string }
+    if (!response.ok) throw new Error(data.error || '考试成绩未能同步到云端。')
+    cloudDashboardError.value = ''
+    void loadCloudDashboard()
+  } catch (error) {
+    cloudDashboardError.value = error instanceof Error
+      ? error.message + ' 成绩仍保留在本设备，之后可重试同步。'
+      : '考试成绩未能同步到云端；本地记录仍保留。'
+  }
+}
 function addExamRecord() {
   const exam = window.prompt('记录哪项考试？例如 SG', 'SG')
   if (!exam?.trim()) return
@@ -140,7 +158,7 @@ function addExamRecord() {
   if (correctRaw === null) return
   const correct = Number(correctRaw)
   if (!Number.isInteger(correct) || correct < 0 || correct > total) { window.alert('答对题数应为 0 到总题数之间的整数。'); return }
-  examRecords.value.push({ date: todayKey, correct, total, exam: exam.trim().toUpperCase() })
+  void saveExamRecord({ date: todayKey, correct, total, exam: exam.trim().toUpperCase() })
 }
 function removeExamRecords() {
   if (window.confirm('确定清除本设备保存的全部考试成绩吗？此操作无法撤销。')) examRecords.value = []
@@ -151,7 +169,7 @@ type QuestionReviewProgress = { question_id: string; review_count: number; corre
 const questionProgressById = ref<Record<string, QuestionReviewProgress>>({})
 type PracticeQuestion = {
   id: string; track_id: string; topic: string; difficulty: string; prompt: string;
-  options: PracticeOption[]; answer: string; explanation: string; source_type: string; source_reference?: string; language: string
+  options: PracticeOption[]; answer: string; explanation: string; source_type: string; source_reference?: string; language: string; exam_section?: 'A' | 'B' | null; exam_section_method?: 'explicit' | 'case_pattern' | 'default_a' | 'unclassified' | null
 }
 const quizQuestions = ref<PracticeQuestion[]>([])
 const quizIndex = ref(0)
@@ -170,7 +188,7 @@ const selectedTrackId = ref('exam-sg')
 const tracksLoading = ref(false)
 const tracksError = ref('')
 const questionSourceFilter = ref<'official' | 'generated'>('generated')
-const activeReviewMode = ref<'' | 'mastered' | 'due' | 'wrong'>('')
+const activeReviewMode = ref<'all' | 'mastered' | 'due' | 'wrong'>('all')
 const questionSourceFilters = [
   { id: 'official', label: '历年真题' },
   { id: 'generated', label: '预测题库' },
@@ -211,11 +229,13 @@ async function startMockExam() {
   mockLoading.value = true
   mockError.value = ''
   try {
-    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=60&mode=random')
-    const data = await response.json() as { items?: PracticeQuestion[]; error?: string }
+    const response = await fetch('/api/mock-exam-questions?track=' + encodeURIComponent(selectedTrack.value.id))
+    const data = await response.json() as { items?: PracticeQuestion[]; error?: string; section_counts?: { A: number; B: number } }
     if (!response.ok) throw new Error(data.error || '模拟考试题目加载失败')
-    if (!data.items || data.items.length < 60) throw new Error('正式模拟考试需要 60 道题，当前实际加载 ' + (data.items?.length || 0) + ' 道；不会用重复题目补足数量。')
-    mockQuestions.value = data.items.slice(0, 60)
+    if (!data.items || data.items.length !== 60 || data.section_counts?.A !== 48 || data.section_counts?.B !== 12) {
+      throw new Error('组卷结果未达到科目 A 48 题、科目 B 12 题的真实分布。请先完善带有明确科目/案例标记的题目，系统不会用普通题目冒充科目 B。')
+    }
+    mockQuestions.value = data.items
     mockAnswers.value = {}
     mockDurationMinutes.value = 120
     mockStartedAt.value = Date.now()
@@ -241,7 +261,7 @@ async function finishMockExam(autoSubmit = false) {
   if (mockTimer) { clearInterval(mockTimer); mockTimer = undefined }
   const total = mockQuestions.value.length
   const correct = mockCorrectCount.value
-  examRecords.value.push({ date: todayKey, correct, total, exam: (selectedTrack.value?.title || selectedTrackId.value) + ' 模拟考试（' + (correct * 2) + '/120分）' })
+  void saveExamRecord({ date: todayKey, correct, total, exam: (selectedTrack.value?.title || selectedTrackId.value) + ' 模拟考试（' + (correct * 2) + '/120分）' })
   const unanswered = total - mockAnsweredCount.value
   if (autoSubmit) mockError.value = '时间到，系统已自动交卷。未作答题目按答错计。'
   else mockError.value = unanswered ? '已交卷。未作答的 ' + unanswered + ' 题按答错计。' : ''
@@ -363,6 +383,7 @@ function selectExam(track: ExamTrack) {
 async function selectQuestionSource(source: 'official' | 'generated') {
   questionSourceFilter.value = source
   questionBatchOffset.value = 0
+  activeReviewMode.value = 'all'
   questionBankTotal.value = 0
   questionBankHasMore.value = false
   quizQuestions.value = []
@@ -383,48 +404,18 @@ async function loadQuestionProgress() {
     questionProgressById.value = Object.fromEntries((data.items || []).map(item => [item.question_id, item]))
   } catch { /* Keep the last known progress visible if the network is temporarily unavailable. */ }
 }
-async function startQuestionReview(mode: 'wrong' | 'due' | 'mastered') {
+function selectReviewMode(mode: 'all' | 'wrong' | 'due' | 'mastered') {
   activeReviewMode.value = mode
+  questionBatchOffset.value = 0
+  questionBankTotal.value = 0
+  questionBankHasMore.value = false
   quizQuestions.value = []
   quizIndex.value = 0
   selectedOption.value = ''
   quizSubmitted.value = false
   quizCorrect.value = 0
   quizFinished.value = false
-  questionBatchOffset.value = 0
-  questionBankTotal.value = 0
-  questionBankHasMore.value = false
-  if (!selectedTrack.value) { quizError.value = '尚未加载考试列表，请刷新页面后重试。'; return }
-  quizLoading.value = true
   quizError.value = ''
-  try {
-    const response = await fetch('/api/wrong-questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=30&mode=' + mode + '&source=' + encodeURIComponent(questionSourceFilter.value))
-    const data = await response.json() as { items?: PracticeQuestion[]; error?: string }
-    if (!response.ok) throw new Error(data.error || '复习题加载失败')
-    const emptyMessages = {
-      wrong: '目前没有待处理的错题。做题答错后会自动加入错题集。',
-      due: '目前没有到期的复习题。答错的题会先安排短间隔复习，答对后逐步拉长间隔。',
-      mastered: '目前还没有已掌握的题目。连续答对三次或手动标记掌握后，会显示在这里。',
-    }
-    if (!data.items?.length) {
-      quizError.value = emptyMessages[mode]
-      return
-    }
-    quizQuestions.value = data.items
-    questionBankTotal.value = data.items.length
-    questionBankHasMore.value = false
-    quizIndex.value = 0
-    selectedOption.value = ''
-    quizSubmitted.value = false
-    quizCorrect.value = 0
-    quizFinished.value = false
-    quizStartedAt.value = Date.now()
-    await loadQuestionProgress()
-  } catch (error) {
-    quizError.value = error instanceof Error ? error.message : '复习题加载失败，请稍后重试。'
-  } finally {
-    quizLoading.value = false
-  }
 }
 async function startPractice() {
   if (!selectedTrack.value) { quizError.value = '尚未加载考试列表，请刷新页面后重试。'; return }
@@ -435,12 +426,30 @@ async function startPractice() {
   quizLoading.value = true
   quizError.value = ''
   try {
-    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value) + '&mode=ordered&limit=' + questionBatchSize + '&offset=' + questionBatchOffset.value)
-    const data = await response.json() as { items?: PracticeQuestion[]; error?: string; total?: number; has_more?: boolean }
+    let response: Response
+    let data: { items?: PracticeQuestion[]; error?: string; total?: number; has_more?: boolean }
+    if (activeReviewMode.value === 'all') {
+      response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value) + '&mode=ordered&limit=' + questionBatchSize + '&offset=' + questionBatchOffset.value)
+      data = await response.json() as typeof data
+    } else {
+      const mode = activeReviewMode.value
+      response = await fetch('/api/wrong-questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=50&mode=' + mode + '&source=' + encodeURIComponent(questionSourceFilter.value))
+      data = await response.json() as typeof data
+      data.total = data.items?.length || 0
+      data.has_more = false
+    }
     if (!response.ok) throw new Error(data.error || '题库加载失败')
-    if (!data.items?.length) throw new Error(questionSourceFilter.value === 'official' ? '历年真题正在整理导入；目前没有可作答的官方题目。' : '预测题库目前没有可用题目，请稍后重试。')
+    if (!data.items?.length) {
+      const messages = {
+        all: questionSourceFilter.value === 'official' ? '当前没有可作答的历年真题。' : '当前没有可用的预测题，请稍后重试。',
+        wrong: '当前筛选下没有错题。答错题目后会自动进入错题集。',
+        due: '当前没有到期的复习题。答错题会先安排短间隔复习。',
+        mastered: '当前没有已掌握的题目。连续答对三次或手动标记掌握后会显示在这里。',
+      }
+      throw new Error(messages[activeReviewMode.value])
+    }
     quizQuestions.value = data.items
-    questionBankTotal.value = data.total || 0
+    questionBankTotal.value = data.total || data.items.length
     questionBankHasMore.value = Boolean(data.has_more)
     quizIndex.value = 0
     selectedOption.value = ''
@@ -504,7 +513,7 @@ function nextPracticeQuestion() {
     quizSubmitted.value = false
     return
   }
-  examRecords.value.push({ date: todayKey, correct: quizCorrect.value, total: quizQuestions.value.length, exam: selectedTrack.value?.title || selectedTrackId.value })
+  void saveExamRecord({ date: todayKey, correct: quizCorrect.value, total: quizQuestions.value.length, exam: selectedTrack.value?.title || selectedTrackId.value })
   quizFinished.value = true
 }
 
@@ -1069,9 +1078,10 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               <div class="question-category-section">
                 <div class="question-category-heading"><strong>学习状态</strong><span>按当前题库筛选</span></div>
                 <div class="question-category-filters question-review-filters" role="group" aria-label="题目学习状态">
-                  <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'mastered' }" :aria-pressed="activeReviewMode === 'mastered'" @click="startQuestionReview('mastered')">掌握</button>
-                  <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'due' }" :aria-pressed="activeReviewMode === 'due'" @click="startQuestionReview('due')">再复习</button>
-                  <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'wrong' }" :aria-pressed="activeReviewMode === 'wrong'" @click="startQuestionReview('wrong')">错题集</button>
+                  <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'all' }" :aria-pressed="activeReviewMode === 'all'" @click="selectReviewMode('all')">全部</button>
+                  <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'mastered' }" :aria-pressed="activeReviewMode === 'mastered'" @click="selectReviewMode('mastered')">掌握</button>
+                  <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'due' }" :aria-pressed="activeReviewMode === 'due'" @click="selectReviewMode('due')">再复习</button>
+                  <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'wrong' }" :aria-pressed="activeReviewMode === 'wrong'" @click="selectReviewMode('wrong')">错题集</button>
                 </div>
               </div>
               <div v-if="!quizQuestions.length || quizFinished" class="panel practice-start-card">
@@ -1095,15 +1105,15 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 </template>
               </div>
               <div v-else-if="currentQuestion" class="panel question-card">
-                <div class="question-topline"><span>{{ selectedTrack?.title || '考试练习' }} · 第 {{ quizIndex + 1 }} / {{ quizQuestions.length }} 题</span><span class="source-pill">{{ currentQuestion?.source_type === 'generated' ? '预测题库 · 原创' : currentQuestion?.source_type === 'official' ? '历年真题' : '其他题目' }}</span></div>
+                <div class="question-topline"><span>{{ selectedTrack?.title || '考试练习' }} · 第 {{ quizIndex + 1 }} / {{ quizQuestions.length }} 题 · {{ currentQuestion.exam_section ? '科目' + currentQuestion.exam_section : '题型待复核' }}<template v-if="currentQuestion.exam_section && currentQuestion.exam_section_method !== 'explicit'">（规则推定）</template></span><span class="source-pill">{{ currentQuestion?.source_type === 'generated' ? '预测题库 · 原创' : currentQuestion?.source_type === 'official' ? '历年真题' : '其他题目' }}</span></div>
                 <div class="question-progress"><span :style="{ width: ((quizIndex + 1) / quizQuestions.length * 100) + '%' }"></span></div>
                 <div class="question-topic">{{ currentQuestion.topic }}</div>
-                <div v-if="questionProgressById[currentQuestion.id]" class="question-mastery-row">
-                  <span class="question-mastery-badge" :class="{ mastered: Boolean(questionProgressById[currentQuestion.id].mastered) }">
-                    {{ questionProgressById[currentQuestion.id].mastered ? '已掌握' : questionProgressById[currentQuestion.id].last_result === 'again' ? '需要复习' : '学习中' }}
+                <div class="question-mastery-row">
+                  <span class="question-mastery-badge" :class="{ mastered: Boolean(questionProgressById[currentQuestion.id]?.mastered) }">
+                    {{ !questionProgressById[currentQuestion.id] ? '未开始' : questionProgressById[currentQuestion.id].mastered ? '已掌握' : questionProgressById[currentQuestion.id].last_result === 'again' ? '需要复习' : '学习中' }}
                   </span>
-                  <span>连续答对 {{ questionProgressById[currentQuestion.id].correct_streak }} 次</span>
-                  <span>复习 {{ questionProgressById[currentQuestion.id].review_count }} 次</span>
+                  <span>连续答对 {{ questionProgressById[currentQuestion.id]?.correct_streak || 0 }} 次</span>
+                  <span>复习 {{ questionProgressById[currentQuestion.id]?.review_count || 0 }} 次</span>
                 </div>
                 <a v-if="currentQuestion.source_type === 'official' && currentQuestion.source_reference" class="language-source" :href="currentQuestion.source_reference" target="_blank" rel="noreferrer">IPA 官方原卷 ↗</a>
                 <h3 class="question-prompt">{{ currentQuestion.prompt }}</h3>
@@ -1126,7 +1136,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               </div>
             </section>
             <section class="section-block mock-exam-section">
-              <div class="section-heading"><div><div class="section-kicker">TIMED MOCK EXAM</div><h2>限时模拟考试</h2><p>随机抽取 60 道题，每题 2 分、满分 120 分，限时 120 分钟。交卷或时间结束前，不显示正确答案与解析。</p></div><span class="source-pill">限时 · 独立计分</span></div>
+              <div class="section-heading"><div><div class="section-kicker">TIMED MOCK EXAM</div><h2>限时模拟考试</h2><p>按 SG 真实题型结构组卷：科目 A 48 题、科目 B 12 题，共 60 题、限时 120 分钟。组卷只使用有明确题型标记或可识别案例特征的题目；题型数量不足时不会用普通题目冒充科目 B。</p></div><span class="source-pill">A 48 题 · B 12 题</span></div>
               <div v-if="!mockStarted && !mockSubmitted" class="panel practice-start-card">
                 <div class="practice-start-icon"><Clock3 :size="25" /></div><h3>模拟真实考试节奏</h3>
                 <p>当前题库有 {{ selectedTrack?.question_count || 0 }} 道可用题目。正式模拟固定 60 题、每题 2 分、满分 120 分、限时 120 分钟；题量不足时不会用重复题补足。</p>
@@ -1156,7 +1166,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                   <button class="primary-button" @click="finishMockExam(false)">交卷并查看结果</button>
                 </div>
                 <article v-for="(question, index) in mockQuestions" :key="question.id" class="panel question-card mock-question-card">
-                  <div class="question-topline"><span>第 {{ index + 1 }} / {{ mockQuestions.length }} 题 · {{ question.topic }}</span><span class="source-pill">{{ question.source_type === 'generated' ? '预测题库 · 原创' : question.source_type === 'official' ? '历年真题' : '其他题目' }}</span></div>
+                  <div class="question-topline"><span>第 {{ index + 1 }} / {{ mockQuestions.length }} 题 · 科目{{ question.exam_section }}<template v-if="question.exam_section_method !== 'explicit'">（规则推定）</template> · {{ question.topic }}</span><span class="source-pill">{{ question.source_type === 'generated' ? '预测题库 · 原创' : question.source_type === 'official' ? '历年真题' : '其他题目' }}</span></div>
                   <a v-if="question.source_type === 'official' && question.source_reference" class="language-source" :href="question.source_reference" target="_blank" rel="noreferrer">IPA 官方原卷 ↗</a>
                   <h3 class="question-prompt">{{ question.prompt }}</h3>
                   <div class="question-options">
