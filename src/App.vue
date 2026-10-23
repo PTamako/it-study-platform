@@ -673,29 +673,20 @@ const modules = [
   { id: 'dictionary' as const, title: '英日发音与 IT 术语', en: 'DICTIONARY', desc: '英语原音 · 日语辅助读音 · 本地 IT 词库', icon: BookMarked, tone: 'blue', count: '英语词汇与专业术语' },
 ]
 
+type LanguageHighlight = { start: number; end: number; type: 'vocabulary' | 'grammar'; term: string; meaning: string; explanation: string }
+type LanguageExpansion = { term: string; meaning: string; explanation: string }
 type LanguageCard = {
   id: string; language: 'ja' | 'en'; category: string; term: string; reading?: string;
-  meaning_zh: string; explanation: string; example: string; example_meaning_zh: string; example_source_url?: string; source_type: string
+  meaning_zh: string; explanation: string; example: string; example_meaning_zh: string;
+  example_source_url?: string; source_url?: string; source_type: string; content_type?: string;
+  highlight_json?: string; vocabulary_expansion_json?: string; grammar_expansion_json?: string
 }
 const languageCards = ref<LanguageCard[]>([])
-const languageCategories = computed(() => {
-  const preferredOrder = [
-    '日常与情景会话', '职场与商务语言', '词汇与语法',
-    'JLPT N5', 'JLPT N4', 'JLPT N3', 'JLPT N2', 'JLPT N1',
-    'Oxford 3000 核心词汇', '大学英语四级', '大学英语六级', '雅思词汇', '托福词汇', '高频词汇',
-  ]
-  const categories = [...new Set(languageCards.value.map(card => card.category))]
-  categories.sort((a, b) => {
-    const ai = preferredOrder.indexOf(a)
-    const bi = preferredOrder.indexOf(b)
-    if (ai >= 0 || bi >= 0) return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi)
-    return a.localeCompare(b, 'zh-CN')
-  })
-  return [
-    { title: '全部', desc: '所有已发布的课程卡', icon: BookOpen },
-    ...categories.map(title => ({ title, desc: '按学习等级或词汇类别筛选', icon: BookMarked })),
-  ]
-})
+const languageCategories = computed(() => [
+  { title: '全部', desc: '全部句子', icon: BookOpen },
+  { title: '日常句子', desc: '日常生活中自然会说的话', icon: BookMarked },
+  { title: '职场语言', desc: '工作沟通、确认、汇报与协作', icon: BookMarked },
+])
 const languageCardsLoading = ref(false)
 const languageCardsError = ref('')
 type LanguageReview = { card_id: string; review_count: number; correct_streak: number; next_review_at: string; last_reviewed_at: string; last_result: 'again' | 'remembered'; is_due?: number }
@@ -740,6 +731,31 @@ const languagePracticeRevealed = ref(false)
 const languagePracticeCard = computed(() => visibleLanguageCards.value.length
   ? visibleLanguageCards.value[languagePracticeIndex.value % visibleLanguageCards.value.length]
   : null)
+function parseLanguageExpansion(value?: string): LanguageExpansion[] {
+  try {
+    const parsed = JSON.parse(value || '[]')
+    return Array.isArray(parsed) ? parsed.filter((item): item is LanguageExpansion => Boolean(item && typeof item.term === 'string')) : []
+  } catch { return [] }
+}
+function sentenceParts(card: LanguageCard | null): Array<{ text: string; type: string; detail: string }> {
+  if (!card) return []
+  let highlights: LanguageHighlight[] = []
+  try {
+    const parsed = JSON.parse(card.highlight_json || '[]')
+    if (Array.isArray(parsed)) highlights = parsed.filter(item => Number.isInteger(item.start) && Number.isInteger(item.end) && item.start >= 0 && item.end > item.start && item.end <= card.term.length)
+  } catch { highlights = [] }
+  highlights.sort((a, b) => a.start - b.start || (a.type === 'grammar' ? -1 : 1))
+  const parts: Array<{ text: string; type: string; detail: string }> = []
+  let cursor = 0
+  for (const item of highlights) {
+    if (item.start < cursor) continue
+    if (item.start > cursor) parts.push({ text: card.term.slice(cursor, item.start), type: '', detail: '' })
+    parts.push({ text: card.term.slice(item.start, item.end), type: item.type, detail: [item.term, item.meaning, item.explanation].filter(Boolean).join(' · ') })
+    cursor = item.end
+  }
+  if (cursor < card.term.length) parts.push({ text: card.term.slice(cursor), type: '', detail: '' })
+  return parts.length ? parts : [{ text: card.term, type: '', detail: '' }]
+}
 function speakLanguageCard(card: LanguageCard | null, example = false, practice = false) {
   if (!card) return
   const text = example ? card.example : card.term
@@ -1625,7 +1641,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               </div>
               <div v-if="languagePracticeCard" class="language-practice-content">
                 <span class="dict-tag">{{ languagePracticeCard.category }}</span>
-                <h4>{{ languagePracticeCard.term }}</h4>
+                <h4 class="language-sentence"><span v-for="(part, index) in sentenceParts(languagePracticeCard)" :key="index" :class="part.type ? 'sentence-highlight-' + part.type : ''" :title="part.detail">{{ part.text }}</span></h4>
                 <p v-if="languagePracticeCard.reading" class="language-reading">{{ languagePracticeCard.reading }}</p>
                 <div class="language-speech-actions"><button type="button" class="play-button" @click="speakLanguageCard(languagePracticeCard, false, true)"><Volume2 :size="16" /> 播放原文</button><button v-if="languagePracticeCard.example" type="button" class="play-button" @click="speakLanguageCard(languagePracticeCard, true, true)"><Volume2 :size="16" /> 播放例句</button></div>
                 <div v-if="speechStatus && speechStatusTarget.startsWith('language-practice:' + languagePracticeCard.id + ':')" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
@@ -1658,8 +1674,8 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               <button :class="{ chosen: selectedLanguageMastery === 'unmastered' }" @click="selectedLanguageMastery = 'unmastered'">学习中 / 待复习 {{ languageCards.filter(card => !completedLanguageCards.includes(card.id) && !isLanguageCardUnlearned(card)).length }}</button>
               <button :class="{ chosen: selectedLanguageMastery === 'mastered' }" @click="selectedLanguageMastery = 'mastered'">已掌握 {{ languageCards.filter(card => completedLanguageCards.includes(card.id)).length }}</button>
             </div>
-            <p v-if="studyLanguage === 'ja'" class="language-source">日语词库：<a href="https://github.com/evanclan/OpenJLPT" target="_blank" rel="noopener noreferrer">OpenJLPT</a> / <a href="https://www.edrdg.org/jmdict/j_jmdict.html" target="_blank" rel="noopener noreferrer">JMdict</a>（<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>）；中文释义：<a href="https://github.com/tomoshi-app/tomoshi-dict-data" target="_blank" rel="noopener noreferrer">Tomoshi 开放词库</a>；例句：<a href="https://tatoeba.org" target="_blank" rel="noopener noreferrer">Tatoeba</a>（CC BY 2.0 FR）。JLPT 等级为社区参考，并非官方公布词表。</p>
-            <p v-else class="language-source">英语词库：<a href="https://github.com/skywind3000/ECDICT" target="_blank" rel="noopener noreferrer">ECDICT</a>（<a href="https://github.com/skywind3000/ECDICT/blob/bc015ed2e24a7abef49fc6dbbb7fe32c1dadaf8b/LICENSE" target="_blank" rel="noopener noreferrer">MIT</a>）；按核心词汇与词频排序，分为三个 1,000 词学习阶段。</p>
+            <p v-if="studyLanguage === 'ja'" class="language-source">日语句子来自 <a href="https://tatoeba.org" target="_blank" rel="noopener noreferrer">Tatoeba</a> 开放例句；每条句子保留来源链接，句中标注词汇与语法。</p>
+            <p v-else class="language-source">英语句子来自 <a href="https://tatoeba.org" target="_blank" rel="noopener noreferrer">Tatoeba</a> 开放例句；每条句子保留来源链接，句中标注词汇与语法。</p>
             <p v-if="languageCardsLoading" class="dictionary-status">正在从学习内容库读取课程…</p>
             <p v-else-if="languageCardsError" class="dictionary-status dictionary-error">{{ languageCardsError }} 请先应用最新的 D1 数据库迁移。</p>
             <div v-else class="language-card-list">
