@@ -1038,6 +1038,25 @@ export default {
       }
     }
 
+    // 题库分类：按当前考试和来源返回实际存在的 topic 及题量。
+    if (url.pathname === '/api/question-categories' && request.method === 'GET') {
+      const trackId = (url.searchParams.get('track') || 'exam-sg').trim().slice(0, 80)
+      const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
+      const source = ['all', 'official', 'generated'].includes(requestedSource) ? requestedSource : 'all'
+      try {
+        const { results } = await env.DB.prepare(
+          `SELECT topic, COUNT(*) AS question_count
+           FROM questions
+           WHERE track_id = ? AND (? = 'all' OR source_type = ?)
+           GROUP BY topic
+           ORDER BY topic`,
+        ).bind(trackId, source, source).all()
+        return json({ items: results })
+      } catch {
+        return json({ items: [], error: '题库分类暂不可用，请确认数据库迁移已应用。' }, 503)
+      }
+    }
+
     // 返回指定考试的练习题。source_type 会明确标记自编练习题，不冒充官方真题。
     if (url.pathname === '/api/questions') {
       const trackId = url.searchParams.get('track') || 'exam-sg'
