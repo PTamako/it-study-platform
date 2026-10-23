@@ -654,7 +654,7 @@ const moduleInfo = {
   exam: { title: '考试备考', subtitle: '日常刷题、复习错题与限时模拟考试。' },
   practical: { title: '实战训练', subtitle: '在工作情境中判断风险、选择行动，并查看评分与解释。' },
   language: { title: '语言学习', subtitle: '选择日语或英语，按实际学习内容练习表达、理解和发音。' },
-  dictionary: { title: '多语言词典', subtitle: '把中文、日语、英语和 IT 术语连起来，随查随记。' },
+  dictionary: { title: '英语发音与 IT 术语', subtitle: '英语释义、IPA 音标、日语假名辅助发音；不做中文翻译。' },
 } as const
 
 const currentInfo = computed(() => moduleInfo[activeModule.value])
@@ -893,12 +893,14 @@ type DictionaryEntry = {
   reading?: string
   phonetic?: string
   en: string
-  zh: string
+  zh?: string
   tag: string
   example?: string
   language?: 'ja' | 'en' | 'zh'
   source?: string
   translationJa?: string
+  englishTerm?: string
+  matchedQuery?: string
   technical?: boolean
 }
 const dictionaryEntries: DictionaryEntry[] = []
@@ -907,13 +909,14 @@ const recentDictionaryEntries = ref<DictionaryEntry[]>(readStored('zhixue:recent
 const savedDictionaryEntries = ref<DictionaryEntry[]>(readStored('zhixue:saved-dictionary-entries', []))
 const dictionaryLoading = ref(false)
 const dictionaryError = ref('')
+const speechStatus = ref('')
 const lastSearchedTerm = ref('')
 watch(recentDictionaryEntries, value => localStorage.setItem('zhixue:recent-dictionary', JSON.stringify(value)), { deep: true })
 watch(savedDictionaryEntries, value => localStorage.setItem('zhixue:saved-dictionary-entries', JSON.stringify(value)), { deep: true })
 const savedVocabularyEntries = computed(() => savedWords.value.map(term =>
   savedDictionaryEntries.value.find(entry => entry.term === term) ||
   recentDictionaryEntries.value.find(entry => entry.term === term) ||
-  { term, zh: '再次查询该词后即可补全释义。', reading: '', translationJa: '', language: 'ja' as const }
+  { term, en: '', reading: '', translationJa: '', language: 'ja' as const, tag: '生词本' }
 ))
 const filteredEntries = computed(() => {
   const q = searchText.value.trim().toLowerCase()
@@ -957,7 +960,7 @@ function toggleSaved(term: string) {
 async function lookupDictionary() {
   const q = searchText.value.trim()
   if (!q) {
-    dictionaryError.value = '请先输入日语、英语或中文词语。'
+    dictionaryError.value = '请先输入英语单词、日语词语或 IT 缩写。'
     onlineEntries.value = []
     lastSearchedTerm.value = ''
     return
@@ -995,7 +998,7 @@ function clearDictionarySearch() {
   lastSearchedTerm.value = ''
   dictionaryError.value = ''
 }
-function quickDictionarySearch(term: string, language: 'ja' | 'en' | 'zh' | 'it') {
+function quickDictionarySearch(term: string, language: 'ja' | 'en' | 'it') {
   searchText.value = term
   dictSourceLang.value = language
   void lookupDictionary()
@@ -1055,51 +1058,79 @@ function speakJapaneseQuestion(text: string) {
   window.setTimeout(() => play(), 100)
 }
 function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
+  const spokenText = text.trim()
+  if (!spokenText) {
+    speechStatus.value = '没有可播放的文字。'
+    return
+  }
   const synthesis = window.speechSynthesis
   if (typeof synthesis === 'undefined' || typeof SpeechSynthesisUtterance === 'undefined') {
-    window.alert('当前浏览器不支持语音播放。请用 iPhone 的 Safari 打开，或检查系统语音设置。')
+    speechStatus.value = '当前浏览器不支持语音合成。请使用 Safari/Chrome，并检查系统语音功能。'
     return
   }
 
+  // Call speak() synchronously in the click handler. Delaying with setTimeout may lose
+  // browser user activation and cause silent playback failures on Safari/iOS.
   const requestId = ++speechRequestId
-  synthesis.cancel()
-  const utterance = new SpeechSynthesisUtterance(text.trim())
+  try {
+    synthesis.cancel()
+    if (synthesis.paused) synthesis.resume()
+  } catch {
+    // Continue and report playback failure via utterance.onerror if needed.
+  }
+
+  const utterance = new SpeechSynthesisUtterance(spokenText)
   utterance.lang = lang
-  utterance.rate = lang === 'ja-JP' ? 0.78 : lang === 'en-US' ? 0.86 : 0.82
+  utterance.rate = 0.82
   utterance.pitch = 1
   utterance.volume = 1
 
-  const chooseVoice = (): SpeechSynthesisVoice | null => {
-    const normalizedLang = lang.toLowerCase().replace('_', '-')
-    const voices = synthesis.getVoices().filter(voice => {
-      const voiceLang = voice.lang.toLowerCase().replace('_', '-')
-      return voiceLang === normalizedLang || voiceLang.startsWith(normalizedLang.slice(0, 2) + '-')
-    })
-    if (!voices.length) return null
-    return voices.find(voice => /natural|enhanced|premium|siri|kyoko|otoya/i.test(voice.name))
-      || voices.find(voice => voice.lang.toLowerCase().replace('_', '-') === normalizedLang && voice.localService)
-      || voices.find(voice => voice.lang.toLowerCase().replace('_', '-') === normalizedLang)
-      || voices[0]
+  const normalize = (value: string) => value.toLowerCase().replace('_', '-')
+  const normalizedLang = normalize(lang)
+  const prefix = normalizedLang.slice(0, 2)
+  const voices = synthesis.getVoices().filter(voice => normalize(voice.lang).startsWith(prefix))
+  const voice = voices.find(candidate => /natural|enhanced|premium|siri|daniel|karen|ava|alex|samantha|kyoko|otoya/i.test(candidate.name))
+    || voices.find(candidate => normalize(candidate.lang) === normalizedLang && candidate.localService)
+    || voices.find(candidate => normalize(candidate.lang) === normalizedLang)
+    || voices[0]
+  if (voice) utterance.voice = voice
+
+  utterance.onstart = () => {
+    if (requestId === speechRequestId) speechStatus.value = '正在播放：' + spokenText
+  }
+  utterance.onend = () => {
+    if (requestId === speechRequestId) speechStatus.value = '播放完成：' + spokenText
+  }
+  utterance.onerror = event => {
+    if (requestId !== speechRequestId || ['canceled', 'interrupted'].includes(String(event.error))) return
+    speechStatus.value = '播放失败（' + String(event.error) + '）。请检查浏览器声音、设备静音状态和系统中的英语/日语语音。'
   }
 
-  const playWhenVoiceReady = (attempt = 0) => {
-    if (requestId !== speechRequestId) return
-    const preferred = chooseVoice()
-    if (!preferred && lang === 'ja-JP' && attempt < 8) {
-      // Safari/Chrome 可能在页面初次打开时尚未加载完日语语音列表。
-      window.setTimeout(() => playWhenVoiceReady(attempt + 1), 200)
-      return
-    }
-    if (!preferred && lang === 'ja-JP') {
-      // 不允许设备把日语题目悄悄交给中文默认语音朗读。
-      window.alert('当前设备没有检测到可用的日语语音，已停止播放以免误用中文语音。请在系统或浏览器语音设置中启用日语语音后重试。')
-      return
-    }
-    if (preferred) utterance.voice = preferred
+  speechStatus.value = '正在请求播放：' + spokenText
+  try {
     synthesis.speak(utterance)
+    synthesis.resume()
+  } catch {
+    speechStatus.value = '浏览器没有接受这次语音请求，请再次点击播放。'
   }
+}
 
-  window.setTimeout(() => playWhenVoiceReady(), 100)
+function speakDictionaryEnglish(entry: DictionaryEntry) {
+  const term = entry.englishTerm || (entry.language === 'en' ? entry.term : '')
+  if (!term) {
+    speechStatus.value = '该词暂未收录可靠的英语对应词，无法播放英语发音。'
+    return
+  }
+  speak(term, 'en-US')
+}
+
+function speakDictionaryJapanese(entry: DictionaryEntry) {
+  const text = entry.reading || (entry.language === 'ja' ? entry.term : '')
+  if (!text) {
+    speechStatus.value = '该词暂未收录日语假名读音。可以先播放英语原音；IT 术语词库会逐步补齐读音。'
+    return
+  }
+  speak(text, 'ja-JP')
 }
 </script>
 
