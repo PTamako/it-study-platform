@@ -1108,12 +1108,12 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 <div class="question-topline"><span>{{ selectedTrack?.title || '考试练习' }} · 第 {{ quizIndex + 1 }} / {{ quizQuestions.length }} 题</span><span class="source-pill">{{ currentQuestion?.source_type === 'generated' ? '预测题库 · 原创' : currentQuestion?.source_type === 'official' ? '历年真题' : '其他题目' }}</span></div>
                 <div class="question-progress"><span :style="{ width: ((quizIndex + 1) / quizQuestions.length * 100) + '%' }"></span></div>
                 <div class="question-topic">{{ currentQuestion.topic }}</div>
-                <div v-if="questionProgressById[currentQuestion.id]" class="question-mastery-row">
-                  <span class="question-mastery-badge" :class="{ mastered: Boolean(questionProgressById[currentQuestion.id].mastered) }">
-                    {{ questionProgressById[currentQuestion.id].mastered ? '已掌握' : questionProgressById[currentQuestion.id].last_result === 'again' ? '需要复习' : '学习中' }}
+                <div class="question-mastery-row">
+                  <span class="question-mastery-badge" :class="{ mastered: Boolean(questionProgressById[currentQuestion.id]?.mastered) }">
+                    {{ !questionProgressById[currentQuestion.id] ? '未开始' : questionProgressById[currentQuestion.id].mastered ? '已掌握' : questionProgressById[currentQuestion.id].last_result === 'again' ? '需要复习' : '学习中' }}
                   </span>
-                  <span>连续答对 {{ questionProgressById[currentQuestion.id].correct_streak }} 次</span>
-                  <span>复习 {{ questionProgressById[currentQuestion.id].review_count }} 次</span>
+                  <span>连续答对 {{ questionProgressById[currentQuestion.id]?.correct_streak || 0 }} 次</span>
+                  <span>复习 {{ questionProgressById[currentQuestion.id]?.review_count || 0 }} 次</span>
                 </div>
                 <a v-if="currentQuestion.source_type === 'official' && currentQuestion.source_reference" class="language-source" :href="currentQuestion.source_reference" target="_blank" rel="noreferrer">IPA 官方原卷 ↗</a>
                 <h3 class="question-prompt">{{ currentQuestion.prompt }}</h3>
