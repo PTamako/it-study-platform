@@ -400,9 +400,9 @@ async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Prom
         OR lower(meaning_ja) = lower(?)
         OR lower(meaning_en) = lower(?)
         OR instr('|' || lower(COALESCE(aliases, '')) || '|', '|' || lower(?) || '|') > 0
-     ORDER BY term
+     ORDER BY CASE WHEN lower(term) = lower(?) THEN 0 ELSE 1 END, term
      LIMIT 8`,
-  ).bind(query, query, query, query, query, query).all()
+  ).bind(query, query, query, query, query, query, query).all()
   let results = exactResult.results as Record<string, unknown>[]
   if (!results.length) {
     // Avoid matching tiny strings like "it" inside every English definition.
@@ -422,7 +422,7 @@ async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Prom
     ).bind(query, query, query, query, query, query, query).all()
     results = partialResult.results as Record<string, unknown>[]
   }
-  return results.map((row) => {
+  const mapped = results.map((row) => {
     const term = String(row.term || '')
     const aliases = String(row.aliases || '').split('|').map(alias => alias.trim()).filter(Boolean)
     const termIsEnglish = /^[a-z0-9][a-z0-9 .+/#()-]*$/i.test(term)
@@ -431,11 +431,17 @@ async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Prom
       : aliases.find(alias => /^[a-z0-9][a-z0-9 .+/#()-]*$/i.test(alias)) || ''
     // In auto mode, label the result according to the user's query so an English alias
     // gets an English-first card with a Japanese pronunciation aid.
-    const language = /[a-z]/i.test(query) ? 'en' : String(row.language || 'ja') as 'ja' | 'en' | 'zh'
+    const isEnglishQuery = /[a-z]/i.test(query)
+    const language = isEnglishQuery ? 'en' : String(row.language || 'ja') as 'ja' | 'en' | 'zh'
+    const kanaGuide = englishTerm ? englishKatakanaReadings[englishTerm.toLowerCase()] || '' : ''
+    const storedReading = String(row.reading || '')
+    // For English aliases, prefer the curated English-to-katakana guide over a Japanese
+    // word's kun/on reading (e.g. authentication -> オーセンティケーション, not にんしょう).
+    const reading = isEnglishQuery ? (kanaGuide || storedReading) : (storedReading || kanaGuide)
     return {
       term,
       englishTerm: englishTerm || undefined,
-      reading: String(row.reading || '') || (englishTerm ? englishKatakanaReadings[englishTerm.toLowerCase()] || '' : ''),
+      reading,
       en: String(row.meaning_en || ''),
       zh: '',
       translationJa: String(row.meaning_ja || ''),
@@ -446,6 +452,15 @@ async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Prom
       technical: true,
     }
   }).filter(entry => Boolean(entry.term && (entry.en || entry.translationJa)))
+  // A Japanese headword may be indexed alongside its English canonical row. Keep one
+  // result per English term so searching "authentication" does not show duplicate cards.
+  const seen = new Set<string>()
+  return mapped.filter(entry => {
+    const key = (entry.englishTerm || entry.term).trim().toLowerCase()
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' | 'it' = 'auto', db?: D1Database): Promise<DictionaryApiEntry[]> {
