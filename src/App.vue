@@ -169,7 +169,7 @@ type QuestionReviewProgress = { question_id: string; review_count: number; corre
 const questionProgressById = ref<Record<string, QuestionReviewProgress>>({})
 type PracticeQuestion = {
   id: string; track_id: string; topic: string; difficulty: string; prompt: string;
-  options: PracticeOption[]; answer: string; explanation: string; source_type: string; source_reference?: string; language: string; exam_section?: 'A' | 'B' | null; exam_section_method?: 'explicit' | 'case_pattern' | 'knowledge_pattern' | 'unclassified' | null
+  options: PracticeOption[]; answer: string; explanation: string; source_type: string; source_reference?: string; language: string; exam_section?: 'A' | 'B' | null; exam_section_method?: 'explicit' | 'case_pattern' | 'default_a' | 'unclassified' | null
 }
 const quizQuestions = ref<PracticeQuestion[]>([])
 const quizIndex = ref(0)
