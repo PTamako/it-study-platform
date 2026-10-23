@@ -170,38 +170,11 @@ const selectedTrackId = ref('exam-sg')
 const tracksLoading = ref(false)
 const tracksError = ref('')
 const questionSourceFilter = ref<'official' | 'generated'>('generated')
+const activeReviewMode = ref<'' | 'mastered' | 'due' | 'wrong'>('')
 const questionSourceFilters = [
   { id: 'official', label: '历年真题' },
   { id: 'generated', label: '预测题库' },
 ] as const
-type QuestionCategory = { topic: string; question_count: number }
-const questionCategories = ref<QuestionCategory[]>([])
-const selectedQuestionTopic = ref('')
-async function loadQuestionCategories() {
-  if (!selectedTrack.value) return
-  try {
-    const response = await fetch('/api/question-categories?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value))
-    const data = await response.json() as { items?: QuestionCategory[] }
-    if (response.ok) questionCategories.value = data.items || []
-  } catch {
-    questionCategories.value = []
-  }
-}
-async function selectQuestionTopic(topic: string) {
-  selectedQuestionTopic.value = topic
-  questionBatchOffset.value = 0
-  questionBankTotal.value = 0
-  questionBankHasMore.value = false
-  quizQuestions.value = []
-  quizIndex.value = 0
-  selectedOption.value = ''
-  quizSubmitted.value = false
-  quizCorrect.value = 0
-  quizFinished.value = false
-  quizError.value = ''
-  await startPractice()
-}
-
 const selectedTrack = computed(() => examTracks.value.find(track => track.id === selectedTrackId.value) || null)
 const quizStartedAt = ref(0)
 const quizFinished = ref(false)
@@ -389,7 +362,6 @@ function selectExam(track: ExamTrack) {
 
 async function selectQuestionSource(source: 'official' | 'generated') {
   questionSourceFilter.value = source
-  selectedQuestionTopic.value = ''
   questionBatchOffset.value = 0
   questionBankTotal.value = 0
   questionBankHasMore.value = false
@@ -400,7 +372,6 @@ async function selectQuestionSource(source: 'official' | 'generated') {
   quizCorrect.value = 0
   quizFinished.value = false
   quizError.value = ''
-  await loadQuestionCategories()
   await startPractice()
 }
 async function loadQuestionProgress() {
@@ -412,24 +383,36 @@ async function loadQuestionProgress() {
     questionProgressById.value = Object.fromEntries((data.items || []).map(item => [item.question_id, item]))
   } catch { /* Keep the last known progress visible if the network is temporarily unavailable. */ }
 }
-async function startQuestionReview(mode: 'wrong' | 'due' | 'practice') {
+async function startQuestionReview(mode: 'wrong' | 'due' | 'mastered') {
+  activeReviewMode.value = mode
+  quizQuestions.value = []
+  quizIndex.value = 0
+  selectedOption.value = ''
+  quizSubmitted.value = false
+  quizCorrect.value = 0
+  quizFinished.value = false
+  questionBatchOffset.value = 0
+  questionBankTotal.value = 0
+  questionBankHasMore.value = false
   if (!selectedTrack.value) { quizError.value = '尚未加载考试列表，请刷新页面后重试。'; return }
   quizLoading.value = true
   quizError.value = ''
   try {
-    const response = await fetch('/api/wrong-questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=30&mode=' + mode)
+    const response = await fetch('/api/wrong-questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=30&mode=' + mode + '&source=' + encodeURIComponent(questionSourceFilter.value))
     const data = await response.json() as { items?: PracticeQuestion[]; error?: string }
     if (!response.ok) throw new Error(data.error || '复习题加载失败')
     const emptyMessages = {
       wrong: '目前没有待处理的错题。做题答错后会自动加入错题集。',
       due: '目前没有到期的复习题。答错的题会先安排短间隔复习，答对后逐步拉长间隔。',
-      practice: '目前没有待掌握的题目。新题答过后会进入这里，连续答对后才会自动标记掌握。',
+      mastered: '目前还没有已掌握的题目。连续答对三次或手动标记掌握后，会显示在这里。',
     }
     if (!data.items?.length) {
       quizError.value = emptyMessages[mode]
       return
     }
     quizQuestions.value = data.items
+    questionBankTotal.value = data.items.length
+    questionBankHasMore.value = false
     quizIndex.value = 0
     selectedOption.value = ''
     quizSubmitted.value = false
@@ -452,7 +435,7 @@ async function startPractice() {
   quizLoading.value = true
   quizError.value = ''
   try {
-    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value) + '&topic=' + encodeURIComponent(selectedQuestionTopic.value) + '&mode=ordered&limit=' + questionBatchSize + '&offset=' + questionBatchOffset.value)
+    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value) + '&mode=ordered&limit=' + questionBatchSize + '&offset=' + questionBatchOffset.value)
     const data = await response.json() as { items?: PracticeQuestion[]; error?: string; total?: number; has_more?: boolean }
     if (!response.ok) throw new Error(data.error || '题库加载失败')
     if (!data.items?.length) throw new Error(questionSourceFilter.value === 'official' ? '历年真题正在整理导入；目前没有可作答的官方题目。' : '预测题库目前没有可用题目，请稍后重试。')
@@ -762,7 +745,7 @@ async function hydrateCloudProgress() {
     // Keep local data usable if the cloud is unavailable or an import partially fails.
   }
 }
-onMounted(() => { void syncExamHistory(); void hydrateCloudProgress(); void loadQuestionCategories() })
+onMounted(() => { void syncExamHistory(); void hydrateCloudProgress() })
 
 type DictionaryEntry = {
   term: string
@@ -1083,11 +1066,12 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               <div class="question-source-filters" role="group" aria-label="题目来源筛选">
                 <button v-for="filter in questionSourceFilters" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" @click="selectQuestionSource(filter.id)">{{ filter.label }}（{{ filter.id === 'official' ? (selectedTrack?.official_question_count || 0) : (selectedTrack?.prediction_question_count || 0) }}）</button>
               </div>
-              <div class="question-category-section" v-if="questionCategories.length">
-                <div class="question-category-heading"><strong>按分类练习</strong><span>题量来自当前题库</span></div>
-                <div class="question-category-filters" role="group" aria-label="题库分类筛选">
-                  <button type="button" class="question-category-button" :class="{ active: !selectedQuestionTopic }" @click="selectQuestionTopic('')">全部分类 <span>{{ selectedTrack ? (questionSourceFilter === 'official' ? selectedTrack.official_question_count : selectedTrack.prediction_question_count) : 0 }}</span></button>
-                  <button v-for="category in questionCategories" :key="category.topic" type="button" class="question-category-button" :class="{ active: selectedQuestionTopic === category.topic }" @click="selectQuestionTopic(category.topic)">{{ category.topic }} <span>{{ category.question_count }}</span></button>
+              <div class="question-category-section">
+                <div class="question-category-heading"><strong>学习状态</strong><span>按当前题库筛选</span></div>
+                <div class="question-category-filters question-review-filters" role="group" aria-label="题目学习状态">
+                  <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'mastered' }" :aria-pressed="activeReviewMode === 'mastered'" @click="startQuestionReview('mastered')">掌握</button>
+                  <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'due' }" :aria-pressed="activeReviewMode === 'due'" @click="startQuestionReview('due')">再复习</button>
+                  <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'wrong' }" :aria-pressed="activeReviewMode === 'wrong'" @click="startQuestionReview('wrong')">错题集</button>
                 </div>
               </div>
               <div v-if="!quizQuestions.length || quizFinished" class="panel practice-start-card">
@@ -1106,9 +1090,6 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                   <p v-else>你可以选择不同考试。目前 SG 已接入专项练习题库；其他考试将在题库准备完成后开放。</p>
                   <div class="practice-start-actions">
                     <button class="primary-button" @click="startPractice" :disabled="quizLoading || !selectedTrack || selectedTrack.question_count === 0">{{ quizLoading ? '正在加载题目…' : selectedTrack?.question_count ? '开始练习（最多 10 题）' : '当前暂无可练习题目' }} <ArrowRight :size="16" /></button>
-                    <button class="text-link" @click="startQuestionReview('wrong')" :disabled="quizLoading || !selectedTrack">错题集</button>
-                    <button class="text-link" @click="startQuestionReview('due')" :disabled="quizLoading || !selectedTrack">到期再练习</button>
-                    <button class="text-link" @click="startQuestionReview('practice')" :disabled="quizLoading || !selectedTrack">未掌握题目</button>
                   </div>
                   <p v-if="quizError" class="practice-error">{{ quizError }}</p>
                 </template>
