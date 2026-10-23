@@ -1121,7 +1121,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   const voice = voices.find(candidate => normalize(candidate.lang) === normalizedLang && /natural|enhanced|premium|siri|daniel|karen|ava|alex|samantha|kyoko|otoya/i.test(candidate.name))
     || voices.find(candidate => normalize(candidate.lang) === normalizedLang && candidate.localService)
     || voices.find(candidate => normalize(candidate.lang) === normalizedLang)
-    || voices.find(candidate => /natural|enhanced|premium|siri|daniel|karen|ava|alex|samantha|kyoko|otoya/i.test(candidate.name))
+
   // Never fall back to voices[0]: that voice may be Chinese or the opposite target language.
   // If the browser has loaded voices but none for this language, fail visibly rather than
   // silently speaking Japanese text with an English voice (or vice versa).
@@ -1576,8 +1576,8 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
         <template v-else-if="activeModule === 'language'">
           <section class="language-banner" :class="studyLanguage === 'ja' ? 'japanese' : 'english'">
             <div><span class="banner-tag">{{ studyLanguage === 'ja' ? '日本語 · JAPANESE' : 'ENGLISH · 英语' }}</span>
-              <h2>{{ studyLanguage === 'ja' ? '学会真实场景里会说的话。' : 'Build confidence one useful phrase at a time.' }}</h2>
-              <p>{{ studyLanguage === 'ja' ? '精选日常和职场表达，带读音、中文解释与实际例句。' : 'Practice daily and workplace English with examples, explanations and speech.' }}</p>
+              <h2>{{ studyLanguage === 'ja' ? '実際の場面で使える日本語を身につけよう。' : 'Build confidence one useful phrase at a time.' }}</h2>
+              <p>{{ studyLanguage === 'ja' ? '日常会話や職場で使える表現を、読み方・中国語訳・実例とともに学びます。' : 'Practice daily and workplace English with examples, explanations and speech.' }}</p>
             </div>
             <div class="banner-decoration"><Languages :size="64" stroke-width="1.1" /></div>
           </section>
