@@ -6,14 +6,16 @@ const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
 const worker = await readFile(new URL('../worker/index.ts', import.meta.url), 'utf8')
 
 test('English dictionary results always expose a separate Japanese-aid player', () => {
-  assert.match(app, /entry\.reading \|\| entry\.language === 'ja' \|\| entry\.language === 'en' \|\| entry\.englishTerm/)
-  assert.match(app, /播放日语辅助读音/)
-  assert.match(app, /title="播放日语辅助读音（片假名为近似提示）"/)
+  assert.match(app, /title="播放英语原音；缺少对应词时会提示"/)
+  assert.match(app, /title="播放日语辅助读音；缺少假名时会提示"/)
+  assert.match(app, /title: '英日发音与 IT 术语'/)
+  assert.match(app, /function speakDictionaryEnglish\(entry: DictionaryEntry\)/)
+  assert.match(app, /function speakDictionaryJapanese\(entry: DictionaryEntry\)/)
 })
 
 test('recent English vocabulary also exposes its Japanese-aid player', () => {
-  assert.match(app, /aria-label="播放日语辅助读音"/)
-  assert.match(app, /title="播放日语辅助读音（片假名为近似提示）"/)
+  assert.match(app, /aria-label="播放日语辅助读音：' \+ entry\.term/)
+  assert.match(app, /aria-label="'播放英语发音：' \+ entry\.term/)
 })
 
 test('speech voice selection never falls back to an arbitrary first voice', () => {
@@ -104,4 +106,13 @@ test('language learning cards and active-recall cards have original/example play
   assert.match(app, /继续播放/)
   assert.match(app, /@click="stopSpeech">停止/)
   assert.match(app, /function nextLanguagePractice\(\) \{\s*stopSpeech\(\)/)
+})
+
+test('every dictionary result and saved word exposes both English and Japanese playback controls', () => {
+  assert.match(app, /<button class="round-action pronunciation-button" @click="speakDictionaryEnglish\(entry\)"/)
+  assert.match(app, /<button class="round-action pronunciation-button" @click="speakDictionaryJapanese\(entry\)"/)
+  assert.doesNotMatch(app, /<button v-if="entry\.englishTerm \|\| entry\.language === 'en'" class="round-action pronunciation-button"/)
+  assert.doesNotMatch(app, /<button v-else-if="entry\.reading \|\| entry\.language === 'ja'"/)
+  assert.match(app, /缺少对应词时会提示/)
+  assert.match(app, /缺少假名时会提示/)
 })
