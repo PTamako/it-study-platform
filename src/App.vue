@@ -294,6 +294,31 @@ function selectExam(track: ExamTrack) {
   quizFinished.value = false
   quizError.value = ''
 }
+async function startWrongReview() {
+  if (!selectedTrack.value) { quizError.value = '尚未加载考试列表，请刷新页面后重试。'; return }
+  quizLoading.value = true
+  quizError.value = ''
+  try {
+    const response = await fetch('/api/wrong-questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=30')
+    const data = await response.json() as { items?: PracticeQuestion[]; error?: string }
+    if (!response.ok) throw new Error(data.error || '错题加载失败')
+    if (!data.items?.length) {
+      quizError.value = '当前考试还没有云端错题。完成练习并答错后，这里会自动收集需要复习的题目。'
+      return
+    }
+    quizQuestions.value = data.items
+    quizIndex.value = 0
+    selectedOption.value = ''
+    quizSubmitted.value = false
+    quizCorrect.value = 0
+    quizFinished.value = false
+    quizStartedAt.value = Date.now()
+  } catch (error) {
+    quizError.value = error instanceof Error ? error.message : '错题加载失败，请稍后重试。'
+  } finally {
+    quizLoading.value = false
+  }
+}
 async function startPractice() {
   if (!selectedTrack.value) { quizError.value = '尚未加载考试列表，请刷新页面后重试。'; return }
   if (!selectedTrack.value.question_count) {
@@ -796,7 +821,10 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                   <h3>准备好开始练习了吗？</h3>
                   <p v-if="selectedTrack?.question_count">从 D1 读取 {{ selectedTrack.title }} 题目，提交后查看正确答案与解析。</p>
                   <p v-else>你可以选择不同考试。目前只有 SG 已接入题目；其他考试准备好题库后才会开放练习。</p>
-                  <button class="primary-button" @click="startPractice" :disabled="quizLoading || !selectedTrack || selectedTrack.question_count === 0">{{ quizLoading ? '正在加载题目…' : selectedTrack?.question_count ? '开始练习（最多 10 题）' : '当前暂无可练习题目' }} <ArrowRight :size="16" /></button>
+                  <div class="practice-start-actions">
+                    <button class="primary-button" @click="startPractice" :disabled="quizLoading || !selectedTrack || selectedTrack.question_count === 0">{{ quizLoading ? '正在加载题目…' : selectedTrack?.question_count ? '开始练习（最多 10 题）' : '当前暂无可练习题目' }} <ArrowRight :size="16" /></button>
+                    <button class="secondary-button" @click="startWrongReview" :disabled="quizLoading || !selectedTrack">{{ quizLoading ? '正在加载…' : '复习云端错题' }}</button>
+                  </div>
                   <p v-if="quizError" class="practice-error">{{ quizError }}</p>
                 </template>
               </div>
