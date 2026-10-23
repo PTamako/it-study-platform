@@ -163,7 +163,7 @@ const examTracks = ref<ExamTrack[]>([])
 const selectedTrackId = ref('exam-sg')
 const tracksLoading = ref(false)
 const tracksError = ref('')
-const questionSourceFilter = ref<'all' | 'official' | 'generated' | 'licensed'>('all')
+const questionSourceFilter = ref<'all' | 'generated' | 'licensed'>('all')
 const questionSourceFilters = [
   { id: 'all', label: '全部题目' },
   { id: 'generated', label: '专项练习' },
@@ -340,6 +340,23 @@ function selectExam(track: ExamTrack) {
   quizFinished.value = false
   quizError.value = ''
 }
+
+async function selectQuestionSource(source: 'all' | 'generated' | 'licensed') {
+  questionSourceFilter.value = source
+  // Changing a source should have an immediate, visible effect instead of only changing a hidden filter.
+  quizQuestions.value = []
+  quizIndex.value = 0
+  selectedOption.value = ''
+  quizSubmitted.value = false
+  quizCorrect.value = 0
+  quizFinished.value = false
+  quizError.value = ''
+  if (source === 'licensed') {
+    quizError.value = '当前题库还没有已登记的授权题目。选择“全部题目”或“专项练习”即可开始练习。'
+    return
+  }
+  await startPractice()
+}
 async function startWrongReview() {
   if (!selectedTrack.value) { quizError.value = '尚未加载考试列表，请刷新页面后重试。'; return }
   quizLoading.value = true
@@ -377,7 +394,7 @@ async function startPractice() {
     const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value) + '&limit=10')
     const data = await response.json() as { items?: PracticeQuestion[]; error?: string }
     if (!response.ok) throw new Error(data.error || '题库加载失败')
-    if (!data.items?.length) throw new Error(questionSourceFilter.value === 'official' ? '当前考试还没有导入可在站内作答的官方过去问题目。你可以先通过上方官方题源链接查看原题；这里不会把自编题冒充真题。' : questionSourceFilter.value === 'licensed' ? '当前考试暂时没有已登记的授权题目。' : '该考试目前没有可用题目，请刷新考试列表后重试。')
+    if (!data.items?.length) throw new Error(questionSourceFilter.value === 'licensed' ? '当前题库还没有已登记的授权题目。' : '当前考试目前没有可用题目，请稍后重试。')
     quizQuestions.value = data.items
     quizIndex.value = 0
     selectedOption.value = ''
@@ -978,7 +995,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
             <section class="practice-section">
               <div class="section-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2><p>从题库中抽题，提交后立即查看答案与解析。</p></div><span class="source-pill">{{ selectedTrack?.question_count ? selectedTrack.question_count + ' 道可练习' : '题库待接入' }}</span></div>
               <div class="question-source-filters" role="group" aria-label="题目来源筛选">
-                <button v-for="filter in questionSourceFilters" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" @click="questionSourceFilter = filter.id">{{ filter.label }}</button>
+                <button v-for="filter in questionSourceFilters" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" @click="selectQuestionSource(filter.id)">{{ filter.label }}</button>
               </div>
               <div v-if="!quizQuestions.length || quizFinished" class="panel practice-start-card">
                 <template v-if="quizFinished">
