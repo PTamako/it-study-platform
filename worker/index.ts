@@ -30,6 +30,33 @@ type DictionaryApiEntry = {
 
 type LooseRecord = Record<string, any>
 
+// Offline fallback for common Chinese phrases. This keeps basic lookups useful when
+// public translation endpoints time out or rate-limit the Worker.
+const commonChineseTranslations: Record<string, { ja: string; en: string }> = {
+  '你好': { ja: 'こんにちは', en: 'Hello' },
+  '您好': { ja: 'こんにちは（丁寧）', en: 'Hello' },
+  '大家好': { ja: '皆さん、こんにちは', en: 'Hello everyone' },
+  '早上好': { ja: 'おはようございます', en: 'Good morning' },
+  '晚上好': { ja: 'こんばんは', en: 'Good evening' },
+  '晚安': { ja: 'おやすみなさい', en: 'Good night' },
+  '谢谢': { ja: 'ありがとうございます', en: 'Thank you' },
+  '非常感谢': { ja: 'どうもありがとうございます', en: 'Thank you very much' },
+  '不客气': { ja: 'どういたしまして', en: "You're welcome" },
+  '再见': { ja: 'さようなら', en: 'Goodbye' },
+  '拜拜': { ja: 'バイバイ', en: 'Bye-bye' },
+  '对不起': { ja: 'ごめんなさい', en: "I'm sorry" },
+  '不好意思': { ja: 'すみません', en: 'Excuse me' },
+  '没关系': { ja: '大丈夫です', en: "It's okay" },
+  '请': { ja: 'お願いします', en: 'Please' },
+  '请问': { ja: 'お尋ねします', en: 'May I ask' },
+  '是': { ja: 'はい／です', en: 'Yes / be' },
+  '不是': { ja: 'いいえ／ではありません', en: 'No / not be' },
+  '我爱你': { ja: '愛しています', en: 'I love you' },
+  '多少钱': { ja: 'いくらですか', en: 'How much is it?' },
+  '厕所': { ja: 'トイレ', en: 'Restroom' },
+  '帮助': { ja: '助け', en: 'Help' },
+}
+
 // 两个在线翻译源并行尝试，避免 MyMemory 超时后才开始备用源；Google 端点是非正式接口，结果仅作参考。
 async function translateText(text: string, source: string, target: string): Promise<string> {
   const valid = (value: string) =>
@@ -227,6 +254,11 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
       translateText(query, 'zh-CN', 'ja'),
       translateText(query, 'zh-CN', 'en'),
     ])
+    const offline = commonChineseTranslations[query.trim()]
+    if (offline) {
+      if (!ja) ja = offline.ja
+      if (!en) en = offline.en
+    }
   }
 
   // 只有日语原文才查 Jisho，避免把翻译出来的近似词误当成用户原词。
