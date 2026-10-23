@@ -698,7 +698,7 @@ const languageCategories = computed(() => {
 })
 const languageDataAttribution = computed(() => studyLanguage.value === 'ja'
   ? '日语词库：OpenJLPT / JMdict；中文释义：Tomoshi 开放词库（CC BY-SA 4.0）。JLPT 等级为社区参考，并非官方公布词表。'
-  : '英语词库：ECDICT（MIT）；按词频、核心词汇及可用考试标签整理。')
+  : '英语词库：ECDICT（MIT）；按核心词汇与词频排序，分为三个 1,000 词学习阶段。')
 const languageCardsLoading = ref(false)
 const languageCardsError = ref('')
 type LanguageReview = { card_id: string; review_count: number; correct_streak: number; next_review_at: string; last_reviewed_at: string; last_result: 'again' | 'remembered'; is_due?: number }

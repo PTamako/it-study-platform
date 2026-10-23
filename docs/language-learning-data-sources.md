@@ -8,7 +8,7 @@ The 6,000-card seed migration is generated from pinned open data sources; the ge
 - Sources: https://github.com/evanclan/OpenJLPT and https://github.com/tomoshi-app/tomoshi-dict-data/releases/tag/v2026-10-13
 
 ## English (3,000 cards)
-- **ECDICT** at commit \`bc015ed2e24a7abef49fc6dbbb7fe32c1dadaf8b\`, providing headwords, phonetics, Chinese translations, definitions, and available core/exam tags. License: MIT.
+- **ECDICT** at commit \`bc015ed2e24a7abef49fc6dbbb7fe32c1dadaf8b\`, providing headwords, phonetics, Chinese translations, definitions, and frequency/core-vocabulary metadata. The 3,000 selected entries are grouped into three 1,000-word learning bands after core/frequency ranking. License: MIT.
 - Source: https://github.com/skywind3000/ECDICT
 
 ## Modifications

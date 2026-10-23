@@ -71,8 +71,8 @@ def english_data(p):
  for w,z,definition,phon,tag,frq,bnc,ox in rows:
   k=w.casefold()
   if k in seen:continue
-  t=tag.lower()
-  cat="Oxford 3000 核心词汇" if ox==1 else "大学英语四级" if "cet4" in t or "四级" in tag else "大学英语六级" if "cet6" in t or "六级" in tag else "雅思词汇" if "ielts" in t or "雅思" in tag else "托福词汇" if "toefl" in t or "托福" in tag else "高频词汇"
+  rank=len(cards)+1
+  cat="英语核心词汇（1–1000）" if rank<=1000 else "英语进阶词汇（1001–2000）" if rank<=2000 else "英语扩展词汇（2001–3000）"
   cards.append(dict(id="en-ecdict-"+hashlib.sha1(k.encode()).hexdigest()[:16],language="en",category=cat,term=w,reading=phon,meaning_zh=z,explanation=definition[:1000],example="",example_meaning_zh="",source_type="licensed"));seen.add(k)
   if len(cards)==3000:break
  return cards,translations
