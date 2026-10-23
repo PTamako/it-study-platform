@@ -208,7 +208,7 @@ const selectedTrackId = ref('exam-sg')
 const tracksLoading = ref(false)
 const tracksError = ref('')
 const questionSourceFilter = ref<'official' | 'generated'>('generated')
-const activeReviewMode = ref<'all' | 'mastered' | 'due' | 'wrong'>('all')
+const activeReviewMode = ref<'all' | 'unlearned' | 'mastered' | 'due' | 'wrong'>('all')
 const questionSourceFilters = [
   { id: 'official', label: '历年真题' },
   { id: 'generated', label: '预测题库' },
@@ -300,8 +300,9 @@ onUnmounted(() => { if (mockTimer) clearInterval(mockTimer) })
 type ScenarioOption = { id: string; text: string }
 type PracticalScenario = {
   id: string; track_id: string; title: string; category: string; difficulty: string;
-  situation: string; task: string; options: ScenarioOption[]; source_type: string
+  situation: string; task: string; options: ScenarioOption[]; explanation?: string; source_type: string
 }
+type ScenarioExplanationTranslation = { source_text: string; translation_zh: string }
 const scenarios = ref<PracticalScenario[]>([])
 const scenariosLoading = ref(false)
 const scenariosError = ref('')
@@ -309,7 +310,63 @@ const selectedScenarioId = ref('')
 const selectedScenarioOption = ref('')
 const scenarioSubmitting = ref(false)
 const scenarioResult = ref<{ score: number; best_option: string; correct: boolean; feedback: string } | null>(null)
+const scenarioExplanationTranslations = ref<Record<string, ScenarioExplanationTranslation>>(
+  readStored('zhixue:scenario-explanations-zh', {}),
+)
+const scenarioExplanationTranslating = ref<Record<string, boolean>>({})
+const scenarioExplanationTranslationErrors = ref<Record<string, string>>({})
+watch(scenarioExplanationTranslations, value => {
+  localStorage.setItem('zhixue:scenario-explanations-zh', JSON.stringify(value))
+}, { deep: true })
 const currentScenario = computed(() => scenarios.value.find(item => item.id === selectedScenarioId.value) || scenarios.value[0] || null)
+function getScenarioExplanationLanguage(text: string): 'ja-JP' | 'en-US' | 'zh-CN' {
+  if (/[\u3040-\u30ff]/.test(text)) return 'ja-JP'
+  if (/[a-z]{4,}/i.test(text) && !/[\u3400-\u9fff]/.test(text)) return 'en-US'
+  if (/[\u3400-\u9fff]/.test(text)) return 'zh-CN'
+  return 'ja-JP'
+}
+
+async function translateScenarioExplanation(scenarioId: string, text: string) {
+  const sourceText = text.trim()
+  if (!sourceText) return
+  const source = getScenarioExplanationLanguage(sourceText)
+  delete scenarioExplanationTranslationErrors.value[scenarioId]
+  if (source === 'zh-CN') {
+    scenarioExplanationTranslations.value[scenarioId] = {
+      source_text: sourceText,
+      translation_zh: sourceText,
+    }
+    return
+  }
+  const cached = scenarioExplanationTranslations.value[scenarioId]
+  if (cached?.source_text === sourceText || scenarioExplanationTranslating.value[scenarioId]) return
+  scenarioExplanationTranslating.value[scenarioId] = true
+  try {
+    const response = await fetch('/api/translate-explanation', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: sourceText, source }),
+    })
+    const data = await response.json() as { translation?: string; error?: string }
+    if (!response.ok || !data.translation) throw new Error(data.error || '在线中文解析暂时不可用。')
+    scenarioExplanationTranslations.value[scenarioId] = {
+      source_text: sourceText,
+      translation_zh: data.translation,
+    }
+  } catch (error) {
+    scenarioExplanationTranslationErrors.value[scenarioId] = error instanceof Error ? error.message : '中文解析翻译失败。'
+  } finally {
+    scenarioExplanationTranslating.value[scenarioId] = false
+  }
+}
+
+function speakScenario(scenario: PracticalScenario | null) {
+  if (!scenario) return
+  const options = scenario.options.map(option => `${option.id.toUpperCase()}。 ${option.text}`).join('。')
+  // 情境内容统一为日语；共用只选择日语音色的播放函数，找不到日语语音时不会回退到中文。
+  speakJapaneseQuestion(`${scenario.title}。状況：${scenario.situation}。課題：${scenario.task}。選択肢：${options}`)
+}
+
 async function loadScenarios() {
   if (!selectedTrack.value) { scenarios.value = []; return }
   scenariosLoading.value = true
@@ -355,12 +412,14 @@ async function submitScenario() {
     })
     const data = await response.json() as { score?: number; best_option?: string; correct?: boolean; feedback?: string; error?: string }
     if (!response.ok) throw new Error(data.error || '实战结果保存失败')
+    const feedback = String(data.feedback || '')
     scenarioResult.value = {
       score: Number(data.score || 0),
       best_option: String(data.best_option || ''),
       correct: Boolean(data.correct),
-      feedback: String(data.feedback || ''),
+      feedback,
     }
+    void translateScenarioExplanation(currentScenario.value.id, feedback)
     void loadCloudDashboard()
   } catch (error) {
     scenariosError.value = error instanceof Error ? error.message : '实战结果保存失败，请稍后重试。'
@@ -368,8 +427,8 @@ async function submitScenario() {
     scenarioSubmitting.value = false
   }
 }
-watch([selectedTrackId, examTracks], () => {
-  void loadScenarios()
+watch([selectedTrackId, examTracks, activeModule], () => {
+  if (activeModule.value === 'practical') void loadScenarios()
 })
 async function loadExamTracks() {
   tracksLoading.value = true
@@ -424,7 +483,7 @@ async function loadQuestionProgress() {
     questionProgressById.value = Object.fromEntries((data.items || []).map(item => [item.question_id, item]))
   } catch { /* Keep the last known progress visible if the network is temporarily unavailable. */ }
 }
-function selectReviewMode(mode: 'all' | 'wrong' | 'due' | 'mastered') {
+function selectReviewMode(mode: 'all' | 'unlearned' | 'wrong' | 'due' | 'mastered') {
   activeReviewMode.value = mode
   questionBatchOffset.value = 0
   questionBankTotal.value = 0
@@ -453,15 +512,20 @@ async function startPractice() {
       data = await response.json() as typeof data
     } else {
       const mode = activeReviewMode.value
-      response = await fetch('/api/wrong-questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=50&mode=' + mode + '&source=' + encodeURIComponent(questionSourceFilter.value))
+      const reviewBatchLimit = mode === 'unlearned' ? questionBatchSize : 50
+      // 未学习题会在答题后离开此筛选集，因此每组始终从剩余未学习题的开头取，避免 offset 导致跳题。
+      response = await fetch('/api/wrong-questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=' + reviewBatchLimit + '&offset=0&mode=' + mode + '&source=' + encodeURIComponent(questionSourceFilter.value))
       data = await response.json() as typeof data
-      data.total = data.items?.length || 0
-      data.has_more = false
+      if (mode !== 'unlearned') {
+        data.total = data.items?.length || 0
+        data.has_more = false
+      }
     }
     if (!response.ok) throw new Error(data.error || '题库加载失败')
     if (!data.items?.length) {
       const messages = {
         all: questionSourceFilter.value === 'official' ? '当前没有可作答的历年真题。' : '当前没有可用的预测题，请稍后重试。',
+        unlearned: '当前题库中没有尚未作答的题目。',
         wrong: '当前筛选下没有错题。答错题目后会自动进入错题集。',
         due: '当前没有到期的复习题。答错题会先安排短间隔复习。',
         mastered: '当前没有已掌握的题目。连续答对三次或手动标记掌握后会显示在这里。',
@@ -469,7 +533,9 @@ async function startPractice() {
       throw new Error(messages[activeReviewMode.value])
     }
     quizQuestions.value = data.items
-    questionBankTotal.value = data.total || data.items.length
+    if (activeReviewMode.value !== 'unlearned' || questionBatchOffset.value === 0) {
+      questionBankTotal.value = data.total || data.items.length
+    }
     questionBankHasMore.value = Boolean(data.has_more)
     quizIndex.value = 0
     selectedOption.value = ''
@@ -495,9 +561,7 @@ async function submitPracticeAnswer() {
   const question = currentQuestion.value
   quizSubmitted.value = true
   if (selectedOption.value === question.answer) quizCorrect.value += 1
-  if ((selectedOption.value !== question.answer || activeReviewMode.value === 'wrong' || activeReviewMode.value === 'due') && getQuestionLanguage(question) !== 'zh-CN') {
-    void translateQuestionExplanation(question)
-  }
+  void translateQuestionExplanation(question)
   try {
     const response = await fetch('/api/attempts', {
       method: 'POST',
@@ -516,27 +580,40 @@ async function submitPracticeAnswer() {
     quizError.value = error instanceof Error ? error.message : '网络异常：本次答题结果尚未保存到云端。'
   }
 }
-function getQuestionLanguage(question: PracticeQuestion): 'ja-JP' | 'en-US' | 'zh-CN' {
-  const language = (question.language || '').toLowerCase().replace('_', '-')
-  if (language.startsWith('zh')) return 'zh-CN'
-  if (language.startsWith('en')) return 'en-US'
-  if (language.startsWith('ja')) return 'ja-JP'
-  const text = question.prompt + '\n' + question.explanation
+function getExplanationLanguage(question: PracticeQuestion): 'ja-JP' | 'en-US' | 'zh-CN' {
+  // question.language describes the question stem (usually Japanese), not the explanation.
+  // Detect the explanation itself so authored Chinese explanations aren't sent to a zh→zh translator.
+  const text = (question.explanation || '').trim()
   if (/[\u3040-\u30ff]/.test(text)) return 'ja-JP'
   if (/[a-z]{4,}/i.test(text) && !/[\u3400-\u9fff]/.test(text)) return 'en-US'
-  return /[\u3400-\u9fff]/.test(text) ? 'zh-CN' : 'ja-JP'
+  if (/[\u3400-\u9fff]/.test(text)) return 'zh-CN'
+  const language = (question.language || '').toLowerCase().replace('_', '-')
+  if (language.startsWith('en')) return 'en-US'
+  if (language.startsWith('zh')) return 'zh-CN'
+  return 'ja-JP'
 }
 async function translateQuestionExplanation(question: PracticeQuestion | null) {
   if (!question?.explanation?.trim()) return
+  const source = getExplanationLanguage(question)
+  delete questionExplanationTranslationErrors.value[question.id]
+
+  // Most prediction questions already contain hand-written Chinese explanations; show them as-is.
+  if (source === 'zh-CN') {
+    questionExplanationTranslations.value[question.id] = {
+      source_text: question.explanation,
+      translation_zh: question.explanation,
+    }
+    return
+  }
+
   const cached = questionExplanationTranslations.value[question.id]
   if (cached?.source_text === question.explanation) return
   if (questionExplanationTranslating.value[question.id]) return
   questionExplanationTranslating.value[question.id] = true
-  delete questionExplanationTranslationErrors.value[question.id]
   try {
     const response = await fetch('/api/translate-explanation', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text: question.explanation, source: getQuestionLanguage(question) }),
+      body: JSON.stringify({ text: question.explanation, source }),
     })
     const data = await response.json() as { translation?: string; error?: string }
     if (!response.ok || !data.translation) throw new Error(data.error || '中文解析翻译暂时不可用。')
@@ -585,7 +662,7 @@ const searchPlaceholder = computed(() => activeModule.value === 'dictionary' ? '
 
 const modules = [
   { id: 'exam' as const, title: '考试备考', en: 'EXAM PREP', desc: '日常练习 · 错题复习 · 限时模拟考试', icon: GraduationCap, tone: 'lavender', count: '题量以题库数据为准' },
-  { id: 'practical' as const, title: '实战训练', en: 'PRACTICAL LAB', desc: '安全事件与职场决策情境', icon: ShieldCheck, tone: 'blue', count: '情境题 · 评分 · 复盘' },
+  { id: 'practical' as const, title: '实战训练', en: 'PRACTICAL LAB', desc: '日语安全情境 · 日语语音 · 中日双语解析', icon: ShieldCheck, tone: 'blue', count: '400 个情境 · 评分 · 复盘' },
   { id: 'language' as const, title: '语言学习', en: 'LANGUAGE', desc: '日语 / 英语 · 例句 · 发音 · 复习', icon: Languages, tone: 'peach', count: '选择语言开始学习' },
   { id: 'dictionary' as const, title: '词典与 IT 术语', en: 'DICTIONARY', desc: '中日英互译 · 专业词库 · 生词本', icon: BookMarked, tone: 'blue', count: '普通词汇与技术词汇' },
 ]
@@ -936,9 +1013,46 @@ function navigate(id: ModuleId) {
 let speechRequestId = 0
 function speakQuestion(question: PracticeQuestion | null) {
   if (!question) return
-  // SG 读题固定使用日语语音；中文解析只供阅读，不参与朗读。
-  const options = question.options.map(option => `${option.id.toUpperCase()}。${option.text}`).join('。')
-  speak(`${question.prompt}。${options ? '選択肢：' + options : ''}`, 'ja-JP')
+  // Only use a browser voice explicitly tagged as Japanese. If unavailable, do not play with Chinese voice.
+  const options = question.options.map(option => `${option.id.toUpperCase()}。 ${option.text}`).join('。')
+  speakJapaneseQuestion(`${question.prompt}。選択肢：${options}`)
+}
+function speakJapaneseQuestion(text: string) {
+  const synthesis = window.speechSynthesis
+  if (typeof synthesis === 'undefined' || typeof SpeechSynthesisUtterance === 'undefined') {
+    window.alert('当前浏览器不支持语音播放。请使用 Safari/Chrome 并检查系统语音设置。')
+    return
+  }
+  const requestId = ++speechRequestId
+  synthesis.cancel()
+
+  const play = (attempt = 0) => {
+    if (requestId !== speechRequestId) return
+    const voices = synthesis.getVoices()
+    const japaneseVoices = voices.filter(voice => /^ja(?:-|$)/i.test(voice.lang.replace('_', '-')))
+    const voice = japaneseVoices.find(candidate => /^ja-jp$/i.test(candidate.lang.replace('_', '-')) && /natural|enhanced|premium/i.test(candidate.name))
+      || japaneseVoices.find(candidate => /^ja-jp$/i.test(candidate.lang.replace('_', '-')) && candidate.localService)
+      || japaneseVoices.find(candidate => /^ja-jp$/i.test(candidate.lang.replace('_', '-')))
+      || japaneseVoices.find(candidate => candidate.localService)
+      || japaneseVoices[0]
+
+    if (!voice && attempt < 20) {
+      window.setTimeout(() => play(attempt + 1), 250)
+      return
+    }
+    if (!voice) {
+      window.alert('未检测到可用的日语语音，因此没有播放。请在系统或浏览器中启用日语语音后重试；不会改用中文语音。')
+      return
+    }
+    const utterance = new SpeechSynthesisUtterance(text.trim())
+    utterance.voice = voice
+    utterance.lang = voice.lang
+    utterance.rate = 0.78
+    utterance.pitch = 1
+    utterance.volume = 1
+    synthesis.speak(utterance)
+  }
+  window.setTimeout(() => play(), 100)
 }
 function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
   const synthesis = window.speechSynthesis
@@ -1072,7 +1186,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
             <p v-if="cloudDashboardError" class="dictionary-status dictionary-error">{{ cloudDashboardError }}</p>
             <div v-if="cloudDashboard" class="metric-grid">
               <div class="panel metric-card"><span class="metric-icon"><CheckCircle2 :size="18" /></span><small>云端答题</small><strong>{{ cloudDashboard.exam.attempted_questions }}</strong><span>{{ cloudDashboard.exam.accuracy_percent === null ? '暂无记录' : '正确率 ' + cloudDashboard.exam.accuracy_percent + '%' }}</span></div>
-              <div class="panel metric-card"><span class="metric-icon"><Target :size="18" /></span><small>实战演练</small><strong>{{ cloudDashboard.practical.completed_scenarios }}</strong><span>{{ cloudDashboard.practical.completed_scenarios ? '平均得分 ' + Math.round(cloudDashboard.practical.average_score) + ' 分' : '暂无记录' }}</span></div>
+              <div class="panel metric-card"><span class="metric-icon"><Target :size="18" /></span><small>实战训练</small><strong>{{ cloudDashboard.practical.completed_scenarios }}</strong><span>{{ cloudDashboard.practical.completed_scenarios ? '平均得分 ' + Math.round(cloudDashboard.practical.average_score) + ' 分' : '暂无记录' }}</span></div>
               <div class="panel metric-card"><span class="metric-icon"><BookMarked :size="18" /></span><small>云端生词</small><strong>{{ cloudDashboard.vocabulary.saved_terms }}</strong><span>个已收藏词条</span></div>
             </div>
           </section>
@@ -1151,6 +1265,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 <div class="question-category-heading"><strong>学习状态</strong><span>按当前题库筛选</span></div>
                 <div class="question-category-filters question-review-filters" role="group" aria-label="题目学习状态">
                   <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'all' }" :aria-pressed="activeReviewMode === 'all'" @click="selectReviewMode('all')">全部</button>
+                  <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'unlearned' }" :aria-pressed="activeReviewMode === 'unlearned'" @click="selectReviewMode('unlearned')">未学习</button>
                   <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'mastered' }" :aria-pressed="activeReviewMode === 'mastered'" @click="selectReviewMode('mastered')">掌握</button>
                   <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'due' }" :aria-pressed="activeReviewMode === 'due'" @click="selectReviewMode('due')">再复习</button>
                   <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'wrong' }" :aria-pressed="activeReviewMode === 'wrong'" @click="selectReviewMode('wrong')">错题集</button>
@@ -1199,11 +1314,14 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 </div>
                 <div v-if="quizSubmitted" class="answer-explanation" :class="{ right: selectedOption === currentQuestion.answer }">
                   <strong>{{ selectedOption === currentQuestion.answer ? '回答正确！' : '这题答错了' }} 正确答案：{{ currentQuestion.answer.toUpperCase() }}</strong>
-                  <p class="explanation-original-label">原文解析</p>
-                  <p>{{ currentQuestion.explanation }}</p>
-                  <div v-if="(selectedOption !== currentQuestion.answer || activeReviewMode === 'wrong' || activeReviewMode === 'due') && getQuestionLanguage(currentQuestion) !== 'zh-CN'" class="explanation-chinese">
+                  <template v-if="getExplanationLanguage(currentQuestion) !== 'zh-CN'">
+                    <p class="explanation-original-label">原文解析</p>
+                    <p>{{ currentQuestion.explanation }}</p>
+                  </template>
+                  <div class="explanation-chinese">
                     <strong>中文解析</strong>
-                    <p v-if="questionExplanationTranslating[currentQuestion.id]">正在翻译解析…</p>
+                    <p v-if="getExplanationLanguage(currentQuestion) === 'zh-CN'">{{ currentQuestion.explanation }}</p>
+                    <p v-else-if="questionExplanationTranslating[currentQuestion.id]">正在翻译解析…</p>
                     <p v-else-if="questionExplanationTranslations[currentQuestion.id]?.source_text === currentQuestion.explanation">{{ questionExplanationTranslations[currentQuestion.id].translation_zh }}</p>
                     <div v-else>
                       <p v-if="questionExplanationTranslationErrors[currentQuestion.id]">{{ questionExplanationTranslationErrors[currentQuestion.id] }}</p>
@@ -1294,9 +1412,9 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
 
         <template v-else-if="activeModule === 'practical'">
           <section class="section-block module-page-section">
-            <div class="section-heading"><div><div class="section-kicker">PRACTICAL SECURITY LAB</div><h2>把知识用在真实工作情境里</h2><p>阅读情况，选择最合适的行动；提交后会显示评分、推荐选项和复盘说明。</p></div><span class="section-index">{{ scenarios.length }} 个情境</span></div>
+            <div class="section-heading"><div><div class="section-kicker">PRACTICAL SECURITY LAB</div><h2>把知识用在真实工作情境里</h2><p>日语题干与选项，支持日语语音播报；提交后显示日文原文和中文解析。</p></div><span class="section-index">{{ scenarios.length }} 个情境</span></div>
             <div class="panel practice-start-card">
-              <div class="section-heading"><div><h3>选择考试方向</h3><p>当前先提供 SG 信息安全管理情境。</p></div></div>
+              <div class="section-heading"><div><h3>选择训练方向</h3><p>当前提供 SG 信息安全管理情境，共 400 个日语原创情境。</p></div></div>
               <div class="exam-list">
                 <button v-for="exam in examTracks" :key="exam.id" class="exam-card" :class="{ 'exam-card-selected': selectedTrackId === exam.id }" @click="selectExam(exam)">
                   <span class="exam-code purple">{{ exam.id.split('-').pop()?.toUpperCase() }}</span>
@@ -1314,7 +1432,10 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
             </div>
             <article v-else class="panel question-card practical-scenario-card">
               <div class="question-topline"><span>{{ currentScenario.category }} · {{ currentScenario.difficulty === 'intermediate' ? '中等' : '标准' }}</span><span class="source-pill">{{ currentScenario.source_type === 'official' ? '官方来源' : '平台原创情境' }}</span></div>
-              <h3 class="question-prompt">{{ currentScenario.title }}</h3>
+              <div class="question-prompt-row">
+                <h3 class="question-prompt">{{ currentScenario.title }}</h3>
+                <button type="button" class="secondary-button question-speak-button" @click="speakScenario(currentScenario)"><Volume2 :size="16" /> 日语语音读题</button>
+              </div>
               <p class="scenario-situation">{{ currentScenario.situation }}</p>
               <h4>{{ currentScenario.task }}</h4>
               <div class="question-options">
@@ -1325,7 +1446,17 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               </div>
               <div v-if="scenarioResult" class="answer-explanation" :class="{ right: scenarioResult.correct }">
                 <strong>{{ scenarioResult.correct ? '判断正确' : '可以做得更好' }} · 得分 {{ scenarioResult.score }}/100 · 推荐选项 {{ scenarioResult.best_option.toUpperCase() }}</strong>
+                <p class="explanation-original-label">日文解析</p>
                 <p>{{ scenarioResult.feedback }}</p>
+                <div class="explanation-chinese">
+                  <strong>中文解析</strong>
+                  <p v-if="scenarioExplanationTranslating[currentScenario.id]">正在翻译中文解析…</p>
+                  <p v-else-if="scenarioExplanationTranslations[currentScenario.id]?.source_text === scenarioResult.feedback.trim()">{{ scenarioExplanationTranslations[currentScenario.id].translation_zh }}</p>
+                  <div v-else>
+                    <p v-if="scenarioExplanationTranslationErrors[currentScenario.id]">{{ scenarioExplanationTranslationErrors[currentScenario.id] }}</p>
+                    <button type="button" class="text-link" @click="translateScenarioExplanation(currentScenario.id, scenarioResult.feedback)">{{ scenarioExplanationTranslationErrors[currentScenario.id] ? '重试中文翻译' : '翻译为中文' }}</button>
+                  </div>
+                </div>
               </div>
               <p v-if="scenariosError" class="practice-error">{{ scenariosError }}</p>
               <div class="practice-start-actions">
