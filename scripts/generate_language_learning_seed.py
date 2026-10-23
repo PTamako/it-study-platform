@@ -145,7 +145,7 @@ def japanese_data(zmap,trans):
   for item in json.loads(p.read_text(encoding="utf-8")):
    w,reading=norm(item.get("word")),norm(item.get("reading"))
    if not w or not reading or w in seen:continue
-   gloss=zmap.get(str(item.get("jmdict_id") or ""),[])
+   gloss=zmap.get(str(item.get("jmdict_id") or ""),[]) or zmap.get(word,[])
    if not gloss:
     stopwords={"a","an","the","to","be","is","are","was","were","of","for","in","on","at","by","with","and","or","not","as","from","into","than","that","this","it","its"}
     for g in item.get("meanings",[]):
