@@ -453,10 +453,14 @@ async function startPractice() {
       data = await response.json() as typeof data
     } else {
       const mode = activeReviewMode.value
-      response = await fetch('/api/wrong-questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=50&mode=' + mode + '&source=' + encodeURIComponent(questionSourceFilter.value))
+      const reviewBatchLimit = mode === 'unlearned' ? questionBatchSize : 50
+      // 未学习题会在答题后离开此筛选集，因此每组始终从剩余未学习题的开头取，避免 offset 导致跳题。
+      response = await fetch('/api/wrong-questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=' + reviewBatchLimit + '&offset=0&mode=' + mode + '&source=' + encodeURIComponent(questionSourceFilter.value))
       data = await response.json() as typeof data
-      data.total = data.items?.length || 0
-      data.has_more = false
+      if (mode !== 'unlearned') {
+        data.total = data.items?.length || 0
+        data.has_more = false
+      }
     }
     if (!response.ok) throw new Error(data.error || '题库加载失败')
     if (!data.items?.length) {
@@ -470,7 +474,9 @@ async function startPractice() {
       throw new Error(messages[activeReviewMode.value])
     }
     quizQuestions.value = data.items
-    questionBankTotal.value = data.total || data.items.length
+    if (activeReviewMode.value !== 'unlearned' || questionBatchOffset.value === 0) {
+      questionBankTotal.value = data.total || data.items.length
+    }
     questionBankHasMore.value = Boolean(data.has_more)
     quizIndex.value = 0
     selectedOption.value = ''
