@@ -776,14 +776,14 @@ export default {
       }
     }
 
-    // Language lessons are stored in D1 and labeled as authored learning content.
+    // Language learning cards are stored in D1 with source and license metadata.
     if (url.pathname === '/api/language-cards') {
       const language = url.searchParams.get('lang') || 'ja'
       const category = url.searchParams.get('category') || ''
       if (!['ja', 'en'].includes(language)) return json({ items: [], error: 'lang 只支持 ja 或 en。' }, 400)
       try {
         const { results } = await env.DB.prepare(
-          `SELECT id, language, category, term, reading, meaning_zh, explanation, example, example_meaning_zh, source_type
+          `SELECT id, language, category, term, reading, meaning_zh, explanation, example, example_meaning_zh, example_source_url, source_type
            FROM language_cards WHERE language = ? AND (? = '' OR category = ?)
            ORDER BY category, id`,
         ).bind(language, category, category).all()

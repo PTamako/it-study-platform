@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
-  BookOpen, Languages, Search, BriefcaseBusiness, GraduationCap,
+  BookOpen, Languages, Search, GraduationCap,
   ChevronRight, Sparkles, Clock3, Flame, Bookmark, Volume2, ArrowRight,
   ShieldCheck, BookMarked, Menu, X, CheckCircle2, Target, TrendingUp, ListChecks, PlusCircle,
 } from 'lucide-vue-next'
@@ -673,30 +673,49 @@ const modules = [
   { id: 'dictionary' as const, title: '英日发音与 IT 术语', en: 'DICTIONARY', desc: '英语原音 · 日语辅助读音 · 本地 IT 词库', icon: BookMarked, tone: 'blue', count: '英语词汇与专业术语' },
 ]
 
-const languageCategories = [
-  { title: '全部', desc: '所有已发布的课程卡', icon: BookOpen },
-  { title: '日常与情景会话', desc: '生活中真实会用到的表达', icon: Languages },
-  { title: '职场与商务语言', desc: '工作沟通和礼貌表达', icon: BriefcaseBusiness },
-  { title: '词汇与语法', desc: '词义、搭配和句型', icon: BookMarked },
-]
-
 type LanguageCard = {
   id: string; language: 'ja' | 'en'; category: string; term: string; reading?: string;
-  meaning_zh: string; explanation: string; example: string; example_meaning_zh: string; source_type: string
+  meaning_zh: string; explanation: string; example: string; example_meaning_zh: string; example_source_url?: string; source_type: string
 }
 const languageCards = ref<LanguageCard[]>([])
+const languageCategories = computed(() => {
+  const preferredOrder = [
+    '日常与情景会话', '职场与商务语言', '词汇与语法',
+    'JLPT N5', 'JLPT N4', 'JLPT N3', 'JLPT N2', 'JLPT N1',
+    'Oxford 3000 核心词汇', '大学英语四级', '大学英语六级', '雅思词汇', '托福词汇', '高频词汇',
+  ]
+  const categories = [...new Set(languageCards.value.map(card => card.category))]
+  categories.sort((a, b) => {
+    const ai = preferredOrder.indexOf(a)
+    const bi = preferredOrder.indexOf(b)
+    if (ai >= 0 || bi >= 0) return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi)
+    return a.localeCompare(b, 'zh-CN')
+  })
+  return [
+    { title: '全部', desc: '所有已发布的课程卡', icon: BookOpen },
+    ...categories.map(title => ({ title, desc: '按学习等级或词汇类别筛选', icon: BookMarked })),
+  ]
+})
 const languageCardsLoading = ref(false)
 const languageCardsError = ref('')
 type LanguageReview = { card_id: string; review_count: number; correct_streak: number; next_review_at: string; last_reviewed_at: string; last_result: 'again' | 'remembered'; is_due?: number }
 const languageReviews = ref<LanguageReview[]>(readStored('zhixue:language-reviews', []))
 const languageReviewBusy = ref('')
-const selectedLanguageMastery = ref<'all' | 'unmastered' | 'mastered'>('all')
+const selectedLanguageMastery = ref<'all' | 'unlearned' | 'unmastered' | 'mastered'>('all')
+const languageReviewByCardId = computed(() => new Map(languageReviews.value.map(review => [review.card_id, review])))
+const isLanguageCardUnlearned = (card: LanguageCard) => {
+  const review = languageReviewByCardId.value.get(card.id)
+  return !completedLanguageCards.value.includes(card.id) && (!review || review.review_count === 0)
+}
+const unlearnedLanguageCount = computed(() => languageCards.value.filter(isLanguageCardUnlearned).length)
 const visibleLanguageCards = computed(() => languageCards.value.filter(card => {
   const matchesCategory = selectedLanguageCategory.value === '全部' || card.category === selectedLanguageCategory.value
   const isMastered = completedLanguageCards.value.includes(card.id)
+  const isUnlearned = isLanguageCardUnlearned(card)
   const matchesMastery = selectedLanguageMastery.value === 'all'
+    || (selectedLanguageMastery.value === 'unlearned' && isUnlearned)
     || (selectedLanguageMastery.value === 'mastered' && isMastered)
-    || (selectedLanguageMastery.value === 'unmastered' && !isMastered)
+    || (selectedLanguageMastery.value === 'unmastered' && !isMastered && !isUnlearned)
   return matchesCategory && matchesMastery
 }).sort((a, b) => {
   const aReview = languageReviews.value.find(item => item.card_id === a.id)
@@ -705,9 +724,16 @@ const visibleLanguageCards = computed(() => languageCards.value.filter(card => {
   const bDue = !bReview || new Date(bReview.next_review_at).getTime() <= Date.now()
   return Number(bDue) - Number(aDue)
 }))
+const languagePage = ref(1)
+const languagePageSize = 30
+const languagePageCount = computed(() => Math.max(1, Math.ceil(visibleLanguageCards.value.length / languagePageSize)))
+const paginatedLanguageCards = computed(() => visibleLanguageCards.value.slice(
+  (languagePage.value - 1) * languagePageSize,
+  languagePage.value * languagePageSize,
+))
 const dueLanguageReviewCount = computed(() => visibleLanguageCards.value.filter(card => {
-  const review = languageReviews.value.find(item => item.card_id === card.id)
-  return !review || new Date(review.next_review_at).getTime() <= Date.now()
+  const review = languageReviewByCardId.value.get(card.id)
+  return Boolean(review && review.review_count > 0 && new Date(review.next_review_at).getTime() <= Date.now())
 }).length)
 const languagePracticeIndex = ref(0)
 const languagePracticeRevealed = ref(false)
@@ -728,6 +754,7 @@ function nextLanguagePractice() {
 }
 watch([studyLanguage, selectedLanguageCategory, selectedLanguageMastery], () => {
   stopSpeech()
+  languagePage.value = 1
   languagePracticeIndex.value = 0
   languagePracticeRevealed.value = false
 })
@@ -1626,25 +1653,33 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               <button v-for="category in languageCategories" :key="category.title" :class="{ chosen: selectedLanguageCategory === category.title }" @click="selectedLanguageCategory = category.title">{{ category.title }}</button>
             </div>
             <div class="language-mastery-filter" role="group" aria-label="按掌握状态筛选">
-              <button :class="{ chosen: selectedLanguageMastery === 'all' }" @click="selectedLanguageMastery = 'all'">全部卡片</button>
-              <button :class="{ chosen: selectedLanguageMastery === 'unmastered' }" @click="selectedLanguageMastery = 'unmastered'">待复习 {{ languageCards.filter(card => !completedLanguageCards.includes(card.id)).length }}</button>
-              <button :class="{ chosen: selectedLanguageMastery === 'mastered' }" @click="selectedLanguageMastery = 'mastered'">已掌握</button>
+              <button :class="{ chosen: selectedLanguageMastery === 'all' }" @click="selectedLanguageMastery = 'all'">全部卡片 {{ languageCards.length }}</button>
+              <button :class="{ chosen: selectedLanguageMastery === 'unlearned' }" @click="selectedLanguageMastery = 'unlearned'">未学习 {{ unlearnedLanguageCount }}</button>
+              <button :class="{ chosen: selectedLanguageMastery === 'unmastered' }" @click="selectedLanguageMastery = 'unmastered'">学习中 / 待复习 {{ languageCards.filter(card => !completedLanguageCards.includes(card.id) && !isLanguageCardUnlearned(card)).length }}</button>
+              <button :class="{ chosen: selectedLanguageMastery === 'mastered' }" @click="selectedLanguageMastery = 'mastered'">已掌握 {{ languageCards.filter(card => completedLanguageCards.includes(card.id)).length }}</button>
             </div>
+            <p v-if="studyLanguage === 'ja'" class="language-source">日语词库：<a href="https://github.com/evanclan/OpenJLPT" target="_blank" rel="noopener noreferrer">OpenJLPT</a> / <a href="https://www.edrdg.org/jmdict/j_jmdict.html" target="_blank" rel="noopener noreferrer">JMdict</a>（<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>）；中文释义：<a href="https://github.com/tomoshi-app/tomoshi-dict-data" target="_blank" rel="noopener noreferrer">Tomoshi 开放词库</a>；例句：<a href="https://tatoeba.org" target="_blank" rel="noopener noreferrer">Tatoeba</a>（CC BY 2.0 FR）。JLPT 等级为社区参考，并非官方公布词表。</p>
+            <p v-else class="language-source">英语词库：<a href="https://github.com/skywind3000/ECDICT" target="_blank" rel="noopener noreferrer">ECDICT</a>（<a href="https://github.com/skywind3000/ECDICT/blob/bc015ed2e24a7abef49fc6dbbb7fe32c1dadaf8b/LICENSE" target="_blank" rel="noopener noreferrer">MIT</a>）；按核心词汇与词频排序，分为三个 1,000 词学习阶段。</p>
             <p v-if="languageCardsLoading" class="dictionary-status">正在从学习内容库读取课程…</p>
             <p v-else-if="languageCardsError" class="dictionary-status dictionary-error">{{ languageCardsError }} 请先应用最新的 D1 数据库迁移。</p>
             <div v-else class="language-card-list">
-              <article v-for="card in visibleLanguageCards" :key="card.id" class="language-study-card" :class="{ completed: completedLanguageCards.includes(card.id) }">
-                <div class="language-card-top"><span class="dict-tag">{{ card.category }}</span><button class="language-done-button" @click="toggleLanguageCard(card.id)">{{ completedLanguageCards.includes(card.id) ? '已掌握 ✓' : '标记已掌握' }}</button></div>
+              <article v-for="card in paginatedLanguageCards" :key="card.id" class="language-study-card" :class="{ completed: completedLanguageCards.includes(card.id) }">
+                <div class="language-card-top"><span class="dict-tag">{{ card.category }}</span><span class="language-source">{{ completedLanguageCards.includes(card.id) ? '已掌握' : isLanguageCardUnlearned(card) ? '未学习' : '学习中' }}</span><button class="language-done-button" @click="toggleLanguageCard(card.id)">{{ completedLanguageCards.includes(card.id) ? '取消掌握' : '标记已掌握' }}</button></div>
                 <h3>{{ card.term }}</h3>
                 <p v-if="card.reading" class="language-reading">{{ card.reading }}</p>
                 <p class="language-meaning">{{ card.meaning_zh }}</p>
                 <p class="language-explanation">{{ card.explanation }}</p>
-                <div class="language-example"><strong>例句</strong><p>{{ card.example }}</p><span>{{ card.example_meaning_zh }}</span></div>
+                <div v-if="card.example" class="language-example"><strong>例句</strong><p>{{ card.example }}</p><span v-if="card.example_meaning_zh">{{ card.example_meaning_zh }}</span><a v-if="card.example_source_url" :href="card.example_source_url" target="_blank" rel="noopener noreferrer">例句来源：Tatoeba</a></div>
                 <div class="language-speech-actions"><button type="button" class="play-button" @click="speakLanguageCard(card)"><Volume2 :size="17" /> 播放原文</button><button v-if="card.example" type="button" class="play-button" @click="speakLanguageCard(card, true)"><Volume2 :size="17" /> 播放例句</button></div>
                 <div v-if="speechStatus && speechStatusTarget.startsWith('language-card:' + card.id + ':')" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
-                <small class="language-source">平台自编学习内容</small>
+                <small class="language-source">{{ card.source_type === 'licensed' ? '开放词库数据' : '平台自编学习内容' }}</small>
               </article>
-              <div v-if="!languageCardsLoading && !languageCardsError && visibleLanguageCards.length === 0" class="empty-state"><BookOpen :size="25" /><strong>{{ selectedLanguageMastery === 'mastered' ? '还没有已掌握的卡片' : selectedLanguageMastery === 'unmastered' ? '太棒了，这组卡片已经复习完啦' : '这个分类暂时没有已发布的课程' }}</strong><p>可以切换类别或掌握状态继续学习；进度会在云端保存，并在当前设备保留副本。</p></div>
+              <div v-if="visibleLanguageCards.length > languagePageSize" class="language-pagination">
+                <span>第 {{ languagePage }} / {{ languagePageCount }} 页 · 共 {{ visibleLanguageCards.length }} 张卡片</span>
+                <button class="secondary-button" :disabled="languagePage <= 1" @click="languagePage = Math.max(1, languagePage - 1)">上一页</button>
+                <button class="secondary-button" :disabled="languagePage >= languagePageCount" @click="languagePage = Math.min(languagePageCount, languagePage + 1)">下一页</button>
+              </div>
+              <div v-if="!languageCardsLoading && !languageCardsError && visibleLanguageCards.length === 0" class="empty-state"><BookOpen :size="25" /><strong>{{ selectedLanguageMastery === 'mastered' ? '还没有已掌握的卡片' : selectedLanguageMastery === 'unlearned' ? '这组卡片已经全部开始学习啦' : selectedLanguageMastery === 'unmastered' ? '没有正在学习或待复习的卡片' : '这个分类暂时没有已发布的课程' }}</strong><p>可以切换类别或掌握状态继续学习；进度会在云端保存，并在当前设备保留副本。</p></div>
             </div>
           </section>
         </template>
