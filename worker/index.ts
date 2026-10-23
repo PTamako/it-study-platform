@@ -950,12 +950,18 @@ export default {
     // 返回指定考试的练习题。source_type 会明确标记自编练习题，不冒充官方真题。
     if (url.pathname === '/api/questions') {
       const trackId = url.searchParams.get('track') || 'exam-sg'
-      const limit = Math.min(60, Math.max(1, Number(url.searchParams.get('limit') || 10)))
+      const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 10)))
+      const offset = Math.min(10000, Math.max(0, Number(url.searchParams.get('offset') || 0)))
       const topic = (url.searchParams.get('topic') || '').trim().slice(0, 100)
       const mode = url.searchParams.get('mode') || 'random'
       const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
       const source = ['all', 'official', 'generated'].includes(requestedSource) ? requestedSource : 'all'
       try {
+        const totalRow = await env.DB.prepare(
+          `SELECT COUNT(*) AS total FROM questions
+           WHERE track_id = ? AND (? = '' OR topic = ?)
+             AND (? = 'all' OR source_type = ?)`,
+        ).bind(trackId, topic, topic, source, source).first() as { total?: number } | null
         const { results } = await env.DB.prepare(
           `SELECT id, track_id, topic, difficulty, question_type, prompt,
                   options_json, answer_json, explanation, source_type, source_reference, language
@@ -964,8 +970,9 @@ export default {
              AND (? = 'all' OR source_type = ?)
            ORDER BY CASE WHEN ? = 'ordered' THEN id END,
                     CASE WHEN ? <> 'ordered' THEN random() END
-           LIMIT ?`,
-        ).bind(trackId, topic, topic, source, source, mode, mode, limit).all()
+           LIMIT ? OFFSET ?`,
+        ).bind(trackId, topic, topic, source, source, mode, mode, limit, offset).all()
+        const total = Number(totalRow?.total || 0)
         return json({
           items: results.map((row: Record<string, unknown>) => ({
             ...row,
@@ -974,6 +981,10 @@ export default {
             options_json: undefined,
             answer_json: undefined,
           })),
+          total,
+          limit,
+          offset,
+          has_more: offset + results.length < total,
         })
       } catch {
         return json({ error: '题库暂不可用，请确认已执行最新的 D1 迁移。' }, 503)
