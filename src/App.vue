@@ -584,17 +584,44 @@ function navigate(id: ModuleId) {
   searchText.value = ''
 }
 
-// 使用浏览器内置语音，不调用付费语音接口；具体声音取决于设备和浏览器。
+// 浏览器 TTS 的声音质量因设备而异：优先选择匹配语言的自然/增强语音，
+ // 并放慢语速，避免快速连点造成语音重叠或被取消后不播放。
+let speechRequestId = 0
 function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
-  if (typeof window.speechSynthesis === 'undefined') {
-    window.alert('当前浏览器暂不支持语音播放。')
+  const synthesis = window.speechSynthesis
+  if (typeof synthesis === 'undefined' || typeof SpeechSynthesisUtterance === 'undefined') {
+    window.alert('当前浏览器不支持语音播放。请用 iPhone 的 Safari 打开，或检查系统语音设置。')
     return
   }
-  window.speechSynthesis.cancel()
-  const utterance = new SpeechSynthesisUtterance(text)
+
+  const requestId = ++speechRequestId
+  synthesis.cancel()
+  const utterance = new SpeechSynthesisUtterance(text.trim())
   utterance.lang = lang
-  utterance.rate = 0.88
-  window.speechSynthesis.speak(utterance)
+  utterance.rate = lang === 'ja-JP' ? 0.78 : lang === 'en-US' ? 0.86 : 0.82
+  utterance.pitch = 1
+  utterance.volume = 1
+
+  const chooseVoice = () => {
+    const voices = synthesis.getVoices().filter(voice =>
+      voice.lang.toLowerCase() === lang.toLowerCase()
+      || voice.lang.toLowerCase().replace('_', '-').startsWith(lang.slice(0, 2).toLowerCase()),
+    )
+    if (!voices.length) return
+    const preferred = voices.find(voice => /natural|enhanced|premium|siri|kyoko|otoya/i.test(voice.name))
+      || voices.find(voice => voice.lang.toLowerCase() === lang.toLowerCase() && voice.localService)
+      || voices.find(voice => voice.lang.toLowerCase() === lang.toLowerCase())
+      || voices[0]
+    utterance.voice = preferred
+  }
+
+  chooseVoice()
+  // iOS Safari 有时在 cancel() 后立即 speak() 会吞掉新语音，短暂延迟更稳定。
+  window.setTimeout(() => {
+    if (requestId !== speechRequestId) return
+    chooseVoice()
+    synthesis.speak(utterance)
+  }, 100)
 }
 </script>
 
