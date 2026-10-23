@@ -151,7 +151,7 @@ async function translateText(text: string, source: string, target: string): Prom
       const data = await response.json() as { responseData?: { translatedText?: string }; responseStatus?: number }
       const translated = data.responseData?.translatedText?.trim() || ''
       return (!data.responseStatus || data.responseStatus < 400) && valid(translated) ? translated : ''
-    } catch { return '' }
+    } catch (error) { console.warn('[translation] MyMemory request failed', { source, target, message: error instanceof Error ? error.message : String(error) }); return '' }
   }
 
   const googleFallback = async (): Promise<string> => {
@@ -169,11 +169,13 @@ async function translateText(text: string, source: string, target: string): Prom
       const segments = payload[0] as unknown[]
       const translated = segments.map(segment => Array.isArray(segment) ? String(segment[0] || '') : '').join('').trim()
       return valid(translated) ? translated : ''
-    } catch { return '' }
+    } catch (error) { console.warn('[translation] Google fallback request failed', { source, target, message: error instanceof Error ? error.message : String(error) }); return '' }
   }
 
   const results = await Promise.all([myMemory(), googleFallback()])
-  return results.find(valid) || ''
+  const translated = results.find(valid) || ''
+  if (!translated) console.warn('[translation] all providers returned no usable translation', { source, target, queryLength: text.length })
+  return translated
 }
 // Jisho 提供日语词条、假名读音和英语释义；其接口是公开接口，可能偶尔不可用。
 async function searchJisho(keyword: string): Promise<LooseRecord[]> {
