@@ -8,7 +8,7 @@
 - **语言间隔复习**：`/api/language-review` 记录每张语言卡的复习次数、连续记住次数与下次复习时间；记住后按 1、3、7、14 天逐步延长间隔，选择“还不熟”则安排约 10 分钟后重试。需要先应用 `0013_language_spaced_repetition.sql`，并在 D1 迁移完成后部署 Worker。
 - **考试备考**：考试列表从 D1 已启用模块动态读取，显示每项考试实际题量。当前 SG 已通过多批迁移接入平台自编练习题（最新 `0014_sg_question_bank_pack_2.sql` 新增 22 道日语题干、中文解析的原创练习题；不是官方过去问），实际题量由 D1 动态计算；FE/AP 在对应题库未接入前不会启动练习。答案会即时判分，并通过 `/api/attempts` 将每次答案写入 D1；可通过 `/api/wrong-questions?track=exam-sg` 按错题频次提取复习题。
 - **语言学习**：统一入口后选择日语或英语，从 `language_cards` 表读取课程卡片，支持分类筛选、读音、中文解释、例句、浏览器发音及本地掌握进度。当前内容为平台自编学习资料，已明确标注，不冒充官方课程。
-- **中日英互译与 IT 术语词典**：优先检索 D1 `vocabulary` 术语表，提供中日英释义、日语读音与例句；未命中时调用在线英语/日语词典和机器翻译。对“展开/收起、保存、取消、搜索、设置”等常用 UI 词增加 Worker 离线中日英兜底，即使外部翻译源限流也尽量给出结果。在线翻译使用 MyMemory 与 Google 双主机备用，并缓存成功译文 6 小时，以降低重复查询和短暂上游故障的影响；首次遇到上游限流或网络拦截时仍可能失败。对未覆盖的词不捏造结果。支持手动选择源语言、发音、结果来源、最近查询与本地生词收藏。
+- **英日发音词典与 IT 术语**：词典以英语学习为中心，展示英语释义、在线词典提供的 IPA（如有）、可用时的日语片假名近似读音、日语释义/读音和例句；可分开播放英语原音与日语读音。播放器在点击事件内同步调用浏览器 SpeechSynthesis，显示播放开始/完成/失败状态；不依赖付费 TTS 服务。IT 术语优先查 D1 `vocabulary`，匹配本地条目后不请求第三方翻译；「IT 术语（离线）」模式只查本地库。迁移 `0076_expand_offline_it_dictionary.sql` 提供 136 条 IT 术语词条种子，覆盖编程、前端、数据库、网络、云部署、运维、安全和算法；为既有术语补充中英日别名，并跳过同名重复卡片。普通英语/日语词汇仍使用免费在线词典与英日翻译备用；中文词典模式和中文翻译请求不在当前用户界面支持。设备没有合适的系统语音、浏览器静音或上游词典限流时，播放/查询仍可能失败，应按 [英日词典模块验收清单](docs/dictionary-module-acceptance.md) 进行实际设备检查。支持最近查询、生词本及 D1 跨设备同步。
 - **学习计划与今日进度**：每日任务清单、目标分钟数、完成比例；任务完成状态按日期保存在当前设备。
 - **实战训练**：独立页面模块读取 `practical_scenarios`，显示情境、选项、分数和复盘反馈；`/api/scenarios` 返回任务，`POST /api/scenario-attempts` 在 Worker 端判分并把结果保存到 `scenario_attempts`。迁移 `0017_sg_practical_scenarios_pack.sql` 再增补 25 个情境，覆盖第三方账号、勒索软件、云共享、MFA、备份恢复、漏洞修补、个人信息误发、审计日志、数据脱敏、开发密钥、环境隔离等。内容为平台原创情境，不冒充官方真题。
 - **考试统计与历史成绩**：练习题答案写入 `study_attempts`；实战分数写入 `scenario_attempts`。首页旧的手动成绩与每日任务仍然保存在浏览器 localStorage，不应与云端答题记录混为一谈。
@@ -50,7 +50,7 @@ npm run build
    npx wrangler login
    ```
 
-3. 将全部表结构、SG 自编练习题、扩充后的技术词库、语言卡片、SG 练习题和实战情境应用到远程 D1（会按迁移编号依序执行，包括 `0007`、`0008`、`0009`、`0010`、`0011`、`0012`、`0013`、`0014`、`0015`、`0016`、`0017`、`0018`、`0019`、`0020`）：
+3. 将全部表结构、题库、语言卡片、实战情境和 IT 术语词库应用到远程 D1。命令会按编号自动执行所有尚未应用的迁移；词典改进包含 `0076_expand_offline_it_dictionary.sql`：
 
    ```sh
    npx wrangler d1 migrations apply it-study-platform-db --remote
@@ -91,9 +91,9 @@ npm run build
 - `<WORKER_URL>/api/health`：D1 初始化成功后应返回 `ok: true`。
 - `<WORKER_URL>/api/tracks`：返回已启用的学习模块及每项考试的实际题量。
 - `<WORKER_URL>/api/language-cards?lang=ja`：读取日语学习卡；改为 `lang=en` 读取英语课程。
-- `<WORKER_URL>/api/dictionary?q=authentication&lang=en`：命中 IT 词库时优先返回专业释义；否则查询普通词典并尝试提供中日英翻译。
-- `<WORKER_URL>/api/dictionary?q=hello&lang=en`：应返回在线英文字典结果；如第三方服务未响应，可能返回空结果。
-- `<WORKER_URL>/api/dictionary?q=こんにちは&lang=ja`：应返回日语词条/翻译结果。
+- `<WORKER_URL>/api/dictionary?q=authentication&lang=en`：命中 IT 词库时直接返回本地英日释义、读音和例句；不请求翻译服务。
+- `<WORKER_URL>/api/dictionary?q=hello&lang=en`：应尝试返回英语释义、IPA（若词典提供）、日语辅助读音（若有本地收录）和日语翻译；在线词典故障时可能缺少其中部分内容。
+- `<WORKER_URL>/api/dictionary?q=こんにちは&lang=ja`：应返回日语词条与对应英文结果。`lang=zh` 应返回 400，用户界面不进行中文翻译。
 
 ## 题库真实性
 
