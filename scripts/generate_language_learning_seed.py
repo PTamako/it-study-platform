@@ -110,7 +110,6 @@ def zhmap(db):
   out.setdefault(canonical,[]).extend(vals)
   for form in forms_by_key.get(str(i),set()) | forms_by_key.get(canonical,set()):
    out.setdefault(form,[]).extend(vals)
- c.close()
  for term in ("会う","あう","青","あお"):
   form_rows=c.execute("SELECT entry_id,is_kana FROM forms WHERE text=? LIMIT 5",(term,)).fetchall()
   ids=[str(row[0]) for row in form_rows]
@@ -120,6 +119,7 @@ def zhmap(db):
    gloss_rows=c.execute(f"SELECT entry_id,locale,substr(data,1,180) FROM zh_defs WHERE entry_id IN ({marks}) LIMIT 5",ids).fetchall()
   print("Tomoshi term lookup",term,"forms",form_rows,"zh_defs",gloss_rows,"mapped",term in out)
  print("Tomoshi gloss key sample:",list(out.keys())[:3],"JMdict ID 1198180:", "1198180" in out,"headword 会う:", "会う" in out,"reading あう:", "あう" in out,"headword 青:", "青" in out,"reading あお:", "あお" in out)
+ c.close()
  return {k:list(dict.fromkeys(v)) for k,v in out.items()}
 def english_data(p):
  rows=[]; translations={}
