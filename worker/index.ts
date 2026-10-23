@@ -429,7 +429,9 @@ async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Prom
     const englishTerm = termIsEnglish
       ? term
       : aliases.find(alias => /^[a-z0-9][a-z0-9 .+/#()-]*$/i.test(alias)) || ''
-    const language = String(row.language || 'ja') as 'ja' | 'en' | 'zh'
+    // In auto mode, label the result according to the user's query so an English alias
+    // gets an English-first card with a Japanese pronunciation aid.
+    const language = /[a-z]/i.test(query) ? 'en' : String(row.language || 'ja') as 'ja' | 'en' | 'zh'
     return {
       term,
       englishTerm: englishTerm || undefined,
