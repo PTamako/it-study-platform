@@ -18,7 +18,7 @@ const showMobileMenu = ref(false)
 const savedWords = ref<string[]>(readStored('zhixue:saved-words', []))
 
 type StudyTask = { id: string; title: string; detail: string; minutes: number; done: boolean }
-type ExamRecord = { date: string; correct: number; total: number; exam: string }
+type ExamRecord = { id?: string; date: string; correct: number; total: number; exam: string }
 const todayKey = new Date().toLocaleDateString('sv-SE')
 const defaultTasks: StudyTask[] = [
   { id: 'sg-review', title: '复习 SG 日语关键词', detail: '法律 / 技术 / 管理术语', minutes: 15, done: false },
@@ -129,6 +129,24 @@ async function syncExamHistory() {
     examHistorySyncStarted = false
   }
 }
+async function saveExamRecord(record: ExamRecord) {
+  const savedRecord = { ...record, id: record.id || crypto.randomUUID() }
+  examRecords.value.push(savedRecord)
+  try {
+    const response = await fetch('/api/exam-history', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(savedRecord),
+    })
+    const data = await response.json().catch(() => ({})) as { error?: string }
+    if (!response.ok) throw new Error(data.error || '考试成绩未能同步到云端。')
+    cloudDashboardError.value = ''
+    void loadCloudDashboard()
+  } catch (error) {
+    cloudDashboardError.value = error instanceof Error
+      ? error.message + ' 成绩仍保留在本设备，之后可重试同步。'
+      : '考试成绩未能同步到云端；本地记录仍保留。'
+  }
+}
 function addExamRecord() {
   const exam = window.prompt('记录哪项考试？例如 SG', 'SG')
   if (!exam?.trim()) return
@@ -140,7 +158,7 @@ function addExamRecord() {
   if (correctRaw === null) return
   const correct = Number(correctRaw)
   if (!Number.isInteger(correct) || correct < 0 || correct > total) { window.alert('答对题数应为 0 到总题数之间的整数。'); return }
-  examRecords.value.push({ date: todayKey, correct, total, exam: exam.trim().toUpperCase() })
+  void saveExamRecord({ date: todayKey, correct, total, exam: exam.trim().toUpperCase() })
 }
 function removeExamRecords() {
   if (window.confirm('确定清除本设备保存的全部考试成绩吗？此操作无法撤销。')) examRecords.value = []
@@ -241,7 +259,7 @@ async function finishMockExam(autoSubmit = false) {
   if (mockTimer) { clearInterval(mockTimer); mockTimer = undefined }
   const total = mockQuestions.value.length
   const correct = mockCorrectCount.value
-  examRecords.value.push({ date: todayKey, correct, total, exam: (selectedTrack.value?.title || selectedTrackId.value) + ' 模拟考试（' + (correct * 2) + '/120分）' })
+  void saveExamRecord({ date: todayKey, correct, total, exam: (selectedTrack.value?.title || selectedTrackId.value) + ' 模拟考试（' + (correct * 2) + '/120分）' })
   const unanswered = total - mockAnsweredCount.value
   if (autoSubmit) mockError.value = '时间到，系统已自动交卷。未作答题目按答错计。'
   else mockError.value = unanswered ? '已交卷。未作答的 ' + unanswered + ' 题按答错计。' : ''
@@ -504,7 +522,7 @@ function nextPracticeQuestion() {
     quizSubmitted.value = false
     return
   }
-  examRecords.value.push({ date: todayKey, correct: quizCorrect.value, total: quizQuestions.value.length, exam: selectedTrack.value?.title || selectedTrackId.value })
+  void saveExamRecord({ date: todayKey, correct: quizCorrect.value, total: quizQuestions.value.length, exam: selectedTrack.value?.title || selectedTrackId.value })
   quizFinished.value = true
 }
 
