@@ -291,3 +291,26 @@
   .question-source-filters { gap: 6px; }
   .source-filter-button { padding: 8px 11px; font-size: 0.82rem; }
 }
+
+
+/* Active-recall practice for language cards */
+.language-practice { margin: 18px 0 22px; padding: 20px; border: 1px solid var(--line, #e8e5ef); background: linear-gradient(135deg, rgba(246,242,255,.75), rgba(255,249,244,.88)); }
+.language-practice-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.language-practice-heading h3 { margin: 7px 0 5px; font-size: 1.15rem; }
+.language-practice-heading p { margin: 0; color: var(--muted, #777789); font-size: .9rem; line-height: 1.6; }
+.language-practice-count { flex: 0 0 auto; border-radius: 999px; padding: 6px 10px; background: rgba(255,255,255,.8); color: var(--muted, #777789); font-size: .8rem; }
+.language-practice-content { margin-top: 18px; padding-top: 17px; border-top: 1px solid rgba(130,112,160,.16); }
+.language-practice-content h4 { margin: 12px 0 6px; font-size: clamp(1.3rem, 4vw, 1.8rem); line-height: 1.45; overflow-wrap: anywhere; }
+.language-practice-prompt { margin: 16px 0; color: var(--muted, #777789); line-height: 1.7; }
+.language-practice-answer { margin: 15px 0; padding: 15px; border-radius: 13px; background: rgba(255,255,255,.78); }
+.language-practice-answer > strong { font-size: 1rem; line-height: 1.65; }
+.language-practice-answer > p { color: var(--muted, #777789); line-height: 1.7; }
+.language-practice-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin-top: 17px; }
+.language-practice-actions button { min-height: 40px; }
+@media (max-width: 560px) {
+ .language-practice { padding: 15px; }
+ .language-practice-heading { gap: 8px; }
+ .language-practice-heading p { font-size: .84rem; }
+ .language-practice-actions { display: grid; grid-template-columns: 1fr 1fr; }
+ .language-practice-actions .language-done-button { grid-column: 1 / -1; }
+}
