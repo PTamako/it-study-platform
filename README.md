@@ -140,3 +140,5 @@ There are now 75 official-source question records in migrations: 60 from the 202
 
 - `migrations/0025_sg_official_2019_autumn_am_questions_25_27_30.sql`: four additional 2019 autumn official questions (25, 26, 27, 30); questions 28–29 were left out of this batch pending item-level transcription verification.
 - `docs/sg-exam-final-acceptance.md`: final acceptance checklist for target counts, answer/source integrity, practice and review flows, mock exams, mobile layout, API/database checks, and deployment.
+
+- `migrations/0026_sg_official_2019_autumn_am_questions_28_29.sql`: two additional 2019 autumn official questions (28–29), covering SMTP-AUTH and honeypots, with official answer-key mappings.
