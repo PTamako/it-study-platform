@@ -352,6 +352,14 @@ const englishKatakanaReadings: Record<string, string> = {
   upload: 'アップロード', download: 'ダウンロード', git: 'ギット', github: 'ギットハブ',
   cloudflare: 'クラウドフレア', sql: 'エスキューエル', windows: 'ウィンドウズ', linux: 'リナックス',
   cors: 'コルス', mfa: 'エムエフエー', csrf: 'シーエスアールエフ', xss: 'クロスサイトスクリプティング',
+  totp: 'ティーオーティーピー', hotp: 'ホップ', rbac: 'アールバック', acl: 'エーシーエル',
+  tls: 'ティーエルエス', pki: 'ピーケーアイ', ca: 'シーエー', waf: 'ワフ',
+  ids: 'アイディーエス', ips: 'アイピーエス', siem: 'シーム', ssrf: 'サーバーサイドリクエストフォージェリ',
+  dns: 'ディーエヌエス', rest: 'レスト', crud: 'クラッド', acid: 'アシッド',
+  rto: 'アールティーオー', rpo: 'アールピーオー', pdca: 'ピーディーシーエー',
+  sdlc: 'エスディーエルシー', agile: 'アジャイル', scrum: 'スクラム',
+  'waterfall model': 'ウォーターフォールモデル', devsecops: 'デブセックオプス',
+  'zero trust': 'ゼロトラスト', 'osi model': 'オーエスアイモデル',
 }
 
 function englishDictionaryEntries(rows: LooseRecord[], _zh: string, ja: string): DictionaryApiEntry[] {
