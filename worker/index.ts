@@ -506,10 +506,11 @@ export default {
     const url = new URL(request.url)
 
     if (request.method === 'OPTIONS') {
-      return new Response(null, { status: 204, headers: { 'allow': 'GET, POST, OPTIONS' } })
+      return new Response(null, { status: 204, headers: { 'allow': 'GET, POST, DELETE, OPTIONS' } })
     }
-    const isWriteEndpoint = ['/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history'].includes(url.pathname)
-    if (request.method !== 'GET' && !(request.method === 'POST' && isWriteEndpoint)) {
+    const isWriteEndpoint = ['/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history', '/api/translate-explanation'].includes(url.pathname)
+    const isExamHistoryDelete = request.method === 'DELETE' && url.pathname === '/api/exam-history'
+    if (request.method !== 'GET' && !(request.method === 'POST' && isWriteEndpoint) && !isExamHistoryDelete) {
       return json({ error: '不支持此请求方法' }, 405)
     }
 
@@ -541,6 +542,40 @@ export default {
       }
     }
 
+
+    // 按需翻译答题解析。限长并复用现有翻译缓存，避免对整道题重复请求。
+    if (url.pathname === '/api/translate-explanation' && request.method === 'POST') {
+      let body: Record<string, unknown>
+      try { body = await request.json() as Record<string, unknown> }
+      catch { return json({ error: '请求体必须是 JSON。' }, 400) }
+      const text = String(body.text || '').trim()
+      const requestedSource = String(body.source || 'ja').trim().toLowerCase()
+      const source = requestedSource.startsWith('ja') ? 'ja' : requestedSource.startsWith('en') ? 'en' : requestedSource.startsWith('zh') ? 'zh' : ''
+      if (!text) return json({ error: '没有可翻译的解析内容。' }, 400)
+      if (text.length > 1800) return json({ error: '解析文本过长，暂时无法一次翻译。' }, 400)
+      if (!source) return json({ error: '原文语言只支持日语、英语或中文。' }, 400)
+      if (source === 'zh') return json({ translation: text, source: 'already_chinese' })
+
+      const chunks: string[] = []
+      let remaining = text
+      while (remaining.length > 450) {
+        const candidates = ['。', '！', '？', '.', '!', '?', '\n'].map(mark => remaining.lastIndexOf(mark, 450))
+        const splitAt = Math.max(...candidates)
+        const boundary = splitAt >= 180 ? splitAt + 1 : 450
+        chunks.push(remaining.slice(0, boundary).trim())
+        remaining = remaining.slice(boundary).trim()
+      }
+      if (remaining) chunks.push(remaining)
+      try {
+        const translatedChunks = await Promise.all(chunks.map(chunk => translateText(chunk, source, 'zh')))
+        if (translatedChunks.some(value => !value.trim())) {
+          return json({ error: '在线翻译暂时不可用，请稍后重试。' }, 503)
+        }
+        return json({ translation: translatedChunks.join(''), source, target: 'zh' })
+      } catch {
+        return json({ error: '解析翻译失败，请稍后重试。' }, 503)
+      }
+    }
 
     // 通用日中英词典：可查普通单词、日常用语和 IT 专业术语，不局限于 D1 内置词条。
     if (url.pathname === '/api/dictionary') {
@@ -906,6 +941,14 @@ export default {
     
     // 手动汇总的历史考试成绩从浏览器迁移到 D1；客户端为每条记录生成稳定 ID，重复提交不会重复计数。
     if (url.pathname === '/api/exam-history') {
+      if (request.method === 'DELETE') {
+        try {
+          const result = await env.DB.prepare('DELETE FROM exam_history').run()
+          return json({ ok: true, deleted: Number(result.meta?.changes || 0) })
+        } catch {
+          return json({ error: '清除考试记录失败，请确认考试历史表已初始化。' }, 503)
+        }
+      }
       if (request.method === 'GET') {
         try {
           const { results } = await env.DB.prepare(
