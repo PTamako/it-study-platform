@@ -1245,8 +1245,10 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             <div class="panel recent-panel">
               <div class="panel-heading"><div><h3>最近查过的词</h3><p>把不熟悉的词，慢慢变成熟悉。</p></div><button class="text-link" @click="navigate('dictionary')">打开词典 <ArrowRight :size="14" /></button></div>
               <div v-for="entry in recentDictionaryEntries.slice(0, 2)" :key="entry.term" class="word-row">
-                <div class="word-letter">{{ entry.term.slice(0,1) }}</div><div class="word-details"><strong>{{ entry.term }} <small>{{ entry.reading || entry.phonetic || '' }}</small></strong><span>{{ entry.zh }}</span></div>
-                <button class="round-action" @click="speak(entry.term, entry.language === 'en' ? 'en-US' : entry.language === 'zh' ? 'zh-CN' : 'ja-JP')" aria-label="播放发音"><Volume2 :size="17" /></button>
+                <div class="word-letter">{{ (entry.language === 'en' && entry.englishTerm ? entry.englishTerm : entry.term).slice(0,1) }}</div>
+                <div class="word-details"><strong>{{ entry.language === 'en' && entry.englishTerm ? entry.englishTerm : entry.term }} <small>{{ entry.reading || entry.phonetic || '' }}</small></strong><span>{{ entry.en || entry.translationJa || '' }}</span></div>
+                <button v-if="entry.englishTerm || entry.language === 'en'" class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" aria-label="播放英语发音" title="播放英语发音"><Volume2 :size="14" /><span>EN</span></button>
+                <button v-if="entry.reading || entry.language === 'ja'" class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" aria-label="播放日语读音" title="播放日语读音"><Languages :size="14" /><span>日</span></button>
               </div>
               <div v-if="recentDictionaryEntries.length === 0" class="recent-dictionary-empty">查过的词会显示在这里，方便继续复习。</div>
             </div>
