@@ -140,6 +140,7 @@ const mockSubmitted = ref(false)
 const mockLoading = ref(false)
 const mockError = ref('')
 const mockDeadline = ref(0)
+const mockStartedAt = ref(0)
 const mockNow = ref(Date.now())
 const mockDurationMinutes = ref(30)
 let mockTimer: ReturnType<typeof setInterval> | undefined
@@ -167,8 +168,9 @@ async function startMockExam() {
     mockQuestions.value = data.items
     mockAnswers.value = {}
     mockDurationMinutes.value = Math.max(1, Math.ceil(data.items.length * 1.5))
-    mockDeadline.value = Date.now() + mockDurationMinutes.value * 60 * 1000
-    mockNow.value = Date.now()
+    mockStartedAt.value = Date.now()
+    mockDeadline.value = mockStartedAt.value + mockDurationMinutes.value * 60 * 1000
+    mockNow.value = mockStartedAt.value
     mockStarted.value = true
     mockSubmitted.value = false
     if (mockTimer) clearInterval(mockTimer)
@@ -196,7 +198,7 @@ async function finishMockExam(autoSubmit = false) {
   const attempts = mockQuestions.value.filter(question => mockAnswers.value[question.id])
   const results = await Promise.allSettled(attempts.map(question => fetch('/api/attempts', {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ question_id: question.id, answer: mockAnswers.value[question.id], duration_seconds: Math.max(0, Math.floor((mockDurationMinutes.value * 60) - mockRemainingSeconds.value)) }),
+    body: JSON.stringify({ question_id: question.id, answer: mockAnswers.value[question.id], duration_seconds: Math.max(0, Math.floor((Date.now() - mockStartedAt.value) / 1000)) }),
   })))
   if (results.some(result => result.status === 'rejected' || (result.status === 'fulfilled' && !result.value.ok))) {
     mockError.value = (mockError.value ? mockError.value + ' ' : '') + '部分答题记录未能同步到云端。'
