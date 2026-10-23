@@ -1096,20 +1096,26 @@ export default {
             section_counts: { A: sectionA.length, B: sectionB.length },
           }, 409)
         }
-        const shuffle = <T,>(rows: T[]) => [...rows].sort(() => Math.random() - 0.5)
+        const shuffle = <T,>(rows: T[]) => {
+          const shuffled = [...rows]
+          for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1))
+            ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+          }
+          return shuffled
+        }
         const items = [
           ...shuffle(sectionA).slice(0, 48).map(row => decode(row, 'A')),
           ...shuffle(sectionB).slice(0, 12).map(row => decode(row, 'B')),
         ]
         const shuffledItems = shuffle(items)
         return json({ items: shuffledItems, section_counts: { A: 48, B: 12 }, total: 60, duration_minutes: 120 })
-      } catch (error) {
-        if (error instanceof Response) throw error
+      } catch {
         return json({ error: '模拟考试组卷失败，请确认题库迁移已完成。' }, 503)
       }
     }
 
-    // 返回指定考试的练习题。source_type 会明确标记自编练习题，不冒充官方真题。
+    // 返回指定考试的练习题。source_type 会明确标记自编练习题，不冒充官方真题.
     if (url.pathname === '/api/questions') {
       const trackId = url.searchParams.get('track') || 'exam-sg'
       const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 10)))
