@@ -1,5 +1,9 @@
 -- SG original prediction question expansion: 451 items.
+
 -- All rows are original practice scenarios, explicitly marked generated (not official past questions).
+
+-- Split into bounded INSERT statements to avoid SQLite SQLITE_TOOBIG on D1.
+
 INSERT OR IGNORE INTO questions
   (id, track_id, topic, difficulty, question_type, prompt, options_json, answer_json, explanation, source_type, source_reference, language)
 VALUES
@@ -52,7 +56,11 @@ VALUES
 ('sg-pred-bulk-047','exam-sg','マルウェア','standard','single_choice','不審な添付ファイルを開いた可能性がある端末への初動として適切なものはどれか。（ケース02）','[{"id":"a","text":"証拠を残さず端末を初期化する"},{"id":"b","text":"添付ファイルを社内全員へ転送する"},{"id":"c","text":"ネットワークから隔離し，担当窓口へ報告して調査に必要な情報を保全する"},{"id":"d","text":"警告を無視して作業を続ける"}]','"c"','隔離・報告・証拠保全を優先し，組織の手順に従う。','generated',NULL,'ja'),
 ('sg-pred-bulk-048','exam-sg','物理セキュリティ','standard','single_choice','機密書類を廃棄する際の対応として最も適切なものはどれか。（ケース02）','[{"id":"a","text":"一般ごみ箱へそのまま捨てる"},{"id":"b","text":"廃棄前に共有スペースへ置く"},{"id":"c","text":"廃棄記録を必ず省略する"},{"id":"d","text":"復元困難な方法で廃棄し，定められた手順と記録を守る"}]','"d"','機密度に応じた安全な廃棄方法と手順が必要である。','generated',NULL,'ja'),
 ('sg-pred-bulk-049','exam-sg','内部統制','standard','single_choice','職務分掌を行う主な目的はどれか。（ケース02）','[{"id":"a","text":"一人に権限や処理が集中することを防ぎ，不正や誤りを発見しやすくする"},{"id":"b","text":"全業務を一人で完結させる"},{"id":"c","text":"承認記録をなくす"},{"id":"d","text":"すべての利用者に同じ権限を与える"}]','"a"','職務を分離することで不正防止と相互牽制を実現する。','generated',NULL,'ja'),
-('sg-pred-bulk-050','exam-sg','監査','standard','single_choice','システム監査人の独立性を保つために適切なものはどれか。（ケース02）','[{"id":"a","text":"自分が設計した統制を自分だけで監査する"},{"id":"b","text":"監査対象業務の設計・運用責任を負う立場から独立して監査する"},{"id":"c","text":"監査結果を対象部門に無条件で変更させる"},{"id":"d","text":"証拠を収集せず口頭説明だけで結論を出す"}]','"b"','監査人は対象業務の責任から独立し，十分な証拠に基づき評価する。','generated',NULL,'ja'),
+('sg-pred-bulk-050','exam-sg','監査','standard','single_choice','システム監査人の独立性を保つために適切なものはどれか。（ケース02）','[{"id":"a","text":"自分が設計した統制を自分だけで監査する"},{"id":"b","text":"監査対象業務の設計・運用責任を負う立場から独立して監査する"},{"id":"c","text":"監査結果を対象部門に無条件で変更させる"},{"id":"d","text":"証拠を収集せず口頭説明だけで結論を出す"}]','"b"','監査人は対象業務の責任から独立し，十分な証拠に基づき評価する。','generated',NULL,'ja');
+
+INSERT OR IGNORE INTO questions
+  (id, track_id, topic, difficulty, question_type, prompt, options_json, answer_json, explanation, source_type, source_reference, language)
+VALUES
 ('sg-pred-bulk-051','exam-sg','サービス管理','standard','single_choice','サービスに計画外の中断や品質低下が発生した場合，通常は何として記録・管理するか。（ケース02）','[{"id":"a","text":"既知の誤り"},{"id":"b","text":"変更要求"},{"id":"c","text":"インシデント"},{"id":"d","text":"サービスカタログ"}]','"c"','インシデントはサービスの中断・品質低下などを扱う。','generated',NULL,'ja'),
 ('sg-pred-bulk-052','exam-sg','開発管理','standard','single_choice','ソフトウェア変更の影響範囲を把握するために行うことはどれか。（ケース02）','[{"id":"a","text":"変更したファイル名だけを確認する"},{"id":"b","text":"テストを常に省略する"},{"id":"c","text":"変更記録を削除する"},{"id":"d","text":"関連する要件，設計，コード，テスト，利用者への影響を追跡する"}]','"d"','影響分析は関連成果物と利用者への影響を確認する。','generated',NULL,'ja'),
 ('sg-pred-bulk-053','exam-sg','データ管理','standard','single_choice','データの正確性と完全性を高める入力時の対策はどれか。（ケース02）','[{"id":"a","text":"形式・範囲・必須項目などを検証し，エラーを適切に処理する"},{"id":"b","text":"すべての入力検証を無効にする"},{"id":"c","text":"入力値を確認せず自動承認する"},{"id":"d","text":"エラー記録を残さない"}]','"a"','入力チェックと例外処理で不正確なデータの混入を防ぐ。','generated',NULL,'ja'),
@@ -102,7 +110,11 @@ VALUES
 ('sg-pred-bulk-097','exam-sg','変更管理','standard','single_choice','本番システムの設定変更による障害リスクを抑える方法はどれか。（ケース04）','[{"id":"a","text":"影響評価，承認，事前テスト，切戻し手順を用意する"},{"id":"b","text":"担当者が記録せず直接変更する"},{"id":"c","text":"旧設定を復元できないよう削除する"},{"id":"d","text":"利用者への影響確認を省略する"}]','"a"','変更管理では承認，テスト，記録，切戻し計画が重要である。','generated',NULL,'ja'),
 ('sg-pred-bulk-098','exam-sg','事業継続','standard','single_choice','災害後にシステムを復旧させるまでの目標時間を示す指標はどれか。（ケース04）','[{"id":"a","text":"RPO"},{"id":"b","text":"RTO"},{"id":"c","text":"MTBF"},{"id":"d","text":"稼働率"}]','"b"','RTOは目標復旧時間，RPOは目標復旧時点である。','generated',NULL,'ja'),
 ('sg-pred-bulk-099','exam-sg','リスク管理','standard','single_choice','対策コストが過大で，組織の許容基準内のリスクを受け入れる対応はどれか。（ケース04）','[{"id":"a","text":"リスク回避"},{"id":"b","text":"リスク移転"},{"id":"c","text":"リスク受容"},{"id":"d","text":"リスク低減"}]','"c"','リスク受容は評価したリスクを基準に照らして受け入れる対応である。','generated',NULL,'ja'),
-('sg-pred-bulk-100','exam-sg','メールセキュリティ','standard','single_choice','送信ドメインのなりすまし対策として，送信元ドメインの認証結果を受信側で検証する仕組みはどれか。（ケース04）','[{"id":"a","text":"メール本文を圧縮する"},{"id":"b","text":"受信者全員に管理者権限を付与する"},{"id":"c","text":"送信ログを停止する"},{"id":"d","text":"SPF・DKIM・DMARCなどを適切に設定する"}]','"d"','送信ドメイン認証の設定とポリシー運用がなりすまし対策になる。','generated',NULL,'ja'),
+('sg-pred-bulk-100','exam-sg','メールセキュリティ','standard','single_choice','送信ドメインのなりすまし対策として，送信元ドメインの認証結果を受信側で検証する仕組みはどれか。（ケース04）','[{"id":"a","text":"メール本文を圧縮する"},{"id":"b","text":"受信者全員に管理者権限を付与する"},{"id":"c","text":"送信ログを停止する"},{"id":"d","text":"SPF・DKIM・DMARCなどを適切に設定する"}]','"d"','送信ドメイン認証の設定とポリシー運用がなりすまし対策になる。','generated',NULL,'ja');
+
+INSERT OR IGNORE INTO questions
+  (id, track_id, topic, difficulty, question_type, prompt, options_json, answer_json, explanation, source_type, source_reference, language)
+VALUES
 ('sg-pred-bulk-101','exam-sg','ネットワーク','standard','single_choice','IPアドレスに対応するドメイン名などを問い合わせる仕組みはどれか。（ケース04）','[{"id":"a","text":"DNS"},{"id":"b","text":"DHCP"},{"id":"c","text":"NAT"},{"id":"d","text":"ARP"}]','"a"','DNSは名前解決を行い，DHCPはIP設定の配布などを行う。','generated',NULL,'ja'),
 ('sg-pred-bulk-102','exam-sg','無線LAN','standard','single_choice','社内無線LANの盗聴リスクを下げる対策として最も適切なものはどれか。（ケース04）','[{"id":"a","text":"SSIDを隠すだけで十分とする"},{"id":"b","text":"強固な暗号方式を使い，認証と鍵管理を適切に行う"},{"id":"c","text":"暗号化を無効にする"},{"id":"d","text":"全利用者で同じ鍵を公開する"}]','"b"','SSID秘匿だけでは十分ではなく，強固な暗号化と認証が必要である。','generated',NULL,'ja'),
 ('sg-pred-bulk-103','exam-sg','Webセキュリティ','standard','single_choice','SQLインジェクションへの代表的な対策はどれか。（ケース04）','[{"id":"a","text":"入力値をHTMLに表示するだけで対策済みとする"},{"id":"b","text":"データベースの監査を停止する"},{"id":"c","text":"プレースホルダを用いたパラメータ化クエリを使用する"},{"id":"d","text":"エラーメッセージを詳細に外部公開する"}]','"c"','SQL文と入力値を分離するパラメータ化が有効である。','generated',NULL,'ja'),
@@ -152,7 +164,11 @@ VALUES
 ('sg-pred-bulk-147','exam-sg','インシデント対応','standard','single_choice','機密情報が外部に送信された疑いがある。最初に行う対応として最も適切なものはどれか。（ケース06）','[{"id":"a","text":"関係するログをすべて削除する"},{"id":"b","text":"原因が確定するまで誰にも知らせない"},{"id":"c","text":"定められた連絡先へ速やかに報告し，証拠を保全しながら拡大を防ぐ"},{"id":"d","text":"端末を初期化して調査記録を残さない"}]','"c"','初動では報告，拡大防止，証拠保全を並行して進める。','generated',NULL,'ja'),
 ('sg-pred-bulk-148','exam-sg','脆弱性管理','standard','single_choice','外部公開サーバに重大な脆弱性が公表された。最も適切な対応はどれか。（ケース06）','[{"id":"a","text":"攻撃を受けるまで何もしない"},{"id":"b","text":"脆弱性情報を社内から隠す"},{"id":"c","text":"ログを停止して負荷を下げる"},{"id":"d","text":"影響と緊急度を評価し，検証と変更管理を経て修正または暫定対策を実施する"}]','"d"','影響評価に基づき，検証済みの修正や暫定対策を優先する。','generated',NULL,'ja'),
 ('sg-pred-bulk-149','exam-sg','バックアップ','standard','single_choice','バックアップから業務データを復旧できることを確かめる方法はどれか。（ケース06）','[{"id":"a","text":"定期的に復元テストを実施し，結果を記録する"},{"id":"b","text":"ファイル名が存在することだけ確認する"},{"id":"c","text":"本番環境と同じディスクに一つだけ保存する"},{"id":"d","text":"バックアップ取得後は検証しない"}]','"a"','実際に復元できるかをテストすることが重要である。','generated',NULL,'ja'),
-('sg-pred-bulk-150','exam-sg','認証','standard','single_choice','パスワード漏えいのリスクを下げるため，管理者アカウントに適用する対策はどれか。（ケース06）','[{"id":"a","text":"全員で同じ管理者パスワードを共有する"},{"id":"b","text":"多要素認証を有効にし，特権利用を必要最小限にする"},{"id":"c","text":"パスワードをソースコードに記載する"},{"id":"d","text":"認証ログを記録しない"}]','"b"','多要素認証と特権アクセス管理を組み合わせる。','generated',NULL,'ja'),
+('sg-pred-bulk-150','exam-sg','認証','standard','single_choice','パスワード漏えいのリスクを下げるため，管理者アカウントに適用する対策はどれか。（ケース06）','[{"id":"a","text":"全員で同じ管理者パスワードを共有する"},{"id":"b","text":"多要素認証を有効にし，特権利用を必要最小限にする"},{"id":"c","text":"パスワードをソースコードに記載する"},{"id":"d","text":"認証ログを記録しない"}]','"b"','多要素認証と特権アクセス管理を組み合わせる。','generated',NULL,'ja');
+
+INSERT OR IGNORE INTO questions
+  (id, track_id, topic, difficulty, question_type, prompt, options_json, answer_json, explanation, source_type, source_reference, language)
+VALUES
 ('sg-pred-bulk-151','exam-sg','暗号化','standard','single_choice','保存中の機密ファイルを盗難された媒体から読み取られにくくする対策はどれか。（ケース06）','[{"id":"a","text":"ファイル名だけを変更する"},{"id":"b","text":"圧縮だけを行う"},{"id":"c","text":"適切な鍵管理の下でデータを暗号化する"},{"id":"d","text":"ハッシュ値だけを保存して元データを平文で置く"}]','"c"','暗号化は鍵を持たない者による内容の閲覧を防ぐ。','generated',NULL,'ja'),
 ('sg-pred-bulk-152','exam-sg','ログ管理','standard','single_choice','不正アクセス調査に利用するログの信頼性を高める対策はどれか。（ケース06）','[{"id":"a","text":"利用者が自由にログを書き換えられるようにする"},{"id":"b","text":"記録時刻を端末ごとに任意に設定する"},{"id":"c","text":"重要なログを毎日無条件に削除する"},{"id":"d","text":"時刻を同期し，書込み権限を制限して改ざんを検知できる形で保管する"}]','"d"','時刻同期，アクセス制御，改ざん検知が調査の信頼性を高める。','generated',NULL,'ja'),
 ('sg-pred-bulk-153','exam-sg','個人情報','standard','single_choice','分析業務を外部委託する際，提供する個人データを減らす考え方はどれか。（ケース06）','[{"id":"a","text":"目的達成に必要な範囲に限定し，必要に応じて識別性を下げる加工を行う"},{"id":"b","text":"保有する個人情報をすべて提供する"},{"id":"c","text":"提供後の委託先管理を省略する"},{"id":"d","text":"データを一般公開する"}]','"a"','データ最小化と委託先監督で漏えい時の影響を抑える。','generated',NULL,'ja'),
@@ -202,7 +218,11 @@ VALUES
 ('sg-pred-bulk-197','exam-sg','開発管理','standard','single_choice','ソフトウェア変更の影響範囲を把握するために行うことはどれか。（ケース07）','[{"id":"a","text":"関連する要件，設計，コード，テスト，利用者への影響を追跡する"},{"id":"b","text":"変更したファイル名だけを確認する"},{"id":"c","text":"テストを常に省略する"},{"id":"d","text":"変更記録を削除する"}]','"a"','影響分析は関連成果物と利用者への影響を確認する。','generated',NULL,'ja'),
 ('sg-pred-bulk-198','exam-sg','データ管理','standard','single_choice','データの正確性と完全性を高める入力時の対策はどれか。（ケース07）','[{"id":"a","text":"すべての入力検証を無効にする"},{"id":"b","text":"形式・範囲・必須項目などを検証し，エラーを適切に処理する"},{"id":"c","text":"入力値を確認せず自動承認する"},{"id":"d","text":"エラー記録を残さない"}]','"b"','入力チェックと例外処理で不正確なデータの混入を防ぐ。','generated',NULL,'ja'),
 ('sg-pred-bulk-199','exam-sg','クラウド','standard','single_choice','クラウドストレージで社外の特定担当者と機密ファイルを共有する設定はどれか。（ケース07）','[{"id":"a","text":"リンクを知る全員に編集権限を付与する"},{"id":"b","text":"公開設定にしてパスワードをファイル名に含める"},{"id":"c","text":"共有相手を指定し，最小権限と有効期限を設定する"},{"id":"d","text":"監査ログを無効にする"}]','"c"','共有先と権限を限定し，期限やアクセス状況を管理する。','generated',NULL,'ja'),
-('sg-pred-bulk-200','exam-sg','暗号・署名','standard','single_choice','電子署名によって主に確認できることはどれか。（ケース07）','[{"id":"a","text":"通信速度の向上"},{"id":"b","text":"データの圧縮率"},{"id":"c","text":"署名対象の内容を秘密にすること"},{"id":"d","text":"署名対象の完全性と，署名鍵に対応する署名者の確認"}]','"d"','電子署名は改ざん検知や署名者の確認に役立つが，内容の秘匿は暗号化の役割である。','generated',NULL,'ja'),
+('sg-pred-bulk-200','exam-sg','暗号・署名','standard','single_choice','電子署名によって主に確認できることはどれか。（ケース07）','[{"id":"a","text":"通信速度の向上"},{"id":"b","text":"データの圧縮率"},{"id":"c","text":"署名対象の内容を秘密にすること"},{"id":"d","text":"署名対象の完全性と，署名鍵に対応する署名者の確認"}]','"d"','電子署名は改ざん検知や署名者の確認に役立つが，内容の秘匿は暗号化の役割である。','generated',NULL,'ja');
+
+INSERT OR IGNORE INTO questions
+  (id, track_id, topic, difficulty, question_type, prompt, options_json, answer_json, explanation, source_type, source_reference, language)
+VALUES
 ('sg-pred-bulk-201','exam-sg','認証情報管理','standard','single_choice','退職者のアカウントを放置することによるリスクを下げる方法はどれか。（ケース07）','[{"id":"a","text":"人事情報と連携した退職・異動時の権限変更手順を運用する"},{"id":"b","text":"退職者アカウントを永久に有効にする"},{"id":"c","text":"パスワードを部署内で共有する"},{"id":"d","text":"利用者台帳を更新しない"}]','"a"','ライフサイクルに沿ってアカウントと権限を速やかに変更・削除する。','generated',NULL,'ja'),
 ('sg-pred-bulk-202','exam-sg','教育','standard','single_choice','標的型メール訓練の適切な目的はどれか。（ケース07）','[{"id":"a","text":"失敗した社員を公開処罰する"},{"id":"b","text":"訓練結果から報告行動や教育内容を改善する"},{"id":"c","text":"実際のパスワードを収集する"},{"id":"d","text":"メール防御機能をすべて停止する"}]','"b"','訓練は気付きと報告行動，組織の対策改善につなげる。','generated',NULL,'ja'),
 ('sg-pred-bulk-203','exam-sg','プライバシー','standard','single_choice','個人データの利用目的を変更する場合に必要な考え方はどれか。（ケース07）','[{"id":"a","text":"利用目的を無制限に拡張する"},{"id":"b","text":"目的を社内記録から削除する"},{"id":"c","text":"適用法令と本人への通知・公表等の要件を確認し，目的の範囲を適切に管理する"},{"id":"d","text":"外部委託先に自由な二次利用を認める"}]','"c"','個人データは利用目的と法令上の要件に従って取り扱う。','generated',NULL,'ja'),
@@ -252,7 +272,11 @@ VALUES
 ('sg-pred-bulk-247','exam-sg','無線LAN','standard','single_choice','社内無線LANの盗聴リスクを下げる対策として最も適切なものはどれか。（ケース09）','[{"id":"a","text":"SSIDを隠すだけで十分とする"},{"id":"b","text":"暗号化を無効にする"},{"id":"c","text":"強固な暗号方式を使い，認証と鍵管理を適切に行う"},{"id":"d","text":"全利用者で同じ鍵を公開する"}]','"c"','SSID秘匿だけでは十分ではなく，強固な暗号化と認証が必要である。','generated',NULL,'ja'),
 ('sg-pred-bulk-248','exam-sg','Webセキュリティ','standard','single_choice','SQLインジェクションへの代表的な対策はどれか。（ケース09）','[{"id":"a","text":"入力値をHTMLに表示するだけで対策済みとする"},{"id":"b","text":"データベースの監査を停止する"},{"id":"c","text":"エラーメッセージを詳細に外部公開する"},{"id":"d","text":"プレースホルダを用いたパラメータ化クエリを使用する"}]','"d"','SQL文と入力値を分離するパラメータ化が有効である。','generated',NULL,'ja'),
 ('sg-pred-bulk-249','exam-sg','Webセキュリティ','standard','single_choice','クロスサイトスクリプティング（XSS）対策として適切なものはどれか。（ケース09）','[{"id":"a","text":"出力先の文脈に応じて適切にエスケープする"},{"id":"b","text":"すべての入力をSQL文に連結する"},{"id":"c","text":"Cookieの有効期限を延ばすだけにする"},{"id":"d","text":"TLSを使えばアプリケーション対策は不要とする"}]','"a"','出力時の適切なエンコードなどでスクリプト実行を防ぐ。','generated',NULL,'ja'),
-('sg-pred-bulk-250','exam-sg','マルウェア','standard','single_choice','不審な添付ファイルを開いた可能性がある端末への初動として適切なものはどれか。（ケース09）','[{"id":"a","text":"証拠を残さず端末を初期化する"},{"id":"b","text":"ネットワークから隔離し，担当窓口へ報告して調査に必要な情報を保全する"},{"id":"c","text":"添付ファイルを社内全員へ転送する"},{"id":"d","text":"警告を無視して作業を続ける"}]','"b"','隔離・報告・証拠保全を優先し，組織の手順に従う。','generated',NULL,'ja'),
+('sg-pred-bulk-250','exam-sg','マルウェア','standard','single_choice','不審な添付ファイルを開いた可能性がある端末への初動として適切なものはどれか。（ケース09）','[{"id":"a","text":"証拠を残さず端末を初期化する"},{"id":"b","text":"ネットワークから隔離し，担当窓口へ報告して調査に必要な情報を保全する"},{"id":"c","text":"添付ファイルを社内全員へ転送する"},{"id":"d","text":"警告を無視して作業を続ける"}]','"b"','隔離・報告・証拠保全を優先し，組織の手順に従う。','generated',NULL,'ja');
+
+INSERT OR IGNORE INTO questions
+  (id, track_id, topic, difficulty, question_type, prompt, options_json, answer_json, explanation, source_type, source_reference, language)
+VALUES
 ('sg-pred-bulk-251','exam-sg','物理セキュリティ','standard','single_choice','機密書類を廃棄する際の対応として最も適切なものはどれか。（ケース09）','[{"id":"a","text":"一般ごみ箱へそのまま捨てる"},{"id":"b","text":"廃棄前に共有スペースへ置く"},{"id":"c","text":"復元困難な方法で廃棄し，定められた手順と記録を守る"},{"id":"d","text":"廃棄記録を必ず省略する"}]','"c"','機密度に応じた安全な廃棄方法と手順が必要である。','generated',NULL,'ja'),
 ('sg-pred-bulk-252','exam-sg','内部統制','standard','single_choice','職務分掌を行う主な目的はどれか。（ケース09）','[{"id":"a","text":"全業務を一人で完結させる"},{"id":"b","text":"承認記録をなくす"},{"id":"c","text":"すべての利用者に同じ権限を与える"},{"id":"d","text":"一人に権限や処理が集中することを防ぎ，不正や誤りを発見しやすくする"}]','"d"','職務を分離することで不正防止と相互牽制を実現する。','generated',NULL,'ja'),
 ('sg-pred-bulk-253','exam-sg','監査','standard','single_choice','システム監査人の独立性を保つために適切なものはどれか。（ケース09）','[{"id":"a","text":"監査対象業務の設計・運用責任を負う立場から独立して監査する"},{"id":"b","text":"自分が設計した統制を自分だけで監査する"},{"id":"c","text":"監査結果を対象部門に無条件で変更させる"},{"id":"d","text":"証拠を収集せず口頭説明だけで結論を出す"}]','"a"','監査人は対象業務の責任から独立し，十分な証拠に基づき評価する。','generated',NULL,'ja'),
@@ -302,7 +326,11 @@ VALUES
 ('sg-pred-bulk-297','exam-sg','ログ管理','standard','single_choice','不正アクセス調査に利用するログの信頼性を高める対策はどれか。（ケース11）','[{"id":"a","text":"時刻を同期し，書込み権限を制限して改ざんを検知できる形で保管する"},{"id":"b","text":"利用者が自由にログを書き換えられるようにする"},{"id":"c","text":"記録時刻を端末ごとに任意に設定する"},{"id":"d","text":"重要なログを毎日無条件に削除する"}]','"a"','時刻同期，アクセス制御，改ざん検知が調査の信頼性を高める。','generated',NULL,'ja'),
 ('sg-pred-bulk-298','exam-sg','個人情報','standard','single_choice','分析業務を外部委託する際，提供する個人データを減らす考え方はどれか。（ケース11）','[{"id":"a","text":"保有する個人情報をすべて提供する"},{"id":"b","text":"目的達成に必要な範囲に限定し，必要に応じて識別性を下げる加工を行う"},{"id":"c","text":"提供後の委託先管理を省略する"},{"id":"d","text":"データを一般公開する"}]','"b"','データ最小化と委託先監督で漏えい時の影響を抑える。','generated',NULL,'ja'),
 ('sg-pred-bulk-299','exam-sg','委託先管理','standard','single_choice','機密情報を扱う業務を外部委託する場合，委託元が行うべきことはどれか。（ケース11）','[{"id":"a","text":"契約後は委託先の管理状況を確認しない"},{"id":"b","text":"委託した時点で責任がすべて移ると考える"},{"id":"c","text":"安全管理要件を契約に定め，委託先の実施状況を確認する"},{"id":"d","text":"業務に無関係なデータも閲覧可能にする"}]','"c"','委託元は適切な選定・契約・監督を行う。','generated',NULL,'ja'),
-('sg-pred-bulk-300','exam-sg','変更管理','standard','single_choice','本番システムの設定変更による障害リスクを抑える方法はどれか。（ケース11）','[{"id":"a","text":"担当者が記録せず直接変更する"},{"id":"b","text":"旧設定を復元できないよう削除する"},{"id":"c","text":"利用者への影響確認を省略する"},{"id":"d","text":"影響評価，承認，事前テスト，切戻し手順を用意する"}]','"d"','変更管理では承認，テスト，記録，切戻し計画が重要である。','generated',NULL,'ja'),
+('sg-pred-bulk-300','exam-sg','変更管理','standard','single_choice','本番システムの設定変更による障害リスクを抑える方法はどれか。（ケース11）','[{"id":"a","text":"担当者が記録せず直接変更する"},{"id":"b","text":"旧設定を復元できないよう削除する"},{"id":"c","text":"利用者への影響確認を省略する"},{"id":"d","text":"影響評価，承認，事前テスト，切戻し手順を用意する"}]','"d"','変更管理では承認，テスト，記録，切戻し計画が重要である。','generated',NULL,'ja');
+
+INSERT OR IGNORE INTO questions
+  (id, track_id, topic, difficulty, question_type, prompt, options_json, answer_json, explanation, source_type, source_reference, language)
+VALUES
 ('sg-pred-bulk-301','exam-sg','事業継続','standard','single_choice','災害後にシステムを復旧させるまでの目標時間を示す指標はどれか。（ケース11）','[{"id":"a","text":"RTO"},{"id":"b","text":"RPO"},{"id":"c","text":"MTBF"},{"id":"d","text":"稼働率"}]','"a"','RTOは目標復旧時間，RPOは目標復旧時点である。','generated',NULL,'ja'),
 ('sg-pred-bulk-302','exam-sg','リスク管理','standard','single_choice','対策コストが過大で，組織の許容基準内のリスクを受け入れる対応はどれか。（ケース11）','[{"id":"a","text":"リスク回避"},{"id":"b","text":"リスク受容"},{"id":"c","text":"リスク移転"},{"id":"d","text":"リスク低減"}]','"b"','リスク受容は評価したリスクを基準に照らして受け入れる対応である。','generated',NULL,'ja'),
 ('sg-pred-bulk-303','exam-sg','メールセキュリティ','standard','single_choice','送信ドメインのなりすまし対策として，送信元ドメインの認証結果を受信側で検証する仕組みはどれか。（ケース11）','[{"id":"a","text":"メール本文を圧縮する"},{"id":"b","text":"受信者全員に管理者権限を付与する"},{"id":"c","text":"SPF・DKIM・DMARCなどを適切に設定する"},{"id":"d","text":"送信ログを停止する"}]','"c"','送信ドメイン認証の設定とポリシー運用がなりすまし対策になる。','generated',NULL,'ja'),
@@ -352,7 +380,11 @@ VALUES
 ('sg-pred-bulk-347','exam-sg','教育','standard','single_choice','標的型メール訓練の適切な目的はどれか。（ケース12）','[{"id":"a","text":"失敗した社員を公開処罰する"},{"id":"b","text":"実際のパスワードを収集する"},{"id":"c","text":"訓練結果から報告行動や教育内容を改善する"},{"id":"d","text":"メール防御機能をすべて停止する"}]','"c"','訓練は気付きと報告行動，組織の対策改善につなげる。','generated',NULL,'ja'),
 ('sg-pred-bulk-348','exam-sg','プライバシー','standard','single_choice','個人データの利用目的を変更する場合に必要な考え方はどれか。（ケース12）','[{"id":"a","text":"利用目的を無制限に拡張する"},{"id":"b","text":"目的を社内記録から削除する"},{"id":"c","text":"外部委託先に自由な二次利用を認める"},{"id":"d","text":"適用法令と本人への通知・公表等の要件を確認し，目的の範囲を適切に管理する"}]','"d"','個人データは利用目的と法令上の要件に従って取り扱う。','generated',NULL,'ja'),
 ('sg-pred-bulk-349','exam-sg','アクセス制御','standard','single_choice','社外委託先の担当者が契約終了後も業務システムへログインできる状態を発見した。最も適切な対応はどれか。（ケース13）','[{"id":"a","text":"契約終了を確認し，アカウントと認証情報を速やかに無効化してログを確認する"},{"id":"b","text":"アカウントを残し，次の担当者が使えるようにする"},{"id":"c","text":"監査ログを削除してから対応する"},{"id":"d","text":"全社員の権限を管理者に変更する"}]','"a"','契約終了後の不要な権限を削除し，アクセス履歴も確認する。','generated',NULL,'ja'),
-('sg-pred-bulk-350','exam-sg','インシデント対応','standard','single_choice','機密情報が外部に送信された疑いがある。最初に行う対応として最も適切なものはどれか。（ケース13）','[{"id":"a","text":"関係するログをすべて削除する"},{"id":"b","text":"定められた連絡先へ速やかに報告し，証拠を保全しながら拡大を防ぐ"},{"id":"c","text":"原因が確定するまで誰にも知らせない"},{"id":"d","text":"端末を初期化して調査記録を残さない"}]','"b"','初動では報告，拡大防止，証拠保全を並行して進める。','generated',NULL,'ja'),
+('sg-pred-bulk-350','exam-sg','インシデント対応','standard','single_choice','機密情報が外部に送信された疑いがある。最初に行う対応として最も適切なものはどれか。（ケース13）','[{"id":"a","text":"関係するログをすべて削除する"},{"id":"b","text":"定められた連絡先へ速やかに報告し，証拠を保全しながら拡大を防ぐ"},{"id":"c","text":"原因が確定するまで誰にも知らせない"},{"id":"d","text":"端末を初期化して調査記録を残さない"}]','"b"','初動では報告，拡大防止，証拠保全を並行して進める。','generated',NULL,'ja');
+
+INSERT OR IGNORE INTO questions
+  (id, track_id, topic, difficulty, question_type, prompt, options_json, answer_json, explanation, source_type, source_reference, language)
+VALUES
 ('sg-pred-bulk-351','exam-sg','脆弱性管理','standard','single_choice','外部公開サーバに重大な脆弱性が公表された。最も適切な対応はどれか。（ケース13）','[{"id":"a","text":"攻撃を受けるまで何もしない"},{"id":"b","text":"脆弱性情報を社内から隠す"},{"id":"c","text":"影響と緊急度を評価し，検証と変更管理を経て修正または暫定対策を実施する"},{"id":"d","text":"ログを停止して負荷を下げる"}]','"c"','影響評価に基づき，検証済みの修正や暫定対策を優先する。','generated',NULL,'ja'),
 ('sg-pred-bulk-352','exam-sg','バックアップ','standard','single_choice','バックアップから業務データを復旧できることを確かめる方法はどれか。（ケース13）','[{"id":"a","text":"ファイル名が存在することだけ確認する"},{"id":"b","text":"本番環境と同じディスクに一つだけ保存する"},{"id":"c","text":"バックアップ取得後は検証しない"},{"id":"d","text":"定期的に復元テストを実施し，結果を記録する"}]','"d"','実際に復元できるかをテストすることが重要である。','generated',NULL,'ja'),
 ('sg-pred-bulk-353','exam-sg','認証','standard','single_choice','パスワード漏えいのリスクを下げるため，管理者アカウントに適用する対策はどれか。（ケース13）','[{"id":"a","text":"多要素認証を有効にし，特権利用を必要最小限にする"},{"id":"b","text":"全員で同じ管理者パスワードを共有する"},{"id":"c","text":"パスワードをソースコードに記載する"},{"id":"d","text":"認証ログを記録しない"}]','"a"','多要素認証と特権アクセス管理を組み合わせる。','generated',NULL,'ja'),
@@ -402,7 +434,11 @@ VALUES
 ('sg-pred-bulk-397','exam-sg','内部統制','standard','single_choice','職務分掌を行う主な目的はどれか。（ケース14）','[{"id":"a","text":"一人に権限や処理が集中することを防ぎ，不正や誤りを発見しやすくする"},{"id":"b","text":"全業務を一人で完結させる"},{"id":"c","text":"承認記録をなくす"},{"id":"d","text":"すべての利用者に同じ権限を与える"}]','"a"','職務を分離することで不正防止と相互牽制を実現する。','generated',NULL,'ja'),
 ('sg-pred-bulk-398','exam-sg','監査','standard','single_choice','システム監査人の独立性を保つために適切なものはどれか。（ケース14）','[{"id":"a","text":"自分が設計した統制を自分だけで監査する"},{"id":"b","text":"監査対象業務の設計・運用責任を負う立場から独立して監査する"},{"id":"c","text":"監査結果を対象部門に無条件で変更させる"},{"id":"d","text":"証拠を収集せず口頭説明だけで結論を出す"}]','"b"','監査人は対象業務の責任から独立し，十分な証拠に基づき評価する。','generated',NULL,'ja'),
 ('sg-pred-bulk-399','exam-sg','サービス管理','standard','single_choice','サービスに計画外の中断や品質低下が発生した場合，通常は何として記録・管理するか。（ケース14）','[{"id":"a","text":"既知の誤り"},{"id":"b","text":"変更要求"},{"id":"c","text":"インシデント"},{"id":"d","text":"サービスカタログ"}]','"c"','インシデントはサービスの中断・品質低下などを扱う。','generated',NULL,'ja'),
-('sg-pred-bulk-400','exam-sg','開発管理','standard','single_choice','ソフトウェア変更の影響範囲を把握するために行うことはどれか。（ケース14）','[{"id":"a","text":"変更したファイル名だけを確認する"},{"id":"b","text":"テストを常に省略する"},{"id":"c","text":"変更記録を削除する"},{"id":"d","text":"関連する要件，設計，コード，テスト，利用者への影響を追跡する"}]','"d"','影響分析は関連成果物と利用者への影響を確認する。','generated',NULL,'ja'),
+('sg-pred-bulk-400','exam-sg','開発管理','standard','single_choice','ソフトウェア変更の影響範囲を把握するために行うことはどれか。（ケース14）','[{"id":"a","text":"変更したファイル名だけを確認する"},{"id":"b","text":"テストを常に省略する"},{"id":"c","text":"変更記録を削除する"},{"id":"d","text":"関連する要件，設計，コード，テスト，利用者への影響を追跡する"}]','"d"','影響分析は関連成果物と利用者への影響を確認する。','generated',NULL,'ja');
+
+INSERT OR IGNORE INTO questions
+  (id, track_id, topic, difficulty, question_type, prompt, options_json, answer_json, explanation, source_type, source_reference, language)
+VALUES
 ('sg-pred-bulk-401','exam-sg','データ管理','standard','single_choice','データの正確性と完全性を高める入力時の対策はどれか。（ケース14）','[{"id":"a","text":"形式・範囲・必須項目などを検証し，エラーを適切に処理する"},{"id":"b","text":"すべての入力検証を無効にする"},{"id":"c","text":"入力値を確認せず自動承認する"},{"id":"d","text":"エラー記録を残さない"}]','"a"','入力チェックと例外処理で不正確なデータの混入を防ぐ。','generated',NULL,'ja'),
 ('sg-pred-bulk-402','exam-sg','クラウド','standard','single_choice','クラウドストレージで社外の特定担当者と機密ファイルを共有する設定はどれか。（ケース14）','[{"id":"a","text":"リンクを知る全員に編集権限を付与する"},{"id":"b","text":"共有相手を指定し，最小権限と有効期限を設定する"},{"id":"c","text":"公開設定にしてパスワードをファイル名に含める"},{"id":"d","text":"監査ログを無効にする"}]','"b"','共有先と権限を限定し，期限やアクセス状況を管理する。','generated',NULL,'ja'),
 ('sg-pred-bulk-403','exam-sg','暗号・署名','standard','single_choice','電子署名によって主に確認できることはどれか。（ケース14）','[{"id":"a","text":"通信速度の向上"},{"id":"b","text":"データの圧縮率"},{"id":"c","text":"署名対象の完全性と，署名鍵に対応する署名者の確認"},{"id":"d","text":"署名対象の内容を秘密にすること"}]','"c"','電子署名は改ざん検知や署名者の確認に役立つが，内容の秘匿は暗号化の役割である。','generated',NULL,'ja'),
@@ -452,5 +488,9 @@ VALUES
 ('sg-pred-bulk-447','exam-sg','リスク管理','standard','single_choice','対策コストが過大で，組織の許容基準内のリスクを受け入れる対応はどれか。（ケース16）','[{"id":"a","text":"リスク回避"},{"id":"b","text":"リスク移転"},{"id":"c","text":"リスク受容"},{"id":"d","text":"リスク低減"}]','"c"','リスク受容は評価したリスクを基準に照らして受け入れる対応である。','generated',NULL,'ja'),
 ('sg-pred-bulk-448','exam-sg','メールセキュリティ','standard','single_choice','送信ドメインのなりすまし対策として，送信元ドメインの認証結果を受信側で検証する仕組みはどれか。（ケース16）','[{"id":"a","text":"メール本文を圧縮する"},{"id":"b","text":"受信者全員に管理者権限を付与する"},{"id":"c","text":"送信ログを停止する"},{"id":"d","text":"SPF・DKIM・DMARCなどを適切に設定する"}]','"d"','送信ドメイン認証の設定とポリシー運用がなりすまし対策になる。','generated',NULL,'ja'),
 ('sg-pred-bulk-449','exam-sg','ネットワーク','standard','single_choice','IPアドレスに対応するドメイン名などを問い合わせる仕組みはどれか。（ケース16）','[{"id":"a","text":"DNS"},{"id":"b","text":"DHCP"},{"id":"c","text":"NAT"},{"id":"d","text":"ARP"}]','"a"','DNSは名前解決を行い，DHCPはIP設定の配布などを行う。','generated',NULL,'ja'),
-('sg-pred-bulk-450','exam-sg','無線LAN','standard','single_choice','社内無線LANの盗聴リスクを下げる対策として最も適切なものはどれか。（ケース16）','[{"id":"a","text":"SSIDを隠すだけで十分とする"},{"id":"b","text":"強固な暗号方式を使い，認証と鍵管理を適切に行う"},{"id":"c","text":"暗号化を無効にする"},{"id":"d","text":"全利用者で同じ鍵を公開する"}]','"b"','SSID秘匿だけでは十分ではなく，強固な暗号化と認証が必要である。','generated',NULL,'ja'),
+('sg-pred-bulk-450','exam-sg','無線LAN','standard','single_choice','社内無線LANの盗聴リスクを下げる対策として最も適切なものはどれか。（ケース16）','[{"id":"a","text":"SSIDを隠すだけで十分とする"},{"id":"b","text":"強固な暗号方式を使い，認証と鍵管理を適切に行う"},{"id":"c","text":"暗号化を無効にする"},{"id":"d","text":"全利用者で同じ鍵を公開する"}]','"b"','SSID秘匿だけでは十分ではなく，強固な暗号化と認証が必要である。','generated',NULL,'ja');
+
+INSERT OR IGNORE INTO questions
+  (id, track_id, topic, difficulty, question_type, prompt, options_json, answer_json, explanation, source_type, source_reference, language)
+VALUES
 ('sg-pred-bulk-451','exam-sg','Webセキュリティ','standard','single_choice','SQLインジェクションへの代表的な対策はどれか。（ケース16）','[{"id":"a","text":"入力値をHTMLに表示するだけで対策済みとする"},{"id":"b","text":"データベースの監査を停止する"},{"id":"c","text":"プレースホルダを用いたパラメータ化クエリを使用する"},{"id":"d","text":"エラーメッセージを詳細に外部公開する"}]','"c"','SQL文と入力値を分離するパラメータ化が有効である。','generated',NULL,'ja');
