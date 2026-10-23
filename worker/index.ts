@@ -830,6 +830,43 @@ export default {
       }
     }
 
+    // 手动汇总的历史考试成绩从浏览器迁移到 D1；客户端为每条记录生成稳定 ID，重复提交不会重复计数。
+    if (url.pathname === '/api/exam-history') {
+      if (request.method === 'GET') {
+        try {
+          const { results } = await env.DB.prepare(
+            'SELECT id, study_date AS date, correct_count AS correct, question_count AS total, exam_name AS exam, created_at FROM exam_history ORDER BY study_date, created_at, id',
+          ).all()
+          return json({ items: results })
+        } catch {
+          return json({ error: '考试历史表尚未初始化，请先应用最新 D1 迁移。' }, 503)
+        }
+      }
+      if (request.method === 'POST') {
+        let body: Record<string, unknown>
+        try { body = await request.json() as Record<string, unknown> }
+        catch { return json({ error: '请求体必须是 JSON。' }, 400) }
+        const id = String(body.id || '').trim()
+        const date = String(body.date || '')
+        const exam = String(body.exam || '').trim().slice(0, 100)
+        const total = Number(body.total)
+        const correct = Number(body.correct)
+        if (!/^[a-zA-Z0-9_-]{8,80}$/.test(id) || !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+            !exam || !Number.isInteger(total) || total < 1 || total > 10000 ||
+            !Number.isInteger(correct) || correct < 0 || correct > total) {
+          return json({ error: '考试记录格式无效。' }, 400)
+        }
+        try {
+          await env.DB.prepare(
+            'INSERT INTO exam_history (id, study_date, exam_name, question_count, correct_count) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO NOTHING',
+          ).bind(id, date, exam, total, correct).run()
+          return json({ ok: true, id }, 201)
+        } catch {
+          return json({ error: '考试历史保存失败，请确认已应用最新 D1 迁移。' }, 503)
+        }
+      }
+    }
+
     // 答题记录保存到 D1；此个人版尚未配置账号认证，不应存放敏感个人信息。
     if (url.pathname === '/api/attempts' && request.method === 'POST') {
       let body: Record<string, unknown>
