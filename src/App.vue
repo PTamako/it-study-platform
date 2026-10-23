@@ -1019,11 +1019,6 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
 
             <section class="practice-section">
               <div class="section-heading practice-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2><p>从题库中抽题，提交后立即查看答案与解析。</p></div></div>
-              <div class="question-bank-stats" aria-label="题库导入进度">
-                <div class="question-bank-stat total"><span>总题量</span><strong>{{ selectedTrack?.question_count || 0 }} <small>/ 1,100</small></strong><div class="question-bank-stat-track"><span :style="{ width: Math.min(100, (selectedTrack?.question_count || 0) / 1100 * 100) + '%' }"></span></div></div>
-                <div class="question-bank-stat official"><span>历年真题</span><strong>{{ selectedTrack?.official_question_count || 0 }} <small>/ 448</small></strong><div class="question-bank-stat-track"><span :style="{ width: Math.min(100, (selectedTrack?.official_question_count || 0) / 448 * 100) + '%' }"></span></div></div>
-                <div class="question-bank-stat generated"><span>原创预测</span><strong>{{ selectedTrack?.prediction_question_count || 0 }} <small>/ 652</small></strong><div class="question-bank-stat-track"><span :style="{ width: Math.min(100, (selectedTrack?.prediction_question_count || 0) / 652 * 100) + '%' }"></span></div></div>
-              </div>
               <div class="question-source-filters" role="group" aria-label="题目来源筛选">
                 <button v-for="filter in questionSourceFilters" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" @click="selectQuestionSource(filter.id)">{{ filter.label }}（{{ filter.id === 'official' ? (selectedTrack?.official_question_count || 0) : (selectedTrack?.prediction_question_count || 0) }}）</button>
               </div>
