@@ -950,7 +950,7 @@ export default {
     // 返回指定考试的练习题。source_type 会明确标记自编练习题，不冒充官方真题。
     if (url.pathname === '/api/questions') {
       const trackId = url.searchParams.get('track') || 'exam-sg'
-      const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 10)))
+      const limit = Math.min(60, Math.max(1, Number(url.searchParams.get('limit') || 10)))
       const topic = (url.searchParams.get('topic') || '').trim().slice(0, 100)
       const mode = url.searchParams.get('mode') || 'random'
       const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
