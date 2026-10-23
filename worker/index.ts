@@ -528,7 +528,9 @@ export default {
       try {
         const { results } = await env.DB.prepare(
           `SELECT st.id, st.kind, st.title, st.subtitle,
-                  (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id) AS question_count
+                  (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id) AS question_count,
+                  (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id AND q.source_type = 'official') AS official_question_count,
+                  (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id AND q.source_type = 'generated') AS prediction_question_count
            FROM study_tracks st
            WHERE st.enabled = 1
            ORDER BY st.kind, st.title`,
@@ -952,7 +954,7 @@ export default {
       const topic = (url.searchParams.get('topic') || '').trim().slice(0, 100)
       const mode = url.searchParams.get('mode') || 'random'
       const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
-      const source = ['all', 'official', 'generated', 'licensed'].includes(requestedSource) ? requestedSource : 'all'
+      const source = ['all', 'official', 'generated'].includes(requestedSource) ? requestedSource : 'all'
       try {
         const { results } = await env.DB.prepare(
           `SELECT id, track_id, topic, difficulty, question_type, prompt,
