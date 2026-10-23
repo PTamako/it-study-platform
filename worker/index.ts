@@ -725,6 +725,23 @@ export default {
       }
     }
 
+    // 官方题源目录：只返回来源元数据与官方链接，不复制第三方题库。
+    if (url.pathname === '/api/question-sources' && request.method === 'GET') {
+      const examCode = (url.searchParams.get('exam') || 'SG').trim().slice(0, 12).toUpperCase()
+      try {
+        const { results } = await env.DB.prepare(
+          `SELECT id, exam_code, year_label, subject_label, title, source_url,
+                  content_mode, license_note, checked_at, notes
+           FROM question_sources
+           WHERE exam_code = ?
+           ORDER BY year_label DESC, id`,
+        ).bind(examCode).all()
+        return json({ items: results })
+      } catch {
+        return json({ items: [], error: '官方题源目录尚未初始化，请先执行 D1 迁移 0011、0012。' }, 503)
+      }
+    }
+
     // 返回指定考试的练习题。source_type 会明确标记自编练习题，不冒充官方真题。
     if (url.pathname === '/api/questions') {
       const trackId = url.searchParams.get('track') || 'exam-sg'
