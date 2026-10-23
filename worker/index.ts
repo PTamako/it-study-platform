@@ -634,6 +634,36 @@ export default {
       }
     }
 
+    // 错题复习：只返回当前考试中至少答错过一次的题目，按错误次数优先排列。
+    if (url.pathname === '/api/wrong-questions' && request.method === 'GET') {
+      const trackId = (url.searchParams.get('track') || 'exam-sg').trim().slice(0, 80)
+      const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 30)))
+      try {
+        const { results } = await env.DB.prepare(
+          `SELECT q.id, q.track_id, q.topic, q.difficulty, q.question_type, q.prompt,
+                  q.options_json, q.answer_json, q.explanation, q.source_type, q.source_reference, q.language,
+                  COUNT(*) AS wrong_count, MAX(a.answered_at) AS last_wrong_at
+           FROM questions q
+           INNER JOIN study_attempts a ON a.question_id = q.id AND a.is_correct = 0
+           WHERE q.track_id = ?
+           GROUP BY q.id
+           ORDER BY wrong_count DESC, last_wrong_at DESC, q.id
+           LIMIT ?`,
+        ).bind(trackId, limit).all()
+        return json({
+          items: results.map((row: Record<string, unknown>) => ({
+            ...row,
+            options: JSON.parse(String(row.options_json || '[]')),
+            answer: JSON.parse(String(row.answer_json || 'null')),
+            options_json: undefined,
+            answer_json: undefined,
+          })),
+        })
+      } catch {
+        return json({ error: '错题记录暂不可用，请确认 D1 迁移已完成。' }, 503)
+      }
+    }
+
     // 答题记录保存到 D1；此个人版尚未配置账号认证，不应存放敏感个人信息。
     if (url.pathname === '/api/attempts' && request.method === 'POST') {
       let body: Record<string, unknown>
