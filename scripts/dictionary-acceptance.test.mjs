@@ -63,3 +63,9 @@ test('English alias results never reuse a Japanese headword reading as English k
     assert.match(worker, new RegExp(term + ":"))
   }
 })
+
+test('changing dictionary language invalidates previous results and pending requests', () => {
+  assert.match(app, /function setDictionaryLanguage\(language: 'auto' \| 'ja' \| 'en' \| 'it'\)/)
+  assert.match(app, /dictionaryRequestId \+= 1/)
+  assert.match(app, /@click="setDictionaryLanguage\('it'\)"/)
+})
