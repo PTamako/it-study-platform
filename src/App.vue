@@ -521,10 +521,10 @@ function getQuestionLanguage(question: PracticeQuestion): 'ja' | 'en' | 'zh' {
   if (language.startsWith('zh')) return 'zh'
   if (language.startsWith('en')) return 'en'
   if (language.startsWith('ja')) return 'ja'
-  const text = question.prompt + '\\n' + question.explanation
-  if (/[\\u3040-\\u30ff]/.test(text)) return 'ja'
-  if (/[a-z]{4,}/i.test(text) && !/[\\u3400-\\u9fff]/.test(text)) return 'en'
-  return /[\\u3400-\\u9fff]/.test(text) ? 'zh' : 'ja'
+  const text = question.prompt + '\n' + question.explanation
+  if (/[\u3040-\u30ff]/.test(text)) return 'ja'
+  if (/[a-z]{4,}/i.test(text) && !/[\u3400-\u9fff]/.test(text)) return 'en'
+  return /[\u3400-\u9fff]/.test(text) ? 'zh' : 'ja'
 }
 async function translateQuestionExplanation(question: PracticeQuestion | null) {
   if (!question?.explanation?.trim()) return
