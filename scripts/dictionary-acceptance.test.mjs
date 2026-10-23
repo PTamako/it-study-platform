@@ -92,3 +92,16 @@ test('speech stops when leaving a module or switching exam/practical content', (
   assert.match(app, /function nextPracticeQuestion\(\) \{\s*stopSpeech\(\)/)
   assert.match(app, /function nextScenario\(\) \{\s*stopSpeech\(\)/)
 })
+
+
+test('language learning cards and active-recall cards have original/example playback and speech controls', () => {
+  assert.match(app, /function speakLanguageCard\(card: LanguageCard \| null, example = false, practice = false\)/)
+  assert.match(app, /speak\(text \|\| '', lang, \x60\$\{practice \? 'language-practice' : 'language-card'\}:\$\{card\.id\}:\$\{example \? 'example' : 'term'\}\x60\)/)
+  assert.match(app, /speechStatusTarget\.startsWith\('language-practice:' \+ languagePracticeCard\.id/)
+  assert.match(app, /speechStatusTarget\.startsWith\('language-card:' \+ card\.id/)
+  assert.match(app, /播放原文/)
+  assert.match(app, /播放例句/)
+  assert.match(app, /继续播放/)
+  assert.match(app, /@click="stopSpeech">停止/)
+  assert.match(app, /function nextLanguagePractice\(\) \{\s*stopSpeech\(\)/)
+})
