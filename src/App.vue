@@ -1060,11 +1060,21 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   const normalize = (value: string) => value.toLowerCase().replace('_', '-')
   const normalizedLang = normalize(lang)
   const prefix = normalizedLang.slice(0, 2)
-  const voices = synthesis.getVoices().filter(voice => normalize(voice.lang).startsWith(prefix))
-  const voice = voices.find(candidate => /natural|enhanced|premium|siri|daniel|karen|ava|alex|samantha|kyoko|otoya/i.test(candidate.name))
+  const availableVoices = synthesis.getVoices()
+  const voices = availableVoices.filter(voice => normalize(voice.lang).startsWith(prefix))
+  const voice = voices.find(candidate => normalize(candidate.lang) === normalizedLang && /natural|enhanced|premium|siri|daniel|karen|ava|alex|samantha|kyoko|otoya/i.test(candidate.name))
     || voices.find(candidate => normalize(candidate.lang) === normalizedLang && candidate.localService)
     || voices.find(candidate => normalize(candidate.lang) === normalizedLang)
-    || voices[0]
+    || voices.find(candidate => /natural|enhanced|premium|siri|daniel|karen|ava|alex|samantha|kyoko|otoya/i.test(candidate.name))
+  // Never fall back to voices[0]: that voice may be Chinese or the opposite target language.
+  // If the browser has loaded voices but none for this language, fail visibly rather than
+  // silently speaking Japanese text with an English voice (or vice versa).
+  if (availableVoices.length > 0 && voices.length === 0) {
+    speechStatus.value = lang === 'ja-JP'
+      ? '未检测到日语语音。请在系统语音设置中安装日语语音后重试。'
+      : '未检测到英语语音。请在系统语音设置中安装英语语音后重试。'
+    return
+  }
   if (voice) utterance.voice = voice
 
   let hasStarted = false
@@ -1248,7 +1258,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <div class="word-letter">{{ (entry.language === 'en' && entry.englishTerm ? entry.englishTerm : entry.term).slice(0,1) }}</div>
                 <div class="word-details"><strong>{{ entry.language === 'en' && entry.englishTerm ? entry.englishTerm : entry.term }} <small>{{ entry.reading || entry.phonetic || '' }}</small></strong><span>{{ entry.en || entry.translationJa || '' }}</span></div>
                 <button v-if="entry.englishTerm || entry.language === 'en'" class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" aria-label="播放英语发音" title="播放英语发音"><Volume2 :size="14" /><span>EN</span></button>
-                <button v-if="entry.reading || entry.language === 'ja'" class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" aria-label="播放日语读音" title="播放日语读音"><Languages :size="14" /><span>日</span></button>
+                <button v-if="entry.reading || entry.language === 'ja' || entry.language === 'en' || entry.englishTerm" class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" aria-label="播放日语辅助读音" title="播放日语辅助读音（片假名为近似提示）"><Languages :size="14" /><span>日</span></button>
               </div>
               <div v-if="recentDictionaryEntries.length === 0" class="recent-dictionary-empty">查过的词会显示在这里，方便继续复习。</div>
             </div>
@@ -1579,7 +1589,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               <button v-if="searchText" class="clear-search" @click="clearDictionarySearch">清空</button>
               <button class="dictionary-search-button" :disabled="dictionaryLoading" @click="lookupDictionary">{{ dictionaryLoading ? '查找中…' : '查词' }}</button>
             </div>
-            <p>以英语学习为主：播放英语原音，结合 IPA 音标和日语片假名辅助读音练习；日语查询可查看对应英文释义。IT 术语优先使用本地词库，无需在线翻译。</p>
+            <p>以英语学习为主：分别播放英语原音与日语辅助读音；结合 IPA 音标和片假名近似提示练习。日语查询可查看对应英文释义。IT 术语优先使用本地词库，无需在线翻译。</p>
             <p v-if="dictionaryLoading" class="dictionary-status">正在查词…</p>
             <p v-else-if="dictionaryError" class="dictionary-status dictionary-error">{{ dictionaryError }}</p>
             <div v-if="!searchText.trim() && !dictionaryLoading" class="dictionary-quick-start"><span>试试查询</span><button @click="quickDictionarySearch('hello', 'en')">hello <small>英语</small></button><button @click="quickDictionarySearch('こんにちは', 'ja')">こんにちは <small>日语</small></button><button @click="quickDictionarySearch('認証', 'it')">認証 <small>IT</small></button><button @click="quickDictionarySearch('ハッシュ', 'it')">ハッシュ <small>安全</small></button><button @click="quickDictionarySearch('API', 'it')">API <small>接口</small></button><button @click="quickDictionarySearch('トランザクション', 'it')">トランザクション <small>数据库</small></button><button @click="quickDictionarySearch('CORS', 'it')">CORS <small>跨域</small></button><button @click="quickDictionarySearch('コンポーネント', 'it')">コンポーネント <small>前端</small></button><button @click="quickDictionarySearch('Cloudflare D1', 'it')">Cloudflare D1 <small>云数据库</small></button><button @click="quickDictionarySearch('プルリクエスト', 'it')">プルリクエスト <small>Git协作</small></button></div>
@@ -1597,7 +1607,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <p v-if="entry.technical" class="dictionary-tech-note">来自 IT 专业词汇库</p>
                   <p v-if="speechStatus && speechStatusTarget === entry.term" class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p>
                 </div>
-                <div class="dict-actions"><button v-if="entry.englishTerm || entry.language === 'en'" class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + (entry.englishTerm || entry.term)" title="播放英语原音"><Volume2 :size="14" /><span>EN</span></button><button v-if="entry.reading || entry.language === 'ja'" class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语读音：' + entry.term" title="播放日语读音"><Languages :size="14" /><span>日</span></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
+                <div class="dict-actions"><button v-if="entry.englishTerm || entry.language === 'en'" class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + (entry.englishTerm || entry.term)" title="播放英语原音"><Volume2 :size="14" /><span>EN</span></button><button v-if="entry.reading || entry.language === 'ja' || entry.language === 'en' || entry.englishTerm" class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语辅助读音：' + (entry.englishTerm || entry.term)" title="播放日语辅助读音（片假名为近似提示）"><Languages :size="14" /><span>日</span></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
               </article>
               <div v-if="lastSearchedTerm.trim().toLowerCase() === searchText.trim().toLowerCase() && displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>没有找到匹配词条</strong><p>可试试别名、英语缩写或日语术语；查 IT 专业词请选「IT」，该模式只查本地词库，不请求在线翻译。</p></div>
             </div>
