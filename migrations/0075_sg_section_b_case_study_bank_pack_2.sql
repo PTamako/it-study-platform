@@ -1,5 +1,5 @@
 -- Original SG Section B case-based practice pack, part 2.
--- 24 scenario contexts x 3 applied-decision questions = 72 authored questions.
+-- 32 scenario contexts x 3 applied-decision questions = 96 authored questions.
 -- Non-official content. Every row is explicitly classified B/case_pattern.
 
 INSERT OR IGNORE INTO questions (id, track_id, topic, difficulty, question_type, prompt, options_json, answer_json, explanation, source_type, source_reference, language, exam_section, exam_section_method) VALUES ('sg-b-case-193', 'exam-sg', 'フィッシング・QRコード', 'standard', 'single_choice', '展示会の受付に、社内アカウントでログインすると資料を受け取れるというQRコードが掲示されていた。社員が読み取ると見慣れないログイン画面が表示され、資格情報を入力する直前に不審さを感じて相談した。
