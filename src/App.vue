@@ -1564,10 +1564,10 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               <button v-if="searchText" class="clear-search" @click="clearDictionarySearch">清空</button>
               <button class="dictionary-search-button" :disabled="dictionaryLoading" @click="lookupDictionary">{{ dictionaryLoading ? '查找中…' : '查词' }}</button>
             </div>
-            <p>日常日语、英语和中文使用在线词典；选择「IT」可查询平台维护的专业术语库。输入后按回车或点击“查词”。</p>
-            <p v-if="dictionaryLoading" class="dictionary-status">正在查询在线词典…</p>
+            <p>优先检索本地 IT 词库：命中术语后直接返回中日英释义，不依赖在线翻译；普通词汇再尝试在线词典。选择「IT」可仅查本地专业词库。</p>
+            <p v-if="dictionaryLoading" class="dictionary-status">正在检索词库…</p>
             <p v-else-if="dictionaryError" class="dictionary-status dictionary-error">{{ dictionaryError }}</p>
-            <div v-if="!searchText.trim() && !dictionaryLoading" class="dictionary-quick-start"><span>试试查询</span><button @click="quickDictionarySearch('hello', 'en')">hello <small>英语</small></button><button @click="quickDictionarySearch('こんにちは', 'ja')">こんにちは <small>日语</small></button><button @click="quickDictionarySearch('認証', 'ja')">認証 <small>IT 术语</small></button><button @click="quickDictionarySearch('认证', 'zh')">认证 <small>中文</small></button></div>
+            <div v-if="!searchText.trim() && !dictionaryLoading" class="dictionary-quick-start"><span>试试查询</span><button @click="quickDictionarySearch('hello', 'en')">hello <small>英语</small></button><button @click="quickDictionarySearch('こんにちは', 'ja')">こんにちは <small>日语</small></button><button @click="quickDictionarySearch('認証', 'it')">認証 <small>IT</small></button><button @click="quickDictionarySearch('ハッシュ', 'it')">ハッシュ <small>安全</small></button><button @click="quickDictionarySearch('API', 'it')">API <small>接口</small></button><button @click="quickDictionarySearch('トランザクション', 'it')">トランザクション <small>数据库</small></button><button @click="quickDictionarySearch('CORS', 'it')">CORS <small>跨域</small></button><button @click="quickDictionarySearch('コンポーネント', 'it')">コンポーネント <small>前端</small></button><button @click="quickDictionarySearch('Cloudflare D1', 'it')">Cloudflare D1 <small>云数据库</small></button><button @click="quickDictionarySearch('プルリクエスト', 'it')">プルリクエスト <small>Git协作</small></button></div>
           </section>
           <section class="section-block">
             <div class="section-heading"><div><div class="section-kicker">WORD BANK</div><h2>多语言词典</h2><p>中文释义 · 日语读音 · 英语解释 · 例句与发音</p></div><span class="section-index">{{ displayedEntries.length }} 个结果</span></div>
@@ -1583,7 +1583,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 </div>
                 <div class="dict-actions"><button class="round-action" @click="speak(entry.term, entry.language === 'en' ? 'en-US' : entry.language === 'zh' ? 'zh-CN' : 'ja-JP')" :aria-label="'播放' + entry.term"><Volume2 :size="17" /></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
               </article>
-              <div v-if="lastSearchedTerm.trim().toLowerCase() === searchText.trim().toLowerCase() && displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>没有找到匹配词条</strong><p>可更换源语言，或用短词查询。若第三方词典暂时不可用，稍后可重试。</p></div>
+              <div v-if="lastSearchedTerm.trim().toLowerCase() === searchText.trim().toLowerCase() && displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>没有找到匹配词条</strong><p>可试试别名、英语缩写或日语术语；查 IT 专业词请选「IT」，该模式只查本地词库，不请求在线翻译。</p></div>
             </div>
           </section>
           </template>
