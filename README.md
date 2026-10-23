@@ -122,3 +122,11 @@ SG 题库在界面上只保留两个分类：
 - [SG/FE 公开问题（2023 年度）](https://www.ipa.go.jp/shiken/mondai-kaiotu/sg_fe/koukai/2023r05.html)
 
 不要把官方题源链接列表当作题目本身。正式导入时，题目需能在站内作答，并记录答案、解析与来源信息。
+
+
+## SG question bank progress
+
+- `migrations/0014_sg_question_bank_pack_2.sql`: 22 original prediction questions.
+- `migrations/0015_sg_prediction_pack_3.sql`: 56 additional original prediction questions (stable IDs, `source_type='generated'`, Japanese prompts/options and Chinese explanations).
+- Mock exam behavior: exactly 60 unique questions, 2 points per question (120 points total), 90-minute limit; no repeated-question padding. Unanswered questions are recorded as incorrect when the exam is submitted, so they can appear in the wrong-question review.
+- Historical questions must be imported from verifiable IPA source documents with the official answer key; links alone do not count as imported questions. The 500-question historical target is not yet met and must not be presented as complete until verified question records exist in D1.
