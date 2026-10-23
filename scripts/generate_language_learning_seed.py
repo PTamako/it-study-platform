@@ -21,19 +21,24 @@ def norm(x):return re.sub(r"\s+"," ",str(x or "")).strip()
 def q(x):return "'"+str(x or "").replace("\x00","").replace("'","''")+"'"
 def zhstrings(x):
  out=[]
- def walk(v):
+ def walk(v, gloss_context=False):
   if isinstance(v,str):
    try: parsed=json.loads(v)
    except Exception: parsed=None
    if parsed is not None and isinstance(parsed,(dict,list,str)):
-    walk(parsed)
-   elif re.search(r"[\u3400-\u9fff]",v):out.append(norm(v))
+    walk(parsed,gloss_context)
+   elif re.search(r"[\\u3400-\\u9fff]",v):
+    out.append(norm(v))
   elif isinstance(v,dict):
    for k,z in v.items():
-    if k.lower() not in {"notes","note","source","license","licence"}:walk(z)
+    key=k.lower()
+    if key in {"examples","example","notes","note","source","license","licence"}: continue
+    if key in {"glosses","gloss","meaning","meanings"}: walk(z,True)
+    else: walk(z,gloss_context)
   elif isinstance(v,(list,tuple)):
-   for z in v:walk(z)
- walk(x);return list(dict.fromkeys(z for z in out if z))
+   for z in v: walk(z,gloss_context)
+ walk(x)
+ return list(dict.fromkeys(z for z in out if z))
 def zhmap(db):
  c=sqlite3.connect(f"file:{db}?mode=ro",uri=True); tables={r[0] for r in c.execute("select name from sqlite_master where type='table'")}
  if "zh_defs" not in tables:raise RuntimeError("Tomoshi DB has no zh_defs: "+str(sorted(tables)[:50]))
