@@ -559,7 +559,7 @@ export default {
       const chunks: string[] = []
       let remaining = text
       while (remaining.length > 450) {
-        const candidates = ['。', '！', '？', '.', '!', '?', '\\n'].map(mark => remaining.lastIndexOf(mark, 450))
+        const candidates = ['。', '！', '？', '.', '!', '?', '\n'].map(mark => remaining.lastIndexOf(mark, 450))
         const splitAt = Math.max(...candidates)
         const boundary = splitAt >= 180 ? splitAt + 1 : 450
         chunks.push(remaining.slice(0, boundary).trim())
