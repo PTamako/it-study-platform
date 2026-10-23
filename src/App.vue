@@ -363,7 +363,6 @@ async function selectQuestionSource(source: 'official' | 'generated') {
   questionBatchOffset.value = 0
   questionBankTotal.value = 0
   questionBankHasMore.value = false
-  // Changing a source should have an immediate, visible effect instead of only changing a hidden filter.
   quizQuestions.value = []
   quizIndex.value = 0
   selectedOption.value = ''
@@ -1019,7 +1018,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
             </div>
 
             <section class="practice-section">
-              <div class="section-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2><p>从题库中抽题，提交后立即查看答案与解析。</p></div><span class="source-pill">{{ '当前 ' + (selectedTrack?.question_count || 0) + ' / 1,100 题目标' }}</span></div>
+              <div class="section-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2><p>从题库中抽题，提交后立即查看答案与解析。</p></div><span class="source-pill">{{ '总题量 ' + (selectedTrack?.question_count || 0) + ' / 1,100 · 真题 ' + (selectedTrack?.official_question_count || 0) + ' / 448 · 预测 ' + (selectedTrack?.prediction_question_count || 0) + ' / 652' }}</span></div>
               <div class="question-source-filters" role="group" aria-label="题目来源筛选">
                 <button v-for="filter in questionSourceFilters" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" @click="selectQuestionSource(filter.id)">{{ filter.label }}（{{ filter.id === 'official' ? (selectedTrack?.official_question_count || 0) : (selectedTrack?.prediction_question_count || 0) }}）</button>
               </div>
