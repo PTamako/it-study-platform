@@ -81,7 +81,7 @@
 .practice-result-icon{background:#e5f7ef;color:#37886e}
 .practice-start-card h3{font-size:16px;margin:0 0 5px}
 .practice-start-card p{font-size:11px;line-height:1.8;color:#898da1;max-width:460px;margin:0 0 16px}
-.practice-start-card .primary-button{margin-top:4px}
+.practice-start-card .primary-button{margin-top:4px}.practice-start-actions{display:flex;align-items:center;justify-content:center;gap:16px;flex-wrap:wrap}.practice-start-actions .text-link{padding:12px 8px}
 .practice-start-card .practice-error{color:#b54b5b;margin-top:12px}
 .question-card{padding:clamp(16px,3vw,28px)}
 .question-topline{display:flex;align-items:center;justify-content:space-between;font-size:11px;color:#81869b}
