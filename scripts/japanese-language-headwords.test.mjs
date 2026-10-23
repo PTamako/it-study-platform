@@ -28,3 +28,13 @@ test('Japanese learning seed cards restore Japanese headwords instead of Chinese
   assert.match(seed, /'ja-daily-01','ja','日常与情景会话','もう一度お願いします。'/)
   assert.match(seed, /'麻烦再说一遍。'/)
 })
+
+test('Japanese speech never falls back to a voice from another language', () => {
+  assert.match(app, /const voices = availableVoices\.filter\(voice => normalize\(voice\.lang\)\.startsWith\(prefix\)\)/)
+  assert.match(app, /normalize\(candidate\.lang\) === normalizedLang/)
+  assert.ok(!app.includes("|| voices.find(candidate => /natural|enhanced|premium|siri|daniel|karen|ava|alex|samantha|kyoko|otoya/i.test(candidate.name))"))
+})
+test('Japanese learning banner copy is Japanese, not Chinese', () => {
+  assert.match(app, /studyLanguage === 'ja' \? '実際の場面で使える日本語を身につけよう。'/)
+  assert.match(app, /studyLanguage === 'ja' \? '日常会話や職場で使える表現を、読み方・中国語訳・実例とともに学びます。'/)
+})
