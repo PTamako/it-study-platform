@@ -523,16 +523,16 @@ export default {
         const hasCjk = /[\u3400-\u9fff]/.test(query)
         const language = requestedLanguage === 'auto' ? (hasKana ? 'ja' : hasCjk ? 'zh' : 'en') : requestedLanguage
         const offline = language === 'ja'
-          ? commonJapaneseTranslations[query]
+          ? (() => { const value = commonJapaneseTranslations[query]; return value ? { zh: value.zh, ja: query, en: value.en } : undefined })()
           : language === 'en'
-            ? commonEnglishTranslations[query.toLowerCase()]
-            : commonChineseTranslations[query]
+            ? (() => { const value = commonEnglishTranslations[query.toLowerCase()]; return value ? { zh: value.zh, ja: value.ja, en: query } : undefined })()
+            : (() => { const value = commonChineseTranslations[query]; return value ? { zh: query, ja: value.ja, en: value.en } : undefined })()
         if (offline) {
           const item: DictionaryApiEntry = {
             term: query,
-            zh: language === 'zh' ? query : offline.zh || '',
-            translationJa: language === 'ja' ? query : offline.ja || '',
-            en: language === 'en' ? query : offline.en || '',
+            zh: offline.zh,
+            translationJa: offline.ja,
+            en: offline.en,
             tag: '中日英互译 · 离线兜底',
             language: language as 'ja' | 'en' | 'zh',
             source: '本地词典（在线接口异常时）',
