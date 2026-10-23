@@ -465,22 +465,29 @@ async function loadLanguageCards() {
     languageCardsLoading.value = false
   }
 }
-function toggleLanguageCard(id: string) {
-  const mastered = !completedLanguageCards.value.includes(id)
+async function toggleLanguageCard(id: string) {
+  const previous = completedLanguageCards.value
+  const wasMastered = previous.includes(id)
+  const mastered = !wasMastered
+  // Optimistic UI update; roll back if D1 does not confirm the write.
   completedLanguageCards.value = mastered
-    ? [...completedLanguageCards.value, id]
-    : completedLanguageCards.value.filter(item => item !== id)
-  void fetch('/api/language-progress', {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ card_id: id, mastered }),
-  }).then(async response => {
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({})) as { error?: string }
-      languageCardsError.value = data.error || '掌握进度未能保存到云端。'
-    } else {
-      void loadCloudDashboard()
-    }
-  }).catch(() => { languageCardsError.value = '网络异常：掌握进度暂未同步到云端。' })
+    ? [...previous, id]
+    : previous.filter(item => item !== id)
+  languageCardsError.value = ''
+  try {
+    const response = await fetch('/api/language-progress', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ card_id: id, mastered }),
+    })
+    const data = await response.json().catch(() => ({})) as { error?: string }
+    if (!response.ok) throw new Error(data.error || '掌握进度未能保存到云端。')
+    void loadCloudDashboard()
+  } catch (error) {
+    completedLanguageCards.value = previous
+    languageCardsError.value = error instanceof Error
+      ? error.message
+      : '网络异常：掌握进度未能同步到云端，已恢复原状态。'
+  }
 }
 watch(studyLanguage, value => {
   localStorage.setItem('zhixue:study-language', JSON.stringify(value))
@@ -496,7 +503,7 @@ async function hydrateCloudProgress() {
     ])
     if (progressResponse.ok) {
       const progress = await progressResponse.json() as { items?: Array<{ card_id: string; mastered: number }> }
-      // D1 is authoritative once it responds; unioning stale local state prevents unmarking a card.
+      // Once D1 responds, use its saved progress as the source of truth.
       completedLanguageCards.value = (progress.items || []).filter(item => item.mastered).map(item => item.card_id)
     }
     if (savedResponse.ok) {
