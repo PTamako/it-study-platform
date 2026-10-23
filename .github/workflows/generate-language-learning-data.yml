@@ -1,0 +1,38 @@
+name: Generate licensed language learning cards
+
+on:
+  push:
+    branches: [feat/language-unlearned-filter]
+    paths:
+      - "scripts/generate_language_learning_seed.py"
+      - ".github/workflows/generate-language-learning-data.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: generate-language-learning-data
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    if: \${{ !startsWith(github.event.head_commit.message, 'data: generate 6000 language cards') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/language-unlearned-filter
+          token: \${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check zstandard==0.23.0
+      - run: python scripts/generate_language_learning_seed.py
+      - name: Commit generated migration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add migrations/0079_language_learning_6000_cards.sql
+          git commit -m "data: generate 6000 language cards"
+          git push origin feat/language-unlearned-filter
