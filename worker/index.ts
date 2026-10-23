@@ -138,6 +138,15 @@ const commonEnglishTranslations: Record<string, { zh: string; ja: string }> = {
 // 两个在线翻译源并行尝试，避免 MyMemory 超时后才开始备用源；Google 端点是非正式接口，结果仅作参考。
 // 在线翻译优先复用近期成功结果；上游短暂限流/超时时，已缓存词条仍可正常显示。
 // 缓存键包含源语言、目标语言和原文，避免不同语言方向互相污染。
+function providerLanguageCode(language: string): string {
+  // 应用内部保留区域语言标识（ja-JP、en-US、zh-CN）；请求第三方服务时使用其支持的语言代码。
+  const normalized = language.trim().replace('_', '-').toLowerCase()
+  if (normalized.startsWith('ja')) return 'ja'
+  if (normalized.startsWith('en')) return 'en'
+  if (normalized.startsWith('zh')) return 'zh-CN'
+  return language
+}
+
 async function translateText(text: string, source: string, target: string): Promise<string> {
   const valid = (value: string) =>
     Boolean(value && value.trim() && !/MYMEMORY WARNING|QUERY LENGTH LIMIT|translation unavailable/i.test(value))
@@ -161,7 +170,7 @@ async function translateText(text: string, source: string, target: string): Prom
     try {
       const url = new URL('https://api.mymemory.translated.net/get')
       url.searchParams.set('q', text)
-      url.searchParams.set('langpair', source + '|' + target)
+      url.searchParams.set('langpair', providerLanguageCode(source) + '|' + providerLanguageCode(target))
       const response = await fetch(url.toString(), { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(4500) })
       if (!response.ok) {
         console.warn('[translation] MyMemory HTTP error', { source, target, status: response.status })
@@ -190,8 +199,8 @@ async function translateText(text: string, source: string, target: string): Prom
       try {
         const url = new URL('https://' + host + '/translate_a/single')
         url.searchParams.set('client', 'gtx')
-        url.searchParams.set('sl', source)
-        url.searchParams.set('tl', target)
+        url.searchParams.set('sl', providerLanguageCode(source))
+        url.searchParams.set('tl', providerLanguageCode(target))
         url.searchParams.set('dt', 't')
         url.searchParams.set('q', text)
         const response = await fetch(url.toString(), { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(4500) })
@@ -380,8 +389,8 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
 
   if (language === 'ja') {
     ;[zh, en] = await Promise.all([
-      translateText(query, 'ja', 'zh-CN'),
-      translateText(query, 'ja', 'en'),
+      translateText(query, 'ja-JP', 'zh-CN'),
+      translateText(query, 'ja-JP', 'en-US'),
     ])
     const offline = commonJapaneseTranslations[query.trim()]
     if (offline) {
@@ -390,8 +399,8 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
     }
   } else if (language === 'en') {
     ;[zh, ja] = await Promise.all([
-      translateText(query, 'en', 'zh-CN'),
-      translateText(query, 'en', 'ja'),
+      translateText(query, 'en-US', 'zh-CN'),
+      translateText(query, 'en-US', 'ja-JP'),
     ])
     const offline = commonEnglishTranslations[query.trim().toLowerCase()]
     if (offline) {
@@ -400,8 +409,8 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
     }
   } else {
     ;[ja, en] = await Promise.all([
-      translateText(query, 'zh-CN', 'ja'),
-      translateText(query, 'zh-CN', 'en'),
+      translateText(query, 'zh-CN', 'ja-JP'),
+      translateText(query, 'zh-CN', 'en-US'),
     ])
     const offline = commonChineseTranslations[query.trim()]
     if (offline) {
@@ -549,12 +558,12 @@ export default {
       try { body = await request.json() as Record<string, unknown> }
       catch { return json({ error: '请求体必须是 JSON。' }, 400) }
       const text = String(body.text || '').trim()
-      const requestedSource = String(body.source || 'ja').trim().toLowerCase()
-      const source = requestedSource.startsWith('ja') ? 'ja' : requestedSource.startsWith('en') ? 'en' : requestedSource.startsWith('zh') ? 'zh' : ''
+      const requestedSource = String(body.source || 'ja-JP').trim().toLowerCase()
+      const source = requestedSource.startsWith('ja') ? 'ja-JP' : requestedSource.startsWith('en') ? 'en-US' : requestedSource.startsWith('zh') ? 'zh-CN' : ''
       if (!text) return json({ error: '没有可翻译的解析内容。' }, 400)
       if (text.length > 1800) return json({ error: '解析文本过长，暂时无法一次翻译。' }, 400)
       if (!source) return json({ error: '原文语言只支持日语、英语或中文。' }, 400)
-      if (source === 'zh') return json({ translation: text, source: 'already_chinese' })
+      if (source === 'zh-CN') return json({ translation: text, source: 'already_chinese' })
 
       const chunks: string[] = []
       let remaining = text
@@ -567,11 +576,11 @@ export default {
       }
       if (remaining) chunks.push(remaining)
       try {
-        const translatedChunks = await Promise.all(chunks.map(chunk => translateText(chunk, source, 'zh')))
+        const translatedChunks = await Promise.all(chunks.map(chunk => translateText(chunk, source, 'zh-CN')))
         if (translatedChunks.some(value => !value.trim())) {
           return json({ error: '在线翻译暂时不可用，请稍后重试。' }, 503)
         }
-        return json({ translation: translatedChunks.join(''), source, target: 'zh' })
+        return json({ translation: translatedChunks.join(''), source, target: 'zh-CN' })
       } catch {
         return json({ error: '解析翻译失败，请稍后重试。' }, 503)
       }
