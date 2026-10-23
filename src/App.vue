@@ -208,7 +208,7 @@ const selectedTrackId = ref('exam-sg')
 const tracksLoading = ref(false)
 const tracksError = ref('')
 const questionSourceFilter = ref<'official' | 'generated'>('generated')
-const activeReviewMode = ref<'all' | 'mastered' | 'due' | 'wrong'>('all')
+const activeReviewMode = ref<'all' | 'unlearned' | 'mastered' | 'due' | 'wrong'>('all')
 const questionSourceFilters = [
   { id: 'official', label: '历年真题' },
   { id: 'generated', label: '预测题库' },
@@ -424,7 +424,7 @@ async function loadQuestionProgress() {
     questionProgressById.value = Object.fromEntries((data.items || []).map(item => [item.question_id, item]))
   } catch { /* Keep the last known progress visible if the network is temporarily unavailable. */ }
 }
-function selectReviewMode(mode: 'all' | 'wrong' | 'due' | 'mastered') {
+function selectReviewMode(mode: 'all' | 'unlearned' | 'wrong' | 'due' | 'mastered') {
   activeReviewMode.value = mode
   questionBatchOffset.value = 0
   questionBankTotal.value = 0
@@ -462,6 +462,7 @@ async function startPractice() {
     if (!data.items?.length) {
       const messages = {
         all: questionSourceFilter.value === 'official' ? '当前没有可作答的历年真题。' : '当前没有可用的预测题，请稍后重试。',
+        unlearned: '当前题库中没有尚未作答的题目。',
         wrong: '当前筛选下没有错题。答错题目后会自动进入错题集。',
         due: '当前没有到期的复习题。答错题会先安排短间隔复习。',
         mastered: '当前没有已掌握的题目。连续答对三次或手动标记掌握后会显示在这里。',
@@ -495,9 +496,7 @@ async function submitPracticeAnswer() {
   const question = currentQuestion.value
   quizSubmitted.value = true
   if (selectedOption.value === question.answer) quizCorrect.value += 1
-  if ((selectedOption.value !== question.answer || activeReviewMode.value === 'wrong' || activeReviewMode.value === 'due') && getQuestionLanguage(question) !== 'zh-CN') {
-    void translateQuestionExplanation(question)
-  }
+  void translateQuestionExplanation(question)
   try {
     const response = await fetch('/api/attempts', {
       method: 'POST',
@@ -516,27 +515,40 @@ async function submitPracticeAnswer() {
     quizError.value = error instanceof Error ? error.message : '网络异常：本次答题结果尚未保存到云端。'
   }
 }
-function getQuestionLanguage(question: PracticeQuestion): 'ja-JP' | 'en-US' | 'zh-CN' {
-  const language = (question.language || '').toLowerCase().replace('_', '-')
-  if (language.startsWith('zh')) return 'zh-CN'
-  if (language.startsWith('en')) return 'en-US'
-  if (language.startsWith('ja')) return 'ja-JP'
-  const text = question.prompt + '\n' + question.explanation
+function getExplanationLanguage(question: PracticeQuestion): 'ja-JP' | 'en-US' | 'zh-CN' {
+  // question.language describes the question stem (usually Japanese), not the explanation.
+  // Detect the explanation itself so authored Chinese explanations aren't sent to a zh→zh translator.
+  const text = (question.explanation || '').trim()
   if (/[\u3040-\u30ff]/.test(text)) return 'ja-JP'
   if (/[a-z]{4,}/i.test(text) && !/[\u3400-\u9fff]/.test(text)) return 'en-US'
-  return /[\u3400-\u9fff]/.test(text) ? 'zh-CN' : 'ja-JP'
+  if (/[\u3400-\u9fff]/.test(text)) return 'zh-CN'
+  const language = (question.language || '').toLowerCase().replace('_', '-')
+  if (language.startsWith('en')) return 'en-US'
+  if (language.startsWith('zh')) return 'zh-CN'
+  return 'ja-JP'
 }
 async function translateQuestionExplanation(question: PracticeQuestion | null) {
   if (!question?.explanation?.trim()) return
+  const source = getExplanationLanguage(question)
+  delete questionExplanationTranslationErrors.value[question.id]
+
+  // Most prediction questions already contain hand-written Chinese explanations; show them as-is.
+  if (source === 'zh-CN') {
+    questionExplanationTranslations.value[question.id] = {
+      source_text: question.explanation,
+      translation_zh: question.explanation,
+    }
+    return
+  }
+
   const cached = questionExplanationTranslations.value[question.id]
   if (cached?.source_text === question.explanation) return
   if (questionExplanationTranslating.value[question.id]) return
   questionExplanationTranslating.value[question.id] = true
-  delete questionExplanationTranslationErrors.value[question.id]
   try {
     const response = await fetch('/api/translate-explanation', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text: question.explanation, source: getQuestionLanguage(question) }),
+      body: JSON.stringify({ text: question.explanation, source }),
     })
     const data = await response.json() as { translation?: string; error?: string }
     if (!response.ok || !data.translation) throw new Error(data.error || '中文解析翻译暂时不可用。')
@@ -936,9 +948,46 @@ function navigate(id: ModuleId) {
 let speechRequestId = 0
 function speakQuestion(question: PracticeQuestion | null) {
   if (!question) return
-  // SG 读题固定使用日语语音；中文解析只供阅读，不参与朗读。
-  const options = question.options.map(option => `${option.id.toUpperCase()}。${option.text}`).join('。')
-  speak(`${question.prompt}。${options ? '選択肢：' + options : ''}`, 'ja-JP')
+  // Only use a browser voice explicitly tagged as Japanese. If unavailable, do not play with Chinese voice.
+  const options = question.options.map(option => `${option.id.toUpperCase()}。 ${option.text}`).join('。')
+  speakJapaneseQuestion(`${question.prompt}。選択肢：${options}`)
+}
+function speakJapaneseQuestion(text: string) {
+  const synthesis = window.speechSynthesis
+  if (typeof synthesis === 'undefined' || typeof SpeechSynthesisUtterance === 'undefined') {
+    window.alert('当前浏览器不支持语音播放。请使用 Safari/Chrome 并检查系统语音设置。')
+    return
+  }
+  const requestId = ++speechRequestId
+  synthesis.cancel()
+
+  const play = (attempt = 0) => {
+    if (requestId !== speechRequestId) return
+    const voices = synthesis.getVoices()
+    const japaneseVoices = voices.filter(voice => /^ja(?:-|$)/i.test(voice.lang.replace('_', '-')))
+    const voice = japaneseVoices.find(candidate => /^ja-jp$/i.test(candidate.lang.replace('_', '-')) && /natural|enhanced|premium/i.test(candidate.name))
+      || japaneseVoices.find(candidate => /^ja-jp$/i.test(candidate.lang.replace('_', '-')) && candidate.localService)
+      || japaneseVoices.find(candidate => /^ja-jp$/i.test(candidate.lang.replace('_', '-')))
+      || japaneseVoices.find(candidate => candidate.localService)
+      || japaneseVoices[0]
+
+    if (!voice && attempt < 20) {
+      window.setTimeout(() => play(attempt + 1), 250)
+      return
+    }
+    if (!voice) {
+      window.alert('未检测到可用的日语语音，因此没有播放。请在系统或浏览器中启用日语语音后重试；不会改用中文语音。')
+      return
+    }
+    const utterance = new SpeechSynthesisUtterance(text.trim())
+    utterance.voice = voice
+    utterance.lang = voice.lang
+    utterance.rate = 0.78
+    utterance.pitch = 1
+    utterance.volume = 1
+    synthesis.speak(utterance)
+  }
+  window.setTimeout(() => play(), 100)
 }
 function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
   const synthesis = window.speechSynthesis
@@ -1151,6 +1200,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 <div class="question-category-heading"><strong>学习状态</strong><span>按当前题库筛选</span></div>
                 <div class="question-category-filters question-review-filters" role="group" aria-label="题目学习状态">
                   <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'all' }" :aria-pressed="activeReviewMode === 'all'" @click="selectReviewMode('all')">全部</button>
+                  <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'unlearned' }" :aria-pressed="activeReviewMode === 'unlearned'" @click="selectReviewMode('unlearned')">未学习</button>
                   <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'mastered' }" :aria-pressed="activeReviewMode === 'mastered'" @click="selectReviewMode('mastered')">掌握</button>
                   <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'due' }" :aria-pressed="activeReviewMode === 'due'" @click="selectReviewMode('due')">再复习</button>
                   <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'wrong' }" :aria-pressed="activeReviewMode === 'wrong'" @click="selectReviewMode('wrong')">错题集</button>
@@ -1199,11 +1249,14 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 </div>
                 <div v-if="quizSubmitted" class="answer-explanation" :class="{ right: selectedOption === currentQuestion.answer }">
                   <strong>{{ selectedOption === currentQuestion.answer ? '回答正确！' : '这题答错了' }} 正确答案：{{ currentQuestion.answer.toUpperCase() }}</strong>
-                  <p class="explanation-original-label">原文解析</p>
-                  <p>{{ currentQuestion.explanation }}</p>
-                  <div v-if="(selectedOption !== currentQuestion.answer || activeReviewMode === 'wrong' || activeReviewMode === 'due') && getQuestionLanguage(currentQuestion) !== 'zh-CN'" class="explanation-chinese">
+                  <template v-if="getExplanationLanguage(currentQuestion) !== 'zh-CN'">
+                    <p class="explanation-original-label">原文解析</p>
+                    <p>{{ currentQuestion.explanation }}</p>
+                  </template>
+                  <div class="explanation-chinese">
                     <strong>中文解析</strong>
-                    <p v-if="questionExplanationTranslating[currentQuestion.id]">正在翻译解析…</p>
+                    <p v-if="getExplanationLanguage(currentQuestion) === 'zh-CN'">{{ currentQuestion.explanation }}</p>
+                    <p v-else-if="questionExplanationTranslating[currentQuestion.id]">正在翻译解析…</p>
                     <p v-else-if="questionExplanationTranslations[currentQuestion.id]?.source_text === currentQuestion.explanation">{{ questionExplanationTranslations[currentQuestion.id].translation_zh }}</p>
                     <div v-else>
                       <p v-if="questionExplanationTranslationErrors[currentQuestion.id]">{{ questionExplanationTranslationErrors[currentQuestion.id] }}</p>
