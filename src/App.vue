@@ -1067,7 +1067,9 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
     || voices[0]
   if (voice) utterance.voice = voice
 
+  let hasStarted = false
   utterance.onstart = () => {
+    hasStarted = true
     if (requestId === speechRequestId) speechStatus.value = '正在播放：' + spokenText
   }
   utterance.onend = () => {
@@ -1082,6 +1084,13 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   try {
     synthesis.speak(utterance)
     synthesis.resume()
+    // Some browser/system voice failures never fire onerror; avoid leaving a silent
+    // "requesting playback" message forever. This watchdog does not delay speak().
+    window.setTimeout(() => {
+      if (requestId === speechRequestId && !hasStarted && speechStatus.value === '正在请求播放：' + spokenText) {
+        speechStatus.value = '浏览器尚未启动语音播放。请检查系统英语/日语语音、浏览器权限与设备静音状态后重试。'
+      }
+    }, 3500)
   } catch {
     speechStatus.value = '浏览器没有接受这次语音请求，请再次点击播放。'
   }
@@ -1598,7 +1607,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               <article v-for="entry in savedVocabularyEntries" :key="entry.term" class="saved-vocabulary-row">
                 <div class="saved-vocabulary-copy"><strong>{{ entry.term }}</strong><small v-if="entry.reading">{{ entry.reading }}</small><p v-if="entry.en">英语释义：{{ entry.en }}</p><p v-if="entry.translationJa">日语辅助理解：{{ entry.translationJa }}</p></div>
                 <button v-if="entry.englishTerm || entry.language === 'en'" class="round-action" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + entry.term"><Volume2 :size="16" /></button>
-                <button v-else class="round-action" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语读音：' + entry.term"><Languages :size="16" /></button>
+                <button v-else-if="entry.reading || entry.language === 'ja'" class="round-action" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语读音：' + entry.term"><Languages :size="16" /></button>
                 <p v-if="speechStatus && speechStatusTarget === entry.term" class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p>
                 <button class="saved-remove-button" @click="toggleSaved(entry.term)">取消收藏</button>
               </article>
