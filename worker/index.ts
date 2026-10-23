@@ -356,7 +356,7 @@ function englishDictionaryEntries(rows: LooseRecord[], zh: string, ja: string): 
 async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Promise<DictionaryApiEntry[]> {
   const query = rawQuery.trim()
   if (!query) return []
-  const select = `SELECT term, language, reading, meaning_zh, meaning_ja, meaning_en, example, source_module
+  const select = `SELECT term, language, reading, meaning_zh, meaning_ja, meaning_en, example, source_module, aliases
     FROM vocabulary`
   const exactResult = await db.prepare(
     `${select}
@@ -365,9 +365,10 @@ async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Prom
         OR lower(meaning_zh) = lower(?)
         OR lower(meaning_ja) = lower(?)
         OR lower(meaning_en) = lower(?)
+        OR instr('|' || lower(COALESCE(aliases, '')) || '|', '|' || lower(?) || '|') > 0
      ORDER BY term
      LIMIT 8`,
-  ).bind(query, query, query, query, query).all()
+  ).bind(query, query, query, query, query, query).all()
   let results = exactResult.results as Record<string, unknown>[]
   if (!results.length) {
     // Avoid matching tiny strings like "it" inside every English definition.
@@ -381,9 +382,10 @@ async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Prom
           OR instr(lower(meaning_zh), lower(?)) > 0
           OR instr(lower(meaning_ja), lower(?)) > 0
           OR instr(lower(meaning_en), lower(?)) > 0
+          OR instr(lower(COALESCE(aliases, '')), lower(?)) > 0
        ORDER BY CASE WHEN lower(term) = lower(?) THEN 0 ELSE 1 END, term
        LIMIT 8`,
-    ).bind(query, query, query, query, query, query).all()
+    ).bind(query, query, query, query, query, query, query).all()
     results = partialResult.results as Record<string, unknown>[]
   }
   return results.map((row) => ({
@@ -409,8 +411,11 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
       // If the glossary migration is pending, continue with online providers.
     }
   }
-  // IT mode is a curated glossary lookup, not a translation request.
-  if (requestedLanguage === 'it') return technicalItems
+  // A curated IT hit can be answered locally. Avoid third-party translators when a glossary entry matches;
+  // this keeps technical lookups useful during outages and avoids unnecessary external requests.
+  if (technicalItems.length > 0) return technicalItems
+  // IT mode is deliberately local-only: never fall back to network translation.
+  if (requestedLanguage === 'it') return []
 
   const hasKana = /[\u3040-\u30ff]/.test(query)
   const hasCjk = /[\u3400-\u9fff]/.test(query)
