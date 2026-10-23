@@ -241,14 +241,14 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
   const items: DictionaryApiEntry[] = [...technicalItems]
   if (language === 'en') items.push(...englishDictionaryEntries(englishRows, zh, ja))
 
-  // Han-only input may be Chinese or Japanese kanji. We include translation and
-  // Jisho results together so either use case can still return useful matches.
-  if (language === 'zh' && (ja || en)) {
+  // Han-only input may be Chinese or Japanese kanji. Always return a translation card
+  // for Chinese input even if only one of the two translation providers responds.
+  if (language === 'zh') {
     items.push({
       term: query,
       en: en || '英语翻译暂时不可用',
       zh: query,
-      translationJa: ja || '',
+      translationJa: ja || '日语翻译暂时不可用',
       tag: '中日英互译',
       language: 'zh',
       source: '在线翻译',
