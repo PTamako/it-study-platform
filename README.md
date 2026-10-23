@@ -106,3 +106,19 @@ npm run build
 - 后续应增加自动化测试和密钥泄漏扫描。
 - Worker 提供只读查询 API，并开放 `/api/attempts` 与 `/api/scenario-attempts` 两个经过字段校验的 POST 写入接口。当前没有用户账号/身份认证，适用于个人测试，不应存放敏感信息；若公开部署给多人使用，必须先加入身份认证、用户隔离、滥用限制与 CSRF/来源策略。
 - 当前学习计划勾选状态与手动考试成绩先保存在浏览器 localStorage 中：同一设备、同一浏览器可保留记录，但清理网站数据后会丢失，也不会自动同步到其他设备。后续接入账号/安全的写入 API 后，再迁移到 D1。
+
+
+## SG 题库分类与目标
+
+SG 题库在界面上只保留两个分类：
+
+- **历年真题**（`source_type='official'`）：仅导入 IPA 官方公开的 SG 试题与答案；每题应保存年度、题号和官方 PDF 来源。
+- **预测题库**（`source_type='generated'`）：知学原创预测题，题干为日语并配中文解析，不得标注为官方真题。
+
+总量目标约 **1,100 题**。界面显示的是真实数据库数量；目标数只是目标，不代表已完成。IPA 的 CBT 公开题只覆盖实际考试的一部分，官方公开题以 IPA 页面为准：
+- [SG/FE 公开问题（2026 年度）](https://www.ipa.go.jp/shiken/mondai-kaiotu/sg_fe/koukai/2026r08.html)
+- [SG/FE 公开问题（2025 年度）](https://www.ipa.go.jp/shiken/mondai-kaiotu/sg_fe/koukai/2025r07.html)
+- [SG/FE 公开问题（2024 年度）](https://www.ipa.go.jp/shiken/mondai-kaiotu/sg_fe/koukai/2024r06.html)
+- [SG/FE 公开问题（2023 年度）](https://www.ipa.go.jp/shiken/mondai-kaiotu/sg_fe/koukai/2023r05.html)
+
+不要把官方题源链接列表当作题目本身。正式导入时，题目需能在站内作答，并记录答案、解析与来源信息。
