@@ -136,10 +136,26 @@ const commonEnglishTranslations: Record<string, { zh: string; ja: string }> = {
 }
 
 // 两个在线翻译源并行尝试，避免 MyMemory 超时后才开始备用源；Google 端点是非正式接口，结果仅作参考。
+// 在线翻译优先复用近期成功结果；上游短暂限流/超时时，已缓存词条仍可正常显示。
+// 缓存键包含源语言、目标语言和原文，避免不同语言方向互相污染。
 async function translateText(text: string, source: string, target: string): Promise<string> {
   const valid = (value: string) =>
     Boolean(value && value.trim() && !/MYMEMORY WARNING|QUERY LENGTH LIMIT|translation unavailable/i.test(value))
     && value.trim().toLocaleLowerCase() !== text.trim().toLocaleLowerCase()
+
+  const cacheKey = new URL('https://translation-cache.it-study-platform.invalid/v1')
+  cacheKey.searchParams.set('q', text)
+  cacheKey.searchParams.set('sl', source)
+  cacheKey.searchParams.set('tl', target)
+  try {
+    const cached = await caches.default.match(new Request(cacheKey.toString()))
+    if (cached) {
+      const data = await cached.json() as { translation?: string }
+      if (valid(data.translation || '')) return data.translation!.trim()
+    }
+  } catch {
+    // 缓存不是翻译请求的必要条件；缓存不可用时继续访问在线服务。
+  }
 
   const myMemory = async (): Promise<string> => {
     try {
@@ -162,40 +178,59 @@ async function translateText(text: string, source: string, target: string): Prom
         return ''
       }
       return translated
-    } catch (error) { console.warn('[translation] MyMemory request failed', { source, target, message: error instanceof Error ? error.message : String(error) }); return '' }
+    } catch (error) {
+      console.warn('[translation] MyMemory request failed', { source, target, message: error instanceof Error ? error.message : String(error) })
+      return ''
+    }
   }
 
+  // Google 的 gtx 接口不是正式 SLA 服务；尝试两个可用主机，避免单一主机故障直接导致整条翻译链失败。
   const googleFallback = async (): Promise<string> => {
-    try {
-      const url = new URL('https://translate.googleapis.com/translate_a/single')
-      url.searchParams.set('client', 'gtx')
-      url.searchParams.set('sl', source)
-      url.searchParams.set('tl', target)
-      url.searchParams.set('dt', 't')
-      url.searchParams.set('q', text)
-      const response = await fetch(url.toString(), { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(5500) })
-      if (!response.ok) {
-        console.warn('[translation] Google HTTP error', { source, target, status: response.status })
-        return ''
+    for (const host of ['translate.googleapis.com', 'translate.google.com']) {
+      try {
+        const url = new URL('https://' + host + '/translate_a/single')
+        url.searchParams.set('client', 'gtx')
+        url.searchParams.set('sl', source)
+        url.searchParams.set('tl', target)
+        url.searchParams.set('dt', 't')
+        url.searchParams.set('q', text)
+        const response = await fetch(url.toString(), { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(4500) })
+        if (!response.ok) {
+          console.warn('[translation] Google HTTP error', { host, source, target, status: response.status })
+          continue
+        }
+        const payload = await response.json() as unknown
+        if (!Array.isArray(payload) || !Array.isArray(payload[0])) {
+          console.warn('[translation] Google returned an unexpected response shape', { host, source, target })
+          continue
+        }
+        const segments = payload[0] as unknown[]
+        const translated = segments.map(segment => Array.isArray(segment) ? String(segment[0] || '') : '').join('').trim()
+        if (valid(translated)) return translated
+        console.warn('[translation] Google returned no usable translation', { host, source, target, hasText: Boolean(translated) })
+      } catch (error) {
+        console.warn('[translation] Google fallback request failed', { host, source, target, message: error instanceof Error ? error.message : String(error) })
       }
-      const payload = await response.json() as unknown
-      if (!Array.isArray(payload) || !Array.isArray(payload[0])) {
-        console.warn('[translation] Google returned an unexpected response shape', { source, target })
-        return ''
-      }
-      const segments = payload[0] as unknown[]
-      const translated = segments.map(segment => Array.isArray(segment) ? String(segment[0] || '') : '').join('').trim()
-      if (!valid(translated)) {
-        console.warn('[translation] Google returned no usable translation', { source, target, hasText: Boolean(translated) })
-        return ''
-      }
-      return translated
-    } catch (error) { console.warn('[translation] Google fallback request failed', { source, target, message: error instanceof Error ? error.message : String(error) }); return '' }
+    }
+    return ''
   }
 
   const results = await Promise.all([myMemory(), googleFallback()])
   const translated = results.find(valid) || ''
-  if (!translated) console.warn('[translation] all providers returned no usable translation', { source, target, queryLength: text.length })
+  if (translated) {
+    try {
+      await caches.default.put(
+        new Request(cacheKey.toString()),
+        new Response(JSON.stringify({ translation: translated }), {
+          headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=21600' },
+        }),
+      )
+    } catch {
+      // Ignore cache-write failures; the live translation is still valid.
+    }
+  } else {
+    console.warn('[translation] all providers returned no usable translation', { source, target, queryLength: text.length })
+  }
   return translated
 }
 // Jisho 提供日语词条、假名读音和英语释义；其接口是公开接口，可能偶尔不可用。
@@ -526,10 +561,10 @@ export default {
                   ? (/[\u3040-\u30ff]/.test(query) ? 'ja' : /[\u3400-\u9fff]/.test(query) ? 'zh' : 'en')
                   : requestedLanguage
                 return sourceLanguage === 'en'
-                  ? ['Free Dictionary', 'MyMemory', 'Google Translate（备用）']
+                  ? ['Free Dictionary', 'MyMemory', 'Google Translate（双主机备用）']
                   : sourceLanguage === 'ja'
-                    ? ['Jisho', 'MyMemory', 'Google Translate（备用）']
-                    : ['MyMemory', 'Google Translate（备用）']
+                    ? ['Jisho', 'MyMemory', 'Google Translate（双主机备用）']
+                    : ['MyMemory', 'Google Translate（双主机备用）']
               })(),
           note: items.some(item => item.technical)
             ? '优先显示专业词汇库中匹配的术语及中日英释义。'
