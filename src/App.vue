@@ -130,11 +130,17 @@ type QuestionSource = { id: string; exam_code: string; year_label: string; subje
 const officialQuestionSources = ref<QuestionSource[]>([])
 const questionSourcesLoading = ref(false)
 const questionSourcesError = ref('')
+const selectedExamCode = computed(() => selectedTrackId.value.split('-').pop()?.toUpperCase() || '')
+
 async function loadQuestionSources() {
+  if (!selectedExamCode.value) {
+    officialQuestionSources.value = []
+    return
+  }
   questionSourcesLoading.value = true
   questionSourcesError.value = ''
   try {
-    const response = await fetch('/api/question-sources?exam=SG')
+    const response = await fetch('/api/question-sources?exam=' + encodeURIComponent(selectedExamCode.value))
     const data = await response.json() as { items?: QuestionSource[]; error?: string }
     if (!response.ok) throw new Error(data.error || '官方题源目录暂不可用')
     officialQuestionSources.value = data.items || []
@@ -286,7 +292,10 @@ async function submitScenario() {
     scenarioSubmitting.value = false
   }
 }
-watch(selectedTrackId, () => { void loadScenarios() })
+watch(selectedTrackId, () => {
+  void loadScenarios()
+  void loadQuestionSources()
+})
 async function loadExamTracks() {
   tracksLoading.value = true
   tracksError.value = ''
@@ -824,7 +833,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
             </div>
 
             <section class="panel question-sources-panel">
-              <div class="panel-heading"><div><h3>官方过去问入口</h3><p>优先使用 IPA 官方公开题；当前提供原始出处链接，不把第三方题库冒充官方题。</p></div><span class="source-pill">IPA</span></div>
+              <div class="panel-heading"><div><h3>{{ selectedTrack ? selectedTrack.title + ' · 官方过去问' : '官方过去问' }}</h3><p>与上方所选考试同步，只显示该考试的官方题源；题目来源会在统一练习流程中明确标注。</p></div><span class="source-pill">{{ selectedExamCode || '考试' }}</span></div>
               <p v-if="questionSourcesLoading" class="dictionary-status">正在读取官方题源目录…</p>
               <p v-else-if="questionSourcesError" class="dictionary-status dictionary-error">{{ questionSourcesError }}</p>
               <a v-for="source in officialQuestionSources" :key="source.id" class="question-source-row" :href="source.source_url" target="_blank" rel="noopener noreferrer">
@@ -832,7 +841,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 <span class="question-source-copy"><strong>{{ source.title }}</strong><small>{{ source.year_label }} · {{ source.subject_label }}</small><small>{{ source.notes }}</small></span>
                 <ArrowRight :size="17" />
               </a>
-              <p v-if="!questionSourcesLoading && !questionSourcesError && !officialQuestionSources.length" class="recent-dictionary-empty">官方题源目录尚未导入 D1；稍后执行迁移 0011、0012 即可加载。</p>
+              <p v-if="!questionSourcesLoading && !questionSourcesError && !officialQuestionSources.length" class="recent-dictionary-empty">当前考试暂时没有登记官方过去问来源。接入其他考试后，会按上方选择自动切换对应题源。</p>
             </section>
 
             <section class="practice-section">
@@ -984,7 +993,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 </div>
               </div>
             </section>
-            <div class="notice-card"><CircleHelp :size="19" /><div><strong>题库说明</strong><p>目前是平台框架阶段，尚未导入官方真题。接下来会先搭建 SG 的题目、答案解析、错题本与复习记录结构。</p></div></div>
+            <div class="notice-card"><CircleHelp :size="19" /><div><strong>题库说明</strong><p>官方过去问与平台自编练习题正在逐步整合。来源链接会随上方考试选项同步切换；完整题目仅在核实公开范围与来源后逐批导入，所有题目共用答题、解析和错题复习流程。</p></div></div>
           </section>
         </template>
 
