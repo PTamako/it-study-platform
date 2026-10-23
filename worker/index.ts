@@ -850,6 +850,7 @@ export default {
     if (url.pathname === '/api/wrong-questions' && request.method === 'GET') {
       const trackId = (url.searchParams.get('track') || 'exam-sg').trim().slice(0, 80)
       const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 30)))
+      const offset = Math.min(10000, Math.max(0, Number(url.searchParams.get('offset') || 0)))
       const requestedMode = (url.searchParams.get('mode') || 'wrong').trim()
       const mode = ['wrong', 'due', 'practice', 'mastered', 'unlearned'].includes(requestedMode) ? requestedMode : 'wrong'
       const requestedSource = (url.searchParams.get('source') || '').trim()
@@ -865,7 +866,8 @@ export default {
                   COALESCE(s.next_review_at, CURRENT_TIMESTAMP) AS next_review_at,
                   COALESCE(s.mastered, 0) AS mastered,
                   (SELECT COUNT(*) FROM study_attempts wa WHERE wa.question_id = q.id AND wa.is_correct = 0) AS wrong_count,
-                  (SELECT MAX(wa.answered_at) FROM study_attempts wa WHERE wa.question_id = q.id AND wa.is_correct = 0) AS last_wrong_at
+                  (SELECT MAX(wa.answered_at) FROM study_attempts wa WHERE wa.question_id = q.id AND wa.is_correct = 0) AS last_wrong_at,
+                  COUNT(*) OVER() AS filtered_total
            FROM questions q
            LEFT JOIN question_review_state s ON s.question_id = q.id
            WHERE q.track_id = ? AND (? = '' OR q.source_type = ?) AND (
@@ -883,12 +885,19 @@ export default {
            )
            ORDER BY CASE WHEN COALESCE(s.last_result, 'again') = 'again' THEN 0 ELSE 1 END,
                     wrong_count DESC, next_review_at ASC, q.id
-           LIMIT ?`,
-        ).bind(trackId, source, source, mode, mode, mode, mode, mode, limit).all()
+           LIMIT ? OFFSET ?`,
+        ).bind(trackId, source, source, mode, mode, mode, mode, mode, limit, offset).all()
+        const rows = results as Record<string, unknown>[]
+        const matchedTotal = Number(rows[0]?.filtered_total || 0)
         return json({
           mode,
-          items: results.map((row: Record<string, unknown>) => ({
+          total: mode === 'unlearned' ? matchedTotal : rows.length,
+          offset,
+          limit,
+          has_more: mode === 'unlearned' && offset + rows.length < matchedTotal,
+          items: rows.map((row: Record<string, unknown>) => ({
             ...row,
+            filtered_total: undefined,
             options: JSON.parse(String(row.options_json || '[]')),
             answer: JSON.parse(String(row.answer_json || 'null')),
             options_json: undefined,
