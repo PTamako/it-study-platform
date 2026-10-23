@@ -163,7 +163,7 @@ const examTracks = ref<ExamTrack[]>([])
 const selectedTrackId = ref('exam-sg')
 const tracksLoading = ref(false)
 const tracksError = ref('')
-const questionSourceFilter = ref<'official' | 'generated'>('official')
+const questionSourceFilter = ref<'official' | 'generated'>('generated')
 const questionSourceFilters = [
   { id: 'official', label: '历年真题' },
   { id: 'generated', label: '预测题库' },
@@ -211,7 +211,7 @@ async function startMockExam() {
     if (!data.items || data.items.length < 60) throw new Error('正式模拟考试需要 60 道题，当前实际加载 ' + (data.items?.length || 0) + ' 道；不会用重复题目补足数量。')
     mockQuestions.value = data.items.slice(0, 60)
     mockAnswers.value = {}
-    mockDurationMinutes.value = 90
+    mockDurationMinutes.value = 120
     mockStartedAt.value = Date.now()
     mockDeadline.value = mockStartedAt.value + mockDurationMinutes.value * 60 * 1000
     mockNow.value = mockStartedAt.value
@@ -1035,11 +1035,11 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               </div>
             </section>
             <section class="section-block mock-exam-section">
-              <div class="section-heading"><div><div class="section-kicker">TIMED MOCK EXAM</div><h2>限时模拟考试</h2><p>随机抽取 60 道题，每题 2 分、满分 120 分，限时 90 分钟。交卷或时间结束前，不显示正确答案与解析。</p></div><span class="source-pill">限时 · 独立计分</span></div>
+              <div class="section-heading"><div><div class="section-kicker">TIMED MOCK EXAM</div><h2>限时模拟考试</h2><p>随机抽取 60 道题，每题 2 分、满分 120 分，限时 120 分钟。交卷或时间结束前，不显示正确答案与解析。</p></div><span class="source-pill">限时 · 独立计分</span></div>
               <div v-if="!mockStarted && !mockSubmitted" class="panel practice-start-card">
                 <div class="practice-start-icon"><Clock3 :size="25" /></div><h3>模拟真实考试节奏</h3>
-                <p>当前题库有 {{ selectedTrack?.question_count || 0 }} 道可用题目。正式模拟固定 60 题、每题 2 分、满分 120 分、限时 90 分钟；题量不足时不会用重复题补足。</p>
-                <button class="primary-button" @click="startMockExam" :disabled="mockLoading || !selectedTrack?.question_count">{{ mockLoading ? '正在准备题目…' : '开始限时模拟' }} <ArrowRight :size="16" /></button>
+                <p>当前题库有 {{ selectedTrack?.question_count || 0 }} 道可用题目。正式模拟固定 60 题、每题 2 分、满分 120 分、限时 120 分钟；题量不足时不会用重复题补足。</p>
+                <button class="primary-button" @click="startMockExam"  :disabled="mockLoading || !selectedTrack || selectedTrack.question_count < 60">{{ mockLoading ? '正在准备题目…' : selectedTrack && selectedTrack.question_count < 60 ? '题量不足 60 道' : '开始限时模拟' }} <ArrowRight :size="16" /></button>
                 <p v-if="mockError" class="practice-error">{{ mockError }}</p>
               </div>
               <div v-else-if="mockSubmitted" class="panel practice-start-card">
