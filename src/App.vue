@@ -385,8 +385,6 @@ async function startWrongReview() {
       return
     }
     quizQuestions.value = data.items
-    questionBankTotal.value = data.total || 0
-    questionBankHasMore.value = Boolean(data.has_more)
     quizIndex.value = 0
     selectedOption.value = ''
     quizSubmitted.value = false
@@ -413,6 +411,8 @@ async function startPractice() {
     if (!response.ok) throw new Error(data.error || '题库加载失败')
     if (!data.items?.length) throw new Error(questionSourceFilter.value === 'official' ? '历年真题正在整理导入；目前没有可作答的官方题目。' : '预测题库目前没有可用题目，请稍后重试。')
     quizQuestions.value = data.items
+    questionBankTotal.value = data.total || 0
+    questionBankHasMore.value = Boolean(data.has_more)
     quizIndex.value = 0
     selectedOption.value = ''
     quizSubmitted.value = false
