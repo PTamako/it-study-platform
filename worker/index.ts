@@ -581,12 +581,18 @@ export default {
     if (url.pathname === '/api/questions') {
       const trackId = url.searchParams.get('track') || 'exam-sg'
       const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 10)))
+      const topic = (url.searchParams.get('topic') || '').trim().slice(0, 100)
+      const mode = url.searchParams.get('mode') || 'random'
       try {
         const { results } = await env.DB.prepare(
           `SELECT id, track_id, topic, difficulty, question_type, prompt,
                   options_json, answer_json, explanation, source_type, source_reference, language
-           FROM questions WHERE track_id = ? ORDER BY id LIMIT ?`,
-        ).bind(trackId, limit).all()
+           FROM questions
+           WHERE track_id = ? AND (? = '' OR topic = ?)
+           ORDER BY CASE WHEN ? = 'ordered' THEN id END,
+                    CASE WHEN ? <> 'ordered' THEN random() END
+           LIMIT ?`,
+        ).bind(trackId, topic, topic, mode, mode, limit).all()
         return json({
           items: results.map((row: Record<string, unknown>) => ({
             ...row,
