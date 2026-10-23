@@ -158,6 +158,10 @@ const quizSubmitted = ref(false)
 const quizLoading = ref(false)
 const quizError = ref('')
 const quizCorrect = ref(0)
+const questionBankTotal = ref(0)
+const questionBatchOffset = ref(0)
+const questionBatchSize = 10
+const questionBankHasMore = ref(false)
 type ExamTrack = { id: string; kind: string; title: string; subtitle: string; question_count: number }
 const examTracks = ref<ExamTrack[]>([])
 const selectedTrackId = ref('exam-sg')
@@ -343,6 +347,7 @@ function selectExam(track: ExamTrack) {
 
 async function selectQuestionSource(source: 'all' | 'generated' | 'licensed') {
   questionSourceFilter.value = source
+  questionBatchOffset.value = 0
   // Changing a source should have an immediate, visible effect instead of only changing a hidden filter.
   quizQuestions.value = []
   quizIndex.value = 0
@@ -351,8 +356,11 @@ async function selectQuestionSource(source: 'all' | 'generated' | 'licensed') {
   quizCorrect.value = 0
   quizFinished.value = false
   quizError.value = ''
+  questionBatchOffset.value = 0
   if (source === 'licensed') {
-    quizError.value = '当前题库还没有已登记的授权题目。选择“全部题目”或“专项练习”即可开始练习。'
+    quizError.value = '授权题目：0 道。当前尚未导入授权题目，选择“全部题目”或“专项练习”开始练习。'
+    questionBankTotal.value = 0
+    questionBankHasMore.value = false
     return
   }
   await startPractice()
@@ -370,6 +378,8 @@ async function startWrongReview() {
       return
     }
     quizQuestions.value = data.items
+    questionBankTotal.value = data.total || data.items.length
+    questionBankHasMore.value = Boolean(data.has_more)
     quizIndex.value = 0
     selectedOption.value = ''
     quizSubmitted.value = false
@@ -391,8 +401,8 @@ async function startPractice() {
   quizLoading.value = true
   quizError.value = ''
   try {
-    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value) + '&limit=10')
-    const data = await response.json() as { items?: PracticeQuestion[]; error?: string }
+    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value) + '&mode=ordered&limit=' + questionBatchSize + '&offset=' + questionBatchOffset.value)
+    const data = await response.json() as { items?: PracticeQuestion[]; error?: string; total?: number; has_more?: boolean }
     if (!response.ok) throw new Error(data.error || '题库加载失败')
     if (!data.items?.length) throw new Error(questionSourceFilter.value === 'licensed' ? '当前题库还没有已登记的授权题目。' : '当前考试目前没有可用题目，请稍后重试。')
     quizQuestions.value = data.items
@@ -407,6 +417,14 @@ async function startPractice() {
   } finally {
     quizLoading.value = false
   }
+}
+async function nextQuestionBatch() {
+  if (!questionBankHasMore.value) {
+    quizError.value = '当前筛选条件下的题目已全部练完。新增题目入库后，这里会自动显示更新后的总量。'
+    return
+  }
+  questionBatchOffset.value += questionBatchSize
+  await startPractice()
 }
 function submitPracticeAnswer() {
   if (!currentQuestion.value || !selectedOption.value || quizSubmitted.value) return
@@ -993,7 +1011,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
             </div>
 
             <section class="practice-section">
-              <div class="section-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2><p>从题库中抽题，提交后立即查看答案与解析。</p></div><span class="source-pill">{{ selectedTrack?.question_count ? selectedTrack.question_count + ' 道可练习' : '题库待接入' }}</span></div>
+              <div class="section-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2><p>从题库中抽题，提交后立即查看答案与解析。</p></div><span class="source-pill">{{ questionBankTotal || selectedTrack?.question_count || 0 }} 道题库题目</span></div>
               <div class="question-source-filters" role="group" aria-label="题目来源筛选">
                 <button v-for="filter in questionSourceFilters" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" @click="selectQuestionSource(filter.id)">{{ filter.label }}</button>
               </div>
@@ -1003,15 +1021,15 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                   <div class="practice-result-score">{{ quizCorrect }} / {{ quizQuestions.length }}</div>
                   <h3>本次练习完成</h3>
                   <p>正确率 {{ Math.round(quizCorrect / quizQuestions.length * 100) }}%。本次成绩已加入当前设备的历史记录。</p>
-                  <button class="primary-button" @click="startPractice" :disabled="quizLoading">{{ quizLoading ? '正在加载…' : '再练一组' }} <ArrowRight :size="16" /></button>
+                  <button class="primary-button" @click="nextQuestionBatch" :disabled="quizLoading || !questionBankHasMore">{{ quizLoading ? '正在加载…' : questionBankHasMore ? '继续下一组' : '已完成当前题库' }} <ArrowRight :size="16" /></button>
                 </template>
                 <template v-else>
                   <div class="practice-start-icon"><GraduationCap :size="25" /></div>
                   <h3>准备好开始练习了吗？</h3>
-                  <p v-if="selectedTrack?.question_count">从 D1 读取 {{ selectedTrack.title }} 题目，提交后查看正确答案与解析。</p>
+                  <p v-if="selectedTrack?.question_count">当前筛选共 {{ questionBankTotal || selectedTrack.question_count }} 道题，每组 {{ questionBatchSize }} 道；完成后可继续下一组，不再只随机抽同一批。</p>
                   <p v-else>你可以选择不同考试。目前 SG 已接入专项练习题库；其他考试将在题库准备完成后开放。</p>
                   <div class="practice-start-actions">
-                    <button class="primary-button" @click="startPractice" :disabled="quizLoading || !selectedTrack || selectedTrack.question_count === 0">{{ quizLoading ? '正在加载题目…' : selectedTrack?.question_count ? '开始练习（最多 10 题）' : '当前暂无可练习题目' }} <ArrowRight :size="16" /></button>
+                    <button class="primary-button" @click="startPractice" :disabled="quizLoading || !selectedTrack || selectedTrack.question_count === 0">{{ quizLoading ? '正在加载题目…' : selectedTrack?.question_count ? '开始刷题（每组 10 题）' : '当前暂无可练习题目' }} <ArrowRight :size="16" /></button>
                     <button class="text-link" @click="startWrongReview" :disabled="quizLoading || !selectedTrack">{{ quizLoading ? '正在加载…' : '复习云端错题' }}</button>
                   </div>
                   <p v-if="quizError" class="practice-error">{{ quizError }}</p>
