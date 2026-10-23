@@ -6,11 +6,11 @@
 
 - **题库与官方题源**：新增 `question_sources` 元数据表与 `/api/question-sources`，按所选考试显示对应官方来源。练习区提供“全部题目 / 官方过去问 / 专项练习 / 授权题目”来源筛选，`/api/questions` 支持 `source=all|official|generated|licensed`。当前官方区域主要提供链接目录，官方题文尚未完整导入；官方筛选为空时会明确提示，不会拿自编题冒充真题。详见 `docs/question-bank-expansion.md`。
 - **语言间隔复习**：`/api/language-review` 记录每张语言卡的复习次数、连续记住次数与下次复习时间；记住后按 1、3、7、14 天逐步延长间隔，选择“还不熟”则安排约 10 分钟后重试。需要先应用 `0013_language_spaced_repetition.sql`，并在 D1 迁移完成后部署 Worker。
-- **考试备考**：考试列表从 D1 已启用模块动态读取，显示每项考试实际题量。当前 SG 已通过多批迁移接入平台自编练习题，实际题量由 D1 动态计算；FE/AP 在对应题库未接入前不会启动练习。答案会即时判分，并通过 `/api/attempts` 将每次答案写入 D1；可通过 `/api/wrong-questions?track=exam-sg` 按错题频次提取复习题。
+- **考试备考**：考试列表从 D1 已启用模块动态读取，显示每项考试实际题量。当前 SG 已通过多批迁移接入平台自编练习题（最新 `0014_sg_question_bank_pack_2.sql` 新增 22 道日语题干、中文解析的原创练习题；不是官方过去问），实际题量由 D1 动态计算；FE/AP 在对应题库未接入前不会启动练习。答案会即时判分，并通过 `/api/attempts` 将每次答案写入 D1；可通过 `/api/wrong-questions?track=exam-sg` 按错题频次提取复习题。
 - **语言学习**：统一入口后选择日语或英语，从 `language_cards` 表读取课程卡片，支持分类筛选、读音、中文解释、例句、浏览器发音及本地掌握进度。当前内容为平台自编学习资料，已明确标注，不冒充官方课程。
 - **中日英互译与 IT 术语词典**：优先检索 D1 `vocabulary` 术语表，提供中日英释义、日语读音与例句；未命中时调用在线英语/日语词典和机器翻译。对“展开/收起、保存、取消、搜索、设置”等常用 UI 词增加 Worker 离线中日英兜底，即使外部翻译源限流也尽量给出结果。在线翻译使用 MyMemory 与 Google 双主机备用，并缓存成功译文 6 小时，以降低重复查询和短暂上游故障的影响；首次遇到上游限流或网络拦截时仍可能失败。对未覆盖的词不捏造结果。支持手动选择源语言、发音、结果来源、最近查询与本地生词收藏。
 - **学习计划与今日进度**：每日任务清单、目标分钟数、完成比例；任务完成状态按日期保存在当前设备。
-- **实战演练**：`practical_scenarios` 保存情境、选项和评分规则，`/api/scenarios` 返回任务，`POST /api/scenario-attempts` 在 Worker 端判分并把结果保存到 `scenario_attempts`。SG 情景库已分批补充访问控制、钓鱼与事件响应、生产变更、漏洞修补、日志完整性、供应链数据处理等场景；具体数量以 D1 返回为准。所有内容均为平台自编材料，不是官方真题。
+- **实战训练**：独立页面模块读取 `practical_scenarios`，显示情境、选项、分数和复盘反馈；`/api/scenarios` 返回任务，`POST /api/scenario-attempts` 在 Worker 端判分并把结果保存到 `scenario_attempts`。迁移 `0017_sg_practical_scenarios_pack.sql` 再增补 25 个情境，覆盖第三方账号、勒索软件、云共享、MFA、备份恢复、漏洞修补、个人信息误发、审计日志、数据脱敏、开发密钥、环境隔离等。内容为平台原创情境，不冒充官方真题。
 - **考试统计与历史成绩**：练习题答案写入 `study_attempts`；实战分数写入 `scenario_attempts`。首页旧的手动成绩与每日任务仍然保存在浏览器 localStorage，不应与云端答题记录混为一谈。
 - **PWA**：支持通过 iPhone Safari 的“分享 → 添加到主屏幕”安装为类 App 入口。
 
@@ -50,7 +50,7 @@ npm run build
    npx wrangler login
    ```
 
-3. 将全部表结构、SG 自编练习题、扩充后的技术词库、语言卡片、SG 练习题和实战情境应用到远程 D1（会按迁移编号依序执行，包括 `0007`、`0008`、`0009`、`0010`、`0011`、`0012`、`0013`）：
+3. 将全部表结构、SG 自编练习题、扩充后的技术词库、语言卡片、SG 练习题和实战情境应用到远程 D1（会按迁移编号依序执行，包括 `0007`、`0008`、`0009`、`0010`、`0011`、`0012`、`0013`、`0014`、`0015`、`0016`、`0017`、`0018`、`0019`、`0020`）：
 
    ```sh
    npx wrangler d1 migrations apply it-study-platform-db --remote
@@ -106,3 +106,34 @@ npm run build
 - 后续应增加自动化测试和密钥泄漏扫描。
 - Worker 提供只读查询 API，并开放 `/api/attempts` 与 `/api/scenario-attempts` 两个经过字段校验的 POST 写入接口。当前没有用户账号/身份认证，适用于个人测试，不应存放敏感信息；若公开部署给多人使用，必须先加入身份认证、用户隔离、滥用限制与 CSRF/来源策略。
 - 当前学习计划勾选状态与手动考试成绩先保存在浏览器 localStorage 中：同一设备、同一浏览器可保留记录，但清理网站数据后会丢失，也不会自动同步到其他设备。后续接入账号/安全的写入 API 后，再迁移到 D1。
+
+
+## SG 题库分类与目标
+
+SG 题库在界面上只保留两个分类：
+
+- **历年真题**（`source_type='official'`）：仅导入 IPA 官方公开的 SG 试题与答案；每题应保存年度、题号和官方 PDF 来源。
+- **预测题库**（`source_type='generated'`）：知学原创预测题，题干为日语并配中文解析，不得标注为官方真题。
+
+总量目标约 **1,100 题**。界面显示的是真实数据库数量；目标数只是目标，不代表已完成。IPA 的 CBT 公开题只覆盖实际考试的一部分，官方公开题以 IPA 页面为准：
+- [SG/FE 公开问题（2026 年度）](https://www.ipa.go.jp/shiken/mondai-kaiotu/sg_fe/koukai/2026r08.html)
+- [SG/FE 公开问题（2025 年度）](https://www.ipa.go.jp/shiken/mondai-kaiotu/sg_fe/koukai/2025r07.html)
+- [SG/FE 公开问题（2024 年度）](https://www.ipa.go.jp/shiken/mondai-kaiotu/sg_fe/koukai/2024r06.html)
+- [SG/FE 公开问题（2023 年度）](https://www.ipa.go.jp/shiken/mondai-kaiotu/sg_fe/koukai/2023r05.html)
+
+不要把官方题源链接列表当作题目本身。正式导入时，题目需能在站内作答，并记录答案、解析与来源信息。
+
+
+## SG question bank progress
+
+- `migrations/0014_sg_question_bank_pack_2.sql`: 22 original prediction questions.
+- `migrations/0015_sg_prediction_pack_3.sql`: 56 additional original prediction questions (stable IDs, `source_type='generated'`, Japanese prompts/options and Chinese explanations).
+- `migrations/0016_sg_official_2025_public_questions.sql`: 15 official-source questions from the 2025 IPA public SG paper, mapped to the published answer key and referencing the source PDF.
+- `migrations/0017_sg_practical_scenarios_pack.sql`: 25 additional authored practical scenarios. The `practical` page was missing from the module registry/template even though loading/submission APIs already existed; this migration plus the UI entry exposes the end-to-end flow.
+- `migrations/0018_sg_official_2026_public_questions.sql`: 15 questions from IPA's FY2026 public SG paper, with answers mapped to the official answer key.
+- `migrations/0019_sg_official_2024_public_questions.sql`: 15 questions from IPA's FY2024 public SG paper, with answers mapped to the official answer key.
+- `migrations/0020_sg_official_2023_public_questions.sql`: 15 questions from IPA's FY2023 public SG paper, with answers mapped to the official answer key.\n- `migrations/0021_sg_official_2019_autumn_am_questions_01_15.sql`: first 15 legacy written-exam questions from 2019 autumn morning session, with question/options and official answer-key mapping.\n- `migrations/0022_sg_official_2019_autumn_am_questions_16_20.sql`: next five 2019 autumn morning questions (16–20), with item-level answer verification and explanations.\n- `migrations/0023_sg_prediction_pack_4.sql`: 30 additional original SG prediction questions covering DNS, crypto, authentication attacks, incident response, logs, backup, vulnerabilities, cloud, privacy, web security, BCP, audit and physical security.\n- `migrations/0024_sg_official_2019_autumn_am_questions_21_24.sql`: four more verified 2019 autumn morning questions (21–24), with official-source references and Chinese explanations.
+
+There are now 75 official-source question records in migrations: 60 from the 2023–2026 public-paper batches plus 15 from the 2019 autumn legacy written exam. The 500-historical-question goal is not yet met; continue importing the remaining 2019 questions and the 2016–2018 sessions in verified batches.
+- Mock exam behavior: exactly 60 unique questions, 2 points per question (120 points total), 120-minute limit; no repeated-question padding. Unanswered questions are recorded as incorrect when the exam is submitted, so they can appear in the wrong-question review.
+- Historical questions must be imported from verifiable IPA source documents with the official answer key; links alone do not count as imported questions. The 500-question historical target is not yet met and must not be presented as complete until verified question records exist in D1.

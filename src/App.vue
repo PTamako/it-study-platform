@@ -6,7 +6,7 @@ import {
   ShieldCheck, BookMarked, Menu, X, CheckCircle2, CircleHelp, Target, TrendingUp, ListChecks, PlusCircle,
 } from 'lucide-vue-next'
 
-type ModuleId = 'home' | 'exam' | 'language' | 'dictionary'
+type ModuleId = 'home' | 'exam' | 'practical' | 'language' | 'dictionary'
 const activeModule = ref<ModuleId>('home')
 const searchText = ref('')
 const dictSourceLang = ref<'auto' | 'ja' | 'en' | 'zh' | 'it'>('auto')
@@ -149,7 +149,7 @@ function removeExamRecords() {
 type PracticeOption = { id: string; text: string }
 type PracticeQuestion = {
   id: string; track_id: string; topic: string; difficulty: string; prompt: string;
-  options: PracticeOption[]; answer: string; explanation: string; source_type: string; language: string
+  options: PracticeOption[]; answer: string; explanation: string; source_type: string; source_reference?: string; language: string
 }
 const quizQuestions = ref<PracticeQuestion[]>([])
 const quizIndex = ref(0)
@@ -158,16 +158,19 @@ const quizSubmitted = ref(false)
 const quizLoading = ref(false)
 const quizError = ref('')
 const quizCorrect = ref(0)
-type ExamTrack = { id: string; kind: string; title: string; subtitle: string; question_count: number }
+const questionBankTotal = ref(0)
+const questionBatchOffset = ref(0)
+const questionBatchSize = 10
+const questionBankHasMore = ref(false)
+type ExamTrack = { id: string; kind: string; title: string; subtitle: string; question_count: number; official_question_count?: number; prediction_question_count?: number }
 const examTracks = ref<ExamTrack[]>([])
 const selectedTrackId = ref('exam-sg')
 const tracksLoading = ref(false)
 const tracksError = ref('')
-const questionSourceFilter = ref<'all' | 'generated' | 'licensed'>('all')
+const questionSourceFilter = ref<'official' | 'generated'>('generated')
 const questionSourceFilters = [
-  { id: 'all', label: '全部题目' },
-  { id: 'generated', label: '专项练习' },
-  { id: 'licensed', label: '授权题目' },
+  { id: 'official', label: '历年真题' },
+  { id: 'generated', label: '预测题库' },
 ] as const
 
 const selectedTrack = computed(() => examTracks.value.find(track => track.id === selectedTrackId.value) || null)
@@ -194,24 +197,25 @@ const mockRemainingSeconds = computed(() => mockStarted.value && !mockSubmitted.
 const mockCorrectCount = computed(() => mockQuestions.value.filter(question => mockAnswers.value[question.id] === question.answer).length)
 const mockAnsweredCount = computed(() => Object.values(mockAnswers.value).filter(Boolean).length)
 const mockAccuracy = computed(() => mockQuestions.value.length ? Math.round(mockCorrectCount.value / mockQuestions.value.length * 100) : 0)
+const mockScore = computed(() => mockCorrectCount.value * 2)
 function formatMockTime(seconds: number) {
   return String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0')
 }
 async function startMockExam() {
-  if (!selectedTrack.value || !selectedTrack.value.question_count) {
-    mockError.value = '当前考试没有可用题目，暂时无法开始模拟考试。'
+  if (!selectedTrack.value || selectedTrack.value.question_count < 60) {
+    mockError.value = '正式模拟考试固定为 60 题。当前可用题量不足 60 道，请先完成题库导入后再开始。'
     return
   }
   mockLoading.value = true
   mockError.value = ''
   try {
-    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=30')
+    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=60&mode=random')
     const data = await response.json() as { items?: PracticeQuestion[]; error?: string }
     if (!response.ok) throw new Error(data.error || '模拟考试题目加载失败')
-    if (!data.items?.length) throw new Error('题库目前没有可用题目。')
-    mockQuestions.value = data.items
+    if (!data.items || data.items.length < 60) throw new Error('正式模拟考试需要 60 道题，当前实际加载 ' + (data.items?.length || 0) + ' 道；不会用重复题目补足数量。')
+    mockQuestions.value = data.items.slice(0, 60)
     mockAnswers.value = {}
-    mockDurationMinutes.value = Math.max(1, Math.ceil(data.items.length * 1.5))
+    mockDurationMinutes.value = 120
     mockStartedAt.value = Date.now()
     mockDeadline.value = mockStartedAt.value + mockDurationMinutes.value * 60 * 1000
     mockNow.value = mockStartedAt.value
@@ -235,14 +239,14 @@ async function finishMockExam(autoSubmit = false) {
   if (mockTimer) { clearInterval(mockTimer); mockTimer = undefined }
   const total = mockQuestions.value.length
   const correct = mockCorrectCount.value
-  examRecords.value.push({ date: todayKey, correct, total, exam: (selectedTrack.value?.title || selectedTrackId.value) + ' 模拟考试' })
+  examRecords.value.push({ date: todayKey, correct, total, exam: (selectedTrack.value?.title || selectedTrackId.value) + ' 模拟考试（' + (correct * 2) + '/120分）' })
   const unanswered = total - mockAnsweredCount.value
   if (autoSubmit) mockError.value = '时间到，系统已自动交卷。未作答题目按答错计。'
   else mockError.value = unanswered ? '已交卷。未作答的 ' + unanswered + ' 题按答错计。' : ''
-  const attempts = mockQuestions.value.filter(question => mockAnswers.value[question.id])
+  const attempts = mockQuestions.value
   const results = await Promise.allSettled(attempts.map(question => fetch('/api/attempts', {
     method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ question_id: question.id, answer: mockAnswers.value[question.id], duration_seconds: Math.max(0, Math.floor((Date.now() - mockStartedAt.value) / 1000)) }),
+    body: JSON.stringify({ question_id: question.id, answer: mockAnswers.value[question.id] || '', duration_seconds: Math.max(0, Math.floor((Date.now() - mockStartedAt.value) / 1000)) }),
   })))
   if (results.some(result => result.status === 'rejected' || (result.status === 'fulfilled' && !result.value.ok))) {
     mockError.value = (mockError.value ? mockError.value + ' ' : '') + '部分答题记录未能同步到云端。'
@@ -283,6 +287,16 @@ async function loadScenarios() {
     scenariosLoading.value = false
   }
 }
+function nextScenario() {
+  if (!scenarios.value.length) return
+  const index = scenarios.value.findIndex(item => item.id === currentScenario.value?.id)
+  const next = scenarios.value[(index + 1) % scenarios.value.length]
+  selectedScenarioId.value = next.id
+  selectedScenarioOption.value = ''
+  scenarioResult.value = null
+  scenariosError.value = ''
+}
+
 async function submitScenario() {
   if (!currentScenario.value || !selectedScenarioOption.value || scenarioSubmitting.value || scenarioResult.value) return
   scenarioSubmitting.value = true
@@ -312,7 +326,7 @@ async function submitScenario() {
     scenarioSubmitting.value = false
   }
 }
-watch(selectedTrackId, () => {
+watch([selectedTrackId, examTracks], () => {
   void loadScenarios()
 })
 async function loadExamTracks() {
@@ -331,6 +345,9 @@ async function loadExamTracks() {
   }
 }
 function selectExam(track: ExamTrack) {
+  questionBatchOffset.value = 0
+  questionBankTotal.value = 0
+  questionBankHasMore.value = false
   selectedTrackId.value = track.id
   quizQuestions.value = []
   quizIndex.value = 0
@@ -341,9 +358,11 @@ function selectExam(track: ExamTrack) {
   quizError.value = ''
 }
 
-async function selectQuestionSource(source: 'all' | 'generated' | 'licensed') {
+async function selectQuestionSource(source: 'official' | 'generated') {
   questionSourceFilter.value = source
-  // Changing a source should have an immediate, visible effect instead of only changing a hidden filter.
+  questionBatchOffset.value = 0
+  questionBankTotal.value = 0
+  questionBankHasMore.value = false
   quizQuestions.value = []
   quizIndex.value = 0
   selectedOption.value = ''
@@ -351,10 +370,6 @@ async function selectQuestionSource(source: 'all' | 'generated' | 'licensed') {
   quizCorrect.value = 0
   quizFinished.value = false
   quizError.value = ''
-  if (source === 'licensed') {
-    quizError.value = '当前题库还没有已登记的授权题目。选择“全部题目”或“专项练习”即可开始练习。'
-    return
-  }
   await startPractice()
 }
 async function startWrongReview() {
@@ -391,11 +406,13 @@ async function startPractice() {
   quizLoading.value = true
   quizError.value = ''
   try {
-    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value) + '&limit=10')
-    const data = await response.json() as { items?: PracticeQuestion[]; error?: string }
+    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value) + '&mode=ordered&limit=' + questionBatchSize + '&offset=' + questionBatchOffset.value)
+    const data = await response.json() as { items?: PracticeQuestion[]; error?: string; total?: number; has_more?: boolean }
     if (!response.ok) throw new Error(data.error || '题库加载失败')
-    if (!data.items?.length) throw new Error(questionSourceFilter.value === 'licensed' ? '当前题库还没有已登记的授权题目。' : '当前考试目前没有可用题目，请稍后重试。')
+    if (!data.items?.length) throw new Error(questionSourceFilter.value === 'official' ? '历年真题正在整理导入；目前没有可作答的官方题目。' : '预测题库目前没有可用题目，请稍后重试。')
     quizQuestions.value = data.items
+    questionBankTotal.value = data.total || 0
+    questionBankHasMore.value = Boolean(data.has_more)
     quizIndex.value = 0
     selectedOption.value = ''
     quizSubmitted.value = false
@@ -407,6 +424,12 @@ async function startPractice() {
   } finally {
     quizLoading.value = false
   }
+}
+async function nextQuestionBatch() {
+  if (questionBankHasMore.value) questionBatchOffset.value += questionBatchSize
+  else questionBatchOffset.value = 0
+  quizError.value = ''
+  await startPractice()
 }
 function submitPracticeAnswer() {
   if (!currentQuestion.value || !selectedOption.value || quizSubmitted.value) return
@@ -443,7 +466,8 @@ function nextPracticeQuestion() {
 
 const moduleInfo = {
   home: { title: '今天，学一点新的。', subtitle: '把考试、语言和专业知识，放进一个顺手的学习空间。' },
-  exam: { title: '考试备考', subtitle: '选择已启用的考试；题库已接入的考试才能开始练习。当前已接入 SG。' },
+  exam: { title: '考试备考', subtitle: '日常刷题、复习错题与限时模拟考试。' },
+  practical: { title: '实战训练', subtitle: '在工作情境中判断风险、选择行动，并查看评分与解释。' },
   language: { title: '语言学习', subtitle: '选择日语或英语，按实际学习内容练习表达、理解和发音。' },
   dictionary: { title: '多语言词典', subtitle: '把中文、日语、英语和 IT 术语连起来，随查随记。' },
 } as const
@@ -452,7 +476,8 @@ const currentInfo = computed(() => moduleInfo[activeModule.value])
 const searchPlaceholder = computed(() => activeModule.value === 'dictionary' ? '查词、查缩写，例如 MFA / 認証…' : '搜索考试、课程、知识点…')
 
 const modules = [
-  { id: 'exam' as const, title: '考试备考', en: 'EXAM PREP', desc: '按已接入考试选择目标与练习', icon: GraduationCap, tone: 'lavender', count: '题量以题库数据为准' },
+  { id: 'exam' as const, title: '考试备考', en: 'EXAM PREP', desc: '日常练习 · 错题复习 · 限时模拟考试', icon: GraduationCap, tone: 'lavender', count: '题量以题库数据为准' },
+  { id: 'practical' as const, title: '实战训练', en: 'PRACTICAL LAB', desc: '安全事件与职场决策情境', icon: ShieldCheck, tone: 'blue', count: '情境题 · 评分 · 复盘' },
   { id: 'language' as const, title: '语言学习', en: 'LANGUAGE', desc: '日语 / 英语 · 例句 · 发音 · 复习', icon: Languages, tone: 'peach', count: '选择语言开始学习' },
   { id: 'dictionary' as const, title: '词典与 IT 术语', en: 'DICTIONARY', desc: '中日英互译 · 专业词库 · 生词本', icon: BookMarked, tone: 'blue', count: '普通词汇与技术词汇' },
 ]
@@ -987,15 +1012,15 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               <button v-for="exam in examTracks" :key="exam.id" class="exam-card" :class="{ 'exam-card-selected': selectedTrackId === exam.id }" @click="selectExam(exam)">
                 <span class="exam-code" :class="exam.id.endsWith('sg') ? 'purple' : exam.id.endsWith('fe') ? 'blue' : 'green'">{{ exam.id.split('-').pop()?.toUpperCase() }}</span>
                 <span class="exam-info"><strong>{{ exam.title }}</strong><small>{{ exam.subtitle }}</small></span>
-                <span class="exam-progress">{{ exam.question_count ? exam.question_count + ' 道可练习' : '题库尚未接入' }}</span><ChevronRight :size="18" class="muted" />
+                <span class="exam-progress">{{ '真题 ' + (exam.official_question_count || 0) + ' · 预测 ' + (exam.prediction_question_count || 0) }}</span><ChevronRight :size="18" class="muted" />
               </button>
               <div v-if="!tracksLoading && !tracksError && examTracks.length === 0" class="empty-state"><GraduationCap :size="25" /><strong>暂无已启用的考试</strong><p>请先在 D1 学习模块表中启用考试。</p></div>
             </div>
 
             <section class="practice-section">
-              <div class="section-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2><p>从题库中抽题，提交后立即查看答案与解析。</p></div><span class="source-pill">{{ selectedTrack?.question_count ? selectedTrack.question_count + ' 道可练习' : '题库待接入' }}</span></div>
+              <div class="section-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2><p>从题库中抽题，提交后立即查看答案与解析。</p></div><span class="source-pill">{{ '总题量 ' + (selectedTrack?.question_count || 0) + ' / 1,100 · 真题 ' + (selectedTrack?.official_question_count || 0) + ' / 448 · 预测 ' + (selectedTrack?.prediction_question_count || 0) + ' / 652' }}</span></div>
               <div class="question-source-filters" role="group" aria-label="题目来源筛选">
-                <button v-for="filter in questionSourceFilters" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" @click="selectQuestionSource(filter.id)">{{ filter.label }}</button>
+                <button v-for="filter in questionSourceFilters" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" @click="selectQuestionSource(filter.id)">{{ filter.label }}（{{ filter.id === 'official' ? (selectedTrack?.official_question_count || 0) : (selectedTrack?.prediction_question_count || 0) }}）</button>
               </div>
               <div v-if="!quizQuestions.length || quizFinished" class="panel practice-start-card">
                 <template v-if="quizFinished">
@@ -1003,7 +1028,8 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                   <div class="practice-result-score">{{ quizCorrect }} / {{ quizQuestions.length }}</div>
                   <h3>本次练习完成</h3>
                   <p>正确率 {{ Math.round(quizCorrect / quizQuestions.length * 100) }}%。本次成绩已加入当前设备的历史记录。</p>
-                  <button class="primary-button" @click="startPractice" :disabled="quizLoading">{{ quizLoading ? '正在加载…' : '再练一组' }} <ArrowRight :size="16" /></button>
+                  <p class="muted">当前筛选题量 {{ questionBankTotal }} 题 · 本组 {{ questionBatchOffset + 1 }}–{{ Math.min(questionBatchOffset + quizQuestions.length, questionBankTotal) }} 题</p>
+                  <button class="primary-button" @click="nextQuestionBatch" :disabled="quizLoading">{{ quizLoading ? '正在加载…' : questionBankHasMore ? '继续下一组（10 题）' : '从头再练' }} <ArrowRight :size="16" /></button>
                 </template>
                 <template v-else>
                   <div class="practice-start-icon"><GraduationCap :size="25" /></div>
@@ -1018,9 +1044,10 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 </template>
               </div>
               <div v-else-if="currentQuestion" class="panel question-card">
-                <div class="question-topline"><span>{{ selectedTrack?.title || '考试练习' }} · 第 {{ quizIndex + 1 }} / {{ quizQuestions.length }} 题</span><span class="source-pill">{{ currentQuestion?.source_type === 'generated' ? '自编练习题' : currentQuestion?.source_type === 'official' ? '官方题目' : currentQuestion?.source_type === 'licensed' ? '授权题目' : '个人题目' }}</span></div>
+                <div class="question-topline"><span>{{ selectedTrack?.title || '考试练习' }} · 第 {{ quizIndex + 1 }} / {{ quizQuestions.length }} 题</span><span class="source-pill">{{ currentQuestion?.source_type === 'generated' ? '预测题库 · 原创' : currentQuestion?.source_type === 'official' ? '历年真题' : '其他题目' }}</span></div>
                 <div class="question-progress"><span :style="{ width: ((quizIndex + 1) / quizQuestions.length * 100) + '%' }"></span></div>
                 <div class="question-topic">{{ currentQuestion.topic }}</div>
+                <a v-if="currentQuestion.source_type === 'official' && currentQuestion.source_reference" class="language-source" :href="currentQuestion.source_reference" target="_blank" rel="noreferrer">IPA 官方原卷 ↗</a>
                 <h3 class="question-prompt">{{ currentQuestion.prompt }}</h3>
                 <div class="question-options">
                   <button v-for="option in currentQuestion.options" :key="option.id" class="question-option" :class="{ selected: selectedOption === option.id, correct: quizSubmitted && option.id === currentQuestion.answer, incorrect: quizSubmitted && selectedOption === option.id && option.id !== currentQuestion.answer }" :disabled="quizSubmitted" @click="selectedOption = option.id">
@@ -1039,17 +1066,17 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               </div>
             </section>
             <section class="section-block mock-exam-section">
-              <div class="section-heading"><div><div class="section-kicker">TIMED MOCK EXAM</div><h2>限时模拟考试</h2><p>随机抽取最多 30 道当前考试题。交卷或时间结束前，不显示正确答案与解析。</p></div><span class="source-pill">限时 · 独立计分</span></div>
+              <div class="section-heading"><div><div class="section-kicker">TIMED MOCK EXAM</div><h2>限时模拟考试</h2><p>随机抽取 60 道题，每题 2 分、满分 120 分，限时 120 分钟。交卷或时间结束前，不显示正确答案与解析。</p></div><span class="source-pill">限时 · 独立计分</span></div>
               <div v-if="!mockStarted && !mockSubmitted" class="panel practice-start-card">
                 <div class="practice-start-icon"><Clock3 :size="25" /></div><h3>模拟真实考试节奏</h3>
-                <p>当前题库有 {{ selectedTrack?.question_count || 0 }} 道可用题目；本场最多抽取 30 道，系统按题量设置时间，每题约 90 秒。</p>
-                <button class="primary-button" @click="startMockExam" :disabled="mockLoading || !selectedTrack?.question_count">{{ mockLoading ? '正在准备题目…' : '开始限时模拟' }} <ArrowRight :size="16" /></button>
+                <p>当前题库有 {{ selectedTrack?.question_count || 0 }} 道可用题目。正式模拟固定 60 题、每题 2 分、满分 120 分、限时 120 分钟；题量不足时不会用重复题补足。</p>
+                <button class="primary-button" @click="startMockExam"  :disabled="mockLoading || !selectedTrack || selectedTrack.question_count < 60">{{ mockLoading ? '正在准备题目…' : selectedTrack && selectedTrack.question_count < 60 ? '题量不足 60 道' : '开始限时模拟' }} <ArrowRight :size="16" /></button>
                 <p v-if="mockError" class="practice-error">{{ mockError }}</p>
               </div>
               <div v-else-if="mockSubmitted" class="panel practice-start-card">
                 <div class="practice-result-icon"><CheckCircle2 :size="28" /></div>
-                <div class="practice-result-score">{{ mockCorrectCount }} / {{ mockQuestions.length }}</div>
-                <h3>模拟考试已交卷</h3><p>正确率 {{ mockAccuracy }}% · 已作答 {{ mockAnsweredCount }} / {{ mockQuestions.length }} 题。</p>
+                <div class="practice-result-score">{{ mockScore }} / 120 分</div>
+                <h3>模拟考试已交卷</h3><p>答对 {{ mockCorrectCount }} / 60 题 · 正确率 {{ mockAccuracy }}% · 已作答 {{ mockAnsweredCount }} / 60 题。</p>
                 <p v-if="mockError" class="practice-error">{{ mockError }}</p>
                 <div class="mock-review-list">
                   <article v-for="(question, index) in mockQuestions" :key="question.id" class="mock-review-item">
@@ -1069,7 +1096,8 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                   <button class="primary-button" @click="finishMockExam(false)">交卷并查看结果</button>
                 </div>
                 <article v-for="(question, index) in mockQuestions" :key="question.id" class="panel question-card mock-question-card">
-                  <div class="question-topline"><span>第 {{ index + 1 }} / {{ mockQuestions.length }} 题 · {{ question.topic }}</span><span class="source-pill">{{ question.source_type === 'generated' ? '自编练习题' : question.source_type === 'official' ? '官方题目' : question.source_type === 'licensed' ? '授权题目' : '个人题目' }}</span></div>
+                  <div class="question-topline"><span>第 {{ index + 1 }} / {{ mockQuestions.length }} 题 · {{ question.topic }}</span><span class="source-pill">{{ question.source_type === 'generated' ? '预测题库 · 原创' : question.source_type === 'official' ? '历年真题' : '其他题目' }}</span></div>
+                  <a v-if="question.source_type === 'official' && question.source_reference" class="language-source" :href="question.source_reference" target="_blank" rel="noreferrer">IPA 官方原卷 ↗</a>
                   <h3 class="question-prompt">{{ question.prompt }}</h3>
                   <div class="question-options">
                     <button v-for="option in question.options" :key="option.id" class="question-option" :class="{ selected: mockAnswers[question.id] === option.id }" @click="mockAnswers[question.id] = option.id">
@@ -1144,7 +1172,52 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 </div>
               </div>
             </section>
-            <div class="notice-card"><CircleHelp :size="19" /><div><strong>题库说明</strong><p>题库提供站内作答、即时判分、日语题干、中文解析与错题复习。专项练习为原创模拟题，不冒充官方过去问。</p></div></div>
+            <div class="notice-card"><CircleHelp :size="19" /><div><strong>题库说明</strong><p>题库仅分为「历年真题」与「预测题库」。历年真题以 IPA 官方公开试题及答案为准；预测题库为知学原创预测题，不冒充官方真题。目标总量约 1,100 题，按实际导入数量统计，不以目标数冒充现有题量。</p></div></div>
+          </section>
+        </template>
+
+        <template v-else-if="activeModule === 'practical'">
+          <section class="section-block module-page-section">
+            <div class="section-heading"><div><div class="section-kicker">PRACTICAL SECURITY LAB</div><h2>把知识用在真实工作情境里</h2><p>阅读情况，选择最合适的行动；提交后会显示评分、推荐选项和复盘说明。</p></div><span class="section-index">{{ scenarios.length }} 个情境</span></div>
+            <div class="panel practice-start-card">
+              <div class="section-heading"><div><h3>选择考试方向</h3><p>当前先提供 SG 信息安全管理情境。</p></div></div>
+              <div class="exam-list">
+                <button v-for="exam in examTracks" :key="exam.id" class="exam-card" :class="{ 'exam-card-selected': selectedTrackId === exam.id }" @click="selectExam(exam)">
+                  <span class="exam-code purple">{{ exam.id.split('-').pop()?.toUpperCase() }}</span>
+                  <span class="exam-info"><strong>{{ exam.title }}</strong><small>{{ exam.subtitle }}</small></span>
+                  <ChevronRight :size="18" class="muted" />
+                </button>
+              </div>
+            </div>
+            <p v-if="scenariosLoading" class="dictionary-status">正在从 D1 读取实战情境…</p>
+            <p v-else-if="scenariosError" class="dictionary-status dictionary-error">{{ scenariosError }}</p>
+            <div v-else-if="!currentScenario" class="empty-state">
+              <ShieldCheck :size="25" /><strong>实战情境暂时为空</strong>
+              <p>页面和接口已接通，但当前数据库没有可用情境。请确认最新 D1 迁移已应用；迁移完成后刷新此页面。</p>
+              <button class="secondary-button" @click="loadScenarios">重新加载</button>
+            </div>
+            <article v-else class="panel question-card practical-scenario-card">
+              <div class="question-topline"><span>{{ currentScenario.category }} · {{ currentScenario.difficulty === 'intermediate' ? '中等' : '标准' }}</span><span class="source-pill">{{ currentScenario.source_type === 'official' ? '官方来源' : '平台原创情境' }}</span></div>
+              <h3 class="question-prompt">{{ currentScenario.title }}</h3>
+              <p class="scenario-situation">{{ currentScenario.situation }}</p>
+              <h4>{{ currentScenario.task }}</h4>
+              <div class="question-options">
+                <button v-for="option in currentScenario.options" :key="option.id" class="question-option" :class="{ selected: selectedScenarioOption === option.id, correct: scenarioResult && option.id === scenarioResult.best_option, incorrect: scenarioResult && option.id === selectedScenarioOption && !scenarioResult.correct }" :disabled="Boolean(scenarioResult) || scenarioSubmitting" @click="selectedScenarioOption = option.id">
+                  <span>{{ option.id.toUpperCase() }}</span><strong>{{ option.text }}</strong>
+                  <CheckCircle2 v-if="scenarioResult && option.id === scenarioResult.best_option" :size="17" />
+                </button>
+              </div>
+              <div v-if="scenarioResult" class="answer-explanation" :class="{ right: scenarioResult.correct }">
+                <strong>{{ scenarioResult.correct ? '判断正确' : '可以做得更好' }} · 得分 {{ scenarioResult.score }}/100 · 推荐选项 {{ scenarioResult.best_option.toUpperCase() }}</strong>
+                <p>{{ scenarioResult.feedback }}</p>
+              </div>
+              <p v-if="scenariosError" class="practice-error">{{ scenariosError }}</p>
+              <div class="practice-start-actions">
+                <button v-if="!scenarioResult" class="primary-button" :disabled="!selectedScenarioOption || scenarioSubmitting" @click="submitScenario">{{ scenarioSubmitting ? '正在提交…' : '提交判断并查看复盘' }} <ArrowRight :size="16" /></button>
+                <button v-else class="primary-button" @click="nextScenario">下一个情境 <ArrowRight :size="16" /></button>
+                <button class="text-link" @click="loadScenarios">重新载入情境</button>
+              </div>
+            </article>
           </section>
         </template>
 
