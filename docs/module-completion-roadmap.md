@@ -58,7 +58,7 @@
 - [x] 将 EN 与日语发音按钮分开；使用点击事件内同步播放，并显示开始/完成/失败状态。
 - [x] IT 模式仅查本地词库；D1 词库不可用时提示需要检查迁移。
 - [x] 补充模块验收清单：`docs/dictionary-module-acceptance.md`。
-- [ ] 确认 CI 类型检查、D1 全迁移和 Worker 打包全部通过。
+- [x] CI 类型检查、D1 全迁移和 Worker 打包全部通过（运行记录：[39988666300](https://github.com/PTamako/it-study-platform/actions/runs/39988666300)）。
 - [ ] 在 macOS Chrome/Safari 和 iPhone Safari 实际听测英语/日语声音；CI 无法代替硬件听测。
 - [ ] 端到端验证生词收藏、取消收藏与跨设备同步。
 - [ ] 验证免费在线词典超时、限流和无结果时的实际界面反馈。
