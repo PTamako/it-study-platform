@@ -57,6 +57,50 @@ const commonChineseTranslations: Record<string, { ja: string; en: string }> = {
   '帮助': { ja: '助け', en: 'Help' },
 }
 
+// Small offline fallback for common Japanese and English lookups. Online providers remain
+// the primary source; these entries prevent frequent everyday terms from losing translations.
+const commonJapaneseTranslations: Record<string, { zh: string; en: string }> = {
+  'こんにちは': { zh: '你好', en: 'Hello' },
+  'おはようございます': { zh: '早上好', en: 'Good morning' },
+  'こんばんは': { zh: '晚上好', en: 'Good evening' },
+  'ありがとう': { zh: '谢谢', en: 'Thank you' },
+  'ありがとうございます': { zh: '谢谢', en: 'Thank you' },
+  'すみません': { zh: '不好意思；对不起', en: 'Excuse me; I am sorry' },
+  'ごめんなさい': { zh: '对不起', en: "I'm sorry" },
+  'さようなら': { zh: '再见', en: 'Goodbye' },
+  '認証': { zh: '认证；身份验证', en: 'Authentication' },
+  '認可': { zh: '授权', en: 'Authorization' },
+  '暗号化': { zh: '加密', en: 'Encryption' },
+  '復号': { zh: '解密', en: 'Decryption' },
+  '脆弱性': { zh: '漏洞；脆弱性', en: 'Vulnerability' },
+  '最小権限': { zh: '最小权限', en: 'Least privilege' },
+  '情報セキュリティ': { zh: '信息安全', en: 'Information security' },
+  '可用性': { zh: '可用性', en: 'Availability' },
+  '完全性': { zh: '完整性', en: 'Integrity' },
+  '機密性': { zh: '机密性', en: 'Confidentiality' },
+}
+
+const commonEnglishTranslations: Record<string, { zh: string; ja: string }> = {
+  'hello': { zh: '你好', ja: 'こんにちは' },
+  'good morning': { zh: '早上好', ja: 'おはようございます' },
+  'good evening': { zh: '晚上好', ja: 'こんばんは' },
+  'thank you': { zh: '谢谢', ja: 'ありがとうございます' },
+  'goodbye': { zh: '再见', ja: 'さようなら' },
+  'security': { zh: '安全；信息安全', ja: 'セキュリティ；情報セキュリティ' },
+  'authentication': { zh: '认证；身份验证', ja: '認証' },
+  'authorization': { zh: '授权', ja: '認可' },
+  'encryption': { zh: '加密', ja: '暗号化' },
+  'decryption': { zh: '解密', ja: '復号' },
+  'vulnerability': { zh: '漏洞；脆弱性', ja: '脆弱性' },
+  'integrity': { zh: '完整性', ja: '完全性' },
+  'availability': { zh: '可用性', ja: '可用性' },
+  'confidentiality': { zh: '机密性', ja: '機密性' },
+  'least privilege': { zh: '最小权限原则', ja: '最小権限の原則' },
+  'hash': { zh: '哈希；散列值', ja: 'ハッシュ' },
+  'password': { zh: '密码', ja: 'パスワード' },
+  'network': { zh: '网络', ja: 'ネットワーク' },
+}
+
 // 两个在线翻译源并行尝试，避免 MyMemory 超时后才开始备用源；Google 端点是非正式接口，结果仅作参考。
 async function translateText(text: string, source: string, target: string): Promise<string> {
   const valid = (value: string) =>
@@ -244,11 +288,21 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
       translateText(query, 'ja', 'zh-CN'),
       translateText(query, 'ja', 'en'),
     ])
+    const offline = commonJapaneseTranslations[query.trim()]
+    if (offline) {
+      if (!zh) zh = offline.zh
+      if (!en) en = offline.en
+    }
   } else if (language === 'en') {
     ;[zh, ja] = await Promise.all([
       translateText(query, 'en', 'zh-CN'),
       translateText(query, 'en', 'ja'),
     ])
+    const offline = commonEnglishTranslations[query.trim().toLowerCase()]
+    if (offline) {
+      if (!zh) zh = offline.zh
+      if (!ja) ja = offline.ja
+    }
   } else {
     ;[ja, en] = await Promise.all([
       translateText(query, 'zh-CN', 'ja'),
@@ -283,6 +337,26 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
       translationJa: ja || '日语翻译暂时不可用',
       tag: '中日英互译',
       language: 'zh',
+      source: '在线翻译',
+    })
+  } else if (language === 'ja') {
+    items.push({
+      term: query,
+      en: en || '英语翻译暂时不可用',
+      zh: zh || '中文翻译暂时不可用',
+      translationJa: query,
+      tag: '日中英互译',
+      language: 'ja',
+      source: '在线翻译',
+    })
+  } else {
+    items.push({
+      term: query,
+      en: query,
+      zh: zh || '中文翻译暂时不可用',
+      translationJa: ja || '日语翻译暂时不可用',
+      tag: '英日中互译',
+      language: 'en',
       source: '在线翻译',
     })
   }
