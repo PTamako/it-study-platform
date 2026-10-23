@@ -27,7 +27,7 @@ def zhstrings(x):
    except Exception: parsed=None
    if parsed is not None and isinstance(parsed,(dict,list,str)):
     walk(parsed,gloss_context)
-   elif re.search(r"[\\u3400-\\u9fff]",v):
+   elif re.search(r"[\u3400-\u9fff]",v):
     out.append(norm(v))
   elif isinstance(v,dict):
    for k,z in v.items():
@@ -72,7 +72,6 @@ def zhmap(db):
   pk=epick(["id","entry_id","jmdict_id","ent_seq"])
   jidcol=epick(["jmdict_id","ent_seq"])
   jsoncol=epick(["data","entry_json","json","content","entry"])
-  print("Tomoshi entries columns:",ecols,"selected:",pk,jidcol,jsoncol)
   if pk and (jidcol or jsoncol):
    select_cols=[pk]+([jidcol] if jidcol else [])+([jsoncol] if jsoncol and jsoncol!=jidcol else [])
    for row in c.execute("SELECT "+", ".join('"'+x+'"' for x in select_cols)+" FROM entries"):
@@ -92,7 +91,6 @@ def zhmap(db):
   def fpick(candidates):return next((x for x in candidates if x in fcols),None)
   entrycol=fpick(["entry_id","word_id","id_entry","entry","jmdict_id","ent_seq"])
   formcol=fpick(["text","form","headword","word","value","surface","written","kana","reading"])
-  print("Tomoshi forms columns:",fcols,"selected:",entrycol,formcol)
   if entrycol and formcol:
    for eid,form in c.execute(f'SELECT "{entrycol}","{formcol}" FROM forms'):
     if isinstance(form,str) and form:
@@ -101,7 +99,6 @@ def zhmap(db):
  cols=[r[1] for r in c.execute("pragma table_info(zh_defs)")]
  key=next((x for x in ["jmdict_id","ent_seq","entry_id","id_entry","word_id"] if x in cols),None)
  dat=next((x for x in ["data","glosses","definition","text","content","json"] if x in cols),None)
- print("Tomoshi zh_defs columns:",cols,"selected:",key,dat)
  if not key or not dat:raise RuntimeError("Unexpected zh_defs schema "+str(cols))
  out={}
  for i,d in c.execute(f'SELECT "{key}","{dat}" FROM zh_defs'):
@@ -110,15 +107,6 @@ def zhmap(db):
   out.setdefault(canonical,[]).extend(vals)
   for form in forms_by_key.get(str(i),set()) | forms_by_key.get(canonical,set()):
    out.setdefault(form,[]).extend(vals)
- for term in ("会う","あう","青","あお"):
-  form_rows=c.execute("SELECT entry_id,is_kana FROM forms WHERE text=? LIMIT 5",(term,)).fetchall()
-  ids=[str(row[0]) for row in form_rows]
-  gloss_rows=[]
-  if ids:
-   marks=",".join("?" for _ in ids)
-   gloss_rows=c.execute(f"SELECT entry_id,locale,substr(data,1,180) FROM zh_defs WHERE entry_id IN ({marks}) LIMIT 5",ids).fetchall()
-  print("Tomoshi term lookup",term,"forms",form_rows,"zh_defs",gloss_rows,"mapped",term in out)
- print("Tomoshi gloss key sample:",list(out.keys())[:3],"JMdict ID 1198180:", "1198180" in out,"headword 会う:", "会う" in out,"reading あう:", "あう" in out,"headword 青:", "青" in out,"reading あお:", "あお" in out)
  c.close()
  return {k:list(dict.fromkeys(v)) for k,v in out.items()}
 def english_data(p):
