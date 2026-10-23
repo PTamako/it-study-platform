@@ -1,0 +1,11 @@
+-- IPA SG official past questions: 2016 spring morning, questions 41-44.
+-- Official question paper and answer key:
+-- https://www.ipa.go.jp/shiken/mondai-kaiotu/gmcbt8000000gn5o-att/2016h28h_sg_am_qs.pdf
+-- https://www.ipa.go.jp/shiken/mondai-kaiotu/gmcbt8000000gn5o-att/2016h28h_sg_am_ans.pdf
+INSERT OR IGNORE INTO questions
+(id,track_id,topic,difficulty,question_type,prompt,options_json,answer_json,explanation,source_type,source_reference,language)
+VALUES
+('sg-official-h28h-2016-q41','exam-sg','事業継続・RTO','standard','single_choice','【2016年度 平成28年春期 午前 問41】事業継続計画で用いられ，インシデント発生後，製品・サービス，事業活動又は資源が再開・復旧されるまでに要する目標時間を表す用語はどれか。','[{"id":"a","text":"MTBF"},{"id":"b","text":"MTTR"},{"id":"c","text":"RPO"},{"id":"d","text":"RTO"}]','"d"','正解はエ。RTO（目標復旧時間）は，事業やサービスをどの程度の時間内に復旧させるかを示す。','official','https://www.ipa.go.jp/shiken/mondai-kaiotu/gmcbt8000000gn5o-att/2016h28h_sg_am_qs.pdf','ja'),
+('sg-official-h28h-2016-q42','exam-sg','データ可視化・グラフ','standard','single_choice','【2016年度 平成28年春期 午前 問42】過去5年間のシステム障害について，年ごとの種類別件数と総件数の推移を一つの図で表すのに最も適したものはどれか。','[{"id":"a","text":"積上げ棒グラフ"},{"id":"b","text":"ポートフォリオ図"},{"id":"c","text":"二重円グラフ"},{"id":"d","text":"レーダチャート"}]','"a"','正解はア。積上げ棒グラフなら年ごとの総件数と内訳（障害の種類別件数）を同時に比較できる。','official','https://www.ipa.go.jp/shiken/mondai-kaiotu/gmcbt8000000gn5o-att/2016h28h_sg_am_qs.pdf','ja'),
+('sg-official-h28h-2016-q43','exam-sg','システム性能・レスポンスタイム','standard','single_choice','【2016年度 平成28年春期 午前 問43】コンピュータシステムに問合せや要求の終了を指示してから，利用者端末に最初の処理結果のメッセージが出始めるまでの経過時間を何というか。','[{"id":"a","text":"アクセスタイム"},{"id":"b","text":"ターンアラウンドタイム"},{"id":"c","text":"サイクルタイム"},{"id":"d","text":"レスポンスタイム"}]','"d"','正解はエ。レスポンスタイムは要求を出してから最初の応答が返るまでの時間を指す。','official','https://www.ipa.go.jp/shiken/mondai-kaiotu/gmcbt8000000gn5o-att/2016h28h_sg_am_qs.pdf','ja'),
+('sg-official-h28h-2016-q44','exam-sg','データ管理・データウェアハウス','standard','single_choice','【2016年度 平成28年春期 午前 問44】企業の様々な活動から得られた大量のデータを整理・統合して蓄積し，意思決定支援などに利用するものはどれか。','[{"id":"a","text":"データアドミニストレーション"},{"id":"b","text":"データウェアハウス"},{"id":"c","text":"データディクショナリ"},{"id":"d","text":"データマッピング"}]','"b"','正解はイ。データウェアハウスは，組織内のデータを統合・蓄積し，分析や意思決定支援に活用するための基盤である。','official','https://www.ipa.go.jp/shiken/mondai-kaiotu/gmcbt8000000gn5o-att/2016h28h_sg_am_qs.pdf','ja');
