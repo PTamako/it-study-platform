@@ -34,7 +34,7 @@ GitHub Actions 验收应至少包含以下三步，并且全部成功：
 - [x] 从干净本地 D1 开始依次应用所有迁移，包括 `0076_expand_offline_it_dictionary.sql`
 - [x] Worker bundle / dry-run 成功，且没有发布生产版本
 
-最近一次完整 CI：[`39989287139`](https://github.com/PTamako/it-study-platform/actions/runs/39989287139)（代码提交 `bba2453660600e7267b91f900cb18c38923df219`），三个步骤全部成功。该检查不测试真实设备的扬声器或系统语音。
+CI 状态以 [PR #23 的 Checks 页面](https://github.com/PTamako/it-study-platform/pull/23) 为准。自动化检查只验证回归断言、构建、迁移和 Worker 打包，不测试真实设备的扬声器或系统语音。
 
 CI 证明回归断言、代码构建、迁移和 Worker 打包通过；它仍不会验证真实设备是否有声音。回归测试为源码级断言，不替代真实浏览器的端到端音频测试。
 
