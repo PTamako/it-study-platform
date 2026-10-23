@@ -14,8 +14,8 @@ test('English dictionary results always expose a separate Japanese-aid player', 
 })
 
 test('recent English vocabulary also exposes its Japanese-aid player', () => {
-  assert.match(app, /aria-label="播放日语辅助读音：' \+ entry\.term/)
-  assert.match(app, /aria-label="'播放英语发音：' \+ entry\.term/)
+  assert.match(app, /aria-label="播放日语辅助读音"/)
+  assert.match(app, /aria-label="播放英语发音"/)
 })
 
 test('speech voice selection never falls back to an arbitrary first voice', () => {
