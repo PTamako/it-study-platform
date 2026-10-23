@@ -128,5 +128,6 @@ SG 题库在界面上只保留两个分类：
 
 - `migrations/0014_sg_question_bank_pack_2.sql`: 22 original prediction questions.
 - `migrations/0015_sg_prediction_pack_3.sql`: 56 additional original prediction questions (stable IDs, `source_type='generated'`, Japanese prompts/options and Chinese explanations).
+- `migrations/0016_sg_official_2025_public_questions.sql`: 15 verified official questions from the 2025 IPA public SG paper, keyed to the official answer sheet; each record is marked `source_type='official'` and references the source PDF.
 - Mock exam behavior: exactly 60 unique questions, 2 points per question (120 points total), 90-minute limit; no repeated-question padding. Unanswered questions are recorded as incorrect when the exam is submitted, so they can appear in the wrong-question review.
 - Historical questions must be imported from verifiable IPA source documents with the official answer key; links alone do not count as imported questions. The 500-question historical target is not yet met and must not be presented as complete until verified question records exist in D1.
