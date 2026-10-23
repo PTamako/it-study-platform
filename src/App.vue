@@ -714,12 +714,20 @@ const languagePracticeRevealed = ref(false)
 const languagePracticeCard = computed(() => visibleLanguageCards.value.length
   ? visibleLanguageCards.value[languagePracticeIndex.value % visibleLanguageCards.value.length]
   : null)
+function speakLanguageCard(card: LanguageCard | null, example = false, practice = false) {
+  if (!card) return
+  const text = example ? card.example : card.term
+  const lang = card.language === 'ja' ? 'ja-JP' : 'en-US'
+  speak(text || '', lang, `${practice ? 'language-practice' : 'language-card'}:${card.id}:${example ? 'example' : 'term'}`)
+}
 function nextLanguagePractice() {
+  stopSpeech()
   if (!visibleLanguageCards.value.length) return
   languagePracticeIndex.value = (languagePracticeIndex.value + 1) % visibleLanguageCards.value.length
   languagePracticeRevealed.value = false
 }
 watch([studyLanguage, selectedLanguageCategory, selectedLanguageMastery], () => {
+  stopSpeech()
   languagePracticeIndex.value = 0
   languagePracticeRevealed.value = false
 })
@@ -1592,6 +1600,8 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <span class="dict-tag">{{ languagePracticeCard.category }}</span>
                 <h4>{{ languagePracticeCard.term }}</h4>
                 <p v-if="languagePracticeCard.reading" class="language-reading">{{ languagePracticeCard.reading }}</p>
+                <div class="language-speech-actions"><button type="button" class="play-button" @click="speakLanguageCard(languagePracticeCard, false, true)"><Volume2 :size="16" /> 播放原文</button><button v-if="languagePracticeCard.example" type="button" class="play-button" @click="speakLanguageCard(languagePracticeCard, true, true)"><Volume2 :size="16" /> 播放例句</button></div>
+                <div v-if="speechStatus && speechStatusTarget.startsWith('language-practice:' + languagePracticeCard.id + ':')" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 <div v-if="languagePracticeRevealed" class="language-practice-answer">
                   <strong>{{ languagePracticeCard.meaning_zh }}</strong>
                   <p>{{ languagePracticeCard.explanation }}</p>
@@ -1630,7 +1640,8 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <p class="language-meaning">{{ card.meaning_zh }}</p>
                 <p class="language-explanation">{{ card.explanation }}</p>
                 <div class="language-example"><strong>例句</strong><p>{{ card.example }}</p><span>{{ card.example_meaning_zh }}</span></div>
-                <button class="play-button" @click="speak(card.term, card.language === 'ja' ? 'ja-JP' : 'en-US')"><Volume2 :size="17" /> 听发音</button>
+                <div class="language-speech-actions"><button type="button" class="play-button" @click="speakLanguageCard(card)"><Volume2 :size="17" /> 播放原文</button><button v-if="card.example" type="button" class="play-button" @click="speakLanguageCard(card, true)"><Volume2 :size="17" /> 播放例句</button></div>
+                <div v-if="speechStatus && speechStatusTarget.startsWith('language-card:' + card.id + ':')" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 <small class="language-source">平台自编学习内容</small>
               </article>
               <div v-if="!languageCardsLoading && !languageCardsError && visibleLanguageCards.length === 0" class="empty-state"><BookOpen :size="25" /><strong>{{ selectedLanguageMastery === 'mastered' ? '还没有已掌握的卡片' : selectedLanguageMastery === 'unmastered' ? '太棒了，这组卡片已经复习完啦' : '这个分类暂时没有已发布的课程' }}</strong><p>可以切换类别或掌握状态继续学习；进度会在云端保存，并在当前设备保留副本。</p></div>
