@@ -62,6 +62,17 @@ npm run build
    npx wrangler deploy
    ```
 
+### GitHub PR 合并后自动部署 Cloudflare
+
+仓库包含 `.github/workflows/deploy-cloudflare.yml`：每次合并到 `main` 后，GitHub Actions 会重新安装依赖、构建前端、应用已提交的 D1 远程迁移、部署 Worker 与静态资源，并检查健康接口。也可以在 Actions 页面手动运行部署工作流。
+
+首次启用前，在 GitHub 仓库 **Settings → Secrets and variables → Actions → New repository secret** 配置：
+
+- `CLOUDFLARE_API_TOKEN`：仅授予该账户所需的 Workers Scripts（编辑/部署）和 D1（读写/迁移）权限。
+- `CLOUDFLARE_ACCOUNT_ID`：Cloudflare 账户 ID。
+
+不要把 Token 写入代码或提交到仓库。未配置上述 Secrets 时，部署工作流会明确失败，不会假装部署成功。合并 PR 前，先检查 PR 的 Validate 工作流；合并后再检查 Deploy to Cloudflare 工作流和线上健康接口。
+
 ### 通过 Cloudflare 控制台连接 GitHub 自动部署
 
 在 Cloudflare Workers Builds 中只保留一个关联此仓库的生产部署。`wrangler.toml` 的 `name` 固定为 `it-study-platform`，因此本地 `npx wrangler deploy` 与 Git 自动部署都应更新同一个 Worker，而不是另建 `it-study-platform-api`。部署配置变更后，先构建，再部署，并验证主站和 API。若 Cloudflare 中仍留有历史 `it-study-platform-api` Worker，验证主 Worker 正常前请不要删除；确认无流量后再从控制台停用或删除旧服务。
