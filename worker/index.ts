@@ -511,8 +511,35 @@ export default {
             ? '优先显示专业词汇库中匹配的术语及中日英释义。'
             : '按输入语言调用相应词典，缺失的目标语言会尝试机器翻译；第三方可能限流，译文仅供参考。',
         })
-      } catch {
-        return json({ items: [], error: '在线词典暂时不可用，请稍后重试。' }, 503)
+      } catch (error) {
+        console.error('[dictionary] lookup failed', {
+          message: error instanceof Error ? error.message : String(error),
+          queryLength: query.length,
+          requestedLanguage,
+        })
+        // If an unexpected lookup error escapes the provider guards, still return
+        // verified local translations for common phrases instead of failing the whole API.
+        const hasKana = /[\u3040-\u30ff]/.test(query)
+        const hasCjk = /[\u3400-\u9fff]/.test(query)
+        const language = requestedLanguage === 'auto' ? (hasKana ? 'ja' : hasCjk ? 'zh' : 'en') : requestedLanguage
+        const offline = language === 'ja'
+          ? commonJapaneseTranslations[query]
+          : language === 'en'
+            ? commonEnglishTranslations[query.toLowerCase()]
+            : commonChineseTranslations[query]
+        if (offline) {
+          const item: DictionaryApiEntry = {
+            term: query,
+            zh: language === 'zh' ? query : offline.zh || '',
+            translationJa: language === 'ja' ? query : offline.ja || '',
+            en: language === 'en' ? query : offline.en || '',
+            tag: '中日英互译 · 离线兜底',
+            language: language as 'ja' | 'en' | 'zh',
+            source: '本地词典（在线接口异常时）',
+          }
+          return json({ items: [item], query, providers: ['本地词典'], note: '在线查询失败，当前显示已收录的离线词条。' })
+        }
+        return json({ items: [], error: '在线翻译请求失败，离线词典也未收录该词。请检查 Worker 日志。' }, 503)
       }
     }
 
