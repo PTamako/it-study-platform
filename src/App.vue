@@ -495,7 +495,7 @@ async function submitPracticeAnswer() {
   const question = currentQuestion.value
   quizSubmitted.value = true
   if (selectedOption.value === question.answer) quizCorrect.value += 1
-  if ((selectedOption.value !== question.answer || activeReviewMode.value === 'wrong' || activeReviewMode.value === 'due') && getQuestionLanguage(question) !== 'zh') {
+  if ((selectedOption.value !== question.answer || activeReviewMode.value === 'wrong' || activeReviewMode.value === 'due') && getQuestionLanguage(question) !== 'zh-CN') {
     void translateQuestionExplanation(question)
   }
   try {
@@ -516,15 +516,15 @@ async function submitPracticeAnswer() {
     quizError.value = error instanceof Error ? error.message : '网络异常：本次答题结果尚未保存到云端。'
   }
 }
-function getQuestionLanguage(question: PracticeQuestion): 'ja' | 'en' | 'zh' {
-  const language = (question.language || '').toLowerCase()
-  if (language.startsWith('zh')) return 'zh'
-  if (language.startsWith('en')) return 'en'
-  if (language.startsWith('ja')) return 'ja'
+function getQuestionLanguage(question: PracticeQuestion): 'ja-JP' | 'en-US' | 'zh-CN' {
+  const language = (question.language || '').toLowerCase().replace('_', '-')
+  if (language.startsWith('zh')) return 'zh-CN'
+  if (language.startsWith('en')) return 'en-US'
+  if (language.startsWith('ja')) return 'ja-JP'
   const text = question.prompt + '\n' + question.explanation
-  if (/[\u3040-\u30ff]/.test(text)) return 'ja'
-  if (/[a-z]{4,}/i.test(text) && !/[\u3400-\u9fff]/.test(text)) return 'en'
-  return /[\u3400-\u9fff]/.test(text) ? 'zh' : 'ja'
+  if (/[\u3040-\u30ff]/.test(text)) return 'ja-JP'
+  if (/[a-z]{4,}/i.test(text) && !/[\u3400-\u9fff]/.test(text)) return 'en-US'
+  return /[\u3400-\u9fff]/.test(text) ? 'zh-CN' : 'ja-JP'
 }
 async function translateQuestionExplanation(question: PracticeQuestion | null) {
   if (!question?.explanation?.trim()) return
@@ -1201,7 +1201,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                   <strong>{{ selectedOption === currentQuestion.answer ? '回答正确！' : '这题答错了' }} 正确答案：{{ currentQuestion.answer.toUpperCase() }}</strong>
                   <p class="explanation-original-label">原文解析</p>
                   <p>{{ currentQuestion.explanation }}</p>
-                  <div v-if="(selectedOption !== currentQuestion.answer || activeReviewMode === 'wrong' || activeReviewMode === 'due') && getQuestionLanguage(currentQuestion) !== 'zh'" class="explanation-chinese">
+                  <div v-if="(selectedOption !== currentQuestion.answer || activeReviewMode === 'wrong' || activeReviewMode === 'due') && getQuestionLanguage(currentQuestion) !== 'zh-CN'" class="explanation-chinese">
                     <strong>中文解析</strong>
                     <p v-if="questionExplanationTranslating[currentQuestion.id]">正在翻译解析…</p>
                     <p v-else-if="questionExplanationTranslations[currentQuestion.id]?.source_text === currentQuestion.explanation">{{ questionExplanationTranslations[currentQuestion.id].translation_zh }}</p>
