@@ -167,11 +167,10 @@ const examTracks = ref<ExamTrack[]>([])
 const selectedTrackId = ref('exam-sg')
 const tracksLoading = ref(false)
 const tracksError = ref('')
-const questionSourceFilter = ref<'all' | 'generated' | 'licensed'>('all')
+const questionSourceFilter = ref<'official' | 'generated'>('generated')
 const questionSourceFilters = [
-  { id: 'all', label: '全部题目' },
-  { id: 'generated', label: '专项练习' },
-  { id: 'licensed', label: '授权题目' },
+  { id: 'official', label: '历年真题' },
+  { id: 'generated', label: '预测练习' },
 ] as const
 
 const selectedTrack = computed(() => examTracks.value.find(track => track.id === selectedTrackId.value) || null)
@@ -210,7 +209,7 @@ async function startMockExam() {
   mockError.value = ''
   try {
     const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=30')
-    const data = await response.json() as { items?: PracticeQuestion[]; error?: string }
+    const data = await response.json() as { items?: PracticeQuestion[]; error?: string; total?: number; has_more?: boolean }
     if (!response.ok) throw new Error(data.error || '模拟考试题目加载失败')
     if (!data.items?.length) throw new Error('题库目前没有可用题目。')
     mockQuestions.value = data.items
@@ -345,7 +344,7 @@ function selectExam(track: ExamTrack) {
   quizError.value = ''
 }
 
-async function selectQuestionSource(source: 'all' | 'generated' | 'licensed') {
+async function selectQuestionSource(source: 'official' | 'generated') {
   questionSourceFilter.value = source
   questionBatchOffset.value = 0
   // Changing a source should have an immediate, visible effect instead of only changing a hidden filter.
@@ -357,10 +356,20 @@ async function selectQuestionSource(source: 'all' | 'generated' | 'licensed') {
   quizFinished.value = false
   quizError.value = ''
   questionBatchOffset.value = 0
-  if (source === 'licensed') {
-    quizError.value = '授权题目：0 道。当前尚未导入授权题目，选择“全部题目”或“专项练习”开始练习。'
-    questionBankTotal.value = 0
-    questionBankHasMore.value = false
+  if (source === 'official') {
+    quizLoading.value = true
+    quizError.value = ''
+    try {
+      const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value?.id || '') + '&source=official&limit=' + questionBatchSize)
+      const data = await response.json() as { items?: PracticeQuestion[]; total?: number; has_more?: boolean; error?: string }
+      if (!response.ok) throw new Error(data.error || '历年真题加载失败')
+      quizQuestions.value = data.items || []
+      questionBankTotal.value = data.total || 0
+      questionBankHasMore.value = Boolean(data.has_more)
+      if (!quizQuestions.value.length) quizError.value = '历年真题题库还未导入真实官方题目；这里不会用预测题冒充真题。'
+      else { quizIndex.value = 0; quizStartedAt.value = Date.now() }
+    } catch (error) { quizError.value = error instanceof Error ? error.message : '历年真题加载失败' }
+    finally { quizLoading.value = false }
     return
   }
   await startPractice()
@@ -404,7 +413,7 @@ async function startPractice() {
     const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value) + '&mode=ordered&limit=' + questionBatchSize + '&offset=' + questionBatchOffset.value)
     const data = await response.json() as { items?: PracticeQuestion[]; error?: string; total?: number; has_more?: boolean }
     if (!response.ok) throw new Error(data.error || '题库加载失败')
-    if (!data.items?.length) throw new Error(questionSourceFilter.value === 'licensed' ? '当前题库还没有已登记的授权题目。' : '当前考试目前没有可用题目，请稍后重试。')
+    if (!data.items?.length) throw new Error(questionSourceFilter.value === 'official' ? '历年真题题库还未导入真实官方题目；这里不会用预测题冒充真题。' : '当前考试目前没有可用预测练习题，请稍后重试。')
     quizQuestions.value = data.items
     quizIndex.value = 0
     selectedOption.value = ''
@@ -1027,7 +1036,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                   <div class="practice-start-icon"><GraduationCap :size="25" /></div>
                   <h3>准备好开始练习了吗？</h3>
                   <p v-if="selectedTrack?.question_count">当前筛选共 {{ questionBankTotal || selectedTrack.question_count }} 道题，每组 {{ questionBatchSize }} 道；完成后可继续下一组，不再只随机抽同一批。</p>
-                  <p v-else>你可以选择不同考试。目前 SG 已接入专项练习题库；其他考试将在题库准备完成后开放。</p>
+                  <p v-else>你可以选择不同考试。目前先完善 SG；历年真题与预测练习分开管理，其他考试将在题库准备完成后开放。</p>
                   <div class="practice-start-actions">
                     <button class="primary-button" @click="startPractice" :disabled="quizLoading || !selectedTrack || selectedTrack.question_count === 0">{{ quizLoading ? '正在加载题目…' : selectedTrack?.question_count ? '开始刷题（每组 10 题）' : '当前暂无可练习题目' }} <ArrowRight :size="16" /></button>
                     <button class="text-link" @click="startWrongReview" :disabled="quizLoading || !selectedTrack">{{ quizLoading ? '正在加载…' : '复习云端错题' }}</button>
@@ -1162,7 +1171,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 </div>
               </div>
             </section>
-            <div class="notice-card"><CircleHelp :size="19" /><div><strong>题库说明</strong><p>题库提供站内作答、即时判分、日语题干、中文解析与错题复习。专项练习为原创模拟题，不冒充官方过去问。</p></div></div>
+            <div class="notice-card"><CircleHelp :size="19" /><div><strong>题库说明</strong><p>题库只有两类：历年真题与预测练习。历年真题必须来自可核实的历史题目；预测练习为原创模拟题，不会混充真题。</p></div></div>
           </section>
         </template>
 
