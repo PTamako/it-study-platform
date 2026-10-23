@@ -363,8 +363,8 @@ async function translateScenarioExplanation(scenarioId: string, text: string) {
 function speakScenario(scenario: PracticalScenario | null) {
   if (!scenario) return
   const options = scenario.options.map(option => `${option.id.toUpperCase()}。 ${option.text}`).join('。')
-  // 情境内容统一为日语；共用只选择日语音色的播放函数，找不到日语语音时不会回退到中文。
-  speakJapaneseQuestion(`${scenario.title}。状況：${scenario.situation}。課題：${scenario.task}。選択肢：${options}`)
+  // 情境内容统一为日语；显式绑定当前情境，状态和控制按钮不会串到其他模块。
+  speakJapaneseQuestion(`${scenario.title}。状況：${scenario.situation}。課題：${scenario.task}。選択肢：${options}`, `practical:${scenario.id}`)
 }
 
 async function loadScenarios() {
@@ -387,6 +387,7 @@ async function loadScenarios() {
   }
 }
 function nextScenario() {
+  stopSpeech()
   if (!scenarios.value.length) return
   const index = scenarios.value.findIndex(item => item.id === currentScenario.value?.id)
   const next = scenarios.value[(index + 1) % scenarios.value.length]
@@ -446,6 +447,7 @@ async function loadExamTracks() {
   }
 }
 function selectExam(track: ExamTrack) {
+  stopSpeech()
   questionBatchOffset.value = 0
   questionBankTotal.value = 0
   questionBankHasMore.value = false
@@ -460,6 +462,7 @@ function selectExam(track: ExamTrack) {
 }
 
 async function selectQuestionSource(source: 'official' | 'generated') {
+  stopSpeech()
   questionSourceFilter.value = source
   questionBatchOffset.value = 0
   activeReviewMode.value = 'all'
@@ -484,6 +487,7 @@ async function loadQuestionProgress() {
   } catch { /* Keep the last known progress visible if the network is temporarily unavailable. */ }
 }
 function selectReviewMode(mode: 'all' | 'unlearned' | 'wrong' | 'due' | 'mastered') {
+  stopSpeech()
   activeReviewMode.value = mode
   questionBatchOffset.value = 0
   questionBankTotal.value = 0
@@ -497,6 +501,7 @@ function selectReviewMode(mode: 'all' | 'unlearned' | 'wrong' | 'due' | 'mastere
   quizError.value = ''
 }
 async function startPractice() {
+  stopSpeech()
   if (!selectedTrack.value) { quizError.value = '尚未加载考试列表，请刷新页面后重试。'; return }
   if (!selectedTrack.value.question_count) {
     quizError.value = '该考试尚未接入题库。目前正式接入的是 SG；不会用其他考试题目代替。'
@@ -639,6 +644,7 @@ async function setQuestionMastery(questionId: string, mastered: boolean) {
   }
 }
 function nextPracticeQuestion() {
+  stopSpeech()
   if (!isLastQuestion.value) {
     quizIndex.value += 1
     selectedOption.value = ''
@@ -654,7 +660,7 @@ const moduleInfo = {
   exam: { title: '考试备考', subtitle: '日常刷题、复习错题与限时模拟考试。' },
   practical: { title: '实战训练', subtitle: '在工作情境中判断风险、选择行动，并查看评分与解释。' },
   language: { title: '语言学习', subtitle: '选择日语或英语，按实际学习内容练习表达、理解和发音。' },
-  dictionary: { title: '英语发音与 IT 术语', subtitle: '英语释义、IPA 音标、日语假名辅助发音；不做中文翻译。' },
+  dictionary: { title: '英日发音与 IT 术语', subtitle: '每个词条分别提供英语原音与日语辅助读音；结合 IPA 音标和假名提示。' },
 } as const
 
 const currentInfo = computed(() => moduleInfo[activeModule.value])
@@ -664,7 +670,7 @@ const modules = [
   { id: 'exam' as const, title: '考试备考', en: 'EXAM PREP', desc: '日常练习 · 错题复习 · 限时模拟考试', icon: GraduationCap, tone: 'lavender', count: '题量以题库数据为准' },
   { id: 'practical' as const, title: '实战训练', en: 'PRACTICAL LAB', desc: '日语安全情境 · 日语语音 · 中日双语解析', icon: ShieldCheck, tone: 'blue', count: '400 个情境 · 评分 · 复盘' },
   { id: 'language' as const, title: '语言学习', en: 'LANGUAGE', desc: '日语 / 英语 · 例句 · 发音 · 复习', icon: Languages, tone: 'peach', count: '选择语言开始学习' },
-  { id: 'dictionary' as const, title: '词典与 IT 术语', en: 'DICTIONARY', desc: '英语发音 · 日语辅助读音 · 本地 IT 词库', icon: BookMarked, tone: 'blue', count: '英语词汇与专业术语' },
+  { id: 'dictionary' as const, title: '英日发音与 IT 术语', en: 'DICTIONARY', desc: '英语原音 · 日语辅助读音 · 本地 IT 词库', icon: BookMarked, tone: 'blue', count: '英语词汇与专业术语' },
 ]
 
 const languageCategories = [
@@ -708,12 +714,20 @@ const languagePracticeRevealed = ref(false)
 const languagePracticeCard = computed(() => visibleLanguageCards.value.length
   ? visibleLanguageCards.value[languagePracticeIndex.value % visibleLanguageCards.value.length]
   : null)
+function speakLanguageCard(card: LanguageCard | null, example = false, practice = false) {
+  if (!card) return
+  const text = example ? card.example : card.term
+  const lang = card.language === 'ja' ? 'ja-JP' : 'en-US'
+  speak(text || '', lang, `${practice ? 'language-practice' : 'language-card'}:${card.id}:${example ? 'example' : 'term'}`)
+}
 function nextLanguagePractice() {
+  stopSpeech()
   if (!visibleLanguageCards.value.length) return
   languagePracticeIndex.value = (languagePracticeIndex.value + 1) % visibleLanguageCards.value.length
   languagePracticeRevealed.value = false
 }
 watch([studyLanguage, selectedLanguageCategory, selectedLanguageMastery], () => {
+  stopSpeech()
   languagePracticeIndex.value = 0
   languagePracticeRevealed.value = false
 })
@@ -1039,6 +1053,7 @@ function quickDictionarySearch(term: string, language: 'ja' | 'en' | 'it') {
 watch(savedWords, value => localStorage.setItem('zhixue:saved-words', JSON.stringify(value)), { deep: true })
 
 function navigate(id: ModuleId) {
+  stopSpeech()
   activeModule.value = id
   showMobileMenu.value = false
   searchText.value = ''
@@ -1049,13 +1064,13 @@ function navigate(id: ModuleId) {
 let speechRequestId = 0
 function speakQuestion(question: PracticeQuestion | null) {
   if (!question) return
-  // Only use a browser voice explicitly tagged as Japanese. If unavailable, do not play with Chinese voice.
+  // Exam content is Japanese; target its own control/status area and never use a Chinese voice.
   const options = question.options.map(option => `${option.id.toUpperCase()}。 ${option.text}`).join('。')
-  speakJapaneseQuestion(`${question.prompt}。選択肢：${options}`)
+  speakJapaneseQuestion(`${question.prompt}。選択肢：${options}`, `exam:${question.id}`)
 }
-function speakJapaneseQuestion(text: string) {
+function speakJapaneseQuestion(text: string, statusTarget = '') {
   // Use the same synchronous path as the dictionary play buttons to avoid Safari activation loss.
-  speak(text, 'ja-JP')
+  speak(text, 'ja-JP', statusTarget)
 }
 function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', statusTarget = '') {
   speechStatusTarget.value = statusTarget
@@ -1091,6 +1106,17 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   const normalizedLang = normalize(lang)
   const prefix = normalizedLang.slice(0, 2)
   const availableVoices = synthesis.getVoices()
+  // Some browsers (notably Safari/iOS) populate the voice list asynchronously. If it is
+  // empty, never let the OS silently choose its default voice (which may be Chinese).
+  if (availableVoices.length === 0) {
+    speechStatus.value = '系统语音列表尚未加载，暂未播放。请稍候再点一次；若仍无声音，请检查系统日语语音设置。'
+    synthesis.addEventListener('voiceschanged', () => {
+      if (synthesis.getVoices().length > 0 && requestId === speechRequestId) {
+        speechStatus.value = '系统语音已加载，请再次点击日语发音。'
+      }
+    }, { once: true })
+    return
+  }
   const voices = availableVoices.filter(voice => normalize(voice.lang).startsWith(prefix))
   const voice = voices.find(candidate => normalize(candidate.lang) === normalizedLang && /natural|enhanced|premium|siri|daniel|karen|ava|alex|samantha|kyoko|otoya/i.test(candidate.name))
     || voices.find(candidate => normalize(candidate.lang) === normalizedLang && candidate.localService)
@@ -1382,8 +1408,9 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <a v-if="currentQuestion.source_type === 'official' && currentQuestion.source_reference" class="language-source" :href="currentQuestion.source_reference" target="_blank" rel="noreferrer">IPA 官方原卷 ↗</a>
                 <div class="question-prompt-row">
                   <h3 class="question-prompt">{{ currentQuestion.prompt }}</h3>
-                  <button type="button" class="secondary-button question-speak-button" @click="speakQuestion(currentQuestion)"><Volume2 :size="16" /> 语音读题</button>
+                  <button type="button" class="secondary-button question-speak-button" @click="speakQuestion(currentQuestion)"><Volume2 :size="16" /> 日语语音读题</button>
                 </div>
+                <div v-if="speechStatus && speechStatusTarget === 'exam:' + currentQuestion.id" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 <div class="question-options">
                   <button v-for="option in currentQuestion.options" :key="option.id" class="question-option" :class="{ selected: selectedOption === option.id, correct: quizSubmitted && option.id === currentQuestion.answer, incorrect: quizSubmitted && selectedOption === option.id && option.id !== currentQuestion.answer }" :disabled="quizSubmitted" @click="selectedOption = option.id">
                     <span>{{ option.id.toUpperCase() }}</span><strong>{{ option.text }}</strong><CheckCircle2 v-if="quizSubmitted && option.id === currentQuestion.answer" :size="17" />
@@ -1513,6 +1540,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <h3 class="question-prompt">{{ currentScenario.title }}</h3>
                 <button type="button" class="secondary-button question-speak-button" @click="speakScenario(currentScenario)"><Volume2 :size="16" /> 日语语音读题</button>
               </div>
+              <div v-if="speechStatus && speechStatusTarget === 'practical:' + currentScenario.id" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
               <p class="scenario-situation">{{ currentScenario.situation }}</p>
               <h4>{{ currentScenario.task }}</h4>
               <div class="question-options">
@@ -1572,6 +1600,8 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <span class="dict-tag">{{ languagePracticeCard.category }}</span>
                 <h4>{{ languagePracticeCard.term }}</h4>
                 <p v-if="languagePracticeCard.reading" class="language-reading">{{ languagePracticeCard.reading }}</p>
+                <div class="language-speech-actions"><button type="button" class="play-button" @click="speakLanguageCard(languagePracticeCard, false, true)"><Volume2 :size="16" /> 播放原文</button><button v-if="languagePracticeCard.example" type="button" class="play-button" @click="speakLanguageCard(languagePracticeCard, true, true)"><Volume2 :size="16" /> 播放例句</button></div>
+                <div v-if="speechStatus && speechStatusTarget.startsWith('language-practice:' + languagePracticeCard.id + ':')" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 <div v-if="languagePracticeRevealed" class="language-practice-answer">
                   <strong>{{ languagePracticeCard.meaning_zh }}</strong>
                   <p>{{ languagePracticeCard.explanation }}</p>
@@ -1610,7 +1640,8 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <p class="language-meaning">{{ card.meaning_zh }}</p>
                 <p class="language-explanation">{{ card.explanation }}</p>
                 <div class="language-example"><strong>例句</strong><p>{{ card.example }}</p><span>{{ card.example_meaning_zh }}</span></div>
-                <button class="play-button" @click="speak(card.term, card.language === 'ja' ? 'ja-JP' : 'en-US')"><Volume2 :size="17" /> 听发音</button>
+                <div class="language-speech-actions"><button type="button" class="play-button" @click="speakLanguageCard(card)"><Volume2 :size="17" /> 播放原文</button><button v-if="card.example" type="button" class="play-button" @click="speakLanguageCard(card, true)"><Volume2 :size="17" /> 播放例句</button></div>
+                <div v-if="speechStatus && speechStatusTarget.startsWith('language-card:' + card.id + ':')" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 <small class="language-source">平台自编学习内容</small>
               </article>
               <div v-if="!languageCardsLoading && !languageCardsError && visibleLanguageCards.length === 0" class="empty-state"><BookOpen :size="25" /><strong>{{ selectedLanguageMastery === 'mastered' ? '还没有已掌握的卡片' : selectedLanguageMastery === 'unmastered' ? '太棒了，这组卡片已经复习完啦' : '这个分类暂时没有已发布的课程' }}</strong><p>可以切换类别或掌握状态继续学习；进度会在云端保存，并在当前设备保留副本。</p></div>
@@ -1658,7 +1689,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <p v-if="entry.technical" class="dictionary-tech-note">来自 IT 专业词汇库</p>
                   <div v-if="speechStatus && speechStatusTarget === entry.term" class="dictionary-speech-controls"><p class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 </div>
-                <div class="dict-actions"><button v-if="entry.englishTerm || entry.language === 'en'" class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + (entry.englishTerm || entry.term)" title="播放英语原音"><Volume2 :size="14" /><span>EN</span></button><button v-if="entry.reading || entry.language === 'ja' || entry.language === 'en' || entry.englishTerm" class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语辅助读音：' + (entry.englishTerm || entry.term)" title="播放日语辅助读音（片假名为近似提示）"><Languages :size="14" /><span>日</span></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
+                <div class="dict-actions"><button class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + (entry.englishTerm || entry.term)" title="播放英语原音；缺少对应词时会提示"><Volume2 :size="14" /><span>EN</span></button><button class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语辅助读音：' + (entry.englishTerm || entry.term)" title="播放日语辅助读音；缺少假名时会提示"><Languages :size="14" /><span>日</span></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
               </article>
               <div v-if="lastSearchedTerm.trim().toLowerCase() === searchText.trim().toLowerCase() && displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>没有找到匹配词条</strong><p>可试试别名、英语缩写或日语术语；查 IT 专业词请选「IT」，该模式只查本地词库，不请求在线翻译。</p></div>
             </div>
@@ -1669,8 +1700,8 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             <div v-if="savedVocabularyEntries.length" class="saved-vocabulary-list">
               <article v-for="entry in savedVocabularyEntries" :key="entry.term" class="saved-vocabulary-row">
                 <div class="saved-vocabulary-copy"><strong>{{ entry.term }}</strong><small v-if="entry.reading">{{ entry.reading }}</small><p v-if="entry.en">英语释义：{{ entry.en }}</p><p v-if="entry.translationJa">日语辅助理解：{{ entry.translationJa }}</p></div>
-                <button v-if="entry.englishTerm || entry.language === 'en'" class="round-action" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + entry.term"><Volume2 :size="16" /></button>
-                <button v-else-if="entry.reading || entry.language === 'ja'" class="round-action" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语读音：' + entry.term"><Languages :size="16" /></button>
+                <button class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + entry.term" title="英语原音"><Volume2 :size="16" /><span>EN</span></button>
+                <button class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语辅助读音：' + entry.term" title="日语辅助读音"><Languages :size="16" /><span>日</span></button>
                 <p v-if="speechStatus && speechStatusTarget === entry.term" class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p>
                 <button class="saved-remove-button" @click="toggleSaved(entry.term)">取消收藏</button>
               </article>
