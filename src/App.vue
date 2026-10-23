@@ -451,6 +451,20 @@ const visibleLanguageCards = computed(() => languageCards.value.filter(card => {
     || (selectedLanguageMastery.value === 'unmastered' && !isMastered)
   return matchesCategory && matchesMastery
 }))
+const languagePracticeIndex = ref(0)
+const languagePracticeRevealed = ref(false)
+const languagePracticeCard = computed(() => visibleLanguageCards.value.length
+  ? visibleLanguageCards.value[languagePracticeIndex.value % visibleLanguageCards.value.length]
+  : null)
+function nextLanguagePractice() {
+  if (!visibleLanguageCards.value.length) return
+  languagePracticeIndex.value = (languagePracticeIndex.value + 1) % visibleLanguageCards.value.length
+  languagePracticeRevealed.value = false
+}
+watch([studyLanguage, selectedLanguageCategory, selectedLanguageMastery], () => {
+  languagePracticeIndex.value = 0
+  languagePracticeRevealed.value = false
+})
 const languageProgress = computed(() => {
   const ids = languageCards.value.map(card => card.id)
   const done = ids.filter(id => completedLanguageCards.value.includes(id)).length
@@ -1038,6 +1052,29 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               <div class="language-progress-number">{{ languageProgress.percent }}%</div>
               <div class="language-progress-track"><span :style="{ width: languageProgress.percent + '%' }"></span></div>
             </div>
+            <section class="language-practice panel" aria-label="主动回忆练习">
+              <div class="language-practice-heading">
+                <div><span class="banner-tag">ACTIVE RECALL</span><h3>先回忆，再看答案</h3><p>比反复阅读更主动的练习：先试着说出意思，再翻开解释。</p></div>
+                <span class="language-practice-count">{{ visibleLanguageCards.length ? (languagePracticeIndex % visibleLanguageCards.length) + 1 : 0 }} / {{ visibleLanguageCards.length }}</span>
+              </div>
+              <div v-if="languagePracticeCard" class="language-practice-content">
+                <span class="dict-tag">{{ languagePracticeCard.category }}</span>
+                <h4>{{ languagePracticeCard.term }}</h4>
+                <p v-if="languagePracticeCard.reading" class="language-reading">{{ languagePracticeCard.reading }}</p>
+                <div v-if="languagePracticeRevealed" class="language-practice-answer">
+                  <strong>{{ languagePracticeCard.meaning_zh }}</strong>
+                  <p>{{ languagePracticeCard.explanation }}</p>
+                  <div class="language-example"><strong>例句</strong><p>{{ languagePracticeCard.example }}</p><span>{{ languagePracticeCard.example_meaning_zh }}</span></div>
+                </div>
+                <p v-else class="language-practice-prompt">试着回忆中文意思、使用场景，或自己造一个句子。</p>
+                <div class="language-practice-actions">
+                  <button class="secondary-button" @click="languagePracticeRevealed = !languagePracticeRevealed">{{ languagePracticeRevealed ? '收起答案' : '显示答案' }}</button>
+                  <button class="primary-button" @click="nextLanguagePractice">下一张 <ArrowRight :size="15" /></button>
+                  <button class="language-done-button" @click="toggleLanguageCard(languagePracticeCard.id)">{{ completedLanguageCards.includes(languagePracticeCard.id) ? '取消掌握' : '标记掌握' }}</button>
+                </div>
+              </div>
+              <p v-else class="language-practice-prompt">当前筛选条件下没有卡片，切换分类或掌握状态后就能开始。</p>
+            </section>
             <div class="language-category-filter" role="group" aria-label="按学习类别筛选">
               <button v-for="category in languageCategories" :key="category.title" :class="{ chosen: selectedLanguageCategory === category.title }" @click="selectedLanguageCategory = category.title">{{ category.title }}</button>
             </div>
