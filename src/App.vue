@@ -158,7 +158,7 @@ const quizSubmitted = ref(false)
 const quizLoading = ref(false)
 const quizError = ref('')
 const quizCorrect = ref(0)
-type ExamTrack = { id: string; kind: string; title: string; subtitle: string; question_count: number }
+type ExamTrack = { id: string; kind: string; title: string; subtitle: string; question_count: number; official_question_count?: number; prediction_question_count?: number }
 const examTracks = ref<ExamTrack[]>([])
 const selectedTrackId = ref('exam-sg')
 const tracksLoading = ref(false)
@@ -982,15 +982,15 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               <button v-for="exam in examTracks" :key="exam.id" class="exam-card" :class="{ 'exam-card-selected': selectedTrackId === exam.id }" @click="selectExam(exam)">
                 <span class="exam-code" :class="exam.id.endsWith('sg') ? 'purple' : exam.id.endsWith('fe') ? 'blue' : 'green'">{{ exam.id.split('-').pop()?.toUpperCase() }}</span>
                 <span class="exam-info"><strong>{{ exam.title }}</strong><small>{{ exam.subtitle }}</small></span>
-                <span class="exam-progress">{{ exam.question_count ? exam.question_count + ' 道可练习' : '题库尚未接入' }}</span><ChevronRight :size="18" class="muted" />
+                <span class="exam-progress">{{ '真题 ' + (exam.official_question_count || 0) + ' · 预测 ' + (exam.prediction_question_count || 0) }}</span><ChevronRight :size="18" class="muted" />
               </button>
               <div v-if="!tracksLoading && !tracksError && examTracks.length === 0" class="empty-state"><GraduationCap :size="25" /><strong>暂无已启用的考试</strong><p>请先在 D1 学习模块表中启用考试。</p></div>
             </div>
 
             <section class="practice-section">
-              <div class="section-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2><p>从题库中抽题，提交后立即查看答案与解析。</p></div><span class="source-pill">{{ selectedTrack?.question_count ? selectedTrack.question_count + ' 道可练习' : '题库待接入' }}</span></div>
+              <div class="section-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2><p>从题库中抽题，提交后立即查看答案与解析。</p></div><span class="source-pill">{{ '当前 ' + (selectedTrack?.question_count || 0) + ' / 1,100 题目标' }}</span></div>
               <div class="question-source-filters" role="group" aria-label="题目来源筛选">
-                <button v-for="filter in questionSourceFilters" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" @click="selectQuestionSource(filter.id)">{{ filter.label }}</button>
+                <button v-for="filter in questionSourceFilters" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" @click="selectQuestionSource(filter.id)">{{ filter.label }}（{{ filter.id === 'official' ? (selectedTrack?.official_question_count || 0) : (selectedTrack?.prediction_question_count || 0) }}）</button>
               </div>
               <div v-if="!quizQuestions.length || quizFinished" class="panel practice-start-card">
                 <template v-if="quizFinished">
