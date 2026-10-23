@@ -11,6 +11,8 @@ test('language seed migration contains exactly 3,000 Japanese and 3,000 English 
   assert.equal(rows.length, 6000)
   assert.equal(ja.length, 3000)
   assert.equal(en.length, 3000)
+  assert.match(migration, /example_source_url/)
+  assert.match(migration, /ALTER TABLE language_cards ADD COLUMN example_source_url/)
   assert.match(migration, /source_type/)
   assert.match(migration, /licensed/)
   assert.match(migration, /JLPT N5/)

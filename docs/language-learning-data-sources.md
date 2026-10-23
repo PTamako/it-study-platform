@@ -5,7 +5,9 @@ The 6,000-card seed migration is generated from pinned open data sources; the ge
 ## Japanese (3,000 cards)
 - **OpenJLPT** at commit \`0d1d3410bec90bd4098a7c72de820543cb4f707c\`, providing Japanese spelling, reading, community JLPT reference level, and Japanese examples. Dataset license: **CC BY-SA 4.0**. Levels are community references, not official JLPT vocabulary lists.
 - **Tomoshi open dictionary data**, release \`v2026-10-13\`, provides Chinese glosses for JMdict-derived entries. Its Chinese gloss layer and JMdict-derived data are published under **CC BY-SA 4.0**; attribution includes EDRDG/JMdict and Tomoshi/Y1Z.
-- Sources: https://github.com/evanclan/OpenJLPT and https://github.com/tomoshi-app/tomoshi-dict-data/releases/tag/v2026-10-13
+- Example sentences are sourced from Tatoeba and retain a per-sentence link using the Tatoeba sentence ID. Tatoeba text is licensed under **CC BY 2.0 FR**; each sentence page links to its individual contributors.
+- Sources: https://github.com/evanclan/OpenJLPT, https://github.com/tomoshi-app/tomoshi-dict-data/releases/tag/v2026-10-13, and https://tatoeba.org.
+- The language module displays upstream attribution and relevant license links; the derivative Japanese learning data remains under CC BY-SA 4.0.
 
 ## English (3,000 cards)
 - **ECDICT** at commit \`bc015ed2e24a7abef49fc6dbbb7fe32c1dadaf8b\`, providing headwords, phonetics, Chinese translations, definitions, and frequency/core-vocabulary metadata. The 3,000 selected entries are grouped into three 1,000-word learning bands after core/frequency ranking. License: MIT.

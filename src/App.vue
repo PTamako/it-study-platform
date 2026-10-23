@@ -675,7 +675,7 @@ const modules = [
 
 type LanguageCard = {
   id: string; language: 'ja' | 'en'; category: string; term: string; reading?: string;
-  meaning_zh: string; explanation: string; example: string; example_meaning_zh: string; source_type: string
+  meaning_zh: string; explanation: string; example: string; example_meaning_zh: string; example_source_url?: string; source_type: string
 }
 const languageCards = ref<LanguageCard[]>([])
 const languageCategories = computed(() => {
@@ -696,9 +696,6 @@ const languageCategories = computed(() => {
     ...categories.map(title => ({ title, desc: '按学习等级或词汇类别筛选', icon: BookMarked })),
   ]
 })
-const languageDataAttribution = computed(() => studyLanguage.value === 'ja'
-  ? '日语词库：OpenJLPT / JMdict；中文释义：Tomoshi 开放词库（CC BY-SA 4.0）。JLPT 等级为社区参考，并非官方公布词表。'
-  : '英语词库：ECDICT（MIT）；按核心词汇与词频排序，分为三个 1,000 词学习阶段。')
 const languageCardsLoading = ref(false)
 const languageCardsError = ref('')
 type LanguageReview = { card_id: string; review_count: number; correct_streak: number; next_review_at: string; last_reviewed_at: string; last_result: 'again' | 'remembered'; is_due?: number }
@@ -1667,7 +1664,8 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               <button :class="{ chosen: selectedLanguageMastery === 'unmastered' }" @click="selectedLanguageMastery = 'unmastered'">学习中 / 待复习 {{ languageCards.filter(card => !completedLanguageCards.includes(card.id) && !isLanguageCardUnlearned(card)).length }}</button>
               <button :class="{ chosen: selectedLanguageMastery === 'mastered' }" @click="selectedLanguageMastery = 'mastered'">已掌握 {{ languageCards.filter(card => completedLanguageCards.includes(card.id)).length }}</button>
             </div>
-            <p class="language-source">{{ languageDataAttribution }}</p>
+            <p v-if="studyLanguage === 'ja'" class="language-source">日语词库：<a href="https://github.com/evanclan/OpenJLPT" target="_blank" rel="noopener noreferrer">OpenJLPT</a> / <a href="https://www.edrdg.org/jmdict/j_jmdict.html" target="_blank" rel="noopener noreferrer">JMdict</a>（<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>）；中文释义：<a href="https://github.com/tomoshi-app/tomoshi-dict-data" target="_blank" rel="noopener noreferrer">Tomoshi 开放词库</a>；例句：<a href="https://tatoeba.org" target="_blank" rel="noopener noreferrer">Tatoeba</a>（CC BY 2.0 FR）。JLPT 等级为社区参考，并非官方公布词表。</p>
+            <p v-else class="language-source">英语词库：<a href="https://github.com/skywind3000/ECDICT" target="_blank" rel="noopener noreferrer">ECDICT</a>（<a href="https://github.com/skywind3000/ECDICT/blob/bc015ed2e24a7abef49fc6dbbb7fe32c1dadaf8b/LICENSE" target="_blank" rel="noopener noreferrer">MIT</a>）；按核心词汇与词频排序，分为三个 1,000 词学习阶段。</p>
             <p v-if="languageCardsLoading" class="dictionary-status">正在从学习内容库读取课程…</p>
             <p v-else-if="languageCardsError" class="dictionary-status dictionary-error">{{ languageCardsError }} 请先应用最新的 D1 数据库迁移。</p>
             <div v-else class="language-card-list">
@@ -1677,7 +1675,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <p v-if="card.reading" class="language-reading">{{ card.reading }}</p>
                 <p class="language-meaning">{{ card.meaning_zh }}</p>
                 <p class="language-explanation">{{ card.explanation }}</p>
-                <div v-if="card.example" class="language-example"><strong>例句</strong><p>{{ card.example }}</p><span v-if="card.example_meaning_zh">{{ card.example_meaning_zh }}</span></div>
+                <div v-if="card.example" class="language-example"><strong>例句</strong><p>{{ card.example }}</p><span v-if="card.example_meaning_zh">{{ card.example_meaning_zh }}</span><a v-if="card.example_source_url" :href="card.example_source_url" target="_blank" rel="noopener noreferrer">例句来源：Tatoeba</a></div>
                 <div class="language-speech-actions"><button type="button" class="play-button" @click="speakLanguageCard(card)"><Volume2 :size="17" /> 播放原文</button><button v-if="card.example" type="button" class="play-button" @click="speakLanguageCard(card, true)"><Volume2 :size="17" /> 播放例句</button></div>
                 <div v-if="speechStatus && speechStatusTarget.startsWith('language-card:' + card.id + ':')" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 <small class="language-source">{{ card.source_type === 'licensed' ? '开放词库数据' : '平台自编学习内容' }}</small>
