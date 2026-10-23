@@ -454,7 +454,10 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
     try {
       technicalItems = await searchTechnicalVocabulary(db, query)
     } catch {
-      // If the glossary migration is pending, continue with online providers.
+      // Ordinary English/Japanese lookups may continue to dictionary providers if a local
+      // glossary query fails. IT-only mode must report the migration problem instead of
+      // silently looking like an unknown word or falling back online.
+      if (requestedLanguage === 'it') throw new Error('IT glossary database lookup failed')
     }
   }
   // A curated IT hit can be answered locally. Avoid third-party translators when a glossary entry matches;
@@ -679,7 +682,7 @@ export default {
             ? ['知学 IT 术语库（D1）']
             : (() => {
                 const sourceLanguage = requestedLanguage === 'auto'
-                  ? (/[\u3040-\u30ff]/.test(query) ? 'ja' : /[\u3400-\u9fff]/.test(query) ? 'zh' : 'en')
+                  ? (/[\u3040-\u30ff\u3400-\u9fff]/.test(query) ? 'ja' : 'en')
                   : requestedLanguage
                 return sourceLanguage === 'en'
                   ? ['Free Dictionary', 'MyMemory', 'Google Translate（双主机备用）']
@@ -697,6 +700,9 @@ export default {
           queryLength: query.length,
           requestedLanguage,
         })
+        if (requestedLanguage === 'it') {
+          return json({ items: [], error: '本地 IT 术语库暂不可用。请确认 D1 已应用 0076 迁移后重试。' }, 503)
+        }
         // If an unexpected lookup error escapes the provider guards, still return
         // verified local translations for common phrases instead of failing the whole API.
         const hasKana = /[\u3040-\u30ff]/.test(query)
