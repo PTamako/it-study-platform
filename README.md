@@ -48,7 +48,7 @@ npm run build
    npx wrangler login
    ```
 
-3. 将全部表结构、SG 自编练习题、扩充后的技术词库、语言卡片和实战情境应用到远程 D1（会按迁移编号依序执行，包括 `0007`、`0008`）：
+3. 将全部表结构、SG 自编练习题、扩充后的技术词库、语言卡片、SG 练习题和实战情境应用到远程 D1（会按迁移编号依序执行，包括 `0007`、`0008`、`0009`）：
 
    ```sh
    npx wrangler d1 migrations apply it-study-platform-db --remote
@@ -64,7 +64,7 @@ npm run build
 
 在 Cloudflare Workers Builds 中只保留一个关联此仓库的生产部署。`wrangler.toml` 的 `name` 固定为 `it-study-platform`，因此本地 `npx wrangler deploy` 与 Git 自动部署都应更新同一个 Worker，而不是另建 `it-study-platform-api`。部署配置变更后，先构建，再部署，并验证主站和 API。若 Cloudflare 中仍留有历史 `it-study-platform-api` Worker，验证主 Worker 正常前请不要删除；确认无流量后再从控制台停用或删除旧服务。
 
-部署前先完成一次远程 D1 迁移。Git 自动部署本身不会自动执行 SQL migration。
+部署前先完成一次远程 D1 迁移。Git 自动部署本身不会自动执行 SQL migration。手机端暂时无法执行远程 D1 迁移时，可以先继续提交 `migrations/*.sql`；待能使用电脑或 Cloudflare 控制台后，再按编号一次性应用所有未执行迁移。迁移使用 `INSERT OR IGNORE` 与固定 ID，重复导入已有种子数据不会重复插入相同 ID。
 
 - `wrangler.toml` 中已配置 Cloudflare D1 数据库 ID。该 ID 不是密码，但请勿把 API Token 等访问凭据提交到仓库。
 - 本地密钥放在被 Git 忽略的 `.dev.vars` 文件中；线上密钥使用 Cloudflare Worker Secrets。
