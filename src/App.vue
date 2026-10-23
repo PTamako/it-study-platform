@@ -936,10 +936,9 @@ function navigate(id: ModuleId) {
 let speechRequestId = 0
 function speakQuestion(question: PracticeQuestion | null) {
   if (!question) return
-  const sourceLanguage = getQuestionLanguage(question)
-  const voiceLanguage = sourceLanguage === 'zh' ? 'zh-CN' : sourceLanguage === 'en' ? 'en-US' : 'ja-JP'
+  // SG 读题固定使用日语语音；中文解析只供阅读，不参与朗读。
   const options = question.options.map(option => `${option.id.toUpperCase()}。${option.text}`).join('。')
-  speak(`${question.prompt}。${options ? '选项：' + options : ''}`, voiceLanguage)
+  speak(`${question.prompt}。${options ? '選択肢：' + options : ''}`, 'ja-JP')
 }
 function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
   const synthesis = window.speechSynthesis
