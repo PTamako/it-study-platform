@@ -131,6 +131,13 @@ const officialQuestionSources = ref<QuestionSource[]>([])
 const questionSourcesLoading = ref(false)
 const questionSourcesError = ref('')
 const selectedExamCode = computed(() => selectedTrackId.value.split('-').pop()?.toUpperCase() || '')
+const questionSourceFilter = ref<'all' | 'official' | 'generated' | 'licensed'>('all')
+const questionSourceFilters = [
+  { id: 'all', label: '全部题目' },
+  { id: 'official', label: '官方过去问' },
+  { id: 'generated', label: '专项练习' },
+  { id: 'licensed', label: '授权题目' },
+] as const
 
 async function loadQuestionSources() {
   if (!selectedExamCode.value) {
@@ -355,10 +362,10 @@ async function startPractice() {
   quizLoading.value = true
   quizError.value = ''
   try {
-    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=10')
+    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value) + '&limit=10')
     const data = await response.json() as { items?: PracticeQuestion[]; error?: string }
     if (!response.ok) throw new Error(data.error || '题库加载失败')
-    if (!data.items?.length) throw new Error('该考试目前没有可用题目，请刷新考试列表后重试。')
+    if (!data.items?.length) throw new Error(questionSourceFilter.value === 'official' ? '当前考试还没有导入可在站内作答的官方过去问题目。你可以先通过上方官方题源链接查看原题；这里不会把自编题冒充真题。' : questionSourceFilter.value === 'licensed' ? '当前考试暂时没有已登记的授权题目。' : '该考试目前没有可用题目，请刷新考试列表后重试。')
     quizQuestions.value = data.items
     quizIndex.value = 0
     selectedOption.value = ''
@@ -846,6 +853,9 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
 
             <section class="practice-section">
               <div class="section-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2><p>题目根据上方所选考试读取；未接入题库的考试不会展示假题。</p></div><span class="source-pill">{{ selectedTrack?.question_count ? selectedTrack.question_count + ' 道可练习' : '题库待接入' }}</span></div>
+              <div class="question-source-filters" role="group" aria-label="题目来源筛选">
+                <button v-for="filter in questionSourceFilters" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" @click="questionSourceFilter = filter.id">{{ filter.label }}</button>
+              </div>
               <div v-if="!quizQuestions.length || quizFinished" class="panel practice-start-card">
                 <template v-if="quizFinished">
                   <div class="practice-result-icon"><CheckCircle2 :size="28" /></div>
