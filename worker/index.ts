@@ -1,5 +1,6 @@
 export interface Env {
   DB: D1Database
+  AI?: Ai
   APP_ENV?: string
 }
 
@@ -147,7 +148,16 @@ function providerLanguageCode(language: string): string {
   return language
 }
 
-async function translateText(text: string, source: string, target: string): Promise<string> {
+function workersAiLanguageCode(language: string): string {
+  // M2M100 uses base ISO-style language codes; avoid passing app-specific regional tags.
+  const code = providerLanguageCode(language).toLowerCase()
+  if (code.startsWith('ja')) return 'ja'
+  if (code.startsWith('en')) return 'en'
+  if (code.startsWith('zh')) return 'zh'
+  return code
+}
+
+async function translateText(text: string, source: string, target: string, ai?: Ai): Promise<string> {
   const valid = (value: string) =>
     Boolean(value && value.trim() && !/MYMEMORY WARNING|QUERY LENGTH LIMIT|translation unavailable/i.test(value))
     && value.trim().toLocaleLowerCase() !== text.trim().toLocaleLowerCase()
@@ -225,7 +235,29 @@ async function translateText(text: string, source: string, target: string): Prom
   }
 
   const results = await Promise.all([myMemory(), googleFallback()])
-  const translated = results.find(valid) || ''
+  let translated = results.find(valid) || ''
+
+  // MyMemory has a small anonymous daily quota, and the public Google endpoint is best-effort.
+  // Use Cloudflare-hosted M2M100 as a final fallback so explanation translation does not depend
+  // solely on third-party public endpoints. AI is only invoked after both existing providers fail.
+  if (!translated && ai) {
+    try {
+      const response = await ai.run('@cf/meta/m2m100-1.2b', {
+        text,
+        source_lang: workersAiLanguageCode(source),
+        target_lang: workersAiLanguageCode(target),
+      }) as { translated_text?: string }
+      const candidate = String(response?.translated_text || '').trim()
+      if (valid(candidate)) {
+        translated = candidate
+      } else {
+        console.warn('[translation] Workers AI returned no usable translation', { source, target, hasText: Boolean(candidate) })
+      }
+    } catch (error) {
+      console.warn('[translation] Workers AI fallback failed', { source, target, message: error instanceof Error ? error.message : String(error) })
+    }
+  }
+
   if (translated) {
     try {
       await caches.default.put(
@@ -576,7 +608,7 @@ export default {
       }
       if (remaining) chunks.push(remaining)
       try {
-        const translatedChunks = await Promise.all(chunks.map(chunk => translateText(chunk, source, 'zh-CN')))
+        const translatedChunks = await Promise.all(chunks.map(chunk => translateText(chunk, source, 'zh-CN', env.AI)))
         if (translatedChunks.some(value => !value.trim())) {
           return json({ error: '在线翻译暂时不可用，请稍后重试。' }, 503)
         }

@@ -16,5 +16,9 @@ database_name = "it-study-platform-db"
 database_id = "ed4ca935-5d00-4f38-b3c5-c0d53c5aad63"
 migrations_dir = "migrations"
 
+# Cloudflare-hosted translation fallback for explanation text.
+[ai]
+binding = "AI"
+
 [vars]
 APP_ENV = "production"
