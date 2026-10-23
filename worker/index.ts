@@ -147,10 +147,21 @@ async function translateText(text: string, source: string, target: string): Prom
       url.searchParams.set('q', text)
       url.searchParams.set('langpair', source + '|' + target)
       const response = await fetch(url.toString(), { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(4500) })
-      if (!response.ok) return ''
-      const data = await response.json() as { responseData?: { translatedText?: string }; responseStatus?: number }
+      if (!response.ok) {
+        console.warn('[translation] MyMemory HTTP error', { source, target, status: response.status })
+        return ''
+      }
+      const data = await response.json() as { responseData?: { translatedText?: string }; responseStatus?: number; responseDetails?: string }
       const translated = data.responseData?.translatedText?.trim() || ''
-      return (!data.responseStatus || data.responseStatus < 400) && valid(translated) ? translated : ''
+      if (data.responseStatus && data.responseStatus >= 400) {
+        console.warn('[translation] MyMemory API error', { source, target, apiStatus: data.responseStatus, reason: String(data.responseDetails || '').slice(0, 120) })
+        return ''
+      }
+      if (!valid(translated)) {
+        console.warn('[translation] MyMemory returned no usable translation', { source, target, apiStatus: data.responseStatus ?? null, hasText: Boolean(translated) })
+        return ''
+      }
+      return translated
     } catch (error) { console.warn('[translation] MyMemory request failed', { source, target, message: error instanceof Error ? error.message : String(error) }); return '' }
   }
 
@@ -163,12 +174,22 @@ async function translateText(text: string, source: string, target: string): Prom
       url.searchParams.set('dt', 't')
       url.searchParams.set('q', text)
       const response = await fetch(url.toString(), { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(5500) })
-      if (!response.ok) return ''
+      if (!response.ok) {
+        console.warn('[translation] Google HTTP error', { source, target, status: response.status })
+        return ''
+      }
       const payload = await response.json() as unknown
-      if (!Array.isArray(payload) || !Array.isArray(payload[0])) return ''
+      if (!Array.isArray(payload) || !Array.isArray(payload[0])) {
+        console.warn('[translation] Google returned an unexpected response shape', { source, target })
+        return ''
+      }
       const segments = payload[0] as unknown[]
       const translated = segments.map(segment => Array.isArray(segment) ? String(segment[0] || '') : '').join('').trim()
-      return valid(translated) ? translated : ''
+      if (!valid(translated)) {
+        console.warn('[translation] Google returned no usable translation', { source, target, hasText: Boolean(translated) })
+        return ''
+      }
+      return translated
     } catch (error) { console.warn('[translation] Google fallback request failed', { source, target, message: error instanceof Error ? error.message : String(error) }); return '' }
   }
 
