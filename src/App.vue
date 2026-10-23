@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   BookOpen, Languages, Search, BriefcaseBusiness, GraduationCap,
   ChevronRight, Sparkles, Clock3, Flame, Bookmark, Volume2, ArrowRight,
-  ShieldCheck, BookMarked, Menu, X, CheckCircle2, CircleHelp, Target, TrendingUp, ListChecks, PlusCircle,
+  ShieldCheck, Menu, X, CheckCircle2, CircleHelp, Target, TrendingUp, ListChecks, PlusCircle,
 } from 'lucide-vue-next'
 
 type ModuleId = 'home' | 'exam' | 'language' | 'dictionary'
@@ -163,37 +163,13 @@ const examTracks = ref<ExamTrack[]>([])
 const selectedTrackId = ref('exam-sg')
 const tracksLoading = ref(false)
 const tracksError = ref('')
-type QuestionSource = { id: string; exam_code: string; year_label: string; subject_label: string; title: string; source_url: string; content_mode: string; license_note: string; notes: string }
-const officialQuestionSources = ref<QuestionSource[]>([])
-const questionSourcesLoading = ref(false)
-const questionSourcesError = ref('')
-const selectedExamCode = computed(() => selectedTrackId.value.split('-').pop()?.toUpperCase() || '')
 const questionSourceFilter = ref<'all' | 'official' | 'generated' | 'licensed'>('all')
 const questionSourceFilters = [
   { id: 'all', label: '全部题目' },
-  { id: 'official', label: '官方过去问' },
   { id: 'generated', label: '专项练习' },
   { id: 'licensed', label: '授权题目' },
 ] as const
 
-async function loadQuestionSources() {
-  if (!selectedExamCode.value) {
-    officialQuestionSources.value = []
-    return
-  }
-  questionSourcesLoading.value = true
-  questionSourcesError.value = ''
-  try {
-    const response = await fetch('/api/question-sources?exam=' + encodeURIComponent(selectedExamCode.value))
-    const data = await response.json() as { items?: QuestionSource[]; error?: string }
-    if (!response.ok) throw new Error(data.error || '官方题源目录暂不可用')
-    officialQuestionSources.value = data.items || []
-  } catch (error) {
-    questionSourcesError.value = error instanceof Error ? error.message : '官方题源目录暂不可用'
-  } finally {
-    questionSourcesLoading.value = false
-  }
-}
 const selectedTrack = computed(() => examTracks.value.find(track => track.id === selectedTrackId.value) || null)
 const quizStartedAt = ref(0)
 const quizFinished = ref(false)
@@ -338,7 +314,6 @@ async function submitScenario() {
 }
 watch(selectedTrackId, () => {
   void loadScenarios()
-  void loadQuestionSources()
 })
 async function loadExamTracks() {
   tracksLoading.value = true
@@ -684,7 +659,7 @@ async function hydrateCloudProgress() {
     // Keep local data usable if the cloud is unavailable or an import partially fails.
   }
 }
-onMounted(() => { void syncExamHistory(); void hydrateCloudProgress(); void loadQuestionSources() })
+onMounted(() => { void syncExamHistory(); void hydrateCloudProgress() })
 
 type DictionaryEntry = {
   term: string
@@ -988,7 +963,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
 
         <template v-else-if="activeModule === 'exam'">
           <section class="section-block module-page-section">
-            <div class="section-heading"><div><div class="section-kicker">YOUR EXAM ROADMAP</div><h2>选择要准备的考试</h2><p>题库会明确标注官方来源、授权题目或练习题，不混淆真题与生成题。</p></div><span class="section-index">EXAM</span></div>
+            <div class="section-heading"><div><div class="section-kicker">YOUR EXAM ROADMAP</div><h2>选择要准备的考试</h2><p>直接在站内答题、查看解析并复习错题。题目会标注来源类型。</p></div><span class="section-index">EXAM</span></div>
             <p v-if="tracksLoading" class="dictionary-status">正在读取 D1 中已启用的考试…</p>
             <p v-else-if="tracksError" class="dictionary-status dictionary-error">{{ tracksError }}</p>
             <div class="exam-list">
@@ -1000,20 +975,8 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               <div v-if="!tracksLoading && !tracksError && examTracks.length === 0" class="empty-state"><GraduationCap :size="25" /><strong>暂无已启用的考试</strong><p>请先在 D1 学习模块表中启用考试。</p></div>
             </div>
 
-            <section class="panel question-sources-panel">
-              <div class="panel-heading"><div><h3>{{ selectedTrack ? selectedTrack.title + ' · 官方过去问' : '官方过去问' }}</h3><p>与上方所选考试同步，只显示该考试的官方题源；题目来源会在统一练习流程中明确标注。</p></div><span class="source-pill">{{ selectedExamCode || '考试' }}</span></div>
-              <p v-if="questionSourcesLoading" class="dictionary-status">正在读取官方题源目录…</p>
-              <p v-else-if="questionSourcesError" class="dictionary-status dictionary-error">{{ questionSourcesError }}</p>
-              <a v-for="source in officialQuestionSources" :key="source.id" class="question-source-row" :href="source.source_url" target="_blank" rel="noopener noreferrer">
-                <span class="question-source-icon"><BookMarked :size="18" /></span>
-                <span class="question-source-copy"><strong>{{ source.title }}</strong><small>{{ source.year_label }} · {{ source.subject_label }}</small><small>{{ source.notes }}</small></span>
-                <ArrowRight :size="17" />
-              </a>
-              <p v-if="!questionSourcesLoading && !questionSourcesError && !officialQuestionSources.length" class="recent-dictionary-empty">当前考试暂时没有登记官方过去问来源。接入其他考试后，会按上方选择自动切换对应题源。</p>
-            </section>
-
             <section class="practice-section">
-              <div class="section-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2><p>题目根据上方所选考试读取；未接入题库的考试不会展示假题。</p></div><span class="source-pill">{{ selectedTrack?.question_count ? selectedTrack.question_count + ' 道可练习' : '题库待接入' }}</span></div>
+              <div class="section-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2><p>从题库中抽题，提交后立即查看答案与解析。</p></div><span class="source-pill">{{ selectedTrack?.question_count ? selectedTrack.question_count + ' 道可练习' : '题库待接入' }}</span></div>
               <div class="question-source-filters" role="group" aria-label="题目来源筛选">
                 <button v-for="filter in questionSourceFilters" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" @click="questionSourceFilter = filter.id">{{ filter.label }}</button>
               </div>
@@ -1029,7 +992,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                   <div class="practice-start-icon"><GraduationCap :size="25" /></div>
                   <h3>准备好开始练习了吗？</h3>
                   <p v-if="selectedTrack?.question_count">从 D1 读取 {{ selectedTrack.title }} 题目，提交后查看正确答案与解析。</p>
-                  <p v-else>你可以选择不同考试。目前只有 SG 已接入题目；其他考试准备好题库后才会开放练习。</p>
+                  <p v-else>你可以选择不同考试。目前 SG 已接入专项练习题库；其他考试将在题库准备完成后开放。</p>
                   <div class="practice-start-actions">
                     <button class="primary-button" @click="startPractice" :disabled="quizLoading || !selectedTrack || selectedTrack.question_count === 0">{{ quizLoading ? '正在加载题目…' : selectedTrack?.question_count ? '开始练习（最多 10 题）' : '当前暂无可练习题目' }} <ArrowRight :size="16" /></button>
                     <button class="text-link" @click="startWrongReview" :disabled="quizLoading || !selectedTrack">{{ quizLoading ? '正在加载…' : '复习云端错题' }}</button>
@@ -1164,7 +1127,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 </div>
               </div>
             </section>
-            <div class="notice-card"><CircleHelp :size="19" /><div><strong>题库说明</strong><p>官方过去问与平台自编练习题正在逐步整合。来源链接会随上方考试选项同步切换；完整题目仅在核实公开范围与来源后逐批导入，所有题目共用答题、解析和错题复习流程。</p></div></div>
+            <div class="notice-card"><CircleHelp :size="19" /><div><strong>题库说明</strong><p>题库提供站内作答、即时判分、日语题干、中文解析与错题复习。专项练习为原创模拟题，不冒充官方过去问。</p></div></div>
           </section>
         </template>
 
