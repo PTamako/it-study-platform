@@ -25,7 +25,8 @@ def zhstrings(x):
   if isinstance(v,str):
    try: parsed=json.loads(v)
    except Exception: parsed=None
-   if parsed is not None and not re.search(r"[\u3400-\u9fff]",v):walk(parsed)
+   if parsed is not None and isinstance(parsed,(dict,list,str)):
+    walk(parsed)
    elif re.search(r"[\u3400-\u9fff]",v):out.append(norm(v))
   elif isinstance(v,dict):
    for k,z in v.items():
