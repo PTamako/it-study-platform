@@ -9,7 +9,7 @@ import {
 type ModuleId = 'home' | 'exam' | 'language' | 'dictionary'
 const activeModule = ref<ModuleId>('home')
 const searchText = ref('')
-const dictSourceLang = ref<'auto' | 'ja' | 'en' | 'zh'>('auto')
+const dictSourceLang = ref<'auto' | 'ja' | 'en' | 'zh' | 'it'>('auto')
 const dictionaryView = ref<'search' | 'saved'>('search')
 const studyLanguage = ref<'ja' | 'en'>(readStored('zhixue:study-language', 'ja'))
 const selectedLanguageCategory = ref('全部')
@@ -1168,6 +1168,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               <button type="button" :class="{ chosen: dictSourceLang === 'ja' }" @click="dictSourceLang = 'ja'">日语</button>
               <button type="button" :class="{ chosen: dictSourceLang === 'en' }" @click="dictSourceLang = 'en'">英语</button>
               <button type="button" :class="{ chosen: dictSourceLang === 'zh' }" @click="dictSourceLang = 'zh'">中文</button>
+              <button type="button" :class="{ chosen: dictSourceLang === 'it' }" @click="dictSourceLang = 'it'">IT</button>
             </div>
             <div class="search-box">
               <Search :size="19" />
@@ -1175,7 +1176,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               <button v-if="searchText" class="clear-search" @click="clearDictionarySearch">清空</button>
               <button class="dictionary-search-button" :disabled="dictionaryLoading" @click="lookupDictionary">{{ dictionaryLoading ? '查找中…' : '查词' }}</button>
             </div>
-            <p>日常日语、英语单词、中文词语和 IT 专业术语都可以查。输入后按回车或点击“查词”获取在线词典结果。</p>
+            <p>日常日语、英语和中文使用在线词典；选择「IT」可查询平台维护的专业术语库。输入后按回车或点击“查词”。</p>
             <p v-if="dictionaryLoading" class="dictionary-status">正在查询在线词典…</p>
             <p v-else-if="dictionaryError" class="dictionary-status dictionary-error">{{ dictionaryError }}</p>
             <div v-if="!searchText.trim() && !dictionaryLoading" class="dictionary-quick-start"><span>试试查询</span><button @click="quickDictionarySearch('hello', 'en')">hello <small>英语</small></button><button @click="quickDictionarySearch('こんにちは', 'ja')">こんにちは <small>日语</small></button><button @click="quickDictionarySearch('認証', 'ja')">認証 <small>IT 术语</small></button><button @click="quickDictionarySearch('认证', 'zh')">认证 <small>中文</small></button></div>
