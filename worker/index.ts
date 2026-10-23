@@ -508,7 +508,7 @@ export default {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: { 'allow': 'GET, POST, OPTIONS' } })
     }
-    const isWriteEndpoint = ['/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks'].includes(url.pathname)
+    const isWriteEndpoint = ['/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history'].includes(url.pathname)
     if (request.method !== 'GET' && !(request.method === 'POST' && isWriteEndpoint)) {
       return json({ error: '不支持此请求方法' }, 405)
     }
