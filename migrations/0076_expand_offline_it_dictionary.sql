@@ -22,6 +22,19 @@ UPDATE vocabulary SET aliases = 'digital certificate|server certificate|电子�
 UPDATE vocabulary SET aliases = 'atomicity|事务原子性' WHERE id = 'vocab-it-atomicity';
 UPDATE vocabulary SET aliases = 'XSS|cross-site scripting|跨站脚本攻击' WHERE id = 'vocab-it-xss';
 UPDATE vocabulary SET aliases = 'BCP|business continuity plan|业务连续性计划' WHERE id = 'vocab-it-bcp';
+UPDATE vocabulary SET aliases = 'regression test|regression testing|回归测试' WHERE id = 'sg-v007-regression-test';
+UPDATE vocabulary SET aliases = 'version control|版本控制|バージョン管理' WHERE id = 'sg-v007-version-control';
+UPDATE vocabulary SET aliases = 'cross-origin resource sharing|跨域资源共享|跨源资源共享' WHERE id = 'sg-v007-cors';
+UPDATE vocabulary SET aliases = 'cookies|浏览器Cookie|クッキー' WHERE id = 'sg-v007-cookie';
+UPDATE vocabulary SET aliases = 'session|会话|セッション' WHERE id = 'sg-v007-session';
+UPDATE vocabulary SET aliases = 'normalization|数据库规范化|正規化' WHERE id = 'sg-v007-normalization';
+UPDATE vocabulary SET aliases = 'IP address|IP地址|IPアドレス' WHERE id = 'sg-v007-ip';
+UPDATE vocabulary SET aliases = 'firewall|防火墙|ファイアウォール' WHERE id = 'sg-v007-firewall';
+UPDATE vocabulary SET aliases = 'VPN|virtual private network|虚拟专用网络' WHERE id = 'sg-v007-vpn';
+UPDATE vocabulary SET aliases = 'SLA|service level agreement|服务级别协议' WHERE id = 'sg-v007-sla';
+UPDATE vocabulary SET aliases = 'HTTPS|加密HTTP|HTTP over TLS' WHERE id = 'sg-v007-https';
+UPDATE vocabulary SET aliases = 'DHCP|dynamic host configuration protocol|动态主机配置协议' WHERE id = 'sg-v007-dhcp';
+UPDATE vocabulary SET aliases = 'input validation|输入验证|输入校验' WHERE id = 'sg-v007-input-validation';
 
 INSERT OR IGNORE INTO vocabulary
 (id, term, language, reading, meaning_zh, meaning_ja, meaning_en, example, source_module, mastery, aliases)
@@ -164,4 +177,13 @@ VALUES
 ('it-local-rollback-procedure','切り戻し手順','ja','きりもどしてじゅん','回退步骤：发布失败或出现异常时恢复到先前版本的操作流程。','リリース後に問題が発生した際、前の状態へ戻すための手順。','A rollback procedure restores a previous version after a failed release.','本番反映前に切り戻し手順を確認する。','软件发布',0,'rollback procedure|回退步骤|回滚方案');
 
 -- 常用名词和缩写别名：可用中文、英语缩写或日语术语搜索同一条本地词条。
+-- 若早期词库已有相同规范术语，保留原条目（其上方已补别名），不产生重复卡片。
+DELETE FROM vocabulary
+WHERE id LIKE 'it-local-%'
+  AND EXISTS (
+    SELECT 1 FROM vocabulary AS existing
+    WHERE lower(existing.term) = lower(vocabulary.term)
+      AND existing.id NOT LIKE 'it-local-%'
+  );
+
 CREATE INDEX IF NOT EXISTS idx_vocabulary_source_module ON vocabulary(source_module);
