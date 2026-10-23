@@ -157,7 +157,7 @@ def japanese_data(zmap,trans):
    gloss=list(dict.fromkeys(norm(x) for x in gloss if norm(x)))
    if not gloss:continue
    ex=item.get("examples") or []
-   cards.append(dict(id="ja-openjlpt-"+str(item.get("id") or hashlib.sha1(w.encode()).hexdigest()[:12]),language="ja",category="JLPT "+str(item.get("level") or level).upper(),term=w,reading=reading,meaning_zh="；".join(gloss[:3]),explanation="JLPT 社区参考等级，并非官方公布词表。",example=norm(ex[0].get("ja")) if ex else "",example_meaning_zh="",example_source_url=("https://tatoeba.org/sentences/show/"+str(ex[0].get("tatoeba_id"))) if ex and ex[0].get("tatoeba_id") else "",source_type="licensed"));seen.add(w)
+   cards.append(dict(id="ja-openjlpt-"+str(item.get("id") or hashlib.sha1(w.encode()).hexdigest()[:12]),language="ja",category="JLPT "+str(item.get("level") or level).upper(),term=w,reading=reading,meaning_zh="；".join(gloss[:3]),explanation="JLPT 社区参考等级，并非官方公布词表。",example=norm(ex[0].get("ja")) if ex and ex[0].get("tatoeba_id") else "",example_meaning_zh="",example_source_url=("https://tatoeba.org/sentences/show/"+str(ex[0].get("tatoeba_id"))) if ex and ex[0].get("tatoeba_id") else "",source_type="licensed"));seen.add(w)
    if len(cards)==3000:return cards
  return cards
 def write(cards):
