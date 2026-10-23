@@ -1084,7 +1084,7 @@ export default {
           else if (row.exam_section === 'B') counts.B += count
           else counts.unclassified += count
           if (row.method === 'explicit') counts.explicit += count
-          else if (row.method === 'case_pattern' || row.method === 'knowledge_pattern') counts.inferred += count
+          else if (row.method === 'case_pattern' || row.method === 'default_a') counts.inferred += count
         }
         return json({ track: trackId, source, counts, breakdown: results })
       } catch {
