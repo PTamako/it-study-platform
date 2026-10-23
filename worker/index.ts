@@ -303,7 +303,7 @@ async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Prom
   })).filter(entry => Boolean(entry.term && (entry.zh || entry.en || entry.translationJa)))
 }
 
-async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' = 'auto', db?: D1Database): Promise<DictionaryApiEntry[]> {
+async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' | 'it' = 'auto', db?: D1Database): Promise<DictionaryApiEntry[]> {
   let technicalItems: DictionaryApiEntry[] = []
   if (db) {
     try {
@@ -312,6 +312,9 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
       // If the glossary migration is pending, continue with online providers.
     }
   }
+  // IT mode is a curated glossary lookup, not a translation request.
+  if (requestedLanguage === 'it') return technicalItems
+
   const hasKana = /[\u3040-\u30ff]/.test(query)
   const hasCjk = /[\u3400-\u9fff]/.test(query)
   const language: 'ja' | 'en' | 'zh' = requestedLanguage === 'auto' ? (hasKana ? 'ja' : hasCjk ? 'zh' : 'en') : requestedLanguage
@@ -487,11 +490,11 @@ export default {
       if (!query) return json({ items: [], error: '请提供要查询的词语。' }, 400)
       if (query.length > 100) return json({ items: [], error: '查询内容不能超过 100 个字符。' }, 400)
       const requestedLanguage = url.searchParams.get('lang') || 'auto'
-      if (!['auto', 'ja', 'en', 'zh'].includes(requestedLanguage)) {
-        return json({ items: [], error: 'lang 参数只支持 auto、ja、en、zh。' }, 400)
+      if (!['auto', 'ja', 'en', 'zh', 'it'].includes(requestedLanguage)) {
+        return json({ items: [], error: 'lang 参数只支持 auto、ja、en、zh、it。' }, 400)
       }
       try {
-        const items = await lookupDictionary(query, requestedLanguage as 'auto' | 'ja' | 'en' | 'zh', env.DB)
+        const items = await lookupDictionary(query, requestedLanguage as 'auto' | 'ja' | 'en' | 'zh' | 'it', env.DB)
         return json({
           items,
           query,
