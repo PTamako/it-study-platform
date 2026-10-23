@@ -157,6 +157,9 @@
 .language-category-filter{display:flex;gap:7px;flex-wrap:wrap;margin:14px 0}
 .language-category-filter button{border:1px solid #e7e9f3;background:#fff;border-radius:9px;padding:8px 11px;font-size:10px;color:#84899d}
 .language-category-filter button.chosen{background:#f0f1ff;border-color:#d5d9ff;color:#5968df;font-weight:700}
+.language-mastery-filter{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 14px}
+.language-mastery-filter button{border:1px solid #e7e9f3;background:#f8f9fc;border-radius:999px;padding:7px 11px;font-size:10px;color:#777e94}
+.language-mastery-filter button.chosen{background:#eaf8f0;border-color:#c4e8d2;color:#32805a;font-weight:700}
 .language-card-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .language-study-card{min-width:0;padding:17px;border:1px solid #eceef5;background:#fff;border-radius:15px}
 .language-study-card.completed{border-color:#c9e8d8;background:linear-gradient(145deg,#fff,#f8fdf9)}
