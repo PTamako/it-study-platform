@@ -613,7 +613,13 @@ async function hydrateCloudProgress() {
   // Migrate today's task state before reading cloud state; upserts are safe to retry.
   let taskImportOk = false
   try {
-    const results = await Promise.all(tasks.value.map(task => fetch('/api/daily-tasks', {
+    const existingResponse = await fetch('/api/daily-tasks?date=' + encodeURIComponent(todayKey))
+    if (!existingResponse.ok) throw new Error('Unable to inspect cloud task state')
+    const existingData = await existingResponse.json() as { items?: Array<{ task_id: string; completed: number }> }
+    const existingIds = new Set((existingData.items || []).map(item => item.task_id))
+    // Only import task IDs absent from D1; never overwrite a newer cloud completion with stale local state.
+    const legacyTasks = tasks.value.filter(task => !existingIds.has(task.id))
+    const results = await Promise.all(legacyTasks.map(task => fetch('/api/daily-tasks', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ task_id: task.id, study_date: todayKey, completed: task.done }),
     })))
