@@ -163,11 +163,10 @@ const examTracks = ref<ExamTrack[]>([])
 const selectedTrackId = ref('exam-sg')
 const tracksLoading = ref(false)
 const tracksError = ref('')
-const questionSourceFilter = ref<'all' | 'generated' | 'licensed'>('all')
+const questionSourceFilter = ref<'official' | 'generated'>('official')
 const questionSourceFilters = [
-  { id: 'all', label: '全部题目' },
-  { id: 'generated', label: '专项练习' },
-  { id: 'licensed', label: '授权题目' },
+  { id: 'official', label: '历年真题' },
+  { id: 'generated', label: '预测题库' },
 ] as const
 
 const selectedTrack = computed(() => examTracks.value.find(track => track.id === selectedTrackId.value) || null)
@@ -341,7 +340,7 @@ function selectExam(track: ExamTrack) {
   quizError.value = ''
 }
 
-async function selectQuestionSource(source: 'all' | 'generated' | 'licensed') {
+async function selectQuestionSource(source: 'official' | 'generated') {
   questionSourceFilter.value = source
   // Changing a source should have an immediate, visible effect instead of only changing a hidden filter.
   quizQuestions.value = []
@@ -351,10 +350,6 @@ async function selectQuestionSource(source: 'all' | 'generated' | 'licensed') {
   quizCorrect.value = 0
   quizFinished.value = false
   quizError.value = ''
-  if (source === 'licensed') {
-    quizError.value = '当前题库还没有已登记的授权题目。选择“全部题目”或“专项练习”即可开始练习。'
-    return
-  }
   await startPractice()
 }
 async function startWrongReview() {
@@ -394,7 +389,7 @@ async function startPractice() {
     const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value) + '&limit=10')
     const data = await response.json() as { items?: PracticeQuestion[]; error?: string }
     if (!response.ok) throw new Error(data.error || '题库加载失败')
-    if (!data.items?.length) throw new Error(questionSourceFilter.value === 'licensed' ? '当前题库还没有已登记的授权题目。' : '当前考试目前没有可用题目，请稍后重试。')
+    if (!data.items?.length) throw new Error(questionSourceFilter.value === 'official' ? '历年真题正在整理导入；目前没有可作答的官方题目。' : '预测题库目前没有可用题目，请稍后重试。')
     quizQuestions.value = data.items
     quizIndex.value = 0
     selectedOption.value = ''
@@ -1018,7 +1013,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 </template>
               </div>
               <div v-else-if="currentQuestion" class="panel question-card">
-                <div class="question-topline"><span>{{ selectedTrack?.title || '考试练习' }} · 第 {{ quizIndex + 1 }} / {{ quizQuestions.length }} 题</span><span class="source-pill">{{ currentQuestion?.source_type === 'generated' ? '自编练习题' : currentQuestion?.source_type === 'official' ? '官方题目' : currentQuestion?.source_type === 'licensed' ? '授权题目' : '个人题目' }}</span></div>
+                <div class="question-topline"><span>{{ selectedTrack?.title || '考试练习' }} · 第 {{ quizIndex + 1 }} / {{ quizQuestions.length }} 题</span><span class="source-pill">{{ currentQuestion?.source_type === 'generated' ? '预测题库 · 原创' : currentQuestion?.source_type === 'official' ? '历年真题' : '其他题目' }}</span></div>
                 <div class="question-progress"><span :style="{ width: ((quizIndex + 1) / quizQuestions.length * 100) + '%' }"></span></div>
                 <div class="question-topic">{{ currentQuestion.topic }}</div>
                 <h3 class="question-prompt">{{ currentQuestion.prompt }}</h3>
@@ -1069,7 +1064,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                   <button class="primary-button" @click="finishMockExam(false)">交卷并查看结果</button>
                 </div>
                 <article v-for="(question, index) in mockQuestions" :key="question.id" class="panel question-card mock-question-card">
-                  <div class="question-topline"><span>第 {{ index + 1 }} / {{ mockQuestions.length }} 题 · {{ question.topic }}</span><span class="source-pill">{{ question.source_type === 'generated' ? '自编练习题' : question.source_type === 'official' ? '官方题目' : question.source_type === 'licensed' ? '授权题目' : '个人题目' }}</span></div>
+                  <div class="question-topline"><span>第 {{ index + 1 }} / {{ mockQuestions.length }} 题 · {{ question.topic }}</span><span class="source-pill">{{ question.source_type === 'generated' ? '预测题库 · 原创' : question.source_type === 'official' ? '历年真题' : '其他题目' }}</span></div>
                   <h3 class="question-prompt">{{ question.prompt }}</h3>
                   <div class="question-options">
                     <button v-for="option in question.options" :key="option.id" class="question-option" :class="{ selected: mockAnswers[question.id] === option.id }" @click="mockAnswers[question.id] = option.id">
@@ -1144,7 +1139,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 </div>
               </div>
             </section>
-            <div class="notice-card"><CircleHelp :size="19" /><div><strong>题库说明</strong><p>题库提供站内作答、即时判分、日语题干、中文解析与错题复习。专项练习为原创模拟题，不冒充官方过去问。</p></div></div>
+            <div class="notice-card"><CircleHelp :size="19" /><div><strong>题库说明</strong><p>题库仅分为「历年真题」与「预测题库」。历年真题以 IPA 官方公开试题及答案为准；预测题库为知学原创预测题，不冒充官方真题。目标总量约 1,100 题，按实际导入数量统计，不以目标数冒充现有题量。</p></div></div>
           </section>
         </template>
 
