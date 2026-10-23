@@ -70,6 +70,7 @@ async function saveDailyTask(task: StudyTask) {
   } catch { cloudDashboardError.value = '网络异常：每日任务暂未同步到云端。' }
 }
 const examRecords = ref<ExamRecord[]>(readStored('zhixue:exam-records', []))
+const examHistorySyncing = ref(false)
 const dailyGoalMinutes = ref(40)
 const completedMinutes = computed(() => tasks.value.filter(task => task.done).reduce((sum, task) => sum + task.minutes, 0))
 const dailyPercent = computed(() => Math.min(100, Math.round(completedMinutes.value / dailyGoalMinutes.value * 100)))
@@ -98,6 +99,7 @@ let examHistorySyncStarted = false
 async function syncExamHistory() {
   if (examHistorySyncStarted) return
   examHistorySyncStarted = true
+  examHistorySyncing.value = true
   try {
     const localRecords = examRecords.value.map(record => {
       const id = (record as ExamRecord & { id?: string }).id || crypto.randomUUID()
@@ -127,6 +129,7 @@ async function syncExamHistory() {
     cloudDashboardError.value = '考试记录暂未完成云端迁移；本地数据仍保留。'
   } finally {
     examHistorySyncStarted = false
+    examHistorySyncing.value = false
   }
 }
 async function saveExamRecord(record: ExamRecord) {
@@ -160,8 +163,20 @@ function addExamRecord() {
   if (!Number.isInteger(correct) || correct < 0 || correct > total) { window.alert('答对题数应为 0 到总题数之间的整数。'); return }
   void saveExamRecord({ date: todayKey, correct, total, exam: exam.trim().toUpperCase() })
 }
-function removeExamRecords() {
-  if (window.confirm('确定清除本设备保存的全部考试成绩吗？此操作无法撤销。')) examRecords.value = []
+async function removeExamRecords() {
+  if (!window.confirm('确定清除全部历史考试成绩吗？云端和本设备记录都会删除，且无法恢复。')) return
+  try {
+    const response = await fetch('/api/exam-history', { method: 'DELETE' })
+    const data = await response.json().catch(() => ({})) as { error?: string }
+    if (!response.ok) throw new Error(data.error || '云端记录清除失败。')
+    examRecords.value = []
+    localStorage.setItem('zhixue:exam-records', '[]')
+    cloudDashboardError.value = ''
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '记录清除失败，请检查网络后重试。'
+    cloudDashboardError.value = message
+    window.alert(message + ' 原有记录未从页面清除。')
+  }
 }
 
 type PracticeOption = { id: string; text: string }
@@ -171,6 +186,11 @@ type PracticeQuestion = {
   id: string; track_id: string; topic: string; difficulty: string; prompt: string;
   options: PracticeOption[]; answer: string; explanation: string; source_type: string; source_reference?: string; language: string; exam_section?: 'A' | 'B' | null; exam_section_method?: 'explicit' | 'case_pattern' | 'default_a' | 'unclassified' | null
 }
+type QuestionExplanationTranslation = { source_text: string; translation_zh: string }
+const questionExplanationTranslations = ref<Record<string, QuestionExplanationTranslation>>(readStored('zhixue:question-explanation-zh', {}))
+const questionExplanationTranslating = ref<Record<string, boolean>>({})
+const questionExplanationTranslationErrors = ref<Record<string, string>>({})
+watch(questionExplanationTranslations, value => localStorage.setItem('zhixue:question-explanation-zh', JSON.stringify(value)), { deep: true })
 const quizQuestions = ref<PracticeQuestion[]>([])
 const quizIndex = ref(0)
 const selectedOption = ref('')
@@ -472,8 +492,12 @@ async function nextQuestionBatch() {
 }
 async function submitPracticeAnswer() {
   if (!currentQuestion.value || !selectedOption.value || quizSubmitted.value) return
+  const question = currentQuestion.value
   quizSubmitted.value = true
-  if (selectedOption.value === currentQuestion.value.answer) quizCorrect.value += 1
+  if (selectedOption.value === question.answer) quizCorrect.value += 1
+  if ((selectedOption.value !== question.answer || activeReviewMode.value === 'wrong' || activeReviewMode.value === 'due') && getQuestionLanguage(question) !== 'zh') {
+    void translateQuestionExplanation(question)
+  }
   try {
     const response = await fetch('/api/attempts', {
       method: 'POST',
@@ -490,6 +514,37 @@ async function submitPracticeAnswer() {
     void loadCloudDashboard()
   } catch (error) {
     quizError.value = error instanceof Error ? error.message : '网络异常：本次答题结果尚未保存到云端。'
+  }
+}
+function getQuestionLanguage(question: PracticeQuestion): 'ja' | 'en' | 'zh' {
+  const language = (question.language || '').toLowerCase()
+  if (language.startsWith('zh')) return 'zh'
+  if (language.startsWith('en')) return 'en'
+  if (language.startsWith('ja')) return 'ja'
+  const text = question.prompt + '\\n' + question.explanation
+  if (/[\\u3040-\\u30ff]/.test(text)) return 'ja'
+  if (/[a-z]{4,}/i.test(text) && !/[\\u3400-\\u9fff]/.test(text)) return 'en'
+  return /[\\u3400-\\u9fff]/.test(text) ? 'zh' : 'ja'
+}
+async function translateQuestionExplanation(question: PracticeQuestion | null) {
+  if (!question?.explanation?.trim()) return
+  const cached = questionExplanationTranslations.value[question.id]
+  if (cached?.source_text === question.explanation) return
+  if (questionExplanationTranslating.value[question.id]) return
+  questionExplanationTranslating.value[question.id] = true
+  delete questionExplanationTranslationErrors.value[question.id]
+  try {
+    const response = await fetch('/api/translate-explanation', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: question.explanation, source: getQuestionLanguage(question) }),
+    })
+    const data = await response.json() as { translation?: string; error?: string }
+    if (!response.ok || !data.translation) throw new Error(data.error || '中文解析翻译暂时不可用。')
+    questionExplanationTranslations.value[question.id] = { source_text: question.explanation, translation_zh: data.translation }
+  } catch (error) {
+    questionExplanationTranslationErrors.value[question.id] = error instanceof Error ? error.message : '中文解析翻译失败。'
+  } finally {
+    questionExplanationTranslating.value[question.id] = false
   }
 }
 async function setQuestionMastery(questionId: string, mastered: boolean) {
@@ -879,6 +934,13 @@ function navigate(id: ModuleId) {
 // 浏览器 TTS 的声音质量因设备而异：优先选择匹配语言的自然/增强语音，
  // 并放慢语速，避免快速连点造成语音重叠或被取消后不播放。
 let speechRequestId = 0
+function speakQuestion(question: PracticeQuestion | null) {
+  if (!question) return
+  const sourceLanguage = getQuestionLanguage(question)
+  const voiceLanguage = sourceLanguage === 'zh' ? 'zh-CN' : sourceLanguage === 'en' ? 'en-US' : 'ja-JP'
+  const options = question.options.map(option => `${option.id.toUpperCase()}。${option.text}`).join('。')
+  speak(`${question.prompt}。${options ? '选项：' + options : ''}`, voiceLanguage)
+}
 function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
   const synthesis = window.speechSynthesis
   if (typeof synthesis === 'undefined' || typeof SpeechSynthesisUtterance === 'undefined') {
@@ -1116,7 +1178,10 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                   <span>复习 {{ questionProgressById[currentQuestion.id]?.review_count || 0 }} 次</span>
                 </div>
                 <a v-if="currentQuestion.source_type === 'official' && currentQuestion.source_reference" class="language-source" :href="currentQuestion.source_reference" target="_blank" rel="noreferrer">IPA 官方原卷 ↗</a>
-                <h3 class="question-prompt">{{ currentQuestion.prompt }}</h3>
+                <div class="question-prompt-row">
+                  <h3 class="question-prompt">{{ currentQuestion.prompt }}</h3>
+                  <button type="button" class="secondary-button question-speak-button" @click="speakQuestion(currentQuestion)"><Volume2 :size="16" /> 语音读题</button>
+                </div>
                 <div class="question-options">
                   <button v-for="option in currentQuestion.options" :key="option.id" class="question-option" :class="{ selected: selectedOption === option.id, correct: quizSubmitted && option.id === currentQuestion.answer, incorrect: quizSubmitted && selectedOption === option.id && option.id !== currentQuestion.answer }" :disabled="quizSubmitted" @click="selectedOption = option.id">
                     <span>{{ option.id.toUpperCase() }}</span><strong>{{ option.text }}</strong><CheckCircle2 v-if="quizSubmitted && option.id === currentQuestion.answer" :size="17" />
@@ -1124,7 +1189,17 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 </div>
                 <div v-if="quizSubmitted" class="answer-explanation" :class="{ right: selectedOption === currentQuestion.answer }">
                   <strong>{{ selectedOption === currentQuestion.answer ? '回答正确！' : '这题答错了' }} 正确答案：{{ currentQuestion.answer.toUpperCase() }}</strong>
+                  <p class="explanation-original-label">原文解析</p>
                   <p>{{ currentQuestion.explanation }}</p>
+                  <div v-if="(selectedOption !== currentQuestion.answer || activeReviewMode === 'wrong' || activeReviewMode === 'due') && getQuestionLanguage(currentQuestion) !== 'zh'" class="explanation-chinese">
+                    <strong>中文解析</strong>
+                    <p v-if="questionExplanationTranslating[currentQuestion.id]">正在翻译解析…</p>
+                    <p v-else-if="questionExplanationTranslations[currentQuestion.id]?.source_text === currentQuestion.explanation">{{ questionExplanationTranslations[currentQuestion.id].translation_zh }}</p>
+                    <div v-else>
+                      <p v-if="questionExplanationTranslationErrors[currentQuestion.id]">{{ questionExplanationTranslationErrors[currentQuestion.id] }}</p>
+                      <button type="button" class="text-link" @click="translateQuestionExplanation(currentQuestion)">{{ questionExplanationTranslationErrors[currentQuestion.id] ? '重试中文翻译' : '翻译为中文' }}</button>
+                    </div>
+                  </div>
                 </div>
                 <div class="question-actions">
                   <span v-if="!quizSubmitted" class="question-hint">选择一个答案后提交</span><span v-else class="question-hint">当前得分：{{ quizCorrect }} / {{ quizIndex + 1 }}</span>
@@ -1186,7 +1261,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 <div class="panel metric-card"><span class="metric-icon"><TrendingUp :size="18" /></span><small>考试记录</small><strong>{{ examRecords.length }}</strong><span>次练习</span></div>
               </div>
               <div class="panel curve-panel">
-                <div class="panel-heading"><div><h3>近 7 天正确率曲线</h3><p>每日答题正确率按题量加权计算，不存在记录的日期不绘制数据。</p></div><button v-if="examRecords.length" class="text-link" @click="removeExamRecords">清除记录</button></div>
+                <div class="panel-heading"><div><h3>近 7 天正确率曲线</h3><p>每日答题正确率按题量加权计算，不存在记录的日期不绘制数据。</p></div><button v-if="examRecords.length" class="text-link" :disabled="examHistorySyncing" @click="removeExamRecords">{{ examHistorySyncing ? '正在同步…' : '清除记录' }}</button></div>
                 <div v-if="examRecords.length" class="curve-chart">
                   <div v-for="day in curveRecords" :key="day.date" class="curve-column">
                     <div class="curve-value">{{ day.accuracy === null ? '—' : day.accuracy + '%' }}</div>
