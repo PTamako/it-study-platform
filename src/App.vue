@@ -1113,9 +1113,9 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                   <div class="language-example"><strong>例句</strong><p>{{ languagePracticeCard.example }}</p><span>{{ languagePracticeCard.example_meaning_zh }}</span></div>
                 </div>
                 <p v-else class="language-practice-prompt">试着回忆中文意思、使用场景，或自己造一个句子。</p>
-                <div v-if="languageReviews.some(item => item.card_id === languagePracticeCard.id)" class="language-review-meta">
-                  <span>复习 {{ languageReviews.find(item => item.card_id === languagePracticeCard.id)?.review_count || 0 }} 次</span>
-                  <span>连续记住 {{ languageReviews.find(item => item.card_id === languagePracticeCard.id)?.correct_streak || 0 }} 次</span>
+                <div v-if="languageReviews.some(item => item.card_id === languagePracticeCard?.id)" class="language-review-meta">
+                  <span>复习 {{ languageReviews.find(item => item.card_id === languagePracticeCard?.id)?.review_count || 0 }} 次</span>
+                  <span>连续记住 {{ languageReviews.find(item => item.card_id === languagePracticeCard?.id)?.correct_streak || 0 }} 次</span>
                 </div>
                 <div class="language-practice-actions">
                   <button class="secondary-button" @click="languagePracticeRevealed = !languagePracticeRevealed">{{ languagePracticeRevealed ? '收起答案' : '显示答案' }}</button>
