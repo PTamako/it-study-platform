@@ -413,7 +413,7 @@ export default {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: { 'allow': 'GET, POST, OPTIONS' } })
     }
-    const isWriteEndpoint = ['/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/vocabulary/saved', '/api/daily-tasks'].includes(url.pathname)
+    const isWriteEndpoint = ['/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks'].includes(url.pathname)
     if (request.method !== 'GET' && !(request.method === 'POST' && isWriteEndpoint)) {
       return json({ error: '不支持此请求方法' }, 405)
     }
@@ -547,6 +547,50 @@ export default {
         return json({ ok: true, card_id: cardId, mastered })
       } catch {
         return json({ error: '课程进度保存失败，请确认已应用最新 D1 迁移。' }, 503)
+      }
+    }
+
+    // Language spaced repetition: keep a review schedule per card in D1.
+    if (url.pathname === '/api/language-review') {
+      if (request.method === 'GET') {
+        try {
+          const { results } = await env.DB.prepare(
+            `SELECT card_id, review_count, correct_streak, next_review_at, last_reviewed_at, last_result,
+                    CASE WHEN next_review_at <= CURRENT_TIMESTAMP THEN 1 ELSE 0 END AS is_due
+             FROM language_card_reviews ORDER BY next_review_at ASC`,
+          ).all()
+          return json({ items: results })
+        } catch {
+          return json({ items: [], error: '复习计划表尚未初始化，请先应用最新 D1 迁移。' }, 503)
+        }
+      }
+      let body: Record<string, unknown>
+      try { body = await request.json() as Record<string, unknown> }
+      catch { return json({ error: '请求体必须是 JSON。' }, 400) }
+      const cardId = String(body.card_id || '').trim()
+      const result = body.result === 'remembered' ? 'remembered' : body.result === 'again' ? 'again' : ''
+      if (!cardId || !result) return json({ error: '需要 card_id 和有效的 result。' }, 400)
+      try {
+        const card = await env.DB.prepare('SELECT id FROM language_cards WHERE id = ?').bind(cardId).first()
+        if (!card) return json({ error: '课程卡片不存在。' }, 404)
+        const modifier = result === 'again' ? '+10 minutes' : '+1 day'
+        await env.DB.prepare(
+          `INSERT INTO language_card_reviews
+             (card_id, review_count, correct_streak, next_review_at, last_reviewed_at, last_result, updated_at)
+           VALUES (?, 1, ?, datetime(CURRENT_TIMESTAMP, ?), CURRENT_TIMESTAMP, ?, CURRENT_TIMESTAMP)
+           ON CONFLICT(card_id) DO UPDATE SET
+             review_count = language_card_reviews.review_count + 1,
+             correct_streak = CASE WHEN excluded.last_result = 'remembered' THEN language_card_reviews.correct_streak + 1 ELSE 0 END,
+             next_review_at = datetime(CURRENT_TIMESTAMP, CASE
+               WHEN excluded.last_result = 'again' THEN '+10 minutes'
+               ELSE CASE MIN(language_card_reviews.correct_streak + 1, 4)
+                 WHEN 1 THEN '+1 day' WHEN 2 THEN '+3 days' WHEN 3 THEN '+7 days' ELSE '+14 days' END
+             END),
+             last_reviewed_at = CURRENT_TIMESTAMP, last_result = excluded.last_result, updated_at = CURRENT_TIMESTAMP`,
+        ).bind(cardId, result === 'remembered' ? 1 : 0, modifier, result).run()
+        return json({ ok: true, card_id: cardId, result })
+      } catch {
+        return json({ error: '复习记录保存失败，请确认已应用最新的 D1 迁移。' }, 503)
       }
     }
 
