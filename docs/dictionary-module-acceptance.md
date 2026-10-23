@@ -30,7 +30,7 @@ GitHub Actions 验收应至少包含以下三步，并且全部成功：
 - [x] 从干净本地 D1 开始依次应用所有迁移，包括 `0076_expand_offline_it_dictionary.sql`
 - [x] Worker bundle / dry-run 成功，且没有发布生产版本
 
-最近一次完整 CI：[`39988666300`](https://github.com/PTamako/it-study-platform/actions/runs/39988666300)（代码提交 `56bf6d35f75892cbbc15014be233c0422c36e81f`），三个步骤全部成功。该检查不测试真实设备的扬声器或系统语音。
+最近一次完整 CI：[`39989287139`](https://github.com/PTamako/it-study-platform/actions/runs/39989287139)（代码提交 `bba2453660600e7267b91f900cb18c38923df219`），三个步骤全部成功。该检查不测试真实设备的扬声器或系统语音。
 
 CI 只证明代码能构建、迁移能运行和 Worker 可打包；它不会验证真实设备是否有声音。
 
