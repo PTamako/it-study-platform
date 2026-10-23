@@ -30,35 +30,45 @@ type DictionaryApiEntry = {
 
 type LooseRecord = Record<string, any>
 
-// MyMemory 优先；失败时尝试 Google 网页翻译端点。后者并非正式稳定 API，只作尽力回退。
+// 两个在线翻译源并行尝试，避免 MyMemory 超时后才开始备用源；Google 端点是非正式接口，结果仅作参考。
 async function translateText(text: string, source: string, target: string): Promise<string> {
-  try {
-    const url = new URL('https://api.mymemory.translated.net/get')
-    url.searchParams.set('q', text)
-    url.searchParams.set('langpair', source + '|' + target)
-    const response = await fetch(url.toString(), { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(4000) })
-    if (response.ok) {
+  const valid = (value: string) =>
+    Boolean(value && value.trim() && !/MYMEMORY WARNING|QUERY LENGTH LIMIT|translation unavailable/i.test(value))
+    && value.trim().toLocaleLowerCase() !== text.trim().toLocaleLowerCase()
+
+  const myMemory = async (): Promise<string> => {
+    try {
+      const url = new URL('https://api.mymemory.translated.net/get')
+      url.searchParams.set('q', text)
+      url.searchParams.set('langpair', source + '|' + target)
+      const response = await fetch(url.toString(), { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(4500) })
+      if (!response.ok) return ''
       const data = await response.json() as { responseData?: { translatedText?: string }; responseStatus?: number }
       const translated = data.responseData?.translatedText?.trim() || ''
-      if ((!data.responseStatus || data.responseStatus < 400) && translated && !/MYMEMORY WARNING|QUERY LENGTH LIMIT/i.test(translated)) return translated
-    }
-  } catch { /* try fallback provider */ }
-  try {
-    const url = new URL('https://translate.googleapis.com/translate_a/single')
-    url.searchParams.set('client', 'gtx')
-    url.searchParams.set('sl', source)
-    url.searchParams.set('tl', target)
-    url.searchParams.set('dt', 't')
-    url.searchParams.set('q', text)
-    const response = await fetch(url.toString(), { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(5000) })
-    if (!response.ok) return ''
-    const payload = await response.json() as unknown
-    if (!Array.isArray(payload) || !Array.isArray(payload[0])) return ''
-    const segments = payload[0] as unknown[]
-    return segments.map(segment => Array.isArray(segment) ? String(segment[0] || '') : '').join('').trim()
-  } catch {
-    return ''
+      return (!data.responseStatus || data.responseStatus < 400) && valid(translated) ? translated : ''
+    } catch { return '' }
   }
+
+  const googleFallback = async (): Promise<string> => {
+    try {
+      const url = new URL('https://translate.googleapis.com/translate_a/single')
+      url.searchParams.set('client', 'gtx')
+      url.searchParams.set('sl', source)
+      url.searchParams.set('tl', target)
+      url.searchParams.set('dt', 't')
+      url.searchParams.set('q', text)
+      const response = await fetch(url.toString(), { headers: { accept: 'application/json' }, signal: AbortSignal.timeout(5500) })
+      if (!response.ok) return ''
+      const payload = await response.json() as unknown
+      if (!Array.isArray(payload) || !Array.isArray(payload[0])) return ''
+      const segments = payload[0] as unknown[]
+      const translated = segments.map(segment => Array.isArray(segment) ? String(segment[0] || '') : '').join('').trim()
+      return valid(translated) ? translated : ''
+    } catch { return '' }
+  }
+
+  const results = await Promise.all([myMemory(), googleFallback()])
+  return results.find(valid) || ''
 }
 // Jisho 提供日语词条、假名读音和英语释义；其接口是公开接口，可能偶尔不可用。
 async function searchJisho(keyword: string): Promise<LooseRecord[]> {
@@ -187,10 +197,10 @@ async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Prom
 }
 
 async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' = 'auto', db?: D1Database): Promise<DictionaryApiEntry[]> {
+  let technicalItems: DictionaryApiEntry[] = []
   if (db) {
     try {
-      const technicalItems = await searchTechnicalVocabulary(db, query)
-      if (technicalItems.length) return technicalItems
+      technicalItems = await searchTechnicalVocabulary(db, query)
     } catch {
       // If the glossary migration is pending, continue with online providers.
     }
@@ -226,7 +236,9 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
     language === 'en' ? searchEnglishDictionary(query) : Promise.resolve([]),
   ])
 
-  const items: DictionaryApiEntry[] = []
+  // Keep local SG glossary results, but still try online providers so a partial local entry
+  // does not suppress available translations or dictionary definitions.
+  const items: DictionaryApiEntry[] = [...technicalItems]
   if (language === 'en') items.push(...englishDictionaryEntries(englishRows, zh, ja))
 
   // Han-only input may be Chinese or Japanese kanji. We include translation and
