@@ -2,7 +2,7 @@
 ALTER TABLE questions ADD COLUMN exam_section TEXT
   CHECK (exam_section IS NULL OR exam_section IN ('A', 'B'));
 ALTER TABLE questions ADD COLUMN exam_section_method TEXT
-  CHECK (exam_section_method IS NULL OR exam_section_method IN ('explicit', 'case_pattern', 'knowledge_pattern', 'unclassified'));
+  CHECK (exam_section_method IS NULL OR exam_section_method IN ('explicit', 'case_pattern', 'default_a', 'unclassified'));
 
 -- 明确的来源/题型标签优先。不要仅因为出现“公司/担当者”等普通词就认定为科目 B。
 UPDATE questions
@@ -77,6 +77,6 @@ exam_section_method = CASE
     OR lower(COALESCE(prompt, '')) LIKE '%次のメールを読んで%'
     THEN 'case_pattern'
   WHEN length(COALESCE(prompt, '')) > 1200 THEN 'unclassified'
-  ELSE 'knowledge_pattern'
+  ELSE 'default_a'
 END
 WHERE track_id = 'exam-sg';
