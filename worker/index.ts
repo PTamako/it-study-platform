@@ -463,7 +463,7 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
 
   const hasKana = /[\u3040-\u30ff]/.test(query)
   const hasCjk = /[\u3400-\u9fff]/.test(query)
-  const language: 'ja' | 'en' | 'zh' = requestedLanguage === 'auto' ? (hasKana ? 'ja' : hasCjk ? 'zh' : 'en') : requestedLanguage
+  const language: 'ja' | 'en' | 'zh' = requestedLanguage === 'auto' ? (hasKana || hasCjk ? 'ja' : 'en') : requestedLanguage
   let zh = ''
   let ja = ''
   let en = ''
@@ -665,8 +665,8 @@ export default {
       if (!query) return json({ items: [], error: '请提供要查询的词语。' }, 400)
       if (query.length > 100) return json({ items: [], error: '查询内容不能超过 100 个字符。' }, 400)
       const requestedLanguage = url.searchParams.get('lang') || 'auto'
-      if (!['auto', 'ja', 'en', 'zh', 'it'].includes(requestedLanguage)) {
-        return json({ items: [], error: 'lang 参数只支持 auto、ja、en、zh、it。' }, 400)
+      if (!['auto', 'ja', 'en', 'it'].includes(requestedLanguage)) {
+        return json({ items: [], error: 'lang 参数只支持 auto、ja、en、it。' }, 400)
       }
       try {
         const items = await lookupDictionary(query, requestedLanguage as 'auto' | 'ja' | 'en' | 'zh' | 'it', env.DB)
@@ -699,7 +699,7 @@ export default {
         // verified local translations for common phrases instead of failing the whole API.
         const hasKana = /[\u3040-\u30ff]/.test(query)
         const hasCjk = /[\u3400-\u9fff]/.test(query)
-        const language = requestedLanguage === 'auto' ? (hasKana ? 'ja' : hasCjk ? 'zh' : 'en') : requestedLanguage
+        const language = requestedLanguage === 'auto' ? (hasKana || hasCjk ? 'ja' : 'en') : requestedLanguage
         const offline = language === 'ja'
           ? (() => { const value = commonJapaneseTranslations[query]; return value ? { zh: value.zh, ja: query, en: value.en } : undefined })()
           : language === 'en'
