@@ -806,19 +806,37 @@ export default {
     if (url.pathname === '/api/wrong-questions' && request.method === 'GET') {
       const trackId = (url.searchParams.get('track') || 'exam-sg').trim().slice(0, 80)
       const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 30)))
+      const requestedMode = (url.searchParams.get('mode') || 'wrong').trim()
+      const mode = ['wrong', 'due', 'practice'].includes(requestedMode) ? requestedMode : 'wrong'
       try {
         const { results } = await env.DB.prepare(
           `SELECT q.id, q.track_id, q.topic, q.difficulty, q.question_type, q.prompt,
                   q.options_json, q.answer_json, q.explanation, q.source_type, q.source_reference, q.language,
-                  COUNT(*) AS wrong_count, MAX(a.answered_at) AS last_wrong_at
+                  COALESCE(s.review_count, 0) AS review_count,
+                  COALESCE(s.correct_streak, 0) AS correct_streak,
+                  COALESCE(s.last_result, 'again') AS last_result,
+                  COALESCE(s.next_review_at, CURRENT_TIMESTAMP) AS next_review_at,
+                  COALESCE(s.mastered, 0) AS mastered,
+                  (SELECT COUNT(*) FROM study_attempts wa WHERE wa.question_id = q.id AND wa.is_correct = 0) AS wrong_count,
+                  (SELECT MAX(wa.answered_at) FROM study_attempts wa WHERE wa.question_id = q.id AND wa.is_correct = 0) AS last_wrong_at
            FROM questions q
-           INNER JOIN study_attempts a ON a.question_id = q.id AND a.is_correct = 0
-           WHERE q.track_id = ?
-           GROUP BY q.id
-           ORDER BY wrong_count DESC, last_wrong_at DESC, q.id
+           LEFT JOIN question_review_state s ON s.question_id = q.id
+           WHERE q.track_id = ? AND (
+             (? = 'wrong' AND COALESCE(s.mastered, 0) = 0 AND EXISTS (
+               SELECT 1 FROM study_attempts wa WHERE wa.question_id = q.id AND wa.is_correct = 0
+             ))
+             OR (? = 'due' AND COALESCE(s.mastered, 0) = 0 AND (
+               s.question_id IS NULL AND EXISTS (SELECT 1 FROM study_attempts wa WHERE wa.question_id = q.id AND wa.is_correct = 0)
+               OR s.next_review_at <= CURRENT_TIMESTAMP
+             ))
+             OR (? = 'practice' AND COALESCE(s.mastered, 0) = 0)
+           )
+           ORDER BY CASE WHEN COALESCE(s.last_result, 'again') = 'again' THEN 0 ELSE 1 END,
+                    wrong_count DESC, next_review_at ASC, q.id
            LIMIT ?`,
-        ).bind(trackId, limit).all()
+        ).bind(trackId, mode, mode, mode, limit).all()
         return json({
+          mode,
           items: results.map((row: Record<string, unknown>) => ({
             ...row,
             options: JSON.parse(String(row.options_json || '[]')),
@@ -828,10 +846,60 @@ export default {
           })),
         })
       } catch {
-        return json({ error: '错题记录暂不可用，请确认 D1 迁移已完成。' }, 503)
+        return json({ error: '复习题记录暂不可用，请确认 D1 迁移已完成。' }, 503)
       }
     }
 
+    // 每道题的复习计划与掌握状态。连续答对三次自动掌握，答错立即重置间隔。
+    if (url.pathname === '/api/question-progress') {
+      if (request.method === 'GET') {
+        const trackId = (url.searchParams.get('track') || 'exam-sg').trim().slice(0, 80)
+        try {
+          const { results } = await env.DB.prepare(
+            `SELECT s.question_id, s.review_count, s.correct_streak, s.last_result, s.next_review_at, s.mastered
+             FROM question_review_state s
+             INNER JOIN questions q ON q.id = s.question_id
+             WHERE q.track_id = ? ORDER BY s.next_review_at ASC`,
+          ).bind(trackId).all()
+          return json({ items: results })
+        } catch {
+          return json({ error: '题目复习计划表尚未初始化，请应用最新 D1 迁移。' }, 503)
+        }
+      }
+      if (request.method === 'POST') {
+        let body: Record<string, unknown>
+        try { body = await request.json() as Record<string, unknown> }
+        catch { return json({ error: '请求体必须是 JSON。' }, 400) }
+        const questionId = String(body.question_id || '').trim()
+        if (!questionId || typeof body.mastered !== 'boolean') return json({ error: '请提供 question_id 和 mastered。' }, 400)
+        try {
+          const question = await env.DB.prepare('SELECT id, track_id FROM questions WHERE id = ?').bind(questionId).first() as Record<string, unknown> | null
+          if (!question) return json({ error: '题目不存在。' }, 404)
+          const previous = await env.DB.prepare('SELECT review_count, correct_streak FROM question_review_state WHERE question_id = ?').bind(questionId).first() as { review_count?: number; correct_streak?: number } | null
+          const mastered = body.mastered
+          const nextReview = new Date(Date.now() + (mastered ? 30 * 86400000 : 0)).toISOString().replace('T', ' ').slice(0, 19)
+          const streak = mastered ? Math.max(3, Number(previous?.correct_streak || 0)) : 0
+          await env.DB.prepare(
+            `INSERT INTO question_review_state (question_id, track_id, review_count, correct_streak, last_result, next_review_at, mastered, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+             ON CONFLICT(question_id) DO UPDATE SET
+               correct_streak = excluded.correct_streak,
+               last_result = CASE WHEN excluded.mastered = 1 THEN 'remembered' ELSE 'again' END,
+               next_review_at = excluded.next_review_at,
+               mastered = excluded.mastered,
+               updated_at = CURRENT_TIMESTAMP`,
+          ).bind(questionId, String(question.track_id), Number(previous?.review_count || 0), streak, mastered ? 'remembered' : 'again', nextReview, mastered ? 1 : 0).run()
+          const progress = await env.DB.prepare(
+            'SELECT question_id, review_count, correct_streak, last_result, next_review_at, mastered FROM question_review_state WHERE question_id = ?',
+          ).bind(questionId).first()
+          return json({ ok: true, progress })
+        } catch {
+          return json({ error: '掌握状态保存失败，请确认已应用最新 D1 迁移。' }, 503)
+        }
+      }
+    }
+
+    
     // 手动汇总的历史考试成绩从浏览器迁移到 D1；客户端为每条记录生成稳定 ID，重复提交不会重复计数。
     if (url.pathname === '/api/exam-history') {
       if (request.method === 'GET') {
@@ -879,7 +947,7 @@ export default {
       const duration = Math.max(0, Math.min(86400, Math.floor(Number(body.duration_seconds) || 0)))
       if (!questionId || answer === undefined) return json({ error: '缺少 question_id 或 answer。' }, 400)
       try {
-        const question = await env.DB.prepare('SELECT id, answer_json FROM questions WHERE id = ?').bind(questionId).first() as Record<string, unknown> | null
+        const question = await env.DB.prepare('SELECT id, track_id, answer_json FROM questions WHERE id = ?').bind(questionId).first() as Record<string, unknown> | null
         if (!question) return json({ error: '题目不存在。' }, 404)
         let expected: unknown
         try { expected = JSON.parse(String(question.answer_json)) } catch { expected = null }
@@ -888,12 +956,35 @@ export default {
         await env.DB.prepare(
           'INSERT INTO study_attempts (id, question_id, user_answer_json, is_correct, duration_seconds) VALUES (?, ?, ?, ?, ?)',
         ).bind(attemptId, questionId, JSON.stringify(answer), correct ? 1 : 0, duration).run()
-        return json({ ok: true, attempt_id: attemptId, correct, answer: expected }, 201)
+        const previous = await env.DB.prepare(
+          'SELECT review_count, correct_streak FROM question_review_state WHERE question_id = ?',
+        ).bind(questionId).first() as { review_count?: number; correct_streak?: number } | null
+        const reviewCount = Number(previous?.review_count || 0) + 1
+        const streak = correct ? Number(previous?.correct_streak || 0) + 1 : 0
+        const mastered = correct && streak >= 3
+        const intervalMs = !correct ? 10 * 60 * 1000 : mastered ? 30 * 86400000 : streak === 1 ? 86400000 : streak === 2 ? 3 * 86400000 : 7 * 86400000
+        const nextReview = new Date(Date.now() + intervalMs).toISOString().replace('T', ' ').slice(0, 19)
+        await env.DB.prepare(
+          `INSERT INTO question_review_state (question_id, track_id, review_count, correct_streak, last_result, next_review_at, mastered, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+           ON CONFLICT(question_id) DO UPDATE SET
+             review_count = excluded.review_count,
+             correct_streak = excluded.correct_streak,
+             last_result = excluded.last_result,
+             next_review_at = excluded.next_review_at,
+             mastered = excluded.mastered,
+             updated_at = CURRENT_TIMESTAMP`,
+        ).bind(questionId, String(question.track_id), reviewCount, streak, correct ? 'remembered' : 'again', nextReview, mastered ? 1 : 0).run()
+        const progress = await env.DB.prepare(
+          'SELECT question_id, review_count, correct_streak, last_result, next_review_at, mastered FROM question_review_state WHERE question_id = ?',
+        ).bind(questionId).first()
+        return json({ ok: true, attempt_id: attemptId, correct, answer: expected, progress }, 201)
       } catch {
         return json({ error: '答题记录保存失败，请确认 D1 迁移已完成。' }, 503)
       }
     }
 
+    
     // 实战任务由服务端按 D1 中的评分规则判分，保存分数和反馈。
     if (url.pathname === '/api/scenario-attempts' && request.method === 'POST') {
       let body: Record<string, unknown>

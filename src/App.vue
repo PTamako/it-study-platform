@@ -147,6 +147,8 @@ function removeExamRecords() {
 }
 
 type PracticeOption = { id: string; text: string }
+type QuestionReviewProgress = { question_id: string; review_count: number; correct_streak: number; last_result: 'again' | 'remembered'; next_review_at: string; mastered: number }
+const questionProgressById = ref<Record<string, QuestionReviewProgress>>({})
 type PracticeQuestion = {
   id: string; track_id: string; topic: string; difficulty: string; prompt: string;
   options: PracticeOption[]; answer: string; explanation: string; source_type: string; source_reference?: string; language: string
@@ -372,16 +374,30 @@ async function selectQuestionSource(source: 'official' | 'generated') {
   quizError.value = ''
   await startPractice()
 }
-async function startWrongReview() {
+async function loadQuestionProgress() {
+  if (!selectedTrack.value) return
+  try {
+    const response = await fetch('/api/question-progress?track=' + encodeURIComponent(selectedTrack.value.id))
+    if (!response.ok) return
+    const data = await response.json() as { items?: QuestionReviewProgress[] }
+    questionProgressById.value = Object.fromEntries((data.items || []).map(item => [item.question_id, item]))
+  } catch { /* Keep the last known progress visible if the network is temporarily unavailable. */ }
+}
+async function startQuestionReview(mode: 'wrong' | 'due' | 'practice') {
   if (!selectedTrack.value) { quizError.value = '尚未加载考试列表，请刷新页面后重试。'; return }
   quizLoading.value = true
   quizError.value = ''
   try {
-    const response = await fetch('/api/wrong-questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=30')
+    const response = await fetch('/api/wrong-questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=30&mode=' + mode)
     const data = await response.json() as { items?: PracticeQuestion[]; error?: string }
-    if (!response.ok) throw new Error(data.error || '错题加载失败')
+    if (!response.ok) throw new Error(data.error || '复习题加载失败')
+    const emptyMessages = {
+      wrong: '目前没有待处理的错题。做题答错后会自动加入错题集。',
+      due: '目前没有到期的复习题。答错的题会先安排短间隔复习，答对后逐步拉长间隔。',
+      practice: '目前没有待掌握的题目。新题答过后会进入这里，连续答对后才会自动标记掌握。',
+    }
     if (!data.items?.length) {
-      quizError.value = '当前考试还没有云端错题。完成练习并答错后，这里会自动收集需要复习的题目。'
+      quizError.value = emptyMessages[mode]
       return
     }
     quizQuestions.value = data.items
@@ -391,8 +407,9 @@ async function startWrongReview() {
     quizCorrect.value = 0
     quizFinished.value = false
     quizStartedAt.value = Date.now()
+    await loadQuestionProgress()
   } catch (error) {
-    quizError.value = error instanceof Error ? error.message : '错题加载失败，请稍后重试。'
+    quizError.value = error instanceof Error ? error.message : '复习题加载失败，请稍后重试。'
   } finally {
     quizLoading.value = false
   }
@@ -419,6 +436,7 @@ async function startPractice() {
     quizCorrect.value = 0
     quizFinished.value = false
     quizStartedAt.value = Date.now()
+    await loadQuestionProgress()
   } catch (error) {
     quizError.value = error instanceof Error ? error.message : '题库加载失败，请稍后重试。'
   } finally {
@@ -431,27 +449,41 @@ async function nextQuestionBatch() {
   quizError.value = ''
   await startPractice()
 }
-function submitPracticeAnswer() {
+async function submitPracticeAnswer() {
   if (!currentQuestion.value || !selectedOption.value || quizSubmitted.value) return
   quizSubmitted.value = true
   if (selectedOption.value === currentQuestion.value.answer) quizCorrect.value += 1
-  // 真实答题记录写入 D1；本地分数仍即时显示，保存失败会提示而不丢失当前答题流程。
-  void fetch('/api/attempts', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      question_id: currentQuestion.value.id,
-      answer: selectedOption.value,
-      duration_seconds: quizStartedAt.value ? Math.floor((Date.now() - quizStartedAt.value) / 1000) : 0,
-    }),
-  }).then(async response => {
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({})) as { error?: string }
-      quizError.value = data.error || '本次答题已显示，但保存到学习记录失败。'
-    } else {
-      void loadCloudDashboard()
-    }
-  }).catch(() => { quizError.value = '网络异常：本次答题结果尚未保存到云端。' })
+  try {
+    const response = await fetch('/api/attempts', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        question_id: currentQuestion.value.id,
+        answer: selectedOption.value,
+        duration_seconds: quizStartedAt.value ? Math.floor((Date.now() - quizStartedAt.value) / 1000) : 0,
+      }),
+    })
+    const data = await response.json() as { error?: string; progress?: QuestionReviewProgress }
+    if (!response.ok) throw new Error(data.error || '本次答题已显示，但保存到学习记录失败。')
+    if (data.progress) questionProgressById.value[currentQuestion.value.id] = data.progress
+    void loadCloudDashboard()
+  } catch (error) {
+    quizError.value = error instanceof Error ? error.message : '网络异常：本次答题结果尚未保存到云端。'
+  }
+}
+async function setQuestionMastery(questionId: string, mastered: boolean) {
+  try {
+    const response = await fetch('/api/question-progress', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ question_id: questionId, mastered }),
+    })
+    const data = await response.json() as { error?: string; progress?: QuestionReviewProgress }
+    if (!response.ok) throw new Error(data.error || '掌握状态保存失败。')
+    if (data.progress) questionProgressById.value[questionId] = data.progress
+  } catch (error) {
+    quizError.value = error instanceof Error ? error.message : '掌握状态暂未保存。'
+  }
 }
 function nextPracticeQuestion() {
   if (!isLastQuestion.value) {
@@ -1038,7 +1070,9 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                   <p v-else>你可以选择不同考试。目前 SG 已接入专项练习题库；其他考试将在题库准备完成后开放。</p>
                   <div class="practice-start-actions">
                     <button class="primary-button" @click="startPractice" :disabled="quizLoading || !selectedTrack || selectedTrack.question_count === 0">{{ quizLoading ? '正在加载题目…' : selectedTrack?.question_count ? '开始练习（最多 10 题）' : '当前暂无可练习题目' }} <ArrowRight :size="16" /></button>
-                    <button class="text-link" @click="startWrongReview" :disabled="quizLoading || !selectedTrack">{{ quizLoading ? '正在加载…' : '复习云端错题' }}</button>
+                    <button class="text-link" @click="startQuestionReview('wrong')" :disabled="quizLoading || !selectedTrack">错题集</button>
+                    <button class="text-link" @click="startQuestionReview('due')" :disabled="quizLoading || !selectedTrack">到期再练习</button>
+                    <button class="text-link" @click="startQuestionReview('practice')" :disabled="quizLoading || !selectedTrack">未掌握题目</button>
                   </div>
                   <p v-if="quizError" class="practice-error">{{ quizError }}</p>
                 </template>
@@ -1047,6 +1081,13 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 <div class="question-topline"><span>{{ selectedTrack?.title || '考试练习' }} · 第 {{ quizIndex + 1 }} / {{ quizQuestions.length }} 题</span><span class="source-pill">{{ currentQuestion?.source_type === 'generated' ? '预测题库 · 原创' : currentQuestion?.source_type === 'official' ? '历年真题' : '其他题目' }}</span></div>
                 <div class="question-progress"><span :style="{ width: ((quizIndex + 1) / quizQuestions.length * 100) + '%' }"></span></div>
                 <div class="question-topic">{{ currentQuestion.topic }}</div>
+                <div v-if="questionProgressById[currentQuestion.id]" class="question-mastery-row">
+                  <span class="question-mastery-badge" :class="{ mastered: Boolean(questionProgressById[currentQuestion.id].mastered) }">
+                    {{ questionProgressById[currentQuestion.id].mastered ? '已掌握' : questionProgressById[currentQuestion.id].last_result === 'again' ? '需要复习' : '学习中' }}
+                  </span>
+                  <span>连续答对 {{ questionProgressById[currentQuestion.id].correct_streak }} 次</span>
+                  <span>复习 {{ questionProgressById[currentQuestion.id].review_count }} 次</span>
+                </div>
                 <a v-if="currentQuestion.source_type === 'official' && currentQuestion.source_reference" class="language-source" :href="currentQuestion.source_reference" target="_blank" rel="noreferrer">IPA 官方原卷 ↗</a>
                 <h3 class="question-prompt">{{ currentQuestion.prompt }}</h3>
                 <div class="question-options">
@@ -1060,6 +1101,8 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 </div>
                 <div class="question-actions">
                   <span v-if="!quizSubmitted" class="question-hint">选择一个答案后提交</span><span v-else class="question-hint">当前得分：{{ quizCorrect }} / {{ quizIndex + 1 }}</span>
+                  <button v-if="quizSubmitted && !questionProgressById[currentQuestion.id]?.mastered" class="secondary-button" @click="setQuestionMastery(currentQuestion.id, true)">标记掌握</button>
+                  <button v-else-if="quizSubmitted && questionProgressById[currentQuestion.id]?.mastered" class="secondary-button" @click="setQuestionMastery(currentQuestion.id, false)">重新加入复习</button>
                   <button v-if="!quizSubmitted" class="primary-button" :disabled="!selectedOption" @click="submitPracticeAnswer">提交答案 <ArrowRight :size="15" /></button>
                   <button v-else class="primary-button" @click="nextPracticeQuestion">{{ isLastQuestion ? '查看本次成绩' : '下一题' }} <ArrowRight :size="15" /></button>
                 </div>
