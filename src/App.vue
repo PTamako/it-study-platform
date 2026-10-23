@@ -158,6 +158,10 @@ const quizSubmitted = ref(false)
 const quizLoading = ref(false)
 const quizError = ref('')
 const quizCorrect = ref(0)
+const questionBankTotal = ref(0)
+const questionBatchOffset = ref(0)
+const questionBatchSize = 10
+const questionBankHasMore = ref(false)
 type ExamTrack = { id: string; kind: string; title: string; subtitle: string; question_count: number; official_question_count?: number; prediction_question_count?: number }
 const examTracks = ref<ExamTrack[]>([])
 const selectedTrackId = ref('exam-sg')
@@ -341,6 +345,9 @@ async function loadExamTracks() {
   }
 }
 function selectExam(track: ExamTrack) {
+  questionBatchOffset.value = 0
+  questionBankTotal.value = 0
+  questionBankHasMore.value = false
   selectedTrackId.value = track.id
   quizQuestions.value = []
   quizIndex.value = 0
@@ -353,6 +360,9 @@ function selectExam(track: ExamTrack) {
 
 async function selectQuestionSource(source: 'official' | 'generated') {
   questionSourceFilter.value = source
+  questionBatchOffset.value = 0
+  questionBankTotal.value = 0
+  questionBankHasMore.value = false
   // Changing a source should have an immediate, visible effect instead of only changing a hidden filter.
   quizQuestions.value = []
   quizIndex.value = 0
@@ -376,6 +386,8 @@ async function startWrongReview() {
       return
     }
     quizQuestions.value = data.items
+    questionBankTotal.value = data.total || 0
+    questionBankHasMore.value = Boolean(data.has_more)
     quizIndex.value = 0
     selectedOption.value = ''
     quizSubmitted.value = false
@@ -397,8 +409,8 @@ async function startPractice() {
   quizLoading.value = true
   quizError.value = ''
   try {
-    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value) + '&limit=10')
-    const data = await response.json() as { items?: PracticeQuestion[]; error?: string }
+    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value) + '&mode=ordered&limit=' + questionBatchSize + '&offset=' + questionBatchOffset.value)
+    const data = await response.json() as { items?: PracticeQuestion[]; error?: string; total?: number; has_more?: boolean }
     if (!response.ok) throw new Error(data.error || '题库加载失败')
     if (!data.items?.length) throw new Error(questionSourceFilter.value === 'official' ? '历年真题正在整理导入；目前没有可作答的官方题目。' : '预测题库目前没有可用题目，请稍后重试。')
     quizQuestions.value = data.items
@@ -413,6 +425,12 @@ async function startPractice() {
   } finally {
     quizLoading.value = false
   }
+}
+async function nextQuestionBatch() {
+  if (questionBankHasMore.value) questionBatchOffset.value += questionBatchSize
+  else questionBatchOffset.value = 0
+  quizError.value = ''
+  await startPractice()
 }
 function submitPracticeAnswer() {
   if (!currentQuestion.value || !selectedOption.value || quizSubmitted.value) return
@@ -1011,7 +1029,8 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                   <div class="practice-result-score">{{ quizCorrect }} / {{ quizQuestions.length }}</div>
                   <h3>本次练习完成</h3>
                   <p>正确率 {{ Math.round(quizCorrect / quizQuestions.length * 100) }}%。本次成绩已加入当前设备的历史记录。</p>
-                  <button class="primary-button" @click="startPractice" :disabled="quizLoading">{{ quizLoading ? '正在加载…' : '再练一组' }} <ArrowRight :size="16" /></button>
+                  <p class="muted">当前筛选题量 {{ questionBankTotal }} 题 · 本组 {{ questionBatchOffset + 1 }}–{{ Math.min(questionBatchOffset + quizQuestions.length, questionBankTotal) }} 题</p>
+                  <button class="primary-button" @click="nextQuestionBatch" :disabled="quizLoading">{{ quizLoading ? '正在加载…' : questionBankHasMore ? '继续下一组（10 题）' : '从头再练' }} <ArrowRight :size="16" /></button>
                 </template>
                 <template v-else>
                   <div class="practice-start-icon"><GraduationCap :size="25" /></div>
