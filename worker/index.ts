@@ -851,7 +851,7 @@ export default {
       const trackId = (url.searchParams.get('track') || 'exam-sg').trim().slice(0, 80)
       const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 30)))
       const requestedMode = (url.searchParams.get('mode') || 'wrong').trim()
-      const mode = ['wrong', 'due', 'practice', 'mastered'].includes(requestedMode) ? requestedMode : 'wrong'
+      const mode = ['wrong', 'due', 'practice', 'mastered', 'unlearned'].includes(requestedMode) ? requestedMode : 'wrong'
       const requestedSource = (url.searchParams.get('source') || '').trim()
       const source = ['official', 'generated'].includes(requestedSource) ? requestedSource : ''
       try {
@@ -878,11 +878,13 @@ export default {
              ))
              OR (? = 'practice' AND COALESCE(s.mastered, 0) = 0)
              OR (? = 'mastered' AND COALESCE(s.mastered, 0) = 1)
+             OR (? = 'unlearned' AND s.question_id IS NULL
+                 AND NOT EXISTS (SELECT 1 FROM study_attempts ua WHERE ua.question_id = q.id))
            )
            ORDER BY CASE WHEN COALESCE(s.last_result, 'again') = 'again' THEN 0 ELSE 1 END,
                     wrong_count DESC, next_review_at ASC, q.id
            LIMIT ?`,
-        ).bind(trackId, source, source, mode, mode, mode, mode, limit).all()
+        ).bind(trackId, source, source, mode, mode, mode, mode, mode, limit).all()
         return json({
           mode,
           items: results.map((row: Record<string, unknown>) => ({
