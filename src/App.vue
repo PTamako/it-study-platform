@@ -92,6 +92,43 @@ const curveRecords = computed(() => {
 })
 watch(tasks, value => localStorage.setItem('zhixue:tasks:' + todayKey, JSON.stringify(value)), { deep: true })
 watch(examRecords, value => localStorage.setItem('zhixue:exam-records', JSON.stringify(value)), { deep: true })
+
+// 将旧版本保存在浏览器的手动成绩记录迁移到 D1。先上传，再读取云端；每条记录带稳定 ID，失败时保留本地副本。
+let examHistorySyncStarted = false
+async function syncExamHistory() {
+  if (examHistorySyncStarted) return
+  examHistorySyncStarted = true
+  try {
+    const localRecords = examRecords.value.map(record => {
+      const id = (record as ExamRecord & { id?: string }).id || crypto.randomUUID()
+      return { ...record, id }
+    })
+    examRecords.value = localRecords
+    let uploadFailed = false
+    for (const record of localRecords) {
+      try {
+        const response = await fetch('/api/exam-history', {
+          method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(record),
+        })
+        if (!response.ok) uploadFailed = true
+      } catch { uploadFailed = true }
+    }
+    const response = await fetch('/api/exam-history')
+    if (!response.ok) throw new Error('云端考试历史暂不可用')
+    const data = await response.json() as { items?: Array<ExamRecord & { id: string }> }
+    // If any upload failed, do not replace local data with an incomplete cloud list.
+    if (!uploadFailed) {
+      examRecords.value = data.items || []
+    } else {
+      cloudDashboardError.value = '部分本地考试记录尚未同步，原始记录仍保留在本设备。'
+    }
+  } catch {
+    cloudDashboardError.value = '考试记录暂未完成云端迁移；本地数据仍保留。'
+  } finally {
+    examHistorySyncStarted = false
+  }
+}
 function addExamRecord() {
   const exam = window.prompt('记录哪项考试？例如 SG', 'SG')
   if (!exam?.trim()) return
@@ -596,7 +633,7 @@ async function hydrateCloudProgress() {
     }
   } catch { /* local experience remains available if cloud sync is temporarily unavailable */ }
 }
-onMounted(() => { void hydrateCloudProgress(); void loadQuestionSources() })
+onMounted(() => { void syncExamHistory(); void hydrateCloudProgress(); void loadQuestionSources() })
 
 type DictionaryEntry = {
   term: string
