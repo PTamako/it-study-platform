@@ -25,6 +25,6 @@ test('language cards are classified dynamically and paginated for large decks', 
 })
 
 test('cloud review hydration preserves local-only review records during sync', () => {
-  assert.match(app, /const cloudReviews = reviewData\.items \|\| \[\]/)
+  assert.match(app, /const cloudReviews = reviews\.items \|\| \[\]/)
   assert.match(app, /!cloudReviews\.some\(cloud => cloud\.card_id === local\.card_id\)/)
 })
