@@ -807,7 +807,9 @@ export default {
       const trackId = (url.searchParams.get('track') || 'exam-sg').trim().slice(0, 80)
       const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 30)))
       const requestedMode = (url.searchParams.get('mode') || 'wrong').trim()
-      const mode = ['wrong', 'due', 'practice'].includes(requestedMode) ? requestedMode : 'wrong'
+      const mode = ['wrong', 'due', 'practice', 'mastered'].includes(requestedMode) ? requestedMode : 'wrong'
+      const requestedSource = (url.searchParams.get('source') || '').trim()
+      const source = ['official', 'generated'].includes(requestedSource) ? requestedSource : ''
       try {
         const { results } = await env.DB.prepare(
           `SELECT q.id, q.track_id, q.topic, q.difficulty, q.question_type, q.prompt,
@@ -821,7 +823,7 @@ export default {
                   (SELECT MAX(wa.answered_at) FROM study_attempts wa WHERE wa.question_id = q.id AND wa.is_correct = 0) AS last_wrong_at
            FROM questions q
            LEFT JOIN question_review_state s ON s.question_id = q.id
-           WHERE q.track_id = ? AND (
+           WHERE q.track_id = ? AND (? = '' OR q.source_type = ?) AND (
              (? = 'wrong' AND COALESCE(s.mastered, 0) = 0 AND EXISTS (
                SELECT 1 FROM study_attempts wa WHERE wa.question_id = q.id AND wa.is_correct = 0
              ))
@@ -830,11 +832,12 @@ export default {
                OR s.next_review_at <= CURRENT_TIMESTAMP
              ))
              OR (? = 'practice' AND COALESCE(s.mastered, 0) = 0)
+             OR (? = 'mastered' AND COALESCE(s.mastered, 0) = 1)
            )
            ORDER BY CASE WHEN COALESCE(s.last_result, 'again') = 'again' THEN 0 ELSE 1 END,
                     wrong_count DESC, next_review_at ASC, q.id
            LIMIT ?`,
-        ).bind(trackId, mode, mode, mode, limit).all()
+        ).bind(trackId, source, source, mode, mode, mode, mode, limit).all()
         return json({
           mode,
           items: results.map((row: Record<string, unknown>) => ({
