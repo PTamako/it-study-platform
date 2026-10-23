@@ -442,9 +442,15 @@ type LanguageCard = {
 const languageCards = ref<LanguageCard[]>([])
 const languageCardsLoading = ref(false)
 const languageCardsError = ref('')
-const visibleLanguageCards = computed(() => languageCards.value.filter(card =>
-  selectedLanguageCategory.value === '全部' || card.category === selectedLanguageCategory.value
-))
+const selectedLanguageMastery = ref<'all' | 'unmastered' | 'mastered'>('all')
+const visibleLanguageCards = computed(() => languageCards.value.filter(card => {
+  const matchesCategory = selectedLanguageCategory.value === '全部' || card.category === selectedLanguageCategory.value
+  const isMastered = completedLanguageCards.value.includes(card.id)
+  const matchesMastery = selectedLanguageMastery.value === 'all'
+    || (selectedLanguageMastery.value === 'mastered' && isMastered)
+    || (selectedLanguageMastery.value === 'unmastered' && !isMastered)
+  return matchesCategory && matchesMastery
+}))
 const languageProgress = computed(() => {
   const ids = languageCards.value.map(card => card.id)
   const done = ids.filter(id => completedLanguageCards.value.includes(id)).length
@@ -1035,6 +1041,11 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
             <div class="language-category-filter" role="group" aria-label="按学习类别筛选">
               <button v-for="category in languageCategories" :key="category.title" :class="{ chosen: selectedLanguageCategory === category.title }" @click="selectedLanguageCategory = category.title">{{ category.title }}</button>
             </div>
+            <div class="language-mastery-filter" role="group" aria-label="按掌握状态筛选">
+              <button :class="{ chosen: selectedLanguageMastery === 'all' }" @click="selectedLanguageMastery = 'all'">全部卡片</button>
+              <button :class="{ chosen: selectedLanguageMastery === 'unmastered' }" @click="selectedLanguageMastery = 'unmastered'">待复习 {{ languageCards.filter(card => !completedLanguageCards.includes(card.id)).length }}</button>
+              <button :class="{ chosen: selectedLanguageMastery === 'mastered' }" @click="selectedLanguageMastery = 'mastered'">已掌握</button>
+            </div>
             <p v-if="languageCardsLoading" class="dictionary-status">正在从学习内容库读取课程…</p>
             <p v-else-if="languageCardsError" class="dictionary-status dictionary-error">{{ languageCardsError }} 请先应用最新的 D1 数据库迁移。</p>
             <div v-else class="language-card-list">
@@ -1048,7 +1059,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 <button class="play-button" @click="speak(card.term, card.language === 'ja' ? 'ja-JP' : 'en-US')"><Volume2 :size="17" /> 听发音</button>
                 <small class="language-source">平台自编学习内容</small>
               </article>
-              <div v-if="!languageCardsLoading && !languageCardsError && visibleLanguageCards.length === 0" class="empty-state"><BookOpen :size="25" /><strong>这个分类暂时没有已发布的课程</strong><p>可以切换分类或语言，已掌握状态会保存在当前设备。</p></div>
+              <div v-if="!languageCardsLoading && !languageCardsError && visibleLanguageCards.length === 0" class="empty-state"><BookOpen :size="25" /><strong>{{ selectedLanguageMastery === 'mastered' ? '还没有已掌握的卡片' : selectedLanguageMastery === 'unmastered' ? '太棒了，这组卡片已经复习完啦' : '这个分类暂时没有已发布的课程' }}</strong><p>可以切换类别或掌握状态继续学习；进度会在云端保存，并在当前设备保留副本。</p></div>
             </div>
           </section>
         </template>
