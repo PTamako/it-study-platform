@@ -911,6 +911,8 @@ const dictionaryError = ref('')
 const speechStatus = ref('')
 const speechStatusTarget = ref('')
 const lastSearchedTerm = ref('')
+let dictionaryRequestId = 0
+const speechPaused = ref(false)
 watch(recentDictionaryEntries, value => localStorage.setItem('zhixue:recent-dictionary', JSON.stringify(value)), { deep: true })
 watch(savedDictionaryEntries, value => localStorage.setItem('zhixue:saved-dictionary-entries', JSON.stringify(value)), { deep: true })
 const savedVocabularyEntries = computed(() => savedWords.value.map(term =>
@@ -958,25 +960,36 @@ function toggleSaved(term: string) {
   }
 }
 async function lookupDictionary() {
+  const q = searchText.value.normalize('NFKC').trim().replace(/\s+/g, ' ')
+  const requestedLanguage = dictSourceLang.value
+  const requestId = ++dictionaryRequestId
   speechStatus.value = ''
   speechStatusTarget.value = ''
-  const q = searchText.value.trim()
   if (!q) {
     dictionaryError.value = '请先输入英语单词、日语词语或 IT 缩写。'
     onlineEntries.value = []
     lastSearchedTerm.value = ''
+    dictionaryLoading.value = false
     return
   }
   if (q.length > 100) {
     dictionaryError.value = '一次最多查询 100 个字符，请缩短查询内容。'
+    onlineEntries.value = []
+    lastSearchedTerm.value = ''
+    dictionaryLoading.value = false
     return
   }
   dictionaryLoading.value = true
   dictionaryError.value = ''
   onlineEntries.value = []
+  lastSearchedTerm.value = ''
   try {
-    const response = await fetch('/api/dictionary?q=' + encodeURIComponent(q) + '&lang=' + encodeURIComponent(dictSourceLang.value))
+    const response = await fetch('/api/dictionary?q=' + encodeURIComponent(q) + '&lang=' + encodeURIComponent(requestedLanguage), {
+      signal: AbortSignal.timeout(8000),
+    })
     const data = await response.json() as { items?: DictionaryEntry[]; error?: string }
+    // Ignore late responses from an older query or language selection.
+    if (requestId !== dictionaryRequestId) return
     if (!response.ok) throw new Error(data.error || '在线词典暂时不可用，请稍后再试。')
     onlineEntries.value = data.items || []
     lastSearchedTerm.value = q
@@ -984,17 +997,22 @@ async function lookupDictionary() {
       const stamped = onlineEntries.value.filter(entry => entry.term).slice(0, 3)
       recentDictionaryEntries.value = [
         ...stamped,
-        ...recentDictionaryEntries.value.filter(old => !stamped.some(entry => entry.term === old.term)),
+        ...recentDictionaryEntries.value.filter(old => !stamped.some(entry => old.term === entry.term)),
       ].slice(0, 12)
     }
     if (!onlineEntries.value.length) dictionaryError.value = data.error || '没有找到匹配词条。试试单个单词、日语假名或常见表达。'
   } catch (error) {
-    dictionaryError.value = error instanceof Error ? error.message : '查询失败，请检查网络后重试。'
+    if (requestId !== dictionaryRequestId) return
+    dictionaryError.value = error instanceof Error && error.name === 'TimeoutError'
+      ? '查询超时，请检查网络后重试。'
+      : error instanceof Error ? error.message : '查询失败，请检查网络后重试。'
   } finally {
-    dictionaryLoading.value = false
+    if (requestId === dictionaryRequestId) dictionaryLoading.value = false
   }
 }
 function clearDictionarySearch() {
+  dictionaryRequestId += 1
+  dictionaryLoading.value = false
   speechStatus.value = ''
   speechStatusTarget.value = ''
   searchText.value = ''
@@ -1044,6 +1062,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   // Call speak() synchronously in the click handler. Delaying with setTimeout may lose
   // browser user activation and cause silent playback failures on Safari/iOS.
   const requestId = ++speechRequestId
+  speechPaused.value = false
   try {
     synthesis.cancel()
     if (synthesis.paused) synthesis.resume()
@@ -1104,6 +1123,27 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   } catch {
     speechStatus.value = '浏览器没有接受这次语音请求，请再次点击播放。'
   }
+}
+
+function toggleSpeechPause() {
+  const synthesis = window.speechSynthesis
+  if (typeof synthesis === 'undefined') return
+  if (synthesis.paused) {
+    synthesis.resume()
+    speechPaused.value = false
+    speechStatus.value = '继续播放。'
+  } else {
+    synthesis.pause()
+    speechPaused.value = true
+    speechStatus.value = '已暂停播放。'
+  }
+}
+function stopSpeech() {
+  const synthesis = window.speechSynthesis
+  speechRequestId += 1
+  try { synthesis?.cancel() } catch { /* The browser may already have stopped playback. */ }
+  speechPaused.value = false
+  speechStatus.value = '播放已停止。'
 }
 
 function speakDictionaryEnglish(entry: DictionaryEntry) {
@@ -1591,7 +1631,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             </div>
             <p>以英语学习为主：分别播放英语原音与日语辅助读音；结合 IPA 音标和片假名近似提示练习。日语查询可查看对应英文释义。IT 术语优先使用本地词库，无需在线翻译。</p>
             <p v-if="dictionaryLoading" class="dictionary-status">正在查词…</p>
-            <p v-else-if="dictionaryError" class="dictionary-status dictionary-error">{{ dictionaryError }}</p>
+            <p v-else-if="dictionaryError" class="dictionary-status dictionary-error">{{ dictionaryError }} <button type="button" class="text-link" @click="lookupDictionary">重试</button></p>
             <div v-if="!searchText.trim() && !dictionaryLoading" class="dictionary-quick-start"><span>试试查询</span><button @click="quickDictionarySearch('hello', 'en')">hello <small>英语</small></button><button @click="quickDictionarySearch('こんにちは', 'ja')">こんにちは <small>日语</small></button><button @click="quickDictionarySearch('認証', 'it')">認証 <small>IT</small></button><button @click="quickDictionarySearch('ハッシュ', 'it')">ハッシュ <small>安全</small></button><button @click="quickDictionarySearch('API', 'it')">API <small>接口</small></button><button @click="quickDictionarySearch('トランザクション', 'it')">トランザクション <small>数据库</small></button><button @click="quickDictionarySearch('CORS', 'it')">CORS <small>跨域</small></button><button @click="quickDictionarySearch('コンポーネント', 'it')">コンポーネント <small>前端</small></button><button @click="quickDictionarySearch('Cloudflare D1', 'it')">Cloudflare D1 <small>云数据库</small></button><button @click="quickDictionarySearch('プルリクエスト', 'it')">プルリクエスト <small>Git协作</small></button></div>
           </section>
           <section class="section-block">
@@ -1605,7 +1645,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <p v-if="entry.translationJa" class="dictionary-translation-ja">日语辅助理解：{{ entry.translationJa }}</p>
                   <p v-if="entry.example" class="dict-example">例句：{{ entry.example }}</p>
                   <p v-if="entry.technical" class="dictionary-tech-note">来自 IT 专业词汇库</p>
-                  <p v-if="speechStatus && speechStatusTarget === entry.term" class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p>
+                  <div v-if="speechStatus && speechStatusTarget === entry.term" class="dictionary-speech-controls"><p class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p><button type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 </div>
                 <div class="dict-actions"><button v-if="entry.englishTerm || entry.language === 'en'" class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + (entry.englishTerm || entry.term)" title="播放英语原音"><Volume2 :size="14" /><span>EN</span></button><button v-if="entry.reading || entry.language === 'ja' || entry.language === 'en' || entry.englishTerm" class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语辅助读音：' + (entry.englishTerm || entry.term)" title="播放日语辅助读音（片假名为近似提示）"><Languages :size="14" /><span>日</span></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
               </article>
