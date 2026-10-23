@@ -32,3 +32,34 @@ test('IT dictionary remains local-only and does not fall back to online translat
   assert.match(worker, /if \(requestedLanguage === 'it'\) return \[\]/)
   assert.match(worker, /lang 参数只支持 auto、ja、en、it/)
 })
+
+const glossaryMigration = await readFile(new URL('../migrations/0077_expand_it_glossary_security_network_management.sql', import.meta.url), 'utf8')
+
+test('dictionary ignores stale requests and offers retry after errors', () => {
+  assert.match(app, /let dictionaryRequestId = 0/)
+  assert.match(app, /if \(requestId !== dictionaryRequestId\) return/)
+  assert.match(app, /AbortSignal\.timeout\(8000\)/)
+  assert.match(app, /@click="lookupDictionary">重试/)
+})
+
+test('dictionary speech can be paused, resumed, and stopped', () => {
+  assert.match(app, /function toggleSpeechPause\(\)/)
+  assert.match(app, /function stopSpeech\(\)/)
+  assert.match(app, /@click="toggleSpeechPause"/)
+  assert.match(app, /@click="stopSpeech">停止/)
+})
+
+test('offline glossary includes SG-relevant identity, security, networking, database, and management terms', () => {
+  for (const term of ['TOTP', 'RBAC', 'TLS', 'WAF', 'SIEM', 'CSRF', 'SSRF', 'DNS', 'REST', 'ACID', 'RTO', 'RPO', 'PDCA', 'SDLC', 'ゼロトラスト']) {
+    assert.ok(glossaryMigration.includes(term), `missing glossary term: ${term}`)
+  }
+  assert.match(glossaryMigration, /meaning_ja, meaning_en, example, source_module, mastery, aliases/)
+  assert.match(worker, /rawQuery\.normalize\('NFKC'\)/)
+})
+
+test('English alias results never reuse a Japanese headword reading as English katakana', () => {
+  assert.match(worker, /const reading = isEnglishQuery \? kanaGuide : \(storedReading \|\| kanaGuide\)/)
+  for (const term of ['totp', 'rbac', 'siem', 'csrf', 'dns', 'pdca']) {
+    assert.match(worker, new RegExp(term + ":"))
+  }
+})
