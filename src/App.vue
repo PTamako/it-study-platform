@@ -126,6 +126,24 @@ const examTracks = ref<ExamTrack[]>([])
 const selectedTrackId = ref('exam-sg')
 const tracksLoading = ref(false)
 const tracksError = ref('')
+type QuestionSource = { id: string; exam_code: string; year_label: string; subject_label: string; title: string; source_url: string; content_mode: string; license_note: string; notes: string }
+const officialQuestionSources = ref<QuestionSource[]>([])
+const questionSourcesLoading = ref(false)
+const questionSourcesError = ref('')
+async function loadQuestionSources() {
+  questionSourcesLoading.value = true
+  questionSourcesError.value = ''
+  try {
+    const response = await fetch('/api/question-sources?exam=SG')
+    const data = await response.json() as { items?: QuestionSource[]; error?: string }
+    if (!response.ok) throw new Error(data.error || '官方题源目录暂不可用')
+    officialQuestionSources.value = data.items || []
+  } catch (error) {
+    questionSourcesError.value = error instanceof Error ? error.message : '官方题源目录暂不可用'
+  } finally {
+    questionSourcesLoading.value = false
+  }
+}
 const selectedTrack = computed(() => examTracks.value.find(track => track.id === selectedTrackId.value) || null)
 const quizStartedAt = ref(0)
 const quizFinished = ref(false)
@@ -489,7 +507,7 @@ async function hydrateCloudProgress() {
     }
   } catch { /* local experience remains available if cloud sync is temporarily unavailable */ }
 }
-onMounted(() => { void hydrateCloudProgress() })
+onMounted(() => { void hydrateCloudProgress(); void loadQuestionSources() })
 
 type DictionaryEntry = {
   term: string
@@ -805,6 +823,17 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               <div v-if="!tracksLoading && !tracksError && examTracks.length === 0" class="empty-state"><GraduationCap :size="25" /><strong>暂无已启用的考试</strong><p>请先在 D1 学习模块表中启用考试。</p></div>
             </div>
 
+            <section class="panel question-sources-panel">
+              <div class="panel-heading"><div><h3>官方过去问入口</h3><p>优先使用 IPA 官方公开题；当前提供原始出处链接，不把第三方题库冒充官方题。</p></div><span class="source-pill">IPA</span></div>
+              <p v-if="questionSourcesLoading" class="dictionary-status">正在读取官方题源目录…</p>
+              <p v-else-if="questionSourcesError" class="dictionary-status dictionary-error">{{ questionSourcesError }}</p>
+              <a v-for="source in officialQuestionSources" :key="source.id" class="question-source-row" :href="source.source_url" target="_blank" rel="noopener noreferrer">
+                <span class="question-source-icon"><BookMarked :size="18" /></span>
+                <span class="question-source-copy"><strong>{{ source.title }}</strong><small>{{ source.year_label }} · {{ source.subject_label }}</small><small>{{ source.notes }}</small></span>
+                <ArrowRight :size="17" />
+              </a>
+              <p v-if="!questionSourcesLoading && !questionSourcesError && !officialQuestionSources.length" class="recent-dictionary-empty">官方题源目录尚未导入 D1；稍后执行迁移 0011、0012 即可加载。</p>
+            </section>
 
             <section class="practice-section">
               <div class="section-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2><p>题目根据上方所选考试读取；未接入题库的考试不会展示假题。</p></div><span class="source-pill">{{ selectedTrack?.question_count ? selectedTrack.question_count + ' 道可练习' : '题库待接入' }}</span></div>
