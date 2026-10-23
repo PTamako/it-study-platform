@@ -352,6 +352,35 @@ const englishKatakanaReadings: Record<string, string> = {
   upload: 'アップロード', download: 'ダウンロード', git: 'ギット', github: 'ギットハブ',
   cloudflare: 'クラウドフレア', sql: 'エスキューエル', windows: 'ウィンドウズ', linux: 'リナックス',
   cors: 'コルス', mfa: 'エムエフエー', csrf: 'シーエスアールエフ', xss: 'クロスサイトスクリプティング',
+  totp: 'ティーオーティーピー', hotp: 'ホップ', rbac: 'アールバック', acl: 'エーシーエル',
+  tls: 'ティーエルエス', pki: 'ピーケーアイ', ca: 'シーエー', waf: 'ワフ',
+  ids: 'アイディーエス', ips: 'アイピーエス', siem: 'シーム', ssrf: 'サーバーサイドリクエストフォージェリ',
+  dns: 'ディーエヌエス', rest: 'レスト', crud: 'クラッド', acid: 'アシッド',
+  rto: 'アールティーオー', rpo: 'アールピーオー', pdca: 'ピーディーシーエー',
+  sdlc: 'エスディーエルシー', agile: 'アジャイル', scrum: 'スクラム',
+  'waterfall model': 'ウォーターフォールモデル', devsecops: 'デブセックオプス',
+  'zero trust': 'ゼロトラスト', 'osi model': 'オーエスアイモデル',
+  'time-based one-time password': 'タイムベースドワンタイムパスワード',
+  'hmac-based one-time password': 'エイチマックベースドワンタイムパスワード',
+  'role based access control': 'ロールベースアクセスコントロール',
+  'access control list': 'アクセスコントロールリスト',
+  'transport layer security': 'トランスポートレイヤーセキュリティ',
+  'public key infrastructure': 'パブリックキーインフラストラクチャー',
+  'certificate authority': 'サーティフィケートオーソリティー',
+  'web application firewall': 'ウェブアプリケーションファイアウォール',
+  'intrusion detection system': 'イントルージョンディテクションシステム',
+  'intrusion prevention system': 'イントルージョンプリベンションシステム',
+  'security information and event management': 'セキュリティインフォメーションアンドイベントマネジメント',
+  'cross site request forgery': 'クロスサイトリクエストフォージェリ',
+  'server side request forgery': 'サーバーサイドリクエストフォージェリ',
+  'domain name system': 'ドメインネームシステム',
+  'representational state transfer': 'レプレゼンテーショナルステートトランスファー',
+  'create read update delete': 'クリエイトリードアップデートデリート',
+  'recovery time objective': 'リカバリータイムオブジェクティブ',
+  'recovery point objective': 'リカバリーポイントオブジェクティブ',
+  'software development life cycle': 'ソフトウェアデベロップメントライフサイクル',
+  'agile development': 'アジャイルデベロップメント',
+  'development security operations': 'デベロップメントセキュリティオペレーションズ',
 }
 
 function englishDictionaryEntries(rows: LooseRecord[], _zh: string, ja: string): DictionaryApiEntry[] {
@@ -388,7 +417,7 @@ function englishDictionaryEntries(rows: LooseRecord[], _zh: string, ja: string):
 }
 
 async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Promise<DictionaryApiEntry[]> {
-  const query = rawQuery.trim()
+  const query = rawQuery.normalize('NFKC').trim().replace(/\s+/g, ' ')
   if (!query) return []
   const select = `SELECT term, language, reading, meaning_zh, meaning_ja, meaning_en, example, source_module, aliases
     FROM vocabulary`
@@ -426,9 +455,10 @@ async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Prom
     const term = String(row.term || '')
     const aliases = String(row.aliases || '').split('|').map(alias => alias.trim()).filter(Boolean)
     const termIsEnglish = /^[a-z0-9][a-z0-9 .+/#()-]*$/i.test(term)
+    const queryAlias = aliases.find(alias => alias.toLocaleLowerCase() === query.toLocaleLowerCase() && /^[a-z0-9][a-z0-9 .+/#()-]*$/i.test(alias))
     const englishTerm = termIsEnglish
       ? term
-      : aliases.find(alias => /^[a-z0-9][a-z0-9 .+/#()-]*$/i.test(alias)) || ''
+      : queryAlias || aliases.find(alias => /^[a-z0-9][a-z0-9 .+/#()-]*$/i.test(alias)) || ''
     // In auto mode, label the result according to the user's query so an English alias
     // gets an English-first card with a Japanese pronunciation aid.
     const isEnglishQuery = /[a-z]/i.test(query)
@@ -437,7 +467,9 @@ async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Prom
     const storedReading = String(row.reading || '')
     // For English aliases, prefer the curated English-to-katakana guide over a Japanese
     // word's kun/on reading (e.g. authentication -> オーセンティケーション, not にんしょう).
-    const reading = isEnglishQuery ? (kanaGuide || storedReading) : (storedReading || kanaGuide)
+    // Never use the Japanese headword's reading as if it were a katakana guide to an English word.
+    // English queries only get a Japanese-aid reading when a curated English pronunciation hint exists.
+    const reading = isEnglishQuery ? kanaGuide : (storedReading || kanaGuide)
     return {
       term,
       englishTerm: englishTerm || undefined,
