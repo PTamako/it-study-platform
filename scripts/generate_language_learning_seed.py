@@ -43,36 +43,75 @@ def zhmap(db):
  c=sqlite3.connect(f"file:{db}?mode=ro",uri=True)
  tables={r[0] for r in c.execute("select name from sqlite_master where type='table'")}
  if "zh_defs" not in tables:raise RuntimeError("Tomoshi DB has no zh_defs: "+str(sorted(tables)[:50]))
- aliases={}
+ aliases={};forms_by_key={}
+ def add_forms(key, values):
+  if key is None:return
+  bucket=forms_by_key.setdefault(str(key),set())
+  for value in values:
+   if isinstance(value,str) and re.search(r"[\u3040-\u30ff\u3400-\u9fff]",value):bucket.add(value)
+ def extract_forms(obj):
+  values=[]
+  if isinstance(obj,dict):
+   for k,v in obj.items():
+    key=k.lower()
+    if key in {"kanji","kana","forms","readings","written_forms","k_ele","r_ele","written","reading","word","headword","text","form"}:
+     if isinstance(v,str):values.append(v)
+     elif isinstance(v,list):
+      for item in v:
+       if isinstance(item,str):values.append(item)
+       elif isinstance(item,dict):
+        for fkey in ("text","word","form","value","written","kana","reading"):
+         if isinstance(item.get(fkey),str):values.append(item[fkey])
+    elif isinstance(v,(dict,list)):values.extend(extract_forms(v))
+  elif isinstance(obj,list):
+   for item in obj:values.extend(extract_forms(item))
+  return list(dict.fromkeys(values))
  if "entries" in tables:
   ecols=[r[1] for r in c.execute("pragma table_info(entries)")]
   def epick(candidates):return next((x for x in candidates if x in ecols),None)
   pk=epick(["id","entry_id","jmdict_id","ent_seq"])
   jidcol=epick(["jmdict_id","ent_seq"])
   jsoncol=epick(["data","entry_json","json","content","entry"])
-  if pk and jidcol:
-   for key,jid in c.execute(f'SELECT "{pk}","{jidcol}" FROM entries'):
-    if jid is not None:
-     aliases[str(key)]=str(jid);aliases[str(jid)]=str(jid)
-  elif pk and jsoncol:
-   for key,raw in c.execute(f'SELECT "{pk}","{jsoncol}" FROM entries'):
-    try:obj=json.loads(raw) if isinstance(raw,str) else raw
-    except Exception:obj={}
-    if isinstance(obj,dict):
-     jid=obj.get("jmdict_id") or obj.get("ent_seq") or obj.get("id")
-     if jid is not None:
-      aliases[str(key)]=str(jid);aliases[str(jid)]=str(jid)
+  print("Tomoshi entries columns:",ecols,"selected:",pk,jidcol,jsoncol)
+  if pk and (jidcol or jsoncol):
+   select_cols=[pk]+([jidcol] if jidcol else [])+([jsoncol] if jsoncol and jsoncol!=jidcol else [])
+   for row in c.execute("SELECT "+", ".join('"'+x+'"' for x in select_cols)+" FROM entries"):
+    key=row[0]; pos=1; jid=row[pos] if jidcol else None; pos+=1 if jidcol else 0
+    raw=row[pos] if jsoncol and jsoncol!=jidcol else None
+    obj={}
+    if raw:
+     try:obj=json.loads(raw) if isinstance(raw,str) else raw
+     except Exception:obj={}
+    if jid is None and isinstance(obj,dict):jid=obj.get("jmdict_id") or obj.get("ent_seq") or obj.get("seq") or obj.get("id")
+    if jid is not None:aliases[str(key)]=str(jid);aliases[str(jid)]=str(jid)
+    values=extract_forms(obj)
+    add_forms(key,values)
+    if jid is not None:add_forms(jid,values)
+ if "forms" in tables:
+  fcols=[r[1] for r in c.execute("pragma table_info(forms)")]
+  def fpick(candidates):return next((x for x in candidates if x in fcols),None)
+  entrycol=fpick(["entry_id","word_id","id_entry","entry","jmdict_id","ent_seq"])
+  formcol=fpick(["text","form","headword","word","value","surface","written","kana","reading"])
+  print("Tomoshi forms columns:",fcols,"selected:",entrycol,formcol)
+  if entrycol and formcol:
+   for eid,form in c.execute(f'SELECT "{entrycol}","{formcol}" FROM forms'):
+    if isinstance(form,str) and form:
+     add_forms(eid,[form]);canonical=aliases.get(str(eid))
+     if canonical:add_forms(canonical,[form])
  cols=[r[1] for r in c.execute("pragma table_info(zh_defs)")]
  key=next((x for x in ["jmdict_id","ent_seq","entry_id","id_entry","word_id"] if x in cols),None)
  dat=next((x for x in ["data","glosses","definition","text","content","json"] if x in cols),None)
+ print("Tomoshi zh_defs columns:",cols,"selected:",key,dat)
  if not key or not dat:raise RuntimeError("Unexpected zh_defs schema "+str(cols))
  out={}
  for i,d in c.execute(f'SELECT "{key}","{dat}" FROM zh_defs'):
-  canonical=aliases.get(str(i),str(i))
-  vals=zhstrings(d)
-  if vals:out.setdefault(canonical,[]).extend(vals)
+  canonical=aliases.get(str(i),str(i));vals=zhstrings(d)
+  if not vals:continue
+  out.setdefault(canonical,[]).extend(vals)
+  for form in forms_by_key.get(str(i),set()) | forms_by_key.get(canonical,set()):
+   out.setdefault(form,[]).extend(vals)
  c.close()
- print("Tomoshi zh_defs key sample:", list(out.keys())[:3], "mapped OpenJLPT ID 1198180:", "1198180" in out)
+ print("Tomoshi gloss key sample:",list(out.keys())[:3],"JMdict ID 1198180:", "1198180" in out,"headword 会う:", "会う" in out)
  return {k:list(dict.fromkeys(v)) for k,v in out.items()}
 def english_data(p):
  rows=[]; translations={}
