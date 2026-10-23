@@ -163,11 +163,11 @@ const examTracks = ref<ExamTrack[]>([])
 const selectedTrackId = ref('exam-sg')
 const tracksLoading = ref(false)
 const tracksError = ref('')
-const questionSourceFilter = ref<'all' | 'generated' | 'licensed'>('all')
+const questionSourceFilter = ref<'all' | 'generated' | 'official'>('all')
 const questionSourceFilters = [
   { id: 'all', label: '全部题目' },
-  { id: 'generated', label: '专项练习' },
-  { id: 'licensed', label: '授权题目' },
+  { id: 'generated', label: '预测练习题' },
+  { id: 'official', label: '历年真题' },
 ] as const
 
 const selectedTrack = computed(() => examTracks.value.find(track => track.id === selectedTrackId.value) || null)
@@ -186,7 +186,7 @@ const mockError = ref('')
 const mockDeadline = ref(0)
 const mockStartedAt = ref(0)
 const mockNow = ref(Date.now())
-const mockDurationMinutes = ref(30)
+const mockDurationMinutes = ref(120)
 let mockTimer: ReturnType<typeof setInterval> | undefined
 const mockRemainingSeconds = computed(() => mockStarted.value && !mockSubmitted.value
   ? Math.max(0, Math.ceil((mockDeadline.value - mockNow.value) / 1000))
@@ -205,13 +205,14 @@ async function startMockExam() {
   mockLoading.value = true
   mockError.value = ''
   try {
-    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=30')
+    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=60&mode=mock')
     const data = await response.json() as { items?: PracticeQuestion[]; error?: string }
     if (!response.ok) throw new Error(data.error || '模拟考试题目加载失败')
     if (!data.items?.length) throw new Error('题库目前没有可用题目。')
+    if (data.items.length < 60) throw new Error('标准模拟考试需要 60 道不重复题目；当前题库只有 ' + data.items.length + ' 道可用题。请先扩充题库，避免用重复题凑数。')
     mockQuestions.value = data.items
     mockAnswers.value = {}
-    mockDurationMinutes.value = Math.max(1, Math.ceil(data.items.length * 1.5))
+    mockDurationMinutes.value = 120
     mockStartedAt.value = Date.now()
     mockDeadline.value = mockStartedAt.value + mockDurationMinutes.value * 60 * 1000
     mockNow.value = mockStartedAt.value
@@ -341,7 +342,7 @@ function selectExam(track: ExamTrack) {
   quizError.value = ''
 }
 
-async function selectQuestionSource(source: 'all' | 'generated' | 'licensed') {
+async function selectQuestionSource(source: 'all' | 'generated' | 'official') {
   questionSourceFilter.value = source
   // Changing a source should have an immediate, visible effect instead of only changing a hidden filter.
   quizQuestions.value = []
@@ -351,10 +352,6 @@ async function selectQuestionSource(source: 'all' | 'generated' | 'licensed') {
   quizCorrect.value = 0
   quizFinished.value = false
   quizError.value = ''
-  if (source === 'licensed') {
-    quizError.value = '当前题库还没有已登记的授权题目。选择“全部题目”或“专项练习”即可开始练习。'
-    return
-  }
   await startPractice()
 }
 async function startWrongReview() {
@@ -394,7 +391,7 @@ async function startPractice() {
     const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value) + '&limit=10')
     const data = await response.json() as { items?: PracticeQuestion[]; error?: string }
     if (!response.ok) throw new Error(data.error || '题库加载失败')
-    if (!data.items?.length) throw new Error(questionSourceFilter.value === 'licensed' ? '当前题库还没有已登记的授权题目。' : '当前考试目前没有可用题目，请稍后重试。')
+    if (!data.items?.length) throw new Error(questionSourceFilter.value === 'official' ? '历年真题正在整理导入；当前筛选下暂无可用题目。' : '当前考试目前没有可用题目，请稍后重试。')
     quizQuestions.value = data.items
     quizIndex.value = 0
     selectedOption.value = ''
@@ -1009,7 +1006,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                   <div class="practice-start-icon"><GraduationCap :size="25" /></div>
                   <h3>准备好开始练习了吗？</h3>
                   <p v-if="selectedTrack?.question_count">从 D1 读取 {{ selectedTrack.title }} 题目，提交后查看正确答案与解析。</p>
-                  <p v-else>你可以选择不同考试。目前 SG 已接入专项练习题库；其他考试将在题库准备完成后开放。</p>
+                  <p v-else>你可以选择不同考试。SG 题库目标为约 400 道原创预测练习题与约 600 道历年真题；实战模拟按 60 题、120 分钟执行。</p>
                   <div class="practice-start-actions">
                     <button class="primary-button" @click="startPractice" :disabled="quizLoading || !selectedTrack || selectedTrack.question_count === 0">{{ quizLoading ? '正在加载题目…' : selectedTrack?.question_count ? '开始练习（最多 10 题）' : '当前暂无可练习题目' }} <ArrowRight :size="16" /></button>
                     <button class="text-link" @click="startWrongReview" :disabled="quizLoading || !selectedTrack">{{ quizLoading ? '正在加载…' : '复习云端错题' }}</button>
@@ -1144,7 +1141,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                 </div>
               </div>
             </section>
-            <div class="notice-card"><CircleHelp :size="19" /><div><strong>题库说明</strong><p>题库提供站内作答、即时判分、日语题干、中文解析与错题复习。专项练习为原创模拟题，不冒充官方过去问。</p></div></div>
+            <div class="notice-card"><CircleHelp :size="19" /><div><strong>题库说明</strong><p>题库分为两类：预测练习题（原创预测，不冒充真题）与历年真题（按考试年份整理）。标准实战模拟为 60 道题、120 分钟，交卷后统一判分并查看解析。</p></div></div>
           </section>
         </template>
 
