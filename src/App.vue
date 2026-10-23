@@ -6,7 +6,7 @@ import {
   ShieldCheck, BookMarked, Menu, X, CheckCircle2, Target, TrendingUp, ListChecks, PlusCircle,
 } from 'lucide-vue-next'
 
-type ModuleId = 'home' | 'exam' | 'practical' | 'language' | 'dictionary'
+type ModuleId = 'home' | 'exam' | 'practical' | 'drill' | 'language' | 'dictionary'
 const activeModule = ref<ModuleId>('home')
 const searchText = ref('')
 const dictSourceLang = ref<'auto' | 'ja' | 'en' | 'zh' | 'it'>('auto')
@@ -427,8 +427,8 @@ async function submitScenario() {
     scenarioSubmitting.value = false
   }
 }
-watch([selectedTrackId, examTracks], () => {
-  void loadScenarios()
+watch([selectedTrackId, examTracks, activeModule], () => {
+  if (activeModule.value === 'practical' || activeModule.value === 'drill') void loadScenarios()
 })
 async function loadExamTracks() {
   tracksLoading.value = true
@@ -653,6 +653,7 @@ const moduleInfo = {
   home: { title: '今天，学一点新的。', subtitle: '把考试、语言和专业知识，放进一个顺手的学习空间。' },
   exam: { title: '考试备考', subtitle: '日常刷题、复习错题与限时模拟考试。' },
   practical: { title: '实战训练', subtitle: '在工作情境中判断风险、选择行动，并查看评分与解释。' },
+  drill: { title: '实战演练', subtitle: '用日语处理 400 个信息安全与职场情境，提交后查看日文与中文解析。' },
   language: { title: '语言学习', subtitle: '选择日语或英语，按实际学习内容练习表达、理解和发音。' },
   dictionary: { title: '多语言词典', subtitle: '把中文、日语、英语和 IT 术语连起来，随查随记。' },
 } as const
@@ -662,7 +663,8 @@ const searchPlaceholder = computed(() => activeModule.value === 'dictionary' ? '
 
 const modules = [
   { id: 'exam' as const, title: '考试备考', en: 'EXAM PREP', desc: '日常练习 · 错题复习 · 限时模拟考试', icon: GraduationCap, tone: 'lavender', count: '题量以题库数据为准' },
-  { id: 'practical' as const, title: '实战训练', en: 'PRACTICAL LAB', desc: '安全事件与职场决策情境', icon: ShieldCheck, tone: 'blue', count: '情境题 · 评分 · 复盘' },
+  { id: 'practical' as const, title: '实战训练', en: 'PRACTICAL LAB', desc: '日语安全情境 · 日语语音 · 中日双语解析', icon: ShieldCheck, tone: 'blue', count: '400 个情境 · 评分 · 复盘' },
+  { id: 'drill' as const, title: '实战演练', en: 'PRACTICAL DRILLS', desc: '日语情境演练 · 日语语音 · 中日双语解析', icon: ShieldCheck, tone: 'lavender', count: '共用 400 个原创情境' },
   { id: 'language' as const, title: '语言学习', en: 'LANGUAGE', desc: '日语 / 英语 · 例句 · 发音 · 复习', icon: Languages, tone: 'peach', count: '选择语言开始学习' },
   { id: 'dictionary' as const, title: '词典与 IT 术语', en: 'DICTIONARY', desc: '中日英互译 · 专业词库 · 生词本', icon: BookMarked, tone: 'blue', count: '普通词汇与技术词汇' },
 ]
@@ -1410,11 +1412,11 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
           </section>
         </template>
 
-        <template v-else-if="activeModule === 'practical'">
+        <template v-else-if="activeModule === 'practical' || activeModule === 'drill'">
           <section class="section-block module-page-section">
-            <div class="section-heading"><div><div class="section-kicker">PRACTICAL SECURITY LAB</div><h2>把知识用在真实工作情境里</h2><p>阅读情况，选择最合适的行动；提交后会显示评分、推荐选项和复盘说明。</p></div><span class="section-index">{{ scenarios.length }} 个情境</span></div>
+            <div class="section-heading"><div><div class="section-kicker">{{ activeModule === 'drill' ? 'PRACTICAL DRILLS' : 'PRACTICAL SECURITY LAB' }}</div><h2>{{ activeModule === 'drill' ? '在真实情境中练习判断与应对' : '把知识用在真实工作情境里' }}</h2><p>{{ activeModule === 'drill' ? '日语题干与选项、日语语音播报，并在提交后显示日文原文和中文解析。' : '日语题干与选项；提交后显示日文原文和中文解析。' }}</p></div><span class="section-index">{{ scenarios.length }} 个情境</span></div>
             <div class="panel practice-start-card">
-              <div class="section-heading"><div><h3>选择考试方向</h3><p>当前先提供 SG 信息安全管理情境。</p></div></div>
+              <div class="section-heading"><div><h3>{{ activeModule === 'drill' ? '选择演练方向' : '选择训练方向' }}</h3><p>当前先提供 SG 信息安全管理情境。两个入口共用同一套 400 个日语情境，不重复造题。</p></div></div>
               <div class="exam-list">
                 <button v-for="exam in examTracks" :key="exam.id" class="exam-card" :class="{ 'exam-card-selected': selectedTrackId === exam.id }" @click="selectExam(exam)">
                   <span class="exam-code purple">{{ exam.id.split('-').pop()?.toUpperCase() }}</span>
