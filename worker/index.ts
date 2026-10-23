@@ -26,6 +26,7 @@ type DictionaryApiEntry = {
   language?: 'ja' | 'en' | 'zh'
   source?: string
   translationJa?: string
+  englishTerm?: string
   technical?: boolean
 }
 
@@ -323,7 +324,37 @@ function jishoEntries(rows: LooseRecord[], zh: string): DictionaryApiEntry[] {
   }).filter((entry) => Boolean(entry.term && entry.en))
 }
 
-function englishDictionaryEntries(rows: LooseRecord[], zh: string, ja: string): DictionaryApiEntry[] {
+// Conservative, curated katakana guides for common English/IT terms.
+ // These are pronunciation aids, not phonetic transcriptions; IPA from the dictionary API
+ // is shown separately when available.
+const englishKatakanaReadings: Record<string, string> = {
+  hello: 'ハロー', world: 'ワールド', computer: 'コンピューター', programming: 'プログラミング',
+  developer: 'デベロッパー', software: 'ソフトウェア', hardware: 'ハードウェア', security: 'セキュリティ',
+  network: 'ネットワーク', database: 'データベース', browser: 'ブラウザー', cache: 'キャッシュ',
+  server: 'サーバー', client: 'クライアント', cloud: 'クラウド', password: 'パスワード',
+  authentication: 'オーセンティケーション', authorization: 'オーソライゼーション', encryption: 'エンクリプション',
+  hash: 'ハッシュ', token: 'トークン', request: 'リクエスト', response: 'レスポンス',
+  error: 'エラー', bug: 'バグ', test: 'テスト', build: 'ビルド', deploy: 'デプロイ',
+  update: 'アップデート', commit: 'コミット', branch: 'ブランチ', merge: 'マージ',
+  repository: 'リポジトリ', 'source code': 'ソースコード', 'code review': 'コードレビュー',
+  api: 'エーピーアイ', json: 'ジェイソン', html: 'エイチティーエムエル', css: 'シーエスエス',
+  javascript: 'ジャバスクリプト', typescript: 'タイプスクリプト', function: 'ファンクション',
+  variable: 'バリアブル', array: 'アレイ', object: 'オブジェクト', component: 'コンポーネント',
+  framework: 'フレームワーク', library: 'ライブラリ', compiler: 'コンパイラ', interpreter: 'インタプリタ',
+  query: 'クエリ', index: 'インデックス', 'primary key': 'プライマリーキー',
+  'foreign key': 'フォーリンキー', transaction: 'トランザクション', rollback: 'ロールバック',
+  backup: 'バックアップ', restore: 'リストア', monitor: 'モニター', latency: 'レイテンシ',
+  throughput: 'スループット', website: 'ウェブサイト', application: 'アプリケーション', system: 'システム',
+  account: 'アカウント', login: 'ログイン', logout: 'ログアウト', permission: 'パーミッション',
+  role: 'ロール', user: 'ユーザー', admin: 'アドミン', access: 'アクセス',
+  profile: 'プロフィール', search: 'サーチ', settings: 'セッティング', save: 'セーブ',
+  cancel: 'キャンセル', delete: 'デリート', create: 'クリエイト', read: 'リード', write: 'ライト',
+  upload: 'アップロード', download: 'ダウンロード', git: 'ギット', github: 'ギットハブ',
+  cloudflare: 'クラウドフレア', sql: 'エスキューエル', windows: 'ウィンドウズ', linux: 'リナックス',
+  cors: 'コルス', mfa: 'エムエフエー', csrf: 'シーエスアールエフ', xss: 'クロスサイトスクリプティング',
+}
+
+function englishDictionaryEntries(rows: LooseRecord[], _zh: string, ja: string): DictionaryApiEntry[] {
   return rows.map((row) => {
     const meanings = (Array.isArray(row.meanings) ? row.meanings : []) as LooseRecord[]
     const definitions: string[] = []
@@ -339,13 +370,16 @@ function englishDictionaryEntries(rows: LooseRecord[], zh: string, ja: string): 
     }
     const phonetics = (Array.isArray(row.phonetics) ? row.phonetics : []) as LooseRecord[]
     const phonetic = String(row.phonetic || phonetics.find((item) => item.text)?.text || '')
+    const term = String(row.word || '')
     return {
-      term: String(row.word || ''),
+      term,
+      englishTerm: term,
+      reading: englishKatakanaReadings[term.toLowerCase()] || '',
       phonetic,
       en: definitions.join('；') || '暂未获得详细英语释义',
-      zh: zh || '中文翻译暂时不可用，请参考英语释义。',
+      zh: '',
       translationJa: ja || '',
-      tag: partOfSpeech ? '英语词典 · ' + partOfSpeech : '英语词典',
+      tag: partOfSpeech ? '英日词典 · ' + partOfSpeech : '英日词典',
       example,
       language: 'en',
       source: 'Free Dictionary',
@@ -388,18 +422,28 @@ async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Prom
     ).bind(query, query, query, query, query, query, query).all()
     results = partialResult.results as Record<string, unknown>[]
   }
-  return results.map((row) => ({
-    term: String(row.term || ''),
-    reading: String(row.reading || ''),
-    en: String(row.meaning_en || ''),
-    zh: String(row.meaning_zh || ''),
-    translationJa: String(row.meaning_ja || ''),
-    tag: 'IT 术语 · ' + String(row.source_module || '专业词汇'),
-    language: String(row.language || 'ja') as 'ja' | 'en' | 'zh',
-    source: '知学 IT 术语库（D1）',
-    example: String(row.example || ''),
-    technical: true,
-  })).filter(entry => Boolean(entry.term && (entry.zh || entry.en || entry.translationJa)))
+  return results.map((row) => {
+    const term = String(row.term || '')
+    const aliases = String(row.aliases || '').split('|').map(alias => alias.trim()).filter(Boolean)
+    const termIsEnglish = /^[a-z0-9][a-z0-9 .+/#()-]*$/i.test(term)
+    const englishTerm = termIsEnglish
+      ? term
+      : aliases.find(alias => /^[a-z0-9][a-z0-9 .+/#()-]*$/i.test(alias)) || ''
+    const language = String(row.language || 'ja') as 'ja' | 'en' | 'zh'
+    return {
+      term,
+      englishTerm: englishTerm || undefined,
+      reading: String(row.reading || '') || (englishTerm ? englishKatakanaReadings[englishTerm.toLowerCase()] || '' : ''),
+      en: String(row.meaning_en || ''),
+      zh: '',
+      translationJa: String(row.meaning_ja || ''),
+      tag: 'IT 术语 · ' + String(row.source_module || '专业词汇'),
+      language,
+      source: '知学 IT 术语库（D1）',
+      example: String(row.example || ''),
+      technical: true,
+    }
+  }).filter(entry => Boolean(entry.term && (entry.en || entry.translationJa)))
 }
 
 async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' | 'it' = 'auto', db?: D1Database): Promise<DictionaryApiEntry[]> {
@@ -425,26 +469,17 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
   let en = ''
 
   if (language === 'ja') {
-    ;[zh, en] = await Promise.all([
-      translateText(query, 'ja-JP', 'zh-CN'),
-      translateText(query, 'ja-JP', 'en-US'),
-    ])
+    // This module is an English/Japanese learning dictionary: never spend a translation
+    // request on Chinese output that the UI does not use.
+    en = await translateText(query, 'ja-JP', 'en-US')
     const offline = commonJapaneseTranslations[query.trim()]
-    if (offline) {
-      if (!zh) zh = offline.zh
-      if (!en) en = offline.en
-    }
+    if (!en && offline) en = offline.en
   } else if (language === 'en') {
-    ;[zh, ja] = await Promise.all([
-      translateText(query, 'en-US', 'zh-CN'),
-      translateText(query, 'en-US', 'ja-JP'),
-    ])
+    ja = await translateText(query, 'en-US', 'ja-JP')
     const offline = commonEnglishTranslations[query.trim().toLowerCase()]
-    if (offline) {
-      if (!zh) zh = offline.zh
-      if (!ja) ja = offline.ja
-    }
+    if (!ja && offline) ja = offline.ja
   } else {
+    // Backwards-compatible API path only. The user-facing dictionary no longer exposes Chinese mode.
     ;[ja, en] = await Promise.all([
       translateText(query, 'zh-CN', 'ja-JP'),
       translateText(query, 'zh-CN', 'en-US'),
@@ -466,39 +501,40 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
   // Keep local SG glossary results, but still try online providers so a partial local entry
   // does not suppress available translations or dictionary definitions.
   const items: DictionaryApiEntry[] = [...technicalItems]
-  if (language === 'en') items.push(...englishDictionaryEntries(englishRows, zh, ja))
+  if (language === 'en') items.push(...englishDictionaryEntries(englishRows, '', ja))
 
-  // Han-only input may be Chinese or Japanese kanji. Always return a translation card
-  // for Chinese input even if only one of the two translation providers responds.
-  if (language === 'zh') {
+  if (language === 'ja') {
     items.push({
       term: query,
-      en: en || '英语翻译暂时不可用',
-      zh: query,
-      translationJa: ja || '日语翻译暂时不可用',
-      tag: '中日英互译',
-      language: 'zh',
-      source: '在线翻译',
-    })
-  } else if (language === 'ja') {
-    items.push({
-      term: query,
-      en: en || '英语翻译暂时不可用',
-      zh: zh || '中文翻译暂时不可用',
+      en: en || '英语释义暂时不可用',
+      zh: '',
       translationJa: query,
-      tag: '日中英互译',
+      tag: '日英词典',
       language: 'ja',
-      source: '在线翻译',
+      source: '在线词典/翻译',
+      englishTerm: en || undefined,
+    })
+  } else if (language === 'en') {
+    items.push({
+      term: query,
+      englishTerm: query,
+      reading: englishKatakanaReadings[query.toLowerCase()] || '',
+      en: query,
+      zh: '',
+      translationJa: ja || '',
+      tag: '英日词典',
+      language: 'en',
+      source: '在线词典/翻译',
     })
   } else {
     items.push({
       term: query,
-      en: query,
-      zh: zh || '中文翻译暂时不可用',
-      translationJa: ja || '日语翻译暂时不可用',
-      tag: '英日中互译',
-      language: 'en',
-      source: '在线翻译',
+      en: en || '英语释义暂时不可用',
+      zh: query,
+      translationJa: ja || '',
+      tag: '日英辅助结果',
+      language: 'zh',
+      source: '在线词典/翻译',
     })
   }
 
@@ -623,7 +659,7 @@ export default {
       }
     }
 
-    // 通用日中英词典：可查普通单词、日常用语和 IT 专业术语，不局限于 D1 内置词条。
+    // 英日学习词典：IT 词条优先从本地 D1 返回；普通词仅查询英日释义，不请求中文翻译。
     if (url.pathname === '/api/dictionary') {
       const query = (url.searchParams.get('q') || '').trim()
       if (!query) return json({ items: [], error: '请提供要查询的词语。' }, 400)
@@ -650,8 +686,8 @@ export default {
                     : ['MyMemory', 'Google Translate（双主机备用）']
               })(),
           note: items.some(item => item.technical)
-            ? '优先显示专业词汇库中匹配的术语及中日英释义。'
-            : '按输入语言调用相应词典，缺失的目标语言会尝试机器翻译；第三方可能限流，译文仅供参考。',
+            ? '优先显示专业词汇库中的英日释义、读音和例句；命中时不调用在线翻译。'
+            : '英日互查：英语释义、IPA（如有）、日语辅助读音与日语解释。第三方词典可能限流；不生成中文翻译。',
         })
       } catch (error) {
         console.error('[dictionary] lookup failed', {
