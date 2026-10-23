@@ -18,7 +18,7 @@ test('language seed migration contains exactly 3,000 Japanese and 3,000 English 
   assert.match(migration, /JLPT N5/)
   assert.match(migration, /英语核心词汇（1–1000）/)
   assert.match(migration, /英语扩展词汇（2001–3000）/)
-  assert.ok(migration.includes("'会う', 'あう', '相遇；碰面；见面'"), 'Japanese Chinese glosses must come from the Chinese dictionary layer')
+  assert.ok(migration.includes("'会う', 'あう', '相遇；碰面；见面"), 'Japanese Chinese glosses must come from the Chinese dictionary layer')
   assert.doesNotMatch(migration, /\{\\?"senses"/, 'Japanese meanings must not contain raw dictionary JSON')
 })
 
