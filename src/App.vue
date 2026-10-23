@@ -955,26 +955,37 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
   utterance.pitch = 1
   utterance.volume = 1
 
-  const chooseVoice = () => {
-    const voices = synthesis.getVoices().filter(voice =>
-      voice.lang.toLowerCase() === lang.toLowerCase()
-      || voice.lang.toLowerCase().replace('_', '-').startsWith(lang.slice(0, 2).toLowerCase()),
-    )
-    if (!voices.length) return
-    const preferred = voices.find(voice => /natural|enhanced|premium|siri|kyoko|otoya/i.test(voice.name))
-      || voices.find(voice => voice.lang.toLowerCase() === lang.toLowerCase() && voice.localService)
-      || voices.find(voice => voice.lang.toLowerCase() === lang.toLowerCase())
+  const chooseVoice = (): SpeechSynthesisVoice | null => {
+    const normalizedLang = lang.toLowerCase().replace('_', '-')
+    const voices = synthesis.getVoices().filter(voice => {
+      const voiceLang = voice.lang.toLowerCase().replace('_', '-')
+      return voiceLang === normalizedLang || voiceLang.startsWith(normalizedLang.slice(0, 2) + '-')
+    })
+    if (!voices.length) return null
+    return voices.find(voice => /natural|enhanced|premium|siri|kyoko|otoya/i.test(voice.name))
+      || voices.find(voice => voice.lang.toLowerCase().replace('_', '-') === normalizedLang && voice.localService)
+      || voices.find(voice => voice.lang.toLowerCase().replace('_', '-') === normalizedLang)
       || voices[0]
-    utterance.voice = preferred
   }
 
-  chooseVoice()
-  // iOS Safari 有时在 cancel() 后立即 speak() 会吞掉新语音，短暂延迟更稳定。
-  window.setTimeout(() => {
+  const playWhenVoiceReady = (attempt = 0) => {
     if (requestId !== speechRequestId) return
-    chooseVoice()
+    const preferred = chooseVoice()
+    if (!preferred && lang === 'ja-JP' && attempt < 8) {
+      // Safari/Chrome 可能在页面初次打开时尚未加载完日语语音列表。
+      window.setTimeout(() => playWhenVoiceReady(attempt + 1), 200)
+      return
+    }
+    if (!preferred && lang === 'ja-JP') {
+      // 不允许设备把日语题目悄悄交给中文默认语音朗读。
+      window.alert('当前设备没有检测到可用的日语语音，已停止播放以免误用中文语音。请在系统或浏览器语音设置中启用日语语音后重试。')
+      return
+    }
+    if (preferred) utterance.voice = preferred
     synthesis.speak(utterance)
-  }, 100)
+  }
+
+  window.setTimeout(() => playWhenVoiceReady(), 100)
 }
 </script>
 
