@@ -909,6 +909,7 @@ const savedDictionaryEntries = ref<DictionaryEntry[]>(readStored('zhixue:saved-d
 const dictionaryLoading = ref(false)
 const dictionaryError = ref('')
 const speechStatus = ref('')
+const speechStatusTarget = ref('')
 const lastSearchedTerm = ref('')
 watch(recentDictionaryEntries, value => localStorage.setItem('zhixue:recent-dictionary', JSON.stringify(value)), { deep: true })
 watch(savedDictionaryEntries, value => localStorage.setItem('zhixue:saved-dictionary-entries', JSON.stringify(value)), { deep: true })
@@ -1082,6 +1083,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
 }
 
 function speakDictionaryEnglish(entry: DictionaryEntry) {
+  speechStatusTarget.value = entry.term
   const term = entry.englishTerm || (entry.language === 'en' ? entry.term : '')
   if (!term) {
     speechStatus.value = '该词暂未收录可靠的英语对应词，无法播放英语发音。'
@@ -1091,6 +1093,7 @@ function speakDictionaryEnglish(entry: DictionaryEntry) {
 }
 
 function speakDictionaryJapanese(entry: DictionaryEntry) {
+  speechStatusTarget.value = entry.term
   const text = entry.reading || (entry.language === 'ja' ? entry.term : '')
   if (!text) {
     speechStatus.value = '该词暂未收录日语假名读音。可以先播放英语原音；IT 术语词库会逐步补齐读音。'
@@ -1563,7 +1566,6 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             <p>以英语学习为主：播放英语原音，结合 IPA 音标和日语片假名辅助读音练习；日语查询可查看对应英文释义。IT 术语优先使用本地词库，无需在线翻译。</p>
             <p v-if="dictionaryLoading" class="dictionary-status">正在查词…</p>
             <p v-else-if="dictionaryError" class="dictionary-status dictionary-error">{{ dictionaryError }}</p>
-            <p v-if="speechStatus" class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p>
             <div v-if="!searchText.trim() && !dictionaryLoading" class="dictionary-quick-start"><span>试试查询</span><button @click="quickDictionarySearch('hello', 'en')">hello <small>英语</small></button><button @click="quickDictionarySearch('こんにちは', 'ja')">こんにちは <small>日语</small></button><button @click="quickDictionarySearch('認証', 'it')">認証 <small>IT</small></button><button @click="quickDictionarySearch('ハッシュ', 'it')">ハッシュ <small>安全</small></button><button @click="quickDictionarySearch('API', 'it')">API <small>接口</small></button><button @click="quickDictionarySearch('トランザクション', 'it')">トランザクション <small>数据库</small></button><button @click="quickDictionarySearch('CORS', 'it')">CORS <small>跨域</small></button><button @click="quickDictionarySearch('コンポーネント', 'it')">コンポーネント <small>前端</small></button><button @click="quickDictionarySearch('Cloudflare D1', 'it')">Cloudflare D1 <small>云数据库</small></button><button @click="quickDictionarySearch('プルリクエスト', 'it')">プルリクエスト <small>Git协作</small></button></div>
           </section>
           <section class="section-block">
@@ -1577,6 +1579,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <p v-if="entry.translationJa" class="dictionary-translation-ja">日语辅助理解：{{ entry.translationJa }}</p>
                   <p v-if="entry.example" class="dict-example">例句：{{ entry.example }}</p>
                   <p v-if="entry.technical" class="dictionary-tech-note">来自 IT 专业词汇库</p>
+                  <p v-if="speechStatus && speechStatusTarget === entry.term" class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p>
                 </div>
                 <div class="dict-actions"><button v-if="entry.englishTerm || entry.language === 'en'" class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + (entry.englishTerm || entry.term)" title="播放英语原音"><Volume2 :size="14" /><span>EN</span></button><button v-if="entry.reading || entry.language === 'ja'" class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语读音：' + entry.term" title="播放日语读音"><Languages :size="14" /><span>日</span></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
               </article>
@@ -1591,6 +1594,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <div class="saved-vocabulary-copy"><strong>{{ entry.term }}</strong><small v-if="entry.reading">{{ entry.reading }}</small><p v-if="entry.en">英语释义：{{ entry.en }}</p><p v-if="entry.translationJa">日语辅助理解：{{ entry.translationJa }}</p></div>
                 <button v-if="entry.englishTerm || entry.language === 'en'" class="round-action" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + entry.term"><Volume2 :size="16" /></button>
                 <button v-else class="round-action" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语读音：' + entry.term"><Languages :size="16" /></button>
+                <p v-if="speechStatus && speechStatusTarget === entry.term" class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p>
                 <button class="saved-remove-button" @click="toggleSaved(entry.term)">取消收藏</button>
               </article>
             </div>
