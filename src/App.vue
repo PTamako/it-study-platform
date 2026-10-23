@@ -596,18 +596,63 @@ watch(completedLanguageCards, value => localStorage.setItem('zhixue:completed-la
 watch(languageReviews, value => localStorage.setItem('zhixue:language-reviews', JSON.stringify(value)), { deep: true })
 async function hydrateCloudProgress() {
   await Promise.all([loadCloudDashboard(), loadExamTracks(), loadLanguageCards()])
+
+  // Import this browser's legacy data BEFORE hydrating from D1. This prevents an empty cloud
+  // response from erasing progress that existed only in localStorage.
+  let progressImportOk = false
+  try {
+    const localCardIds = new Set(languageCards.value.map(card => card.id))
+    const localMastered = completedLanguageCards.value.filter(id => localCardIds.has(id))
+    const results = await Promise.all(localMastered.map(card_id => fetch('/api/language-progress', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ card_id, mastered: true }),
+    })))
+    progressImportOk = results.every(response => response.ok)
+  } catch { progressImportOk = false }
+
+  // Migrate today's task state before reading cloud state; upserts are safe to retry.
+  let taskImportOk = false
+  try {
+    const results = await Promise.all(tasks.value.map(task => fetch('/api/daily-tasks', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ task_id: task.id, study_date: todayKey, completed: task.done }),
+    })))
+    taskImportOk = results.every(response => response.ok)
+  } catch { taskImportOk = false }
+
+  // Import saved dictionary snapshots as well as the legacy term list. A term without a local
+  // snapshot remains on-device rather than fabricating a dictionary entry.
+  let vocabularyImportOk = true
+  for (const term of savedWords.value) {
+    const entry = savedDictionaryEntries.value.find(item => item.term === term)
+      || recentDictionaryEntries.value.find(item => item.term === term)
+    if (!entry) continue
+    try {
+      const response = await fetch('/api/vocabulary/saved', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ term, language: entry.language || 'auto', entry }),
+      })
+      if (!response.ok) vocabularyImportOk = false
+    } catch { vocabularyImportOk = false }
+  }
+
   try {
     const [progressResponse, savedResponse, taskResponse, reviewResponse] = await Promise.all([
       fetch('/api/language-progress'), fetch('/api/vocabulary/saved'), fetch('/api/dashboard'), fetch('/api/language-review'),
     ])
     if (reviewResponse.ok) {
       const reviews = await reviewResponse.json() as { items?: LanguageReview[] }
-      languageReviews.value = reviews.items || []
+      // Merge instead of replacing: old local review history has not been fully imported yet.
+      const cloudReviews = reviews.items || []
+      languageReviews.value = [...cloudReviews, ...languageReviews.value.filter(local =>
+        !cloudReviews.some(cloud => cloud.card_id === local.card_id))]
     }
-    if (progressResponse.ok) {
+    if (progressResponse.ok && progressImportOk) {
       const progress = await progressResponse.json() as { items?: Array<{ card_id: string; mastered: number }> }
-      // Once D1 responds, use its saved progress as the source of truth.
-      completedLanguageCards.value = (progress.items || []).filter(item => item.mastered).map(item => item.card_id)
+      const cloudIds = (progress.items || []).filter(item => item.mastered).map(item => item.card_id)
+      completedLanguageCards.value = [...new Set([...cloudIds, ...completedLanguageCards.value])]
+    } else if (!progressImportOk) {
+      languageCardsError.value = '部分旧版语言进度尚未同步；本设备中的进度已保留。'
     }
     if (savedResponse.ok) {
       const saved = await savedResponse.json() as { items?: Array<{ term: string; language: string; entry: DictionaryEntry }> }
@@ -618,20 +663,20 @@ async function hydrateCloudProgress() {
         }
       }
     }
-    // Dashboard query confirms the cloud API is reachable; task rows are keyed by date.
-    if (taskResponse.ok) {
-      const data = await taskResponse.json() as { today?: { tasks_completed: number; tasks_tracked: number } }
-      if (data.today?.tasks_tracked) {
-        // Daily task names are stable IDs; preserve the locally authored labels and hydrate completion flags.
-        const listResponse = await fetch('/api/daily-tasks?date=' + encodeURIComponent(todayKey))
-        if (listResponse.ok) {
-          const list = await listResponse.json() as { items?: Array<{ task_id: string; completed: number }> }
-          const states = new Map((list.items || []).map(item => [item.task_id, Boolean(item.completed)]))
-          tasks.value = tasks.value.map(task => ({ ...task, done: states.get(task.id) ?? task.done }))
-        }
+    if (taskResponse.ok && taskImportOk) {
+      const listResponse = await fetch('/api/daily-tasks?date=' + encodeURIComponent(todayKey))
+      if (listResponse.ok) {
+        const list = await listResponse.json() as { items?: Array<{ task_id: string; completed: number }> }
+        const states = new Map((list.items || []).map(item => [item.task_id, Boolean(item.completed)]))
+        tasks.value = tasks.value.map(task => ({ ...task, done: states.get(task.id) ?? task.done }))
       }
     }
-  } catch { /* local experience remains available if cloud sync is temporarily unavailable */ }
+    if (!taskImportOk || !vocabularyImportOk) {
+      cloudDashboardError.value = '部分旧版学习数据尚未同步；本设备中的原始数据已保留。'
+    }
+  } catch {
+    // Keep local data usable if the cloud is unavailable or an import partially fails.
+  }
 }
 onMounted(() => { void syncExamHistory(); void hydrateCloudProgress(); void loadQuestionSources() })
 
