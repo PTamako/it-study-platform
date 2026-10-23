@@ -15,7 +15,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 60
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -28,6 +28,14 @@ jobs:
 
       - name: Install locked dependencies
         run: npm ci
+
+      - name: Set up Python for licensed sentence dataset generation
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate attributed Japanese and English sentence migration
+        run: python scripts/generate_language_sentence_seed.py
 
       - name: Type-check and build frontend
         run: npm run build

@@ -15,3 +15,9 @@ The 6,000-card seed migration is generated from pinned open data sources; the ge
 
 ## Modifications
 The generator selects unique headwords, groups them into learning categories, trims long definitions, and imports 3,000 cards per language. Japanese examples remain Japanese; English examples are not mislabeled as Chinese. The Japanese deck is a modified derivative of CC BY-SA data and must retain compatible share-alike terms and upstream attribution when redistributed.
+
+
+## Sentence-first curriculum
+- The language-learning module uses 3,000 Japanese and 3,000 English sentences from Tatoeba, with Chinese translations and a source URL on every card.
+- Categories are limited to `日常句子` and `职场语言`. Workplace classification uses explicit keyword rules; unmatched sentences remain in the daily category rather than being falsely labeled.
+- Vocabulary and grammar highlights are curated-rule study aids, not authoritative linguistic parsing. Legacy vocabulary rows and progress remain stored, but the language UI shows sentence cards only.
