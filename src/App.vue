@@ -1560,7 +1560,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               <button v-if="searchText" class="clear-search" @click="clearDictionarySearch">清空</button>
               <button class="dictionary-search-button" :disabled="dictionaryLoading" @click="lookupDictionary">{{ dictionaryLoading ? '查找中…' : '查词' }}</button>
             </div>
-            <p>以英语学习为主：播放英语原音，结合 IPA 音标和日语片假名辅助读音练习；日语查询显示对应英文释义。IT 术语命中本地词库时无需在线翻译，且不提供中文翻译。</p>
+            <p>以英语学习为主：播放英语原音，结合 IPA 音标和日语片假名辅助读音练习；日语查询可查看对应英文释义。IT 术语优先使用本地词库，无需在线翻译。</p>
             <p v-if="dictionaryLoading" class="dictionary-status">正在查词…</p>
             <p v-else-if="dictionaryError" class="dictionary-status dictionary-error">{{ dictionaryError }}</p>
             <p v-if="speechStatus" class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p>
@@ -1571,12 +1571,9 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             <div class="dictionary-list">
               <article v-for="entry in displayedEntries" :key="entry.term + (entry.tag || '') + (entry.en || '')" class="dictionary-card">
                 <div class="dict-main">
-                  <div class="dict-term-row"><h3>{{ entry.term }}</h3><span v-if="entry.reading" class="reading">{{ entry.reading }}</span><span v-if="entry.phonetic" class="reading">{{ entry.phonetic }}</span><span class="dict-tag">{{ entry.tag }}</span><span v-if="entry.source" class="dict-source">{{ entry.source }}</span></div>
+                  <div class="dict-term-row"><h3>{{ entry.language === 'en' && entry.englishTerm ? entry.englishTerm : entry.term }}</h3><span v-if="entry.language === 'en' && entry.englishTerm && entry.englishTerm.toLowerCase() !== entry.term.toLowerCase()" class="reading">日语术语：{{ entry.term }}</span><span v-if="entry.reading" class="reading">{{ entry.language === 'en' ? '日语辅助读音（近似）' : '日语读音' }}：{{ entry.reading }}</span><span v-if="entry.phonetic" class="reading">IPA：{{ entry.phonetic }}</span><span class="dict-tag">{{ entry.tag }}</span><span v-if="entry.source" class="dict-source">{{ entry.source }}</span></div>
                   <div v-if="entry.englishTerm && entry.englishTerm.toLowerCase() !== entry.term.toLowerCase()" class="dict-en">英语对应词：{{ entry.englishTerm }}</div>
                   <div class="dict-en">英语释义：{{ entry.en || '暂无详细英语释义' }}</div>
-                  <p v-if="entry.language === 'en' && entry.reading" class="dictionary-translation-ja">日语辅助读音（近似）：{{ entry.reading }}</p>
-                  <p v-else-if="entry.language === 'ja' && entry.reading" class="dictionary-translation-ja">日语读音：{{ entry.reading }}</p>
-                  <p v-if="entry.phonetic" class="dictionary-translation-ja">IPA 音标：{{ entry.phonetic }}</p>
                   <p v-if="entry.translationJa" class="dictionary-translation-ja">日语辅助理解：{{ entry.translationJa }}</p>
                   <p v-if="entry.example" class="dict-example">例句：{{ entry.example }}</p>
                   <p v-if="entry.technical" class="dictionary-tech-note">来自 IT 专业词汇库</p>
