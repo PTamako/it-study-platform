@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 
 const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
 const migration = await readFile(new URL('../migrations/0078_restore_japanese_learning_headwords.sql', import.meta.url), 'utf8')
+const seed = await readFile(new URL('../migrations/0003_language_and_dictionary_content.sql', import.meta.url), 'utf8')
 
 test('Japanese language cards show the source-language headword as the large title', () => {
   assert.match(app, /<h3>\{\{ card\.term \}\}<\/h3>/)
@@ -24,5 +25,6 @@ test('Japanese learning seed cards restore Japanese headwords instead of Chinese
     assert.ok(migration.includes(headword), `missing Japanese headword: ${headword}`)
   }
   assert.match(migration, /SET term = 'もう一度お願いします。'/)
-  assert.match(migration, /meaning_zh/)
+  assert.match(seed, /'ja-daily-01','ja','日常与情景会话','もう一度お願いします。'/)
+  assert.match(seed, /'麻烦再说一遍。'/)
 })
