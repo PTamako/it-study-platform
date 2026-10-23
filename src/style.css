@@ -327,3 +327,10 @@
 }
 
 
+
+/* Exam question mastery and spaced-review status. */
+.question-mastery-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 0 14px;color:#85899d;font-size:12px}
+.question-mastery-badge{display:inline-flex;align-items:center;border-radius:999px;padding:4px 9px;background:#fff1d9;color:#93641e;font-weight:700}
+.question-mastery-badge.mastered{background:#e4f5eb;color:#26734d}
+.question-actions .secondary-button{font-size:12px;padding:9px 12px}
+.practice-start-actions{flex-wrap:wrap}
