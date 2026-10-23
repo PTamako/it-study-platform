@@ -920,7 +920,7 @@ const savedVocabularyEntries = computed(() => savedWords.value.map(term =>
 const filteredEntries = computed(() => {
   const q = searchText.value.trim().toLowerCase()
   if (!q) return dictionaryEntries
-  return dictionaryEntries.filter((item) => [item.term, item.reading || '', item.phonetic || '', item.en, item.zh].some((v) => v.toLowerCase().includes(q)))
+  return dictionaryEntries.filter((item) => [item.term, item.reading || '', item.phonetic || '', item.en || '', item.zh || ''].some((v) => v.toLowerCase().includes(q)))
 })
 const displayedEntries = computed(() => {
   const q = searchText.value.trim().toLowerCase()
