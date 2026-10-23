@@ -442,6 +442,9 @@ type LanguageCard = {
 const languageCards = ref<LanguageCard[]>([])
 const languageCardsLoading = ref(false)
 const languageCardsError = ref('')
+type LanguageReview = { card_id: string; review_count: number; correct_streak: number; next_review_at: string; last_reviewed_at: string; last_result: 'again' | 'remembered'; is_due?: number }
+const languageReviews = ref<LanguageReview[]>(readStored('zhixue:language-reviews', []))
+const languageReviewBusy = ref('')
 const selectedLanguageMastery = ref<'all' | 'unmastered' | 'mastered'>('all')
 const visibleLanguageCards = computed(() => languageCards.value.filter(card => {
   const matchesCategory = selectedLanguageCategory.value === '全部' || card.category === selectedLanguageCategory.value
@@ -450,7 +453,17 @@ const visibleLanguageCards = computed(() => languageCards.value.filter(card => {
     || (selectedLanguageMastery.value === 'mastered' && isMastered)
     || (selectedLanguageMastery.value === 'unmastered' && !isMastered)
   return matchesCategory && matchesMastery
+}).sort((a, b) => {
+  const aReview = languageReviews.value.find(item => item.card_id === a.id)
+  const bReview = languageReviews.value.find(item => item.card_id === b.id)
+  const aDue = !aReview || new Date(aReview.next_review_at).getTime() <= Date.now()
+  const bDue = !bReview || new Date(bReview.next_review_at).getTime() <= Date.now()
+  return Number(bDue) - Number(aDue)
 }))
+const dueLanguageReviewCount = computed(() => visibleLanguageCards.value.filter(card => {
+  const review = languageReviews.value.find(item => item.card_id === card.id)
+  return !review || new Date(review.next_review_at).getTime() <= Date.now()
+}).length)
 const languagePracticeIndex = ref(0)
 const languagePracticeRevealed = ref(false)
 const languagePracticeCard = computed(() => visibleLanguageCards.value.length
@@ -485,6 +498,34 @@ async function loadLanguageCards() {
     languageCardsLoading.value = false
   }
 }
+async function submitLanguageReview(result: 'again' | 'remembered') {
+  const card = languagePracticeCard.value
+  if (!card || languageReviewBusy.value) return
+  languageReviewBusy.value = card.id
+  languageCardsError.value = ''
+  try {
+    const response = await fetch('/api/language-review', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ card_id: card.id, result }),
+    })
+    const data = await response.json().catch(() => ({})) as { error?: string }
+    if (!response.ok) throw new Error(data.error || '复习记录保存失败。')
+    const refreshed = await fetch('/api/language-review')
+    if (refreshed.ok) {
+      const rows = await refreshed.json() as { items?: LanguageReview[] }
+      languageReviews.value = rows.items || []
+    }
+    languagePracticeRevealed.value = false
+    if (result === 'remembered') {
+      languagePracticeIndex.value = visibleLanguageCards.value.length
+        ? (languagePracticeIndex.value + 1) % visibleLanguageCards.value.length : 0
+    }
+  } catch (error) {
+    languageCardsError.value = error instanceof Error ? error.message : '复习记录暂时无法保存。请确认已应用最新 D1 迁移。'
+  } finally {
+    languageReviewBusy.value = ''
+  }
+}
 async function toggleLanguageCard(id: string) {
   const previous = completedLanguageCards.value
   const wasMastered = previous.includes(id)
@@ -515,12 +556,17 @@ watch(studyLanguage, value => {
   void loadLanguageCards()
 })
 watch(completedLanguageCards, value => localStorage.setItem('zhixue:completed-language-cards', JSON.stringify(value)), { deep: true })
+watch(languageReviews, value => localStorage.setItem('zhixue:language-reviews', JSON.stringify(value)), { deep: true })
 async function hydrateCloudProgress() {
   await Promise.all([loadCloudDashboard(), loadExamTracks(), loadLanguageCards()])
   try {
-    const [progressResponse, savedResponse, taskResponse] = await Promise.all([
-      fetch('/api/language-progress'), fetch('/api/vocabulary/saved'), fetch('/api/dashboard'),
+    const [progressResponse, savedResponse, taskResponse, reviewResponse] = await Promise.all([
+      fetch('/api/language-progress'), fetch('/api/vocabulary/saved'), fetch('/api/dashboard'), fetch('/api/language-review'),
     ])
+    if (reviewResponse.ok) {
+      const reviews = await reviewResponse.json() as { items?: LanguageReview[] }
+      languageReviews.value = reviews.items || []
+    }
     if (progressResponse.ok) {
       const progress = await progressResponse.json() as { items?: Array<{ card_id: string; mastered: number }> }
       // Once D1 responds, use its saved progress as the source of truth.
@@ -1055,7 +1101,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
             <section class="language-practice panel" aria-label="主动回忆练习">
               <div class="language-practice-heading">
                 <div><span class="banner-tag">ACTIVE RECALL</span><h3>先回忆，再看答案</h3><p>比反复阅读更主动的练习：先试着说出意思，再翻开解释。</p></div>
-                <span class="language-practice-count">{{ visibleLanguageCards.length ? (languagePracticeIndex % visibleLanguageCards.length) + 1 : 0 }} / {{ visibleLanguageCards.length }}</span>
+                <span class="language-practice-count">待复习 {{ dueLanguageReviewCount }} · {{ visibleLanguageCards.length }} 张</span>
               </div>
               <div v-if="languagePracticeCard" class="language-practice-content">
                 <span class="dict-tag">{{ languagePracticeCard.category }}</span>
@@ -1067,9 +1113,15 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
                   <div class="language-example"><strong>例句</strong><p>{{ languagePracticeCard.example }}</p><span>{{ languagePracticeCard.example_meaning_zh }}</span></div>
                 </div>
                 <p v-else class="language-practice-prompt">试着回忆中文意思、使用场景，或自己造一个句子。</p>
+                <div v-if="languageReviews.some(item => item.card_id === languagePracticeCard.id)" class="language-review-meta">
+                  <span>复习 {{ languageReviews.find(item => item.card_id === languagePracticeCard.id)?.review_count || 0 }} 次</span>
+                  <span>连续记住 {{ languageReviews.find(item => item.card_id === languagePracticeCard.id)?.correct_streak || 0 }} 次</span>
+                </div>
                 <div class="language-practice-actions">
                   <button class="secondary-button" @click="languagePracticeRevealed = !languagePracticeRevealed">{{ languagePracticeRevealed ? '收起答案' : '显示答案' }}</button>
-                  <button class="primary-button" @click="nextLanguagePractice">下一张 <ArrowRight :size="15" /></button>
+                  <button class="primary-button" @click="nextLanguagePractice">跳过 <ArrowRight :size="15" /></button>
+                  <button class="language-review-again" :disabled="languageReviewBusy === languagePracticeCard.id" @click="submitLanguageReview('again')">还不熟 · 稍后再练</button>
+                  <button class="language-review-remembered" :disabled="languageReviewBusy === languagePracticeCard.id" @click="submitLanguageReview('remembered')">记住了 · 安排复习</button>
                   <button class="language-done-button" @click="toggleLanguageCard(languagePracticeCard.id)">{{ completedLanguageCards.includes(languagePracticeCard.id) ? '取消掌握' : '标记掌握' }}</button>
                 </div>
               </div>
