@@ -182,8 +182,13 @@
 .language-example strong{font-size:9px;letter-spacing:.7px;color:#7f84a0}
 .language-example p{font-size:12px;font-weight:600;line-height:1.65;margin:6px 0}
 .language-example span{font-size:10px;line-height:1.7;color:#85899c}
+.language-example a{display:inline-block;margin-top:7px;color:#5968df;font-size:10px;text-decoration:underline}
 .language-study-card .play-button{margin-top:4px}
-.language-source{display:block;margin-top:10px;color:#a0a4b4;font-size:9px}
+.language-source{display:block;margin-top:10px;color:#777e94;font-size:9px;line-height:1.8}
+.language-source a{color:#5968df;text-decoration:underline}
+.language-pagination{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px;margin:16px 0 6px}
+.language-pagination span{width:100%;text-align:center;color:#85899c;font-size:10px}
+.language-pagination button:disabled{opacity:.4;cursor:not-allowed}
 .dictionary-search-button{flex-shrink:0;border:0;border-radius:9px;padding:9px 13px;background:#5968df;color:#fff;font-size:11px;font-weight:700;white-space:nowrap}
 .dictionary-search-button:disabled{opacity:.6;cursor:wait}
 @media(max-width:760px){.language-card-list{grid-template-columns:1fr}.language-choice{gap:8px}.language-study-card{padding:15px}.language-progress{padding:15px 15px 23px!important}.language-progress-track{left:15px;right:15px}}

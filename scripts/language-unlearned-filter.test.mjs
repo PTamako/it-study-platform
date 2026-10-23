@@ -13,6 +13,17 @@ test('language cards have distinct all, unlearned, in-progress, and mastered fil
   assert.match(app, /已掌握 \{\{ languageCards\.filter\(card => completedLanguageCards\.includes\(card\.id\)\)\.length \}\}/)
 })
 
+test('language cards are classified dynamically and paginated for large decks', () => {
+  assert.match(app, /const languageCategories = computed\(\(\) =>/)
+  assert.match(app, /const languagePageSize = 30/)
+  assert.match(app, /const paginatedLanguageCards = computed/)
+  assert.match(app, /languagePage\.value = 1/)
+  assert.match(app, /v-for="card in paginatedLanguageCards"/)
+  assert.match(app, /example_source_url/)
+  assert.match(app, /Tatoeba/)
+  assert.match(app, /ECDICT/)
+})
+
 test('cloud review hydration preserves local-only review records during sync', () => {
   assert.match(app, /const cloudReviews = reviewData\.items \|\| \[\]/)
   assert.match(app, /!cloudReviews\.some\(cloud => cloud\.card_id === local\.card_id\)/)

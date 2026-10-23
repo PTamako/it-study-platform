@@ -754,6 +754,7 @@ function nextLanguagePractice() {
 }
 watch([studyLanguage, selectedLanguageCategory, selectedLanguageMastery], () => {
   stopSpeech()
+  languagePage.value = 1
   languagePracticeIndex.value = 0
   languagePracticeRevealed.value = false
 })
@@ -771,13 +772,6 @@ async function loadLanguageCards() {
     const data = await response.json() as { items?: LanguageCard[]; error?: string }
     if (!response.ok) throw new Error(data.error || '语言学习内容加载失败')
     languageCards.value = data.items || []
-    const reviewResponse = await fetch('/api/language-review')
-    if (reviewResponse.ok) {
-      const reviewData = await reviewResponse.json() as { items?: LanguageReview[] }
-      const cloudReviews = reviewData.items || []
-      languageReviews.value = [...cloudReviews, ...languageReviews.value.filter(local =>
-        !cloudReviews.some(cloud => cloud.card_id === local.card_id))]
-    }
   } catch (error) {
     languageCardsError.value = error instanceof Error ? error.message : '语言学习内容加载失败，请稍后再试。'
   } finally {
