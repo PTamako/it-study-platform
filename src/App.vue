@@ -9,7 +9,7 @@ import {
 type ModuleId = 'home' | 'exam' | 'practical' | 'language' | 'dictionary'
 const activeModule = ref<ModuleId>('home')
 const searchText = ref('')
-const dictSourceLang = ref<'auto' | 'ja' | 'en' | 'zh' | 'it'>('auto')
+const dictSourceLang = ref<'auto' | 'ja' | 'en' | 'it'>('auto')
 const dictionaryView = ref<'search' | 'saved'>('search')
 const studyLanguage = ref<'ja' | 'en'>(readStored('zhixue:study-language', 'ja'))
 const selectedLanguageCategory = ref('全部')
@@ -900,7 +900,6 @@ type DictionaryEntry = {
   source?: string
   translationJa?: string
   englishTerm?: string
-  matchedQuery?: string
   technical?: boolean
 }
 const dictionaryEntries: DictionaryEntry[] = []
@@ -1021,41 +1020,8 @@ function speakQuestion(question: PracticeQuestion | null) {
   speakJapaneseQuestion(`${question.prompt}。選択肢：${options}`)
 }
 function speakJapaneseQuestion(text: string) {
-  const synthesis = window.speechSynthesis
-  if (typeof synthesis === 'undefined' || typeof SpeechSynthesisUtterance === 'undefined') {
-    window.alert('当前浏览器不支持语音播放。请使用 Safari/Chrome 并检查系统语音设置。')
-    return
-  }
-  const requestId = ++speechRequestId
-  synthesis.cancel()
-
-  const play = (attempt = 0) => {
-    if (requestId !== speechRequestId) return
-    const voices = synthesis.getVoices()
-    const japaneseVoices = voices.filter(voice => /^ja(?:-|$)/i.test(voice.lang.replace('_', '-')))
-    const voice = japaneseVoices.find(candidate => /^ja-jp$/i.test(candidate.lang.replace('_', '-')) && /natural|enhanced|premium/i.test(candidate.name))
-      || japaneseVoices.find(candidate => /^ja-jp$/i.test(candidate.lang.replace('_', '-')) && candidate.localService)
-      || japaneseVoices.find(candidate => /^ja-jp$/i.test(candidate.lang.replace('_', '-')))
-      || japaneseVoices.find(candidate => candidate.localService)
-      || japaneseVoices[0]
-
-    if (!voice && attempt < 20) {
-      window.setTimeout(() => play(attempt + 1), 250)
-      return
-    }
-    if (!voice) {
-      window.alert('未检测到可用的日语语音，因此没有播放。请在系统或浏览器中启用日语语音后重试；不会改用中文语音。')
-      return
-    }
-    const utterance = new SpeechSynthesisUtterance(text.trim())
-    utterance.voice = voice
-    utterance.lang = voice.lang
-    utterance.rate = 0.78
-    utterance.pitch = 1
-    utterance.volume = 1
-    synthesis.speak(utterance)
-  }
-  window.setTimeout(() => play(), 100)
+  // Use the same synchronous path as the dictionary play buttons to avoid Safari activation loss.
+  speak(text, 'ja-JP')
 }
 function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
   const spokenText = text.trim()
@@ -1615,7 +1581,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <p v-if="entry.example" class="dict-example">例句：{{ entry.example }}</p>
                   <p v-if="entry.technical" class="dictionary-tech-note">来自 IT 专业词汇库</p>
                 </div>
-                <div class="dict-actions"><button v-if="entry.englishTerm || entry.language === 'en'" class="round-action" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + (entry.englishTerm || entry.term)" title="播放英语发音"><Volume2 :size="17" /></button><button v-if="entry.reading || entry.language === 'ja'" class="round-action" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语读音：' + entry.term" title="播放日语读音"><Languages :size="17" /></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
+                <div class="dict-actions"><button v-if="entry.englishTerm || entry.language === 'en'" class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + (entry.englishTerm || entry.term)" title="播放英语原音"><Volume2 :size="14" /><span>EN</span></button><button v-if="entry.reading || entry.language === 'ja'" class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语读音：' + entry.term" title="播放日语读音"><Languages :size="14" /><span>日</span></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
               </article>
               <div v-if="lastSearchedTerm.trim().toLowerCase() === searchText.trim().toLowerCase() && displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>没有找到匹配词条</strong><p>可试试别名、英语缩写或日语术语；查 IT 专业词请选「IT」，该模式只查本地词库，不请求在线翻译。</p></div>
             </div>
