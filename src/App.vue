@@ -6,7 +6,7 @@ import {
   ShieldCheck, BookMarked, Menu, X, CheckCircle2, CircleHelp, Target, TrendingUp, ListChecks, PlusCircle,
 } from 'lucide-vue-next'
 
-type ModuleId = 'home' | 'exam' | 'language' | 'dictionary'
+type ModuleId = 'home' | 'exam' | 'practical' | 'language' | 'dictionary'
 const activeModule = ref<ModuleId>('home')
 const searchText = ref('')
 const dictSourceLang = ref<'auto' | 'ja' | 'en' | 'zh' | 'it'>('auto')
@@ -283,6 +283,16 @@ async function loadScenarios() {
     scenariosLoading.value = false
   }
 }
+function nextScenario() {
+  if (!scenarios.value.length) return
+  const index = scenarios.value.findIndex(item => item.id === currentScenario.value?.id)
+  const next = scenarios.value[(index + 1) % scenarios.value.length]
+  selectedScenarioId.value = next.id
+  selectedScenarioOption.value = ''
+  scenarioResult.value = null
+  scenariosError.value = ''
+}
+
 async function submitScenario() {
   if (!currentScenario.value || !selectedScenarioOption.value || scenarioSubmitting.value || scenarioResult.value) return
   scenarioSubmitting.value = true
@@ -312,7 +322,7 @@ async function submitScenario() {
     scenarioSubmitting.value = false
   }
 }
-watch(selectedTrackId, () => {
+watch([selectedTrackId, examTracks], () => {
   void loadScenarios()
 })
 async function loadExamTracks() {
@@ -439,7 +449,8 @@ function nextPracticeQuestion() {
 
 const moduleInfo = {
   home: { title: '今天，学一点新的。', subtitle: '把考试、语言和专业知识，放进一个顺手的学习空间。' },
-  exam: { title: '考试备考', subtitle: '选择已启用的考试；题库已接入的考试才能开始练习。当前已接入 SG。' },
+  exam: { title: '考试备考', subtitle: '日常刷题、复习错题与限时模拟考试。' },
+  practical: { title: '实战训练', subtitle: '在工作情境中判断风险、选择行动，并查看评分与解释。' },
   language: { title: '语言学习', subtitle: '选择日语或英语，按实际学习内容练习表达、理解和发音。' },
   dictionary: { title: '多语言词典', subtitle: '把中文、日语、英语和 IT 术语连起来，随查随记。' },
 } as const
@@ -448,7 +459,8 @@ const currentInfo = computed(() => moduleInfo[activeModule.value])
 const searchPlaceholder = computed(() => activeModule.value === 'dictionary' ? '查词、查缩写，例如 MFA / 認証…' : '搜索考试、课程、知识点…')
 
 const modules = [
-  { id: 'exam' as const, title: '考试备考', en: 'EXAM PREP', desc: '按已接入考试选择目标与练习', icon: GraduationCap, tone: 'lavender', count: '题量以题库数据为准' },
+  { id: 'exam' as const, title: '考试备考', en: 'EXAM PREP', desc: '日常练习 · 错题复习 · 限时模拟考试', icon: GraduationCap, tone: 'lavender', count: '题量以题库数据为准' },
+  { id: 'practical' as const, title: '实战训练', en: 'PRACTICAL LAB', desc: '安全事件与职场决策情境', icon: ShieldCheck, tone: 'blue', count: '情境题 · 评分 · 复盘' },
   { id: 'language' as const, title: '语言学习', en: 'LANGUAGE', desc: '日语 / 英语 · 例句 · 发音 · 复习', icon: Languages, tone: 'peach', count: '选择语言开始学习' },
   { id: 'dictionary' as const, title: '词典与 IT 术语', en: 'DICTIONARY', desc: '中日英互译 · 专业词库 · 生词本', icon: BookMarked, tone: 'blue', count: '普通词汇与技术词汇' },
 ]
@@ -1143,6 +1155,51 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               </div>
             </section>
             <div class="notice-card"><CircleHelp :size="19" /><div><strong>题库说明</strong><p>题库仅分为「历年真题」与「预测题库」。历年真题以 IPA 官方公开试题及答案为准；预测题库为知学原创预测题，不冒充官方真题。目标总量约 1,100 题，按实际导入数量统计，不以目标数冒充现有题量。</p></div></div>
+          </section>
+        </template>
+
+        <template v-else-if="activeModule === 'practical'">
+          <section class="section-block module-page-section">
+            <div class="section-heading"><div><div class="section-kicker">PRACTICAL SECURITY LAB</div><h2>把知识用在真实工作情境里</h2><p>阅读情况，选择最合适的行动；提交后会显示评分、推荐选项和复盘说明。</p></div><span class="section-index">{{ scenarios.length }} 个情境</span></div>
+            <div class="panel practice-start-card">
+              <div class="section-heading"><div><h3>选择考试方向</h3><p>当前先提供 SG 信息安全管理情境。</p></div></div>
+              <div class="exam-list">
+                <button v-for="exam in examTracks" :key="exam.id" class="exam-card" :class="{ 'exam-card-selected': selectedTrackId === exam.id }" @click="selectExam(exam)">
+                  <span class="exam-code purple">{{ exam.id.split('-').pop()?.toUpperCase() }}</span>
+                  <span class="exam-info"><strong>{{ exam.title }}</strong><small>{{ exam.subtitle }}</small></span>
+                  <ChevronRight :size="18" class="muted" />
+                </button>
+              </div>
+            </div>
+            <p v-if="scenariosLoading" class="dictionary-status">正在从 D1 读取实战情境…</p>
+            <p v-else-if="scenariosError" class="dictionary-status dictionary-error">{{ scenariosError }}</p>
+            <div v-else-if="!currentScenario" class="empty-state">
+              <ShieldCheck :size="25" /><strong>实战情境暂时为空</strong>
+              <p>页面和接口已接通，但当前数据库没有可用情境。请确认最新 D1 迁移已应用；迁移完成后刷新此页面。</p>
+              <button class="secondary-button" @click="loadScenarios">重新加载</button>
+            </div>
+            <article v-else class="panel question-card practical-scenario-card">
+              <div class="question-topline"><span>{{ currentScenario.category }} · {{ currentScenario.difficulty === 'intermediate' ? '中等' : '标准' }}</span><span class="source-pill">{{ currentScenario.source_type === 'official' ? '官方来源' : '平台原创情境' }}</span></div>
+              <h3 class="question-prompt">{{ currentScenario.title }}</h3>
+              <p class="scenario-situation">{{ currentScenario.situation }}</p>
+              <h4>{{ currentScenario.task }}</h4>
+              <div class="question-options">
+                <button v-for="option in currentScenario.options" :key="option.id" class="question-option" :class="{ selected: selectedScenarioOption === option.id, correct: scenarioResult && option.id === scenarioResult.best_option, incorrect: scenarioResult && option.id === selectedScenarioOption && !scenarioResult.correct }" :disabled="Boolean(scenarioResult) || scenarioSubmitting" @click="selectedScenarioOption = option.id">
+                  <span>{{ option.id.toUpperCase() }}</span><strong>{{ option.text }}</strong>
+                  <CheckCircle2 v-if="scenarioResult && option.id === scenarioResult.best_option" :size="17" />
+                </button>
+              </div>
+              <div v-if="scenarioResult" class="answer-explanation" :class="{ right: scenarioResult.correct }">
+                <strong>{{ scenarioResult.correct ? '判断正确' : '可以做得更好' }} · 得分 {{ scenarioResult.score }}/100 · 推荐选项 {{ scenarioResult.best_option.toUpperCase() }}</strong>
+                <p>{{ scenarioResult.feedback }}</p>
+              </div>
+              <p v-if="scenariosError" class="practice-error">{{ scenariosError }}</p>
+              <div class="practice-start-actions">
+                <button v-if="!scenarioResult" class="primary-button" :disabled="!selectedScenarioOption || scenarioSubmitting" @click="submitScenario">{{ scenarioSubmitting ? '正在提交…' : '提交判断并查看复盘' }} <ArrowRight :size="16" /></button>
+                <button v-else class="primary-button" @click="nextScenario">下一个情境 <ArrowRight :size="16" /></button>
+                <button class="text-link" @click="loadScenarios">重新载入情境</button>
+              </div>
+            </article>
           </section>
         </template>
 
