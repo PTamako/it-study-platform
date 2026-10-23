@@ -300,8 +300,9 @@ onUnmounted(() => { if (mockTimer) clearInterval(mockTimer) })
 type ScenarioOption = { id: string; text: string }
 type PracticalScenario = {
   id: string; track_id: string; title: string; category: string; difficulty: string;
-  situation: string; task: string; options: ScenarioOption[]; source_type: string
+  situation: string; task: string; options: ScenarioOption[]; explanation?: string; source_type: string
 }
+type ScenarioExplanationTranslation = { source_text: string; translation_zh: string }
 const scenarios = ref<PracticalScenario[]>([])
 const scenariosLoading = ref(false)
 const scenariosError = ref('')
@@ -309,7 +310,63 @@ const selectedScenarioId = ref('')
 const selectedScenarioOption = ref('')
 const scenarioSubmitting = ref(false)
 const scenarioResult = ref<{ score: number; best_option: string; correct: boolean; feedback: string } | null>(null)
+const scenarioExplanationTranslations = ref<Record<string, ScenarioExplanationTranslation>>(
+  readStored('zhixue:scenario-explanations-zh', {}),
+)
+const scenarioExplanationTranslating = ref<Record<string, boolean>>({})
+const scenarioExplanationTranslationErrors = ref<Record<string, string>>({})
+watch(scenarioExplanationTranslations, value => {
+  localStorage.setItem('zhixue:scenario-explanations-zh', JSON.stringify(value))
+}, { deep: true })
 const currentScenario = computed(() => scenarios.value.find(item => item.id === selectedScenarioId.value) || scenarios.value[0] || null)
+function getScenarioExplanationLanguage(text: string): 'ja-JP' | 'en-US' | 'zh-CN' {
+  if (/[\u3040-\u30ff]/.test(text)) return 'ja-JP'
+  if (/[a-z]{4,}/i.test(text) && !/[\u3400-\u9fff]/.test(text)) return 'en-US'
+  if (/[\u3400-\u9fff]/.test(text)) return 'zh-CN'
+  return 'ja-JP'
+}
+
+async function translateScenarioExplanation(scenarioId: string, text: string) {
+  const sourceText = text.trim()
+  if (!sourceText) return
+  const source = getScenarioExplanationLanguage(sourceText)
+  delete scenarioExplanationTranslationErrors.value[scenarioId]
+  if (source === 'zh-CN') {
+    scenarioExplanationTranslations.value[scenarioId] = {
+      source_text: sourceText,
+      translation_zh: sourceText,
+    }
+    return
+  }
+  const cached = scenarioExplanationTranslations.value[scenarioId]
+  if (cached?.source_text === sourceText || scenarioExplanationTranslating.value[scenarioId]) return
+  scenarioExplanationTranslating.value[scenarioId] = true
+  try {
+    const response = await fetch('/api/translate-explanation', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text: sourceText, source }),
+    })
+    const data = await response.json() as { translation?: string; error?: string }
+    if (!response.ok || !data.translation) throw new Error(data.error || '在线中文解析暂时不可用。')
+    scenarioExplanationTranslations.value[scenarioId] = {
+      source_text: sourceText,
+      translation_zh: data.translation,
+    }
+  } catch (error) {
+    scenarioExplanationTranslationErrors.value[scenarioId] = error instanceof Error ? error.message : '中文解析翻译失败。'
+  } finally {
+    scenarioExplanationTranslating.value[scenarioId] = false
+  }
+}
+
+function speakScenario(scenario: PracticalScenario | null) {
+  if (!scenario) return
+  const options = scenario.options.map(option => `${option.id.toUpperCase()}。 ${option.text}`).join('。')
+  // 情境内容统一为日语；共用只选择日语音色的播放函数，找不到日语语音时不会回退到中文。
+  speakJapaneseQuestion(`${scenario.title}。状況：${scenario.situation}。課題：${scenario.task}。選択肢：${options}`)
+}
+
 async function loadScenarios() {
   if (!selectedTrack.value) { scenarios.value = []; return }
   scenariosLoading.value = true
@@ -355,12 +412,14 @@ async function submitScenario() {
     })
     const data = await response.json() as { score?: number; best_option?: string; correct?: boolean; feedback?: string; error?: string }
     if (!response.ok) throw new Error(data.error || '实战结果保存失败')
+    const feedback = String(data.feedback || '')
     scenarioResult.value = {
       score: Number(data.score || 0),
       best_option: String(data.best_option || ''),
       correct: Boolean(data.correct),
-      feedback: String(data.feedback || ''),
+      feedback,
     }
+    void translateScenarioExplanation(currentScenario.value.id, feedback)
     void loadCloudDashboard()
   } catch (error) {
     scenariosError.value = error instanceof Error ? error.message : '实战结果保存失败，请稍后重试。'
@@ -1373,7 +1432,10 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
             </div>
             <article v-else class="panel question-card practical-scenario-card">
               <div class="question-topline"><span>{{ currentScenario.category }} · {{ currentScenario.difficulty === 'intermediate' ? '中等' : '标准' }}</span><span class="source-pill">{{ currentScenario.source_type === 'official' ? '官方来源' : '平台原创情境' }}</span></div>
-              <h3 class="question-prompt">{{ currentScenario.title }}</h3>
+              <div class="question-prompt-row">
+                <h3 class="question-prompt">{{ currentScenario.title }}</h3>
+                <button type="button" class="secondary-button question-speak-button" @click="speakScenario(currentScenario)"><Volume2 :size="16" /> 日语语音读题</button>
+              </div>
               <p class="scenario-situation">{{ currentScenario.situation }}</p>
               <h4>{{ currentScenario.task }}</h4>
               <div class="question-options">
@@ -1384,7 +1446,17 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               </div>
               <div v-if="scenarioResult" class="answer-explanation" :class="{ right: scenarioResult.correct }">
                 <strong>{{ scenarioResult.correct ? '判断正确' : '可以做得更好' }} · 得分 {{ scenarioResult.score }}/100 · 推荐选项 {{ scenarioResult.best_option.toUpperCase() }}</strong>
+                <p class="explanation-original-label">日文解析</p>
                 <p>{{ scenarioResult.feedback }}</p>
+                <div class="explanation-chinese">
+                  <strong>中文解析</strong>
+                  <p v-if="scenarioExplanationTranslating[currentScenario.id]">正在翻译中文解析…</p>
+                  <p v-else-if="scenarioExplanationTranslations[currentScenario.id]?.source_text === scenarioResult.feedback.trim()">{{ scenarioExplanationTranslations[currentScenario.id].translation_zh }}</p>
+                  <div v-else>
+                    <p v-if="scenarioExplanationTranslationErrors[currentScenario.id]">{{ scenarioExplanationTranslationErrors[currentScenario.id] }}</p>
+                    <button type="button" class="text-link" @click="translateScenarioExplanation(currentScenario.id, scenarioResult.feedback)">{{ scenarioExplanationTranslationErrors[currentScenario.id] ? '重试中文翻译' : '翻译为中文' }}</button>
+                  </div>
+                </div>
               </div>
               <p v-if="scenariosError" class="practice-error">{{ scenariosError }}</p>
               <div class="practice-start-actions">
