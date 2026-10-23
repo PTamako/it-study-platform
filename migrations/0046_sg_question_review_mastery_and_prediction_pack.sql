@@ -19,7 +19,7 @@ CREATE INDEX IF NOT EXISTS idx_question_review_due
 INSERT OR IGNORE INTO question_review_state
   (question_id, track_id, review_count, correct_streak, last_result, next_review_at, mastered)
 SELECT q.id, q.track_id, COUNT(a.id),
-       CASE WHEN latest.is_correct = 1 THEN 1 ELSE 0 END,
+       0,
        CASE WHEN latest.is_correct = 1 THEN 'remembered' ELSE 'again' END,
        CASE WHEN latest.is_correct = 1 THEN datetime('now', '+1 day') ELSE datetime('now') END,
        0
