@@ -334,3 +334,15 @@
 .question-mastery-badge.mastered{background:#e4f5eb;color:#26734d}
 .question-actions .secondary-button{font-size:12px;padding:9px 12px}
 .practice-start-actions{flex-wrap:wrap}
+
+
+/* Source totals first, then real topic categories beneath them. */
+.question-category-section{margin:14px 0 18px;padding:14px 15px;border:1px solid var(--line,#e8e5ef);border-radius:16px;background:rgba(255,255,255,.72)}
+.question-category-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;color:var(--ink,#27263a);font-size:13px}
+.question-category-heading span{color:var(--muted,#85899d);font-size:11px;font-weight:500}
+.question-category-filters{display:flex;flex-wrap:wrap;gap:8px}
+.question-category-button{display:inline-flex;align-items:center;gap:8px;max-width:100%;padding:8px 11px;border:1px solid var(--line,#e8e5ef);border-radius:999px;background:#fff;color:var(--ink,#38364b);font:inherit;font-size:12px;line-height:1.4;text-align:left;cursor:pointer}
+.question-category-button span{flex-shrink:0;padding:2px 6px;border-radius:999px;background:#f0eef7;color:#70688e;font-size:11px;font-weight:700}
+.question-category-button.active{border-color:#9384c8;background:#f4f0ff;color:#5e4b9a}
+.question-category-button.active span{background:#e3dcfb;color:#58449b}
+@media(max-width:560px){.question-category-section{padding:12px}.question-category-heading{align-items:flex-start;flex-direction:column;gap:3px}.question-category-filters{gap:7px}.question-category-button{font-size:11px;padding:7px 9px}}

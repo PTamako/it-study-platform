@@ -174,6 +174,33 @@ const questionSourceFilters = [
   { id: 'official', label: '历年真题' },
   { id: 'generated', label: '预测题库' },
 ] as const
+type QuestionCategory = { topic: string; question_count: number }
+const questionCategories = ref<QuestionCategory[]>([])
+const selectedQuestionTopic = ref('')
+async function loadQuestionCategories() {
+  if (!selectedTrack.value) return
+  try {
+    const response = await fetch('/api/question-categories?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value))
+    const data = await response.json() as { items?: QuestionCategory[] }
+    if (response.ok) questionCategories.value = data.items || []
+  } catch {
+    questionCategories.value = []
+  }
+}
+async function selectQuestionTopic(topic: string) {
+  selectedQuestionTopic.value = topic
+  questionBatchOffset.value = 0
+  questionBankTotal.value = 0
+  questionBankHasMore.value = false
+  quizQuestions.value = []
+  quizIndex.value = 0
+  selectedOption.value = ''
+  quizSubmitted.value = false
+  quizCorrect.value = 0
+  quizFinished.value = false
+  quizError.value = ''
+  await startPractice()
+}
 
 const selectedTrack = computed(() => examTracks.value.find(track => track.id === selectedTrackId.value) || null)
 const quizStartedAt = ref(0)
@@ -362,6 +389,7 @@ function selectExam(track: ExamTrack) {
 
 async function selectQuestionSource(source: 'official' | 'generated') {
   questionSourceFilter.value = source
+  selectedQuestionTopic.value = ''
   questionBatchOffset.value = 0
   questionBankTotal.value = 0
   questionBankHasMore.value = false
@@ -372,6 +400,7 @@ async function selectQuestionSource(source: 'official' | 'generated') {
   quizCorrect.value = 0
   quizFinished.value = false
   quizError.value = ''
+  await loadQuestionCategories()
   await startPractice()
 }
 async function loadQuestionProgress() {
@@ -423,7 +452,7 @@ async function startPractice() {
   quizLoading.value = true
   quizError.value = ''
   try {
-    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value) + '&mode=ordered&limit=' + questionBatchSize + '&offset=' + questionBatchOffset.value)
+    const response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value) + '&topic=' + encodeURIComponent(selectedQuestionTopic.value) + '&mode=ordered&limit=' + questionBatchSize + '&offset=' + questionBatchOffset.value)
     const data = await response.json() as { items?: PracticeQuestion[]; error?: string; total?: number; has_more?: boolean }
     if (!response.ok) throw new Error(data.error || '题库加载失败')
     if (!data.items?.length) throw new Error(questionSourceFilter.value === 'official' ? '历年真题正在整理导入；目前没有可作答的官方题目。' : '预测题库目前没有可用题目，请稍后重试。')
@@ -733,7 +762,7 @@ async function hydrateCloudProgress() {
     // Keep local data usable if the cloud is unavailable or an import partially fails.
   }
 }
-onMounted(() => { void syncExamHistory(); void hydrateCloudProgress() })
+onMounted(() => { void syncExamHistory(); void hydrateCloudProgress(); void loadQuestionCategories() })
 
 type DictionaryEntry = {
   term: string
@@ -1053,6 +1082,13 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP') {
               <div class="section-heading practice-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2><p>从题库中抽题，提交后立即查看答案与解析。</p></div></div>
               <div class="question-source-filters" role="group" aria-label="题目来源筛选">
                 <button v-for="filter in questionSourceFilters" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" @click="selectQuestionSource(filter.id)">{{ filter.label }}（{{ filter.id === 'official' ? (selectedTrack?.official_question_count || 0) : (selectedTrack?.prediction_question_count || 0) }}）</button>
+              </div>
+              <div class="question-category-section" v-if="questionCategories.length">
+                <div class="question-category-heading"><strong>按分类练习</strong><span>题量来自当前题库</span></div>
+                <div class="question-category-filters" role="group" aria-label="题库分类筛选">
+                  <button type="button" class="question-category-button" :class="{ active: !selectedQuestionTopic }" @click="selectQuestionTopic('')">全部分类 <span>{{ selectedTrack ? (questionSourceFilter === 'official' ? selectedTrack.official_question_count : selectedTrack.prediction_question_count) : 0 }}</span></button>
+                  <button v-for="category in questionCategories" :key="category.topic" type="button" class="question-category-button" :class="{ active: selectedQuestionTopic === category.topic }" @click="selectQuestionTopic(category.topic)">{{ category.topic }} <span>{{ category.question_count }}</span></button>
+                </div>
               </div>
               <div v-if="!quizQuestions.length || quizFinished" class="panel practice-start-card">
                 <template v-if="quizFinished">
