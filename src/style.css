@@ -314,3 +314,14 @@
  .language-practice-actions { display: grid; grid-template-columns: 1fr 1fr; }
  .language-practice-actions .language-done-button { grid-column: 1 / -1; }
 }
+
+/* Spaced repetition review actions */
+.language-review-meta { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+.language-review-meta span { padding:5px 9px; border-radius:999px; background:rgba(255,255,255,.78); color:var(--muted,#777789); font-size:.78rem; }
+.language-review-again,.language-review-remembered { appearance:none; border:1px solid var(--line,#e8e5ef); border-radius:11px; padding:10px 12px; font:inherit; font-size:.88rem; font-weight:600; cursor:pointer; }
+.language-review-again { background:#fff2e9; color:#92552e; border-color:#f1d8c7; }
+.language-review-remembered { background:#eaf7f0; color:#246d4b; border-color:#c8e7d5; }
+.language-review-again:disabled,.language-review-remembered:disabled { opacity:.55; cursor:wait; }
+@media(max-width:560px) {
+ .language-practice-actions .language-review-again,.language-practice-actions .language-review-remembered { grid-column:1 / -1; width:100%; }
+}
