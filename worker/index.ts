@@ -748,16 +748,19 @@ export default {
       const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit') || 10)))
       const topic = (url.searchParams.get('topic') || '').trim().slice(0, 100)
       const mode = url.searchParams.get('mode') || 'random'
+      const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
+      const source = ['all', 'official', 'generated', 'licensed'].includes(requestedSource) ? requestedSource : 'all'
       try {
         const { results } = await env.DB.prepare(
           `SELECT id, track_id, topic, difficulty, question_type, prompt,
                   options_json, answer_json, explanation, source_type, source_reference, language
            FROM questions
            WHERE track_id = ? AND (? = '' OR topic = ?)
+             AND (? = 'all' OR source_type = ?)
            ORDER BY CASE WHEN ? = 'ordered' THEN id END,
                     CASE WHEN ? <> 'ordered' THEN random() END
            LIMIT ?`,
-        ).bind(trackId, topic, topic, mode, mode, limit).all()
+        ).bind(trackId, topic, topic, source, source, mode, mode, limit).all()
         return json({
           items: results.map((row: Record<string, unknown>) => ({
             ...row,
