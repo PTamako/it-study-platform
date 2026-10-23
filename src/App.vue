@@ -995,7 +995,7 @@ function clearDictionarySearch() {
   lastSearchedTerm.value = ''
   dictionaryError.value = ''
 }
-function quickDictionarySearch(term: string, language: 'ja' | 'en' | 'zh') {
+function quickDictionarySearch(term: string, language: 'ja' | 'en' | 'zh' | 'it') {
   searchText.value = term
   dictSourceLang.value = language
   void lookupDictionary()
