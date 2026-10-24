@@ -667,9 +667,9 @@ export default {
       if (authFailure) return authFailure
       if (request.method !== 'GET') {
         const origin = request.headers.get('origin')
-        if (!origin || new URL(origin).origin !== url.origin) {
-          return json({ error: '请求来源验证失败。' }, 403)
-        }
+        let originMatches = false
+        try { originMatches = Boolean(origin) && new URL(origin!).origin === url.origin } catch { originMatches = false }
+        if (!originMatches) return json({ error: '请求来源验证失败。' }, 403)
       }
     }
     const isWriteEndpoint = ['/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history', '/api/translate-explanation'].includes(url.pathname)
