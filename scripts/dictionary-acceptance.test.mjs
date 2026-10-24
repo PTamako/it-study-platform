@@ -158,3 +158,13 @@ test('preview demo mode supplies isolated Japanese and English sample sentences 
   assert.match(app, /if \(previewDemoMode\) \{\s*languageCards\.value = previewLanguageFixtures\.filter\(card => card\.language === studyLanguage\.value\)/)
   assert.match(app, /预览演示模式：使用内置示例句子，不读取或写入云端学习数据/)
 })
+
+
+test('daily task writes are serialized per task and use a snapshot of each toggle', () => {
+  assert.match(app, /const dailyTaskSaveQueues = new Map<string, Promise<void>>\(\)/)
+  assert.match(app, /const completed = task\.done/)
+  assert.match(app, /const previous = dailyTaskSaveQueues\.get\(taskId\) \|\| Promise\.resolve\(\)/)
+  assert.match(app, /previous\.catch\(\(\) => undefined\)\.then\(async \(\) =>/)
+  assert.match(app, /completed\s*\}\),/)
+  assert.match(app, /dailyTaskSaveRequestIds\.get\(taskId\) === requestId/)
+})
