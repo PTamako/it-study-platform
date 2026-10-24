@@ -1206,6 +1206,16 @@ function speakJapaneseQuestion(text: string, statusTarget = '') {
   // Use the same synchronous path as the dictionary play buttons to avoid Safari activation loss.
   speak(text, 'ja-JP', statusTarget)
 }
+// Where supported, request a media-playback audio session for speech so iOS can route it
+// like page media rather than a short ambient sound. This is best-effort only: Safari/iOS
+// decides whether the API is supported and how system volume/silent mode are applied.
+type BrowserAudioSession = { type: string }
+function setSpeechAudioSessionType(type: 'playback' | 'auto') {
+  const audioSession = (navigator as Navigator & { audioSession?: BrowserAudioSession }).audioSession
+  if (!audioSession) return
+  try { audioSession.type = type } catch { /* Unsupported/locked audio-session implementation. */ }
+}
+
 function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', statusTarget = '') {
   speechStatusTarget.value = statusTarget
   const spokenText = text.trim()
@@ -1286,17 +1296,21 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
     if (requestId === speechRequestId) speechStatus.value = '正在播放：' + spokenText
   }
   utterance.onend = () => {
+    setSpeechAudioSessionType('auto')
     if (requestId === speechRequestId) {
       const voiceLabel = voice ? '；语音：' + voice.name + (voice.localService ? '（设备本地）' : '（系统提供）') : '；语音：浏览器自动选择'
       speechStatus.value = '播放请求已结束' + voiceLabel + '。若实际无声，请检查 iPhone「声音与触感」中的着信音与通知音量及静音状态；iOS 系统语音可能受这些设置影响。此状态不代表已确认听到声音。'
     }
   }
   utterance.onerror = event => {
+    setSpeechAudioSessionType('auto')
     if (requestId !== speechRequestId || ['canceled', 'interrupted'].includes(String(event.error))) return
     const languageName = lang === 'ja-JP' ? '日语' : lang === 'en-US' ? '英语' : '中文'
     speechStatus.value = '播放失败（' + String(event.error) + '）。请检查浏览器声音、设备静音状态和系统中的' + languageName + '语音。'
   }
 
+  // Audio Session API is not available in every Safari version; use it only when present.
+  setSpeechAudioSessionType('playback')
   speechStatus.value = '正在请求播放：' + spokenText
   try {
     synthesis.speak(utterance)
@@ -1392,6 +1406,7 @@ function toggleSpeechPause() {
   }
 }
 function stopSpeech() {
+  setSpeechAudioSessionType('auto')
   const synthesis = window.speechSynthesis
   speechRequestId += 1
   try { synthesis?.cancel() } catch { /* The browser may already have stopped playback. */ }
