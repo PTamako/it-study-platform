@@ -1,5 +1,19 @@
 import { handleAuthRequest, requireAuth } from './auth'
 
+// Personal state is never readable or writable without an authenticated session.
+const protectedPersonalPaths = new Set([
+  '/api/dashboard',
+  '/api/exam-history',
+  '/api/attempts',
+  '/api/scenario-attempts',
+  '/api/language-progress',
+  '/api/language-review',
+  '/api/vocabulary/saved',
+  '/api/daily-tasks',
+  '/api/question-progress',
+  '/api/wrong-questions',
+])
+
 export interface Env {
   DB: D1Database
   AI?: Ai
@@ -649,19 +663,6 @@ export default {
     const authResponse = await handleAuthRequest(request, env)
     if (authResponse) return authResponse
 
-    // All endpoints that read or mutate personal study state require a signed session.
-    const protectedPersonalPaths = new Set([
-      '/api/dashboard',
-      '/api/exam-history',
-      '/api/attempts',
-      '/api/scenario-attempts',
-      '/api/language-progress',
-      '/api/language-review',
-      '/api/vocabulary/saved',
-      '/api/daily-tasks',
-      '/api/question-progress',
-      '/api/wrong-questions',
-    ])
     if (protectedPersonalPaths.has(url.pathname)) {
       const authFailure = await requireAuth(request, env)
       if (authFailure) return authFailure
