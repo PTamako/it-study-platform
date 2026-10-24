@@ -1148,17 +1148,9 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   const normalizedLang = normalize(lang)
   const prefix = normalizedLang.slice(0, 2)
   const availableVoices = synthesis.getVoices()
-  // Some browsers (notably Safari/iOS) populate the voice list asynchronously. If it is
-  // empty, never let the OS silently choose its default voice (which may be Chinese).
-  if (availableVoices.length === 0) {
-    speechStatus.value = '系统语音列表尚未加载，暂未播放。请稍候再点一次；若仍无声音，请检查系统日语语音设置。'
-    synthesis.addEventListener('voiceschanged', () => {
-      if (synthesis.getVoices().length > 0 && requestId === speechRequestId) {
-        speechStatus.value = '系统语音已加载，请再次点击日语发音。'
-      }
-    }, { once: true })
-    return
-  }
+  // Safari/iOS can initially return an empty voice list. Do not return early:
+  // setting utterance.lang is enough for the OS to select a matching voice, and returning
+  // here makes the first tap a no-op on devices that populate voices lazily.
   const voices = availableVoices.filter(voice => normalize(voice.lang).startsWith(prefix))
   const voice = voices.find(candidate => normalize(candidate.lang) === normalizedLang && /natural|enhanced|premium|siri|daniel|karen|ava|alex|samantha|kyoko|otoya/i.test(candidate.name))
     || voices.find(candidate => normalize(candidate.lang) === normalizedLang && candidate.localService)
@@ -1185,7 +1177,8 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   }
   utterance.onerror = event => {
     if (requestId !== speechRequestId || ['canceled', 'interrupted'].includes(String(event.error))) return
-    speechStatus.value = '播放失败（' + String(event.error) + '）。请检查浏览器声音、设备静音状态和系统中的英语/日语语音。'
+    const languageName = lang === 'ja-JP' ? '日语' : lang === 'en-US' ? '英语' : '中文'
+    speechStatus.value = '播放失败（' + String(event.error) + '）。请检查浏览器声音、设备静音状态和系统中的' + languageName + '语音。'
   }
 
   speechStatus.value = '正在请求播放：' + spokenText
