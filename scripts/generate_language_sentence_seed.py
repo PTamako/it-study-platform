@@ -5,6 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "migrations/0081_language_sentence_cards.sql"
+OUT_REFRESH = ROOT / "migrations/0082_refresh_language_sentence_annotations.sql"
 CACHE = Path("/tmp/language-sentence-sources")
 CACHE.mkdir(exist_ok=True)
 SENTENCES_URL = "https://downloads.tatoeba.org/exports/sentences.tar.bz2"
@@ -265,5 +266,18 @@ def main():
         batch = values[start:start+5]
         lines.append(insert_prefix+"\n"+",\n".join(batch)+";")
     OUT.write_text("\n".join(lines)+"\n",encoding="utf-8")
+    # 0081 may already have been applied in production before annotation fixes were made.
+    # A new versioned migration is therefore required: INSERT OR IGNORE cannot repair
+    # existing rows. 0082 refreshes the three annotation columns for every stable card ID.
+    refresh = ["-- Refresh generated vocabulary/grammar annotations for existing sentence cards."]
+    for item in cards:
+        refresh.append(
+            "UPDATE language_cards SET highlight_json = " + sql(item["highlight_json"]) +
+            ", vocabulary_expansion_json = " + sql(item["vocabulary_expansion_json"]) +
+            ", grammar_expansion_json = " + sql(item["grammar_expansion_json"]) +
+            " WHERE id = " + sql(item["id"]) + " AND content_type = 'sentence';"
+        )
+    OUT_REFRESH.write_text("\n".join(refresh)+"\n",encoding="utf-8")
     print("Generated exactly 3,000 Japanese + 3,000 English sentence cards in",OUT)
+    print("Generated annotation refresh migration for existing sentence cards in",OUT_REFRESH)
 if __name__=="__main__": main()
