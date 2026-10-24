@@ -11,6 +11,8 @@ test('language sentence cards have a resilient fallback when production annotati
   assert.match(app, /if \(!highlights\.some\(item => item\.type === 'vocabulary'\)\)/)
   assert.match(app, /function languageExpansions\(card: LanguageCard \| null, type: 'vocabulary' \| 'grammar'\)/)
   assert.match(app, /const highlights = languageHighlights\(card\)\.filter\(item => item\.type === type\)/)
+  assert.match(app, /const merged = \[\.\.\.stored\]/)
+  assert.match(app, /for \(const item of highlights\)/)
 })
 
 test('sentence UI renders separate vocabulary and grammar explanations through fallback-aware data', () => {
