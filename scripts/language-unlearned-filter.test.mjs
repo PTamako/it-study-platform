@@ -21,7 +21,9 @@ test('language cards are classified dynamically and paginated for large decks', 
   assert.match(app, /v-for="card in paginatedLanguageCards"/)
   assert.match(app, /example_source_url/)
   assert.match(app, /Tatoeba/)
-  assert.match(app, /ECDICT/)
+  assert.match(app, /vocabulary_expansion_json/)
+  assert.match(app, /grammar_expansion_json/)
+  assert.match(app, /parseLanguageExpansion/)
 })
 
 test('cloud review hydration preserves local-only review records during sync', () => {
