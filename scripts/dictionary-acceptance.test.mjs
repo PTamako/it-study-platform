@@ -129,6 +129,8 @@ test('every dictionary result and saved word exposes both English and Japanese p
 
 test('speech UI schedules its diagnostic tone only after iOS AudioContext is running', () => {
   assert.match(app, /function testAudioOutput\(\)/)
+  assert.match(app, /window\.AudioContext/)
+  assert.match(app, /webkitAudioContext\?: typeof AudioContext/)
   assert.match(app, /new AudioContextConstructor\(\)/)
   assert.match(app, /const resumePromise = context\.resume\(\)/)
   assert.match(app, /if \(context\.state !== 'running'\)/)
