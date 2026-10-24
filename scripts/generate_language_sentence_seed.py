@@ -105,7 +105,7 @@ JP_GRAMMAR = [
  (r"について","关于……","表示谈论的主题"), (r"ために","为了……","表示目的或原因，依上下文判断"),
  (r"んです|のです","说明／强调语气","用于解释背景或强调说明"),
 
- (r"[ぁ-んァ-ヶ一-龯]{1,8}(?:は|が|を|に|で|と|へ|から|まで|より|だけ|しか|の)","名词／短语＋助词","助词标记主题、对象、地点、方向、所属或范围；具体功能要结合句意判断"),
+ (r"(?<=[ぁ-んァ-ヶ一-龯])(?:から|まで|より|だけ|しか|は|が|を|に|で|と|へ|の)","名词／短语＋助词","助词标记主题、对象、地点、方向、所属或范围；具体功能要结合句意判断"),
  (r"(?:私|僕|彼|彼女|これ|それ|あれ|誰|何)は","主题提示：N は","「は」提示谈话主题，后续说明主题相关的信息"),
  (r"(?:です|でした)(?=[。！？!?…]*$)","礼貌体判断／说明","礼貌地说明身份、性质或状态；过去形式「でした」表示过去的判断或状态"),
 ]
@@ -132,6 +132,8 @@ def make_hits(sentence, lang):
     grammar = JP_GRAMMAR if lang == "ja" else EN_GRAMMAR
     candidates = []
     for term, meaning, explanation in vocab:
+        if lang == "ja" and len(term) < 2:
+            continue
         for match in re.finditer(re.escape(term), sentence, re.I if lang == "en" else 0):
             candidates.append({"start":match.start(),"end":match.end(),"type":"vocabulary","term":match.group(),"meaning":meaning,"explanation":explanation})
     for pattern, term, explanation in grammar:
