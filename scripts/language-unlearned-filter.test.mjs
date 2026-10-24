@@ -30,3 +30,13 @@ test('cloud review hydration preserves local-only review records during sync', (
   assert.match(app, /const cloudReviews = reviews\.items \|\| \[\]/)
   assert.match(app, /!cloudReviews\.some\(cloud => cloud\.card_id === local\.card_id\)/)
 })
+
+
+test('active recall prompts from Chinese before revealing the target-language sentence', () => {
+  assert.match(app, /先看中文提示，尝试说出完整的日语或英语句子/)
+  assert.match(app, /v-if="languagePracticeRevealed" class="language-practice-revealed-sentence"/)
+  assert.match(app, /v-else class="language-practice-recall-prompt"/)
+  assert.match(app, /languagePracticeCard\.meaning_zh \|\| '请先尝试回忆这句话的意思。'/)
+  assert.match(app, /显示原句与解析/)
+  assert.match(app, /隐藏原句/)
+})
