@@ -1695,7 +1695,6 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
     </form>
   </section>
   <div v-else class="app-shell">
-    <button class="auth-logout" type="button" @click="logout" aria-label="退出登录">退出登录</button>
     <aside class="sidebar">
       <button class="brand" @click="navigate('home')" aria-label="返回首页">
         <span class="brand-mark"><BookOpen :size="23" /></span>
@@ -1722,6 +1721,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
         <button class="mobile-brand" @click="navigate('home')"><span class="brand-mark"><BookOpen :size="20" /></span><strong>知学</strong></button>
         <div class="breadcrumb"><span>我的空间</span><ChevronRight :size="14" /><strong>{{ activeModule === 'home' ? '学习首页' : currentInfo.title }}</strong></div>
         <div class="top-actions">
+          <button class="auth-logout" type="button" @click="logout" aria-label="退出登录">退出登录</button>
           <button class="icon-button mobile-menu-button" @click="showMobileMenu = !showMobileMenu" :aria-label="showMobileMenu ? '关闭菜单' : '打开菜单'"><X v-if="showMobileMenu" :size="19" /><Menu v-else :size="19" /></button>
         </div>
       </header>
