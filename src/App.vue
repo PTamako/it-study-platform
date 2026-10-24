@@ -238,6 +238,8 @@ function addExamRecord() {
 }
 async function removeExamRecords() {
   if (!window.confirm('确定清除全部历史考试成绩吗？云端和本设备记录都会删除，且无法恢复。')) return
+  const confirmation = window.prompt('二次确认：此操作无法恢复。请输入「清除」以继续。')
+  if (confirmation !== '清除') return
   try {
     const response = await fetch('/api/exam-history', { method: 'DELETE' })
     const data = await response.json().catch(() => ({})) as { error?: string }
