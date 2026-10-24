@@ -1,0 +1,50 @@
+name: Validate pull request
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Set up Python for licensed sentence dataset generation
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate attributed Japanese and English sentence migration
+        run: python scripts/generate_language_sentence_seed.py
+
+      - name: Run automated regression tests
+        run: npm test
+
+      - name: Type-check and build frontend
+        run: npm run build
+
+      - name: Validate complete D1 migration chain locally
+        run: npx wrangler d1 migrations apply it-study-platform-db --local
+
+      - name: Validate Worker bundle without deploying
+        run: npx wrangler deploy --dry-run
