@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
+const worker = await readFile(new URL('../worker/index.ts', import.meta.url), 'utf8')
 
 test('language cards have distinct all, unlearned, in-progress, and mastered filters', () => {
   assert.match(app, /selectedLanguageMastery = ref<'all' \| 'unlearned' \| 'unmastered' \| 'mastered'>\('all'\)/)
@@ -39,4 +40,14 @@ test('active recall prompts from Chinese before revealing the target-language se
   assert.match(app, /languagePracticeCard\.meaning_zh \|\| '请先尝试回忆这句话的意思。'/)
   assert.match(app, /显示原句与解析/)
   assert.match(app, /隐藏原句/)
+})
+
+
+test('language review uses spaced repetition intervals and validates the target card', () => {
+  assert.match(worker, /url\.pathname === '\/api\/language-review'/)
+  assert.match(worker, /SELECT id FROM language_cards WHERE id = \?/)
+  assert.match(worker, /WHEN excluded\.last_result = 'again' THEN '\+10 minutes'/)
+  assert.match(worker, /WHEN 1 THEN '\+1 day' WHEN 2 THEN '\+3 days' WHEN 3 THEN '\+7 days' ELSE '\+14 days'/)
+  assert.match(worker, /correct_streak = CASE WHEN excluded\.last_result = 'remembered'/)
+  assert.match(worker, /review_count = language_card_reviews\.review_count \+ 1/)
 })
