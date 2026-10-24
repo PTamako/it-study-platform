@@ -12,6 +12,7 @@ const protectedPersonalPaths = new Set([
   '/api/daily-tasks',
   '/api/question-progress',
   '/api/wrong-questions',
+  '/api/translate-explanation',
 ])
 
 export interface Env {
