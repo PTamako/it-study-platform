@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 
 const migration = await readFile(new URL('../migrations/0081_language_sentence_cards.sql', import.meta.url), 'utf8')
 const refreshMigration = await readFile(new URL('../migrations/0084_refresh_contextual_bilingual_annotations.sql', import.meta.url), 'utf8')
+const rebuildMigration = await readFile(new URL('../migrations/0085_rebuild_contextual_bilingual_sentence_cards.sql', import.meta.url), 'utf8')
 const refreshStatements = refreshMigration.split('\n').filter(line => /^UPDATE language_cards SET highlight_json = /.test(line))
 const rows = migration.split('\n').filter(line => /^\s*\('(ja|en)-sentence-/.test(line))
 const ja = rows.filter(line => /^\s*\('ja-sentence-/.test(line))
@@ -129,4 +130,18 @@ test('contextual bilingual annotation rules avoid isolated Japanese particles an
   assert.match(generator, /confidence/)
   assert.match(generator, /0084_refresh_contextual_bilingual_annotations/)
   assert.match(generator, /term in \{"です", "ます", "でした", "ました", "ください"\}/)
+})
+
+
+test('new migration rebuilds all 6,000 sentence cards and preserves mastery for stable IDs', () => {
+  const rebuiltRows = [...rebuildMigration.matchAll(/\\('(ja|en)-sentence-/g)]
+  assert.equal(rebuiltRows.length, 6000, 'rebuild migration must contain exactly 6,000 regenerated sentence rows')
+  assert.equal(rebuiltRows.filter(match => match[1] === 'ja').length, 3000)
+  assert.equal(rebuiltRows.filter(match => match[1] === 'en').length, 3000)
+  const deleteAt = rebuildMigration.indexOf("DELETE FROM language_cards WHERE content_type = 'sentence'")
+  const insertAt = rebuildMigration.indexOf('INSERT OR IGNORE INTO language_cards')
+  assert.ok(deleteAt >= 0 && insertAt > deleteAt, 'old sentence rows must be deleted before regenerated rows are inserted')
+  assert.match(rebuildMigration, /CREATE TABLE IF NOT EXISTS language_card_progress_rebuild_backup/)
+  assert.match(rebuildMigration, /INSERT OR REPLACE INTO language_card_progress \\(card_id, mastered, updated_at\\)/)
+  assert.match(rebuildMigration, /DROP TABLE language_card_progress_rebuild_backup/)
 })
