@@ -5,6 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "migrations/0081_language_sentence_cards.sql"
+OUT_REFRESH = ROOT / "migrations/0082_refresh_language_sentence_annotations.sql"
 CACHE = Path("/tmp/language-sentence-sources")
 CACHE.mkdir(exist_ok=True)
 SENTENCES_URL = "https://downloads.tatoeba.org/exports/sentences.tar.bz2"
@@ -128,7 +129,51 @@ def make_hits(sentence, lang):
         if match:
             hits.append({"start":match.start(),"end":match.end(),"type":"vocabulary","term":match.group(),"meaning":"句中重点表达","explanation":"结合整句语境理解词义和用法。"})
             hits.sort(key=lambda item:item["start"])
-    return hits[:8]
+    # Guarantee a visible grammar/structure highlight on every sentence card. Prefer
+    # a recognizable sentence ending or predicate; if no pattern is recognized, use
+    # an exact source substring and clearly label it as a study prompt, not a parse.
+    if not any(item["type"] == "grammar" for item in hits):
+        clean = re.sub(r"[。！？!?…]+$", "", sentence).rstrip()
+        match = None
+        if lang == "ja":
+            match = re.search(r"(?:ていただけますか|てください|てから|なければなりません|なければならない|てもいいですか|てもいいです|と思います|かもしれません|ませんでした|ません|ました|でしょう|でした|ます|です|だった|ない|たいです|ています|ている|までに|について|ので|けど|かな|か|ね|よ)$", clean)
+            if match is None:
+                match = re.search(r"[ぁ-ゖァ-ヶ一-龯]{1,4}$", clean)
+            meaning = "句尾活用／表达观察点"
+            explanation = "自动规则未识别到明确语法模式；请结合整句观察句尾活用、助词与语气。这是学习提示，不是完整语法解析。"
+        else:
+            words = list(re.finditer(r"\b[A-Za-z][A-Za-z'-]*\b", clean))
+            match = next((item for item in reversed(words)
+                          if item.group().lower() not in {"a", "an", "the", "and", "or", "but", "to", "of", "in", "on", "at", "for", "with"}), None)
+            if match is None and words:
+                match = words[-1]
+            meaning = "句子结构观察点"
+            explanation = "自动规则未识别到明确句型；请观察该词在句中的作用及其前后搭配。这是学习提示，不是完整语法解析。"
+        if match is None:
+            match = re.search(r"\S+", clean)
+        if match:
+            start, end = match.start(), match.end()
+            if any(start < item["end"] and end > item["start"] for item in hits):
+                alternatives = (list(re.finditer(r"[ぁ-ゖァ-ヶ一-龯]{1,4}", clean)) if lang == "ja"
+                                else list(re.finditer(r"\b[A-Za-z][A-Za-z'-]*\b", clean)))
+                match = next((item for item in reversed(alternatives)
+                              if not any(item.start() < hit["end"] and item.end() > hit["start"] for hit in hits)), None)
+            if match:
+                hits.append({"start":match.start(),"end":match.end(),"type":"grammar","term":match.group(),
+                             "meaning":meaning,"explanation":explanation})
+                hits.sort(key=lambda item:(item["start"], -(item["end"]-item["start"]), 0 if item["type"]=="grammar" else 1))
+    limited = hits[:8]
+    # The UI must always be able to show at least one vocabulary and one grammar
+    # highlight, even when a sentence matches many candidate expressions.
+    for kind in ("vocabulary", "grammar"):
+        if not any(item["type"] == kind for item in limited):
+            candidate = next((item for item in hits if item["type"] == kind), None)
+            if candidate:
+                if len(limited) >= 8:
+                    limited[-1] = candidate
+                else:
+                    limited.append(candidate)
+    return sorted(limited, key=lambda item:(item["start"], -(item["end"]-item["start"]), 0 if item["type"]=="grammar" else 1))
 
 def expansion(hits, kind, lang=None):
     output=[]; seen=set()
@@ -158,8 +203,8 @@ def main():
         for row in rows:
             if len(row)<3: continue
             sid,lang,sentence=row[0],row[1],norm(row[2])
-            if lang == "jpn" and 4 <= len(sentence) <= 180: sentences[sid] = ("ja", sentence)
-            elif lang == "eng" and 4 <= len(sentence) <= 180: sentences[sid] = ("en", sentence)
+            if lang == "jpn" and 6 <= len(sentence) <= 180: sentences[sid] = ("ja", sentence)
+            elif lang == "eng" and 4 <= len(sentence) <= 180 and len(re.findall(r"\b[A-Za-z][A-Za-z'-]*\b", sentence)) >= 2: sentences[sid] = ("en", sentence)
             elif lang == "cmn" and 4 <= len(sentence) <= 180: chinese[sid] = sentence
     finally: archive.close()
     print("Loaded Tatoeba Japanese/English and Chinese sentences:",len(sentences),len(chinese))
@@ -184,6 +229,16 @@ def main():
         pattern=JP_WORK if lang=="ja" else EN_WORK
         workplace=sorted((item for item in candidates if pattern.search(item[1])),key=lambda item:(len(item[1]),item[0]))
         daily=sorted((item for item in candidates if not pattern.search(item[1])),key=lambda item:(len(item[1]),item[0]))
+        def eligible(items, limit):
+            result=[]
+            for item in items:
+                kinds={hit["type"] for hit in make_hits(item[1],lang)}
+                if {"vocabulary","grammar"}.issubset(kinds):
+                    result.append(item)
+                    if len(result)>=limit: break
+            return result
+        workplace=eligible(workplace,3000)
+        daily=eligible(daily,3000)
         chosen=[(item,"职场语言") for item in workplace[:1200]]
         chosen += [(item,"日常句子") for item in daily[:3000-len(chosen)]]
         if len(chosen)<3000:
@@ -211,5 +266,18 @@ def main():
         batch = values[start:start+5]
         lines.append(insert_prefix+"\n"+",\n".join(batch)+";")
     OUT.write_text("\n".join(lines)+"\n",encoding="utf-8")
+    # 0081 may already have been applied in production before annotation fixes were made.
+    # A new versioned migration is therefore required: INSERT OR IGNORE cannot repair
+    # existing rows. 0082 refreshes the three annotation columns for every stable card ID.
+    refresh = ["-- Refresh generated vocabulary/grammar annotations for existing sentence cards."]
+    for item in cards:
+        refresh.append(
+            "UPDATE language_cards SET highlight_json = " + sql(item["highlight_json"]) +
+            ", vocabulary_expansion_json = " + sql(item["vocabulary_expansion_json"]) +
+            ", grammar_expansion_json = " + sql(item["grammar_expansion_json"]) +
+            " WHERE id = " + sql(item["id"]) + " AND content_type = 'sentence';"
+        )
+    OUT_REFRESH.write_text("\n".join(refresh)+"\n",encoding="utf-8")
     print("Generated exactly 3,000 Japanese + 3,000 English sentence cards in",OUT)
+    print("Generated annotation refresh migration for existing sentence cards in",OUT_REFRESH)
 if __name__=="__main__": main()

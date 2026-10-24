@@ -3,9 +3,19 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 const migration = await readFile(new URL('../migrations/0081_language_sentence_cards.sql', import.meta.url), 'utf8')
+const refreshMigration = await readFile(new URL('../migrations/0082_refresh_language_sentence_annotations.sql', import.meta.url), 'utf8')
+const refreshStatements = refreshMigration.split('\n').filter(line => /^UPDATE language_cards SET highlight_json = /.test(line))
 const rows = migration.split('\n').filter(line => /^\s*\('(ja|en)-sentence-/.test(line))
 const ja = rows.filter(line => /^\s*\('ja-sentence-/.test(line))
 const en = rows.filter(line => /^\s*\('en-sentence-/.test(line))
+
+test('annotation refresh migration repairs existing production rows for all 6,000 cards', () => {
+  assert.equal(refreshStatements.length, 6000)
+  assert.match(refreshMigration, /highlight_json = /)
+  assert.match(refreshMigration, /vocabulary_expansion_json = /)
+  assert.match(refreshMigration, /grammar_expansion_json = /)
+  assert.match(refreshMigration, /content_type = 'sentence'/)
+})
 
 test('sentence curriculum contains exactly 3,000 Japanese and 3,000 English sentences', () => {
   assert.equal(rows.length, 6000)
@@ -77,14 +87,15 @@ test('every sentence card has usable translations, grounded highlights, and voca
     const grammar = JSON.parse(grammarJson)
     assert.ok(Array.isArray(highlights), id + ': highlights must be an array')
     assert.ok(highlights.some(hit => hit.type === 'vocabulary'), id + ': must have a vocabulary highlight')
+    assert.ok(highlights.some(hit => hit.type === 'grammar'), id + ': must have a grammar/structure highlight')
     assert.ok(vocabulary.length > 0, id + ': vocabulary expansion must not be empty')
     assert.ok(grammar.length > 0, id + ': grammar study expansion must not be empty')
-    if (highlights.some(hit => hit.type === 'grammar')) grammarHighlighted++
+    grammarHighlighted++
     for (const hit of highlights) {
       assert.ok(Number.isInteger(hit.start) && Number.isInteger(hit.end), id + ': highlight offsets must be integers')
       assert.ok(hit.start >= 0 && hit.end > hit.start && hit.end <= sentence.length, id + ': highlight offsets must be in range')
       assert.equal(sentence.slice(hit.start, hit.end), hit.term, id + ': highlight must match the exact sentence substring')
     }
   }
-  assert.ok(grammarHighlighted > 0, 'at least some cards must contain directly highlighted grammar patterns')
+  assert.equal(grammarHighlighted, rows.length, 'every card must contain a directly highlighted grammar/structure point')
 })

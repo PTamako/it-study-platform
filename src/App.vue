@@ -713,7 +713,7 @@ const previewLanguageFixtures: LanguageCard[] = [
     example_meaning_zh: '确认内容后，我会再联系您。',
     source_type: 'preview-demo', content_type: 'sentence',
     highlight_json: JSON.stringify([
-      { start: 0, end: 2, type: 'vocabulary', term: '確認', meaning: '确认、核实', explanation: '「確認する」是职场常见的核实、确认。' },
+      { start: 0, end: 2, type: 'vocabulary', term: '確認', meaning: '确认后', explanation: '「確認する」是职场常见的核实、确认。' },
       { start: 10, end: 16, type: 'vocabulary', term: 'ご連絡します', meaning: '联系您', explanation: '「連絡する」加「ご」构成礼貌表达。' },
       { start: 2, end: 6, type: 'grammar', term: '〜てから', meaning: '做完……之后', explanation: '表示先完成前项动作，再进行后项动作。' },
     ]),
@@ -734,7 +734,7 @@ const previewLanguageFixtures: LanguageCard[] = [
     example_meaning_zh: '不好意思，你可以再说一遍吗？',
     source_type: 'preview-demo', content_type: 'sentence',
     highlight_json: JSON.stringify([
-      { start: 0, end: 13, type: 'grammar', term: 'Could you say', meaning: '可以请你再说一遍吗', explanation: 'Could you + 动词原形构成自然、礼貌的请求句型。' },
+      { start: 0, end: 13, type: 'grammar', term: 'Could you say', meaning: '你可以……吗', explanation: 'Could you + 动词原形构成自然、礼貌的请求句型。' },
       { start: 19, end: 32, type: 'vocabulary', term: 'one more time', meaning: '再一次', explanation: '自然表达“再来一次、再说一遍”。' },
     ]),
     vocabulary_expansion_json: JSON.stringify([
@@ -823,14 +823,113 @@ function parseLanguageExpansion(value?: string): LanguageExpansion[] {
     return Array.isArray(parsed) ? parsed.filter((item): item is LanguageExpansion => Boolean(item && typeof item.term === 'string')) : []
   } catch { return [] }
 }
-function sentenceParts(card: LanguageCard | null): Array<{ text: string; type: string; detail: string }> {
+const fallbackHighlightNotes: Record<string, { meaning: string; explanation: string }> = {
+  'もう一度': { meaning: '再一次', explanation: '用于请求对方重复说明、确认或操作。' },
+  '確認': { meaning: '确认、核实', explanation: '职场常用词，常见搭配是「内容を確認する」。' },
+  '連絡': { meaning: '联系', explanation: '常见于工作沟通，如「ご連絡します」。' },
+  '相談': { meaning: '商量、咨询', explanation: '表示向他人征求意见或讨论问题。' },
+  '資料': { meaning: '资料、文件', explanation: '职场中常指文件、会议材料或参考资料。' },
+  '会議': { meaning: '会议', explanation: '常见搭配「会議に参加する」。' },
+  '予定': { meaning: '安排、计划', explanation: '用于表达日程和计划。' },
+  '仕事': { meaning: '工作', explanation: '可指工作内容或职业。' },
+  '会社': { meaning: '公司', explanation: '常见于职场与商务语境。' },
+  'ください': { meaning: '请……', explanation: '接在动词て形后，用于礼貌请求。' },
+  'ありがとうございます': { meaning: '非常感谢', explanation: '礼貌的感谢表达。' },
+  'すみません': { meaning: '不好意思、对不起', explanation: '可用于道歉、搭话或轻度致谢。' },
+  '大丈夫': { meaning: '没关系、没问题', explanation: '根据语境表达许可或状态良好。' },
+  'Could you': { meaning: '可以请你……吗', explanation: '英语中自然、礼貌的请求开头。' },
+  'Would you': { meaning: '能否请你……', explanation: '常用于礼貌地请求对方做某事。' },
+  'one more time': { meaning: '再一次', explanation: '常用于请求对方重复内容或动作。' },
+  'get back to you': { meaning: '之后回复你', explanation: '自然的职场口语，表示稍后联系或答复。' },
+  'check': { meaning: '确认、核实', explanation: '工作场景中常用于核对信息或细节。' },
+  'confirm': { meaning: '确认', explanation: '常用于确认安排、内容或结果。' },
+  'schedule': { meaning: '日程、安排', explanation: '可作名词或动词，常用于工作安排。' },
+}
+const fallbackGrammarPatterns: Array<{ language: 'ja' | 'en'; pattern: RegExp; label: string; meaning: string; explanation: string }> = [
+  { language: 'ja', pattern: /ていただけますか|でいただけますか/, label: '〜ていただけますか', meaning: '可以请您……吗', explanation: '使用「て形＋いただけますか」委婉地请求对方做某事。' },
+  { language: 'ja', pattern: /てください/, label: '〜てください', meaning: '请……', explanation: '动词て形＋ください，用于礼貌请求。' },
+  { language: 'ja', pattern: /てから/, label: '〜てから', meaning: '……之后', explanation: '表示先完成前项动作，再进行后项动作。' },
+  { language: 'ja', pattern: /なければなりません|なければならない/, label: '〜なければなりません', meaning: '必须……', explanation: '表达义务或必要性。' },
+  { language: 'ja', pattern: /てもいいですか|てもいいです/, label: '〜てもいいですか', meaning: '可以……吗', explanation: '用于征求许可或表达允许。' },
+  { language: 'ja', pattern: /と思います/, label: '〜と思います', meaning: '我认为……', explanation: '用于表达个人意见或判断。' },
+  { language: 'ja', pattern: /ので/, label: '〜ので', meaning: '因为……', explanation: '较柔和地说明原因。' },
+  { language: 'ja', pattern: /ています/, label: '〜ています', meaning: '正在……／持续……', explanation: '表示动作进行或状态持续。' },
+  { language: 'ja', pattern: /たいです/, label: '〜たいです', meaning: '想要……', explanation: '用于表达愿望。' },
+  { language: 'ja', pattern: /までに/, label: '〜までに', meaning: '在……之前', explanation: '表示截止时间。' },
+  { language: 'en', pattern: /\bcould you\b/i, label: 'Could you + 动词原形', meaning: '礼貌请求句型', explanation: 'could you 后接动词原形，语气自然且委婉。' },
+  { language: 'en', pattern: /\bwould you\b/i, label: 'Would you + 动词原形', meaning: '礼貌请求句型', explanation: 'would you 后接动词原形，常用于礼貌请求。' },
+  { language: 'en', pattern: /\bwould like to\b/i, label: 'would like to + 动词', meaning: '较礼貌地表达意愿', explanation: '用于表达希望或意愿，比 want 更委婉。' },
+  { language: 'en', pattern: /\bhave to\b/i, label: 'have to + 动词', meaning: '必须……', explanation: '表示外部要求或必要性。' },
+  { language: 'en', pattern: /\bneed to\b/i, label: 'need to + 动词', meaning: '需要……', explanation: '表示需要做某事。' },
+  { language: 'en', pattern: /\bwill\b/i, label: 'will + 动词原形', meaning: '将会……', explanation: '常用于未来安排、承诺或预测。' },
+  { language: 'en', pattern: /\bshould\b/i, label: 'should + 动词原形', meaning: '应该……', explanation: '表达建议或合理预期。' },
+  { language: 'en', pattern: /\bbecause\b/i, label: 'because 原因从句', meaning: '因为……', explanation: '引导原因说明。' },
+  { language: 'en', pattern: /\bif\b/i, label: 'if 条件从句', meaning: '如果……', explanation: '引出条件，主句说明条件成立时的结果。' },
+  { language: 'en', pattern: /\bwhen\b/i, label: 'when 时间从句', meaning: '当……时', explanation: '引导时间从句。' },
+]
+function languageHighlights(card: LanguageCard | null): LanguageHighlight[] {
   if (!card) return []
-  let highlights: LanguageHighlight[] = []
+  let stored: LanguageHighlight[] = []
   try {
     const parsed = JSON.parse(card.highlight_json || '[]')
-    if (Array.isArray(parsed)) highlights = parsed.filter(item => Number.isInteger(item.start) && Number.isInteger(item.end) && item.start >= 0 && item.end > item.start && item.end <= card.term.length)
-  } catch { highlights = [] }
-  highlights.sort((a, b) => a.start - b.start || (a.type === 'grammar' ? -1 : 1))
+    if (Array.isArray(parsed)) stored = parsed.filter((item): item is LanguageHighlight =>
+      Number.isInteger(item?.start) && Number.isInteger(item?.end) &&
+      item.start >= 0 && item.end > item.start && item.end <= card.term.length &&
+      ['vocabulary', 'grammar'].includes(item.type) && typeof item.term === 'string')
+  } catch { stored = [] }
+  stored.sort((a, b) => a.start - b.start || (a.type === b.type ? b.end - a.end : a.type === 'grammar' ? -1 : 1))
+  const highlights: LanguageHighlight[] = []
+  let lastEnd = 0
+  for (const item of stored) {
+    if (item.start < lastEnd) continue
+    highlights.push(item)
+    lastEnd = item.end
+  }
+  const grammarPresent = highlights.some(item => item.type === 'grammar')
+  if (!grammarPresent) {
+    for (const rule of fallbackGrammarPatterns.filter(item => item.language === card.language)) {
+      const match = rule.pattern.exec(card.term)
+      if (!match) continue
+      const start = match.index
+      const end = start + match[0].length
+      if (highlights.some(item => start < item.end && end > item.start)) continue
+      highlights.push({ start, end, type: 'grammar', term: match[0], meaning: rule.meaning, explanation: rule.explanation })
+      break
+    }
+  }
+  if (!highlights.some(item => item.type === 'vocabulary')) {
+    const candidates = Object.keys(fallbackHighlightNotes).sort((a, b) => b.length - a.length)
+    for (const term of candidates) {
+      const index = card.term.toLocaleLowerCase().indexOf(term.toLocaleLowerCase())
+      if (index < 0) continue
+      const note = fallbackHighlightNotes[term]
+      const end = index + term.length
+      if (highlights.some(item => index < item.end && end > item.start)) continue
+      highlights.push({ start: index, end, type: 'vocabulary', term: card.term.slice(index, end), meaning: note.meaning, explanation: note.explanation })
+      break
+    }
+  }
+  return highlights.sort((a, b) => a.start - b.start || (a.type === 'grammar' ? -1 : 1))
+}
+function languageExpansions(card: LanguageCard | null, type: 'vocabulary' | 'grammar'): LanguageExpansion[] {
+  if (!card) return []
+  const stored = parseLanguageExpansion(type === 'vocabulary' ? card.vocabulary_expansion_json : card.grammar_expansion_json)
+  const highlights = languageHighlights(card).filter(item => item.type === type)
+  const merged = [...stored]
+  for (const item of highlights) {
+    if (merged.some(existing => existing.term.trim().toLocaleLowerCase() === item.term.trim().toLocaleLowerCase())) continue
+    merged.push({ term: item.term, meaning: item.meaning || '结合整句理解', explanation: item.explanation || '请结合上下文理解该表达的用法。' })
+  }
+  if (merged.length) return merged
+  if (type === 'grammar') {
+    const rule = fallbackGrammarPatterns.find(item => item.language === card.language && item.pattern.test(card.term))
+    if (rule) return [{ term: rule.label, meaning: rule.meaning, explanation: rule.explanation }]
+  }
+  return []
+}
+function sentenceParts(card: LanguageCard | null): Array<{ text: string; type: string; detail: string }> {
+  if (!card) return []
+  const highlights = languageHighlights(card)
   const parts: Array<{ text: string; type: string; detail: string }> = []
   let cursor = 0
   for (const item of highlights) {
@@ -1844,15 +1943,15 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <div v-if="languagePracticeRevealed" class="language-practice-answer">
                   <strong>{{ languagePracticeCard.meaning_zh }}</strong>
                   <p>{{ languagePracticeCard.explanation }}</p>
-                  <section v-if="parseLanguageExpansion(languagePracticeCard.vocabulary_expansion_json).length" class="language-expansion">
+                  <section v-if="languageExpansions(languagePracticeCard, 'vocabulary').length" class="language-expansion">
                     <strong>🟨 高亮词汇逐项解释</strong>
-                    <div v-for="(item, index) in parseLanguageExpansion(languagePracticeCard.vocabulary_expansion_json)" :key="'practice-vocab-' + index">
+                    <div v-for="(item, index) in languageExpansions(languagePracticeCard, 'vocabulary')" :key="'practice-vocab-' + index">
                       <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                     </div>
                   </section>
-                  <section v-if="parseLanguageExpansion(languagePracticeCard.grammar_expansion_json).length" class="language-expansion grammar">
+                  <section v-if="languageExpansions(languagePracticeCard, 'grammar').length" class="language-expansion grammar">
                     <strong>{{ sentenceParts(languagePracticeCard).some(part => part.type === 'grammar') ? '🟦 高亮语法逐项解释' : '语法观察提示（未检测到明确结构）' }}</strong>
-                    <div v-for="(item, index) in parseLanguageExpansion(languagePracticeCard.grammar_expansion_json)" :key="'practice-grammar-' + index">
+                    <div v-for="(item, index) in languageExpansions(languagePracticeCard, 'grammar')" :key="'practice-grammar-' + index">
                       <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                     </div>
                   </section>
@@ -1899,15 +1998,15 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <p v-if="card.reading" class="language-reading">{{ card.reading }}</p>
                 <p class="language-meaning language-sentence-translation">{{ card.meaning_zh }}</p>
                 <p class="language-explanation">{{ card.explanation }}</p>
-                <section v-if="parseLanguageExpansion(card.vocabulary_expansion_json).length" class="language-expansion">
+                <section v-if="languageExpansions(card, 'vocabulary').length" class="language-expansion">
                   <strong>🟨 高亮词汇逐项解释</strong>
-                  <div v-for="(item, index) in parseLanguageExpansion(card.vocabulary_expansion_json)" :key="'vocab-' + index">
+                  <div v-for="(item, index) in languageExpansions(card, 'vocabulary')" :key="'vocab-' + index">
                     <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                   </div>
                 </section>
-                <section v-if="parseLanguageExpansion(card.grammar_expansion_json).length" class="language-expansion grammar">
+                <section v-if="languageExpansions(card, 'grammar').length" class="language-expansion grammar">
                   <strong>{{ sentenceParts(card).some(part => part.type === 'grammar') ? '🟦 高亮语法逐项解释' : '语法观察提示（未检测到明确结构）' }}</strong>
-                  <div v-for="(item, index) in parseLanguageExpansion(card.grammar_expansion_json)" :key="'grammar-' + index">
+                  <div v-for="(item, index) in languageExpansions(card, 'grammar')" :key="'grammar-' + index">
                     <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                   </div>
                 </section>
