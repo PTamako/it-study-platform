@@ -876,8 +876,7 @@ function languageHighlights(card: LanguageCard | null): LanguageHighlight[] {
     if (Array.isArray(parsed)) stored = parsed.filter((item): item is LanguageHighlight =>
       Number.isInteger(item?.start) && Number.isInteger(item?.end) &&
       item.start >= 0 && item.end > item.start && item.end <= card.term.length &&
-      ['vocabulary', 'grammar'].includes(item.type) &&
-      card.term.slice(item.start, item.end) === item.term)
+      ['vocabulary', 'grammar'].includes(item.type) && typeof item.term === 'string')
   } catch { stored = [] }
   const highlights = [...stored]
   const grammarPresent = highlights.some(item => item.type === 'grammar')
