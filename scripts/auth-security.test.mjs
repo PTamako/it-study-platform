@@ -21,7 +21,7 @@ test('login checks same-origin and throttles failures in D1', () => {
 })
 
 test('personal data endpoints share the authentication gate', () => {
-  for (const route of ['/api/dashboard', '/api/exam-history', '/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/wrong-questions']) {
+  for (const route of ['/api/dashboard', '/api/exam-history', '/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/wrong-questions', '/api/translate-explanation']) {
     assert.ok(worker.includes(route), `missing protected route: ${route}`)
   }
   assert.match(worker, /requireAuth\(request, env\)/)
