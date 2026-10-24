@@ -123,7 +123,7 @@ test('contextual bilingual annotation rules avoid isolated Japanese particles an
   const generator = await readFile(new URL('./generate_language_sentence_seed.py', import.meta.url), 'utf8')
   assert.match(generator, /誰の\[\^、。！？!?/)
   assert.match(generator, /ですか：礼貌疑问句/)
-  assert.match(generator, /who\|whose\|what\|which/)
+  assert.match(generator, /疑问词问句/)
   assert.match(generator, /be 动词一般疑问句/)
   assert.match(generator, /rule_id/)
   assert.match(generator, /confidence/)
