@@ -108,19 +108,39 @@ async function loadCloudDashboard() {
     cloudDashboardError.value = error instanceof Error ? error.message : '云端学习统计暂不可用'
   }
 }
+const dailyTaskSaveQueues = new Map<string, Promise<void>>()
+const dailyTaskSaveRequestIds = new Map<string, number>()
 async function saveDailyTask(task: StudyTask) {
-  try {
-    const response = await fetch('/api/daily-tasks', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ task_id: task.id, study_date: todayKey, completed: task.done }),
-    })
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({})) as { error?: string }
-      cloudDashboardError.value = data.error || '每日任务云端保存失败'
-    } else {
-      void loadCloudDashboard()
+  const taskId = task.id
+  const completed = task.done
+  const requestId = (dailyTaskSaveRequestIds.get(taskId) || 0) + 1
+  dailyTaskSaveRequestIds.set(taskId, requestId)
+
+  // Serialize writes for each task so a slow earlier toggle cannot overwrite the latest choice.
+  const previous = dailyTaskSaveQueues.get(taskId) || Promise.resolve()
+  const pending = previous.catch(() => undefined).then(async () => {
+    try {
+      const response = await fetch('/api/daily-tasks', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ task_id: taskId, study_date: todayKey, completed }),
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({})) as { error?: string }
+        throw new Error(data.error || '每日任务云端保存失败')
+      }
+      if (dailyTaskSaveRequestIds.get(taskId) === requestId) {
+        cloudDashboardError.value = ''
+        void loadCloudDashboard()
+      }
+    } catch (error) {
+      if (dailyTaskSaveRequestIds.get(taskId) === requestId) {
+        cloudDashboardError.value = error instanceof Error ? error.message : '网络异常：每日任务暂未同步到云端。'
+      }
     }
-  } catch { cloudDashboardError.value = '网络异常：每日任务暂未同步到云端。' }
+  })
+  dailyTaskSaveQueues.set(taskId, pending)
+  await pending
+  if (dailyTaskSaveQueues.get(taskId) === pending) dailyTaskSaveQueues.delete(taskId)
 }
 const examRecords = ref<ExamRecord[]>(readStored('zhixue:exam-records', []))
 const examHistorySyncing = ref(false)
@@ -235,6 +255,9 @@ async function removeExamRecords() {
 type PracticeOption = { id: string; text: string }
 type QuestionReviewProgress = { question_id: string; review_count: number; correct_streak: number; last_result: 'again' | 'remembered'; next_review_at: string; mastered: number }
 const questionProgressById = ref<Record<string, QuestionReviewProgress>>({})
+let questionProgressRequestId = 0
+let practiceLoadRequestId = 0
+let practiceAnswerRequestId = 0
 type PracticeQuestion = {
   id: string; track_id: string; topic: string; difficulty: string; prompt: string;
   options: PracticeOption[]; answer: string; explanation: string; source_type: string; source_reference?: string; language: string; exam_section?: 'A' | 'B' | null; exam_section_method?: 'explicit' | 'case_pattern' | 'default_a' | 'unclassified' | null
@@ -420,27 +443,36 @@ function speakScenario(scenario: PracticalScenario | null) {
   speakJapaneseQuestion(`${scenario.title}。状況：${scenario.situation}。課題：${scenario.task}。選択肢：${options}`, `practical:${scenario.id}`)
 }
 
+let scenarioLoadRequestId = 0
 async function loadScenarios() {
-  if (!selectedTrack.value) { scenarios.value = []; return }
+  const requestId = ++scenarioLoadRequestId
+  const trackId = selectedTrack.value?.id
+  if (!trackId) { scenarios.value = []; scenariosLoading.value = false; return }
   scenariosLoading.value = true
   scenariosError.value = ''
   scenarioResult.value = null
   selectedScenarioOption.value = ''
   try {
-    const response = await fetch('/api/scenarios?track=' + encodeURIComponent(selectedTrack.value.id))
+    const response = await fetch('/api/scenarios?track=' + encodeURIComponent(trackId))
     const data = await response.json() as { items?: PracticalScenario[]; error?: string }
+    if (requestId !== scenarioLoadRequestId) return
     if (!response.ok) throw new Error(data.error || '实战任务加载失败')
     scenarios.value = data.items || []
     selectedScenarioId.value = scenarios.value[0]?.id || ''
   } catch (error) {
+    if (requestId !== scenarioLoadRequestId) return
     scenariosError.value = error instanceof Error ? error.message : '实战任务加载失败，请稍后重试。'
     scenarios.value = []
   } finally {
-    scenariosLoading.value = false
+    if (requestId === scenarioLoadRequestId) scenariosLoading.value = false
   }
 }
+let scenarioSubmissionId = 0
 function nextScenario() {
   stopSpeech()
+  // Invalidate any in-flight submission so its response cannot overwrite the next scenario.
+  scenarioSubmissionId += 1
+  scenarioSubmitting.value = false
   if (!scenarios.value.length) return
   const index = scenarios.value.findIndex(item => item.id === currentScenario.value?.id)
   const next = scenarios.value[(index + 1) % scenarios.value.length]
@@ -451,7 +483,10 @@ function nextScenario() {
 }
 
 async function submitScenario() {
-  if (!currentScenario.value || !selectedScenarioOption.value || scenarioSubmitting.value || scenarioResult.value) return
+  const submittedScenario = currentScenario.value
+  const submittedOption = selectedScenarioOption.value
+  if (!submittedScenario || !submittedOption || scenarioSubmitting.value || scenarioResult.value) return
+  const requestId = ++scenarioSubmissionId
   scenarioSubmitting.value = true
   scenariosError.value = ''
   try {
@@ -459,13 +494,16 @@ async function submitScenario() {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        scenario_id: currentScenario.value.id,
-        selected_option: selectedScenarioOption.value,
+        scenario_id: submittedScenario.id,
+        selected_option: submittedOption,
         duration_seconds: 0,
       }),
     })
     const data = await response.json() as { score?: number; best_option?: string; correct?: boolean; feedback?: string; error?: string }
     if (!response.ok) throw new Error(data.error || '实战结果保存失败')
+    // A newer scenario may be selected while the server is scoring this attempt.
+    // Keep the saved attempt, but do not paint its result onto a different scenario.
+    if (requestId !== scenarioSubmissionId || currentScenario.value?.id !== submittedScenario.id) return
     const feedback = String(data.feedback || '')
     scenarioResult.value = {
       score: Number(data.score || 0),
@@ -473,12 +511,13 @@ async function submitScenario() {
       correct: Boolean(data.correct),
       feedback,
     }
-    void translateScenarioExplanation(currentScenario.value.id, feedback)
+    void translateScenarioExplanation(submittedScenario.id, feedback)
     void loadCloudDashboard()
   } catch (error) {
+    if (requestId !== scenarioSubmissionId) return
     scenariosError.value = error instanceof Error ? error.message : '实战结果保存失败，请稍后重试。'
   } finally {
-    scenarioSubmitting.value = false
+    if (requestId === scenarioSubmissionId) scenarioSubmitting.value = false
   }
 }
 watch([selectedTrackId, examTracks, activeModule], () => {
@@ -501,6 +540,9 @@ async function loadExamTracks() {
 }
 function selectExam(track: ExamTrack) {
   stopSpeech()
+  practiceAnswerRequestId += 1
+  practiceLoadRequestId += 1
+  questionProgressRequestId += 1
   questionBatchOffset.value = 0
   questionBankTotal.value = 0
   questionBankHasMore.value = false
@@ -516,6 +558,9 @@ function selectExam(track: ExamTrack) {
 
 async function selectQuestionSource(source: 'official' | 'generated') {
   stopSpeech()
+  practiceAnswerRequestId += 1
+  practiceLoadRequestId += 1
+  questionProgressRequestId += 1
   questionSourceFilter.value = source
   questionBatchOffset.value = 0
   activeReviewMode.value = 'all'
@@ -530,17 +575,22 @@ async function selectQuestionSource(source: 'official' | 'generated') {
   quizError.value = ''
   await startPractice()
 }
-async function loadQuestionProgress() {
-  if (!selectedTrack.value) return
+async function loadQuestionProgress(trackId = selectedTrack.value?.id || '') {
+  if (!trackId) return
+  const requestId = ++questionProgressRequestId
   try {
-    const response = await fetch('/api/question-progress?track=' + encodeURIComponent(selectedTrack.value.id))
-    if (!response.ok) return
+    const response = await fetch('/api/question-progress?track=' + encodeURIComponent(trackId))
+    if (!response.ok || requestId !== questionProgressRequestId) return
     const data = await response.json() as { items?: QuestionReviewProgress[] }
+    if (requestId !== questionProgressRequestId) return
     questionProgressById.value = Object.fromEntries((data.items || []).map(item => [item.question_id, item]))
   } catch { /* Keep the last known progress visible if the network is temporarily unavailable. */ }
 }
 function selectReviewMode(mode: 'all' | 'unlearned' | 'wrong' | 'due' | 'mastered') {
   stopSpeech()
+  practiceAnswerRequestId += 1
+  practiceLoadRequestId += 1
+  questionProgressRequestId += 1
   activeReviewMode.value = mode
   questionBatchOffset.value = 0
   questionBankTotal.value = 0
@@ -555,6 +605,8 @@ function selectReviewMode(mode: 'all' | 'unlearned' | 'wrong' | 'due' | 'mastere
 }
 async function startPractice() {
   stopSpeech()
+  const requestId = ++practiceLoadRequestId
+  const trackId = selectedTrack.value?.id || ''
   if (!selectedTrack.value) { quizError.value = '尚未加载考试列表，请刷新页面后重试。'; return }
   if (!selectedTrack.value.question_count) {
     quizError.value = '该考试尚未接入题库。目前正式接入的是 SG；不会用其他考试题目代替。'
@@ -579,6 +631,7 @@ async function startPractice() {
         data.has_more = false
       }
     }
+    if (requestId !== practiceLoadRequestId) return
     if (!response.ok) throw new Error(data.error || '题库加载失败')
     if (!data.items?.length) {
       const messages = {
@@ -601,11 +654,11 @@ async function startPractice() {
     quizCorrect.value = 0
     quizFinished.value = false
     quizStartedAt.value = Date.now()
-    await loadQuestionProgress()
+    await loadQuestionProgress(trackId)
   } catch (error) {
-    quizError.value = error instanceof Error ? error.message : '题库加载失败，请稍后重试。'
+    if (requestId === practiceLoadRequestId) quizError.value = error instanceof Error ? error.message : '题库加载失败，请稍后重试。'
   } finally {
-    quizLoading.value = false
+    if (requestId === practiceLoadRequestId) quizLoading.value = false
   }
 }
 async function nextQuestionBatch() {
@@ -617,25 +670,30 @@ async function nextQuestionBatch() {
 async function submitPracticeAnswer() {
   if (!currentQuestion.value || !selectedOption.value || quizSubmitted.value) return
   const question = currentQuestion.value
+  const answer = selectedOption.value
+  const requestId = ++practiceAnswerRequestId
   quizSubmitted.value = true
-  if (selectedOption.value === question.answer) quizCorrect.value += 1
+  if (answer === question.answer) quizCorrect.value += 1
   void translateQuestionExplanation(question)
   try {
     const response = await fetch('/api/attempts', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        question_id: currentQuestion.value.id,
-        answer: selectedOption.value,
+        question_id: question.id,
+        answer,
         duration_seconds: quizStartedAt.value ? Math.floor((Date.now() - quizStartedAt.value) / 1000) : 0,
       }),
     })
     const data = await response.json() as { error?: string; progress?: QuestionReviewProgress }
+    if (requestId !== practiceAnswerRequestId) return
     if (!response.ok) throw new Error(data.error || '本次答题已显示，但保存到学习记录失败。')
-    if (data.progress) questionProgressById.value[currentQuestion.value.id] = data.progress
+    if (data.progress) questionProgressById.value[question.id] = data.progress
     void loadCloudDashboard()
   } catch (error) {
-    quizError.value = error instanceof Error ? error.message : '网络异常：本次答题结果尚未保存到云端。'
+    if (requestId === practiceAnswerRequestId) {
+      quizError.value = error instanceof Error ? error.message : '网络异常：本次答题结果尚未保存到云端。'
+    }
   }
 }
 function getExplanationLanguage(question: PracticeQuestion): 'ja-JP' | 'en-US' | 'zh-CN' {
@@ -698,6 +756,7 @@ async function setQuestionMastery(questionId: string, mastered: boolean) {
 }
 function nextPracticeQuestion() {
   stopSpeech()
+  practiceAnswerRequestId += 1
   if (!isLastQuestion.value) {
     quizIndex.value += 1
     selectedOption.value = ''
