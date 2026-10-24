@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Generate 6,000 attributed sentence cards from Tatoeba's public exports."""
 import csv, hashlib, io, json, re, tarfile, urllib.request
+from functools import lru_cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -127,6 +128,7 @@ EN_GRAMMAR = [
  (r"\b(?:a|an|the)\s+[A-Za-z]+\b","冠词＋名词短语","冠词提示名词的泛指或特指；a/an 通常引入单数可数名词，the 指向特定对象"),
 ]
 
+@lru_cache(maxsize=100000)
 def make_hits(sentence, lang):
     vocab = JP_VOCAB if lang == "ja" else EN_VOCAB
     grammar = JP_GRAMMAR if lang == "ja" else EN_GRAMMAR
