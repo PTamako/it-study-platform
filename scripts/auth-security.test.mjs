@@ -16,8 +16,11 @@ test('single-user auth uses hardened session cookies and expiry', () => {
 test('login checks same-origin and throttles failures in D1', () => {
   assert.match(auth, /sameOrigin\(request, url\)/)
   assert.match(auth, /LOGIN_MAX_FAILURES = 5/)
-  assert.match(auth, /auth_login_rate_limits/)\n  assert.match(auth, /auth_write_rate_limits/)\n  assert.match(auth, /at most 60 state-changing personal API requests per client per minute/
-  assert.match(migration, /CREATE TABLE IF NOT EXISTS auth_login_rate_limits/)\n  assert.match(migration, /CREATE TABLE IF NOT EXISTS auth_write_rate_limits/)
+  assert.match(auth, /auth_login_rate_limits/)
+  assert.match(auth, /auth_write_rate_limits/)
+  assert.match(auth, /at most 60 state-changing personal API requests per client per minute/)
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS auth_login_rate_limits/)
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS auth_write_rate_limits/)
 })
 
 test('personal data endpoints share the authentication gate', () => {
