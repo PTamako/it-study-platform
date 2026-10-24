@@ -125,12 +125,16 @@ test('every dictionary result and saved word exposes both English and Japanese p
   assert.match(dictionaryResults, /缺少假名时会提示/)
 })
 
-test('speech UI provides a separate short-tone diagnostic for silent iOS audio output', () => {
+test('speech UI schedules its diagnostic tone only after iOS AudioContext is running', () => {
   assert.match(app, /function testAudioOutput\(\)/)
   assert.match(app, /new AudioContextConstructor\(\)/)
-  assert.match(app, /oscillator\.frequency\.setValueAtTime\(660, now\)/)
+  assert.match(app, /const resumePromise = context\.resume\(\)/)
+  assert.match(app, /if \(context\.state !== 'running'\)/)
+  assert.match(app, /Schedule the tone only AFTER the context is running/)
+  assert.match(app, /oscillator\.frequency\.setValueAtTime\(880, now\)/)
+  assert.match(app, /oscillator\.start\(now \+ 0\.03\)/)
   assert.match(app, /@click="testAudioOutput">测试设备声音/)
-  assert.match(app, /此测试不代表语音合成已正常/)
+  assert.match(app, /此结果仍不能证明语音合成正常/)
 })
 
 test('preview demo mode supplies isolated Japanese and English sample sentences without loading cloud language data', () => {
