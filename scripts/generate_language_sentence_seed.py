@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "migrations/0081_language_sentence_cards.sql"
 OUT_REFRESH = ROOT / "migrations/0082_refresh_language_sentence_annotations.sql"
-OUT_REFRESH_LATEST = ROOT / "migrations/0083_refresh_japanese_meaningful_annotations.sql"
+OUT_REFRESH_LATEST = ROOT / "migrations/0084_refresh_contextual_bilingual_annotations.sql"
 CACHE = Path("/tmp/language-sentence-sources")
 CACHE.mkdir(exist_ok=True)
 SENTENCES_URL = "https://downloads.tatoeba.org/exports/sentences.tar.bz2"
@@ -45,6 +45,7 @@ def rows_in_tar(path, suffix):
 JP_WORK = re.compile(r"会社|仕事|職場|会議|打ち合わせ|報告|資料|確認|連絡|お客様|メール|電話|納期|依頼|申請|提出|対応|営業|面接|プロジェクト|システム|契約|請求|休暇|残業|出勤|退勤|上司|同僚|担当|共有|相談|予定|予約|変更|説明|承認|見積|部署|勤務")
 EN_WORK = re.compile(r"\b(company|work|office|meeting|report|document|confirm|contact|client|customer|email|phone|deadline|request|application|submit|support|sales|interview|project|system|contract|invoice|leave|overtime|manager|colleague|team|share|discuss|schedule|appointment|change|explain|approve|estimate|department|presentation|coworker)\b", re.I)
 JP_VOCAB = [
+ ("これ","这个／这","指向当前语境中可识别的事物；「これ誰の傘ですか」中的「これ」指眼前的伞"), ("それ","那个／那","指向听话人附近或前文提到的事物"), ("あれ","那个（较远处）","指说话人与听话人都相对较远的事物"), ("誰","谁","疑问代词，用于询问人物；「誰の＋名词」询问所属者"),
  ("旅行","旅行、旅游","表示外出旅行；在「旅行が楽しみです」中，是令人期待的事情"),
  ("よろしくお願いします","麻烦你了／请多关照","用于请求、协作或初次见面后的礼貌表达"),
  ("ありがとうございます","非常感谢","礼貌感谢"), ("すみません","不好意思／对不起","可用于道歉、搭话或轻度致谢"),
@@ -71,6 +72,7 @@ JP_VOCAB = [
  ("何","什么","疑问代词"), ("どこ","哪里","询问地点"), ("いつ","什么时候","询问时间"), ("誰","谁","询问人物"), ("なぜ","为什么","询问原因"), ("どう","怎样／如何","询问方式或状态"), ("いつも","总是／平时","频率副词"), ("よく","经常／很好","依语境表示频率或程度"), ("とても","非常","程度副词"), ("少し","一点儿","表示少量或轻微程度"), ("たくさん","很多","表示数量多"), ("一緒","一起","常见表达「一緒に」"), ("大切","重要／珍贵","な形容词"), ("予約","预约","可用于餐厅、医院、会议等场景"), ("電話","电话","可指电话设备或通话"), ("週","周","时间单位"), ("今日","今天","指当天"), ("明日","明天","指第二天"), ("昨日","昨天","指前一天")
 ]
 EN_VOCAB = [
+ ("this","这个／这","指向当前语境中可识别的人或物；作代词时可独立指代事物"), ("that","那个／那","指向语境中可识别的人或物；作代词时可独立指代事物"), ("umbrella","伞","遮雨或遮阳的工具，常见表达「an umbrella」"),
  ("could you","能否请你","礼貌请求，比 can you 更委婉"), ("would you","你愿意／能否","常用于礼貌请求"),
  ("thank you","谢谢","常见感谢表达"), ("please","请","礼貌请求标记"), ("confirm","确认","常见搭配 confirm the details"),
  ("schedule","日程／安排","名词或动词，常用于工作安排"), ("meeting","会议","常见搭配 attend a meeting"),
@@ -90,6 +92,9 @@ EN_VOCAB = [
  ("time","时间","可指时间点、时长或可用时间"), ("day","天／日子","时间单位"), ("week","周","时间单位"), ("month","月","时间单位"), ("year","年","时间单位"), ("today","今天","时间副词／名词"), ("tomorrow","明天","时间副词／名词"), ("yesterday","昨天","时间副词／名词"), ("people","人们","people 通常作复数意义"), ("person","人","单数名词"), ("family","家庭／家人","集合名词"), ("friend","朋友","表示朋友关系"), ("home","家","常作副词或名词"), ("house","房子","指建筑物"), ("school","学校","教育场所"), ("language","语言","交流系统"), ("money","钱","不可数名词"), ("problem","问题","困难或待解决事项"), ("question","问题／提问","可指疑问或提问"), ("answer","答案／回答","可作名词或动词"), ("place","地方","指地点"), ("train","火车／训练","依语境判断"), ("station","车站","交通场所"), ("store","商店","零售场所"), ("hospital","医院","医疗场所"), ("weather","天气","天气状况"), ("plan","计划","可作名词或动词"), ("idea","想法","观点或构思"), ("information","信息","不可数名词"), ("reason","原因","解释为何发生"), ("experience","经验／经历","可指经历或经验"), ("result","结果","事件或过程的结果"), ("change","改变／变化","可作名词或动词"), ("new","新的","形容词"), ("old","旧的／年长的","依语境判断"), ("high","高的","描述高度或程度"), ("low","低的","描述高度或程度"), ("early","早的／早地","可作形容词或副词"), ("late","晚的／迟的","可作形容词或副词")
 ]
 JP_GRAMMAR = [
+ (r"誰の[^、。！？!?\s]+?(?=です|だ|だった|[。！？!?…]|$)|何の[^、。！？!?\s]+?(?=です|だ|だった|[。！？!?…]|$)","疑問词＋の＋名词：所属・内容","「誰の＋名詞」は持ち主を、「何の＋名詞」は種類や内容を尋ねる。「の」は疑問詞と名詞をつなぐ。"),
+ (r"ですか(?=[。！？!?…]*$)","ですか：礼貌疑问句","名词或な形容词等后接「ですか」构成礼貌疑问；「か」标记疑问，不是独立的重点词汇。"),
+ (r"でしょうか(?=[。！？!?…]*$)","でしょうか：委婉疑问","比直接的「ですか」更委婉，常用于询问或确认。"),
  (r"が楽しみです","N が楽しみです","「が」标记期待的事情；「楽しみです」表示对未来事情的期待，如「旅行が楽しみです」"),
  (r"です$","です：礼貌体判断／说明","用于礼貌地说明身份、性质或状态；需结合前面的名词或形容词理解"),
  (r"ます$","动词ます形","动词的礼貌体形式；词干及具体时态需结合前文判断"),
@@ -111,6 +116,10 @@ JP_GRAMMAR = [
  (r"(?:です|でした)(?=[。！？!?…]*$)","礼貌体判断／说明","礼貌地说明身份、性质或状态；过去形式「でした」表示过去的判断或状态"),
 ]
 EN_GRAMMAR = [
+ (r"\b(?:whose|what|which|who)\s+\w+","疑问词问句","疑问词决定询问的人、所属、事物或选择；结合后续词语判断完整问句含义。"),
+ (r"^\s*(?:is|are|am|was|were)\s+\w+(?:\s+\w+){0,3}\?","be 动词一般疑问句","将 be 动词放在主语前构成一般疑问句，询问身份、状态或所属等信息。"),
+ (r"^\s*(?:do|does|did)\s+\w+\b[^.!?]*\?","do 助动词疑问句","do/does/did 放在主语前构成一般疑问；后接动词原形，did 表示过去时。"),
+ (r"\b(?:a|an|the)\s+\w+","冠词＋名词","a/an 通常引入一个非特定的可数单数对象；the 指向语境中可识别的特定对象。"),
  (r"\bwould you\b","Would you…? 礼貌请求","用 would you + 动词原形提出礼貌请求"),
  (r"\bcould you\b","Could you…? 礼貌请求","用 could you + 动词原形提出礼貌请求"),
  (r"\bwould like to\b","would like to + 动词","较礼貌地表达意愿"), (r"\bhave to\b","have to + 动词","表示外部要求或必要性"),
@@ -130,28 +139,48 @@ EN_GRAMMAR = [
 
 @lru_cache(maxsize=100000)
 def make_hits(sentence, lang):
+    """Select context-aware spans with deterministic overlap resolution."""
     vocab = JP_VOCAB if lang == "ja" else EN_VOCAB
     grammar = JP_GRAMMAR if lang == "ja" else EN_GRAMMAR
     candidates = []
-    for term, meaning, explanation in vocab:
-        if lang == "ja" and len(term) < 2:
+    for rule_index, (pattern, meaning, explanation) in enumerate(grammar):
+        for match in re.finditer(pattern, sentence, re.I if lang == "en" else 0):
+            term = match.group()
+            # Particles receive context-specific explanations; polite endings remain grammar, never vocabulary.
+            if lang == "ja" and term in {"か", "の", "は", "が", "を", "に", "で", "と", "へ"}:
+                particle_notes = {
+                    "か": ("句末助词「か」：疑问", "放在句末标记疑问；若前面是「です」，两者合起来构成礼貌疑问「ですか」。"),
+                    "の": ("助词「の」：所属／连接", "连接所属者与物品或名词与名词；例如「誰の傘」表示“谁的伞”。"),
+                    "は": ("助词「は」：提示主题", "提示这句话正在谈论的对象，后面说明该对象的状态或相关信息。"),
+                    "が": ("助词「が」：主语／关注对象", "标记句中被描述、发生动作或成为关注点的对象；具体功能要结合谓语理解。"),
+                    "を": ("助词「を」：动作对象", "通常标记动作直接作用的对象，例如「本を読む」中的「本」。"),
+                    "に": ("助词「に」：目标／时间／对象", "可标记到达点、时间或动作对象；此处需结合相邻词语判断。"),
+                    "で": ("助词「で」：动作场所／手段", "常标记动作发生的场所或使用的手段，具体含义取决于句中动词。"),
+                    "と": ("助词「と」：共同对象／引用", "可表示“和／与”，也可引出引用内容；需结合前后文判断。"),
+                    "へ": ("助词「へ」：方向", "标记动作前往的方向或目的地。"),
+                }
+                meaning, explanation = particle_notes[term]
+            candidates.append({"start": match.start(), "end": match.end(), "type": "grammar",
+                "term": term, "meaning": meaning, "explanation": explanation,
+                "rule_id": ("ja" if lang == "ja" else "en") + ".grammar." + str(rule_index + 1),
+                "confidence": "rule"})
+    for rule_index, (term, meaning, explanation) in enumerate(vocab):
+        if lang == "ja" and (len(term) < 2 or term in {"です", "ます", "でした", "ました", "ください"}):
             continue
         for match in re.finditer(re.escape(term), sentence, re.I if lang == "en" else 0):
-            candidates.append({"start":match.start(),"end":match.end(),"type":"vocabulary","term":match.group(),"meaning":meaning,"explanation":explanation})
-    for pattern, term, explanation in grammar:
-        for match in re.finditer(pattern, sentence, re.I if lang == "en" else 0):
-            candidates.append({"start":match.start(),"end":match.end(),"type":"grammar","term":match.group(),"meaning":term,"explanation":explanation})
-    candidates.sort(key=lambda item:(item["start"],-(item["end"]-item["start"]),0 if item["type"]=="grammar" else 1))
-    hits=[]
+            candidates.append({"start": match.start(), "end": match.end(), "type": "vocabulary",
+                "term": match.group(), "meaning": meaning, "explanation": explanation,
+                "rule_id": ("ja" if lang == "ja" else "en") + ".vocab." + str(rule_index + 1),
+                "confidence": "lexicon"})
+    # Earlier spans win; at the same position, the longer and more structural span wins.
+    candidates.sort(key=lambda item: (item["start"], -(item["end"] - item["start"]),
+                                      0 if item["type"] == "grammar" else 1))
+    hits = []
     for item in candidates:
-        if any(item["start"] < old["end"] and item["end"] > old["start"] for old in hits): continue
+        if any(item["start"] < old["end"] and item["end"] > old["start"] for old in hits):
+            continue
         hits.append(item)
-    # Never fabricate a vocabulary or grammar annotation from an arbitrary substring.
-    # Cards without a recognized lexical item and a recognized grammar pattern are
-    # excluded by eligible() rather than being filled with generic placeholder text.
     limited = hits[:8]
-    # The UI must always be able to show at least one vocabulary and one grammar
-    # highlight, even when a sentence matches many candidate expressions.
     for kind in ("vocabulary", "grammar"):
         if not any(item["type"] == kind for item in limited):
             candidate = next((item for item in hits if item["type"] == kind), None)
@@ -160,20 +189,38 @@ def make_hits(sentence, lang):
                     limited[-1] = candidate
                 else:
                     limited.append(candidate)
-    return sorted(limited, key=lambda item:(item["start"], -(item["end"]-item["start"]), 0 if item["type"]=="grammar" else 1))
+    return sorted(limited, key=lambda item: (item["start"], -(item["end"] - item["start"])))
+
+
+def validate_annotation_rules():
+    japanese = make_hits("これ誰の傘ですか？", "ja")
+    english = make_hits("Whose umbrella is this?", "en")
+    assert any(hit["term"] == "これ" and hit["type"] == "vocabulary" for hit in japanese), "Japanese example must highlight a meaningful vocabulary item"
+    assert any(hit["term"] == "誰の傘" and hit["type"] == "grammar" for hit in japanese), "Japanese example must identify the ownership structure"
+    assert any(hit["term"] == "ですか" and hit["type"] == "grammar" for hit in japanese), "Japanese example must identify polite question form"
+    assert not any(hit["term"] in {"です", "か"} and hit["type"] == "vocabulary" for hit in japanese), "Polite ending/particle must not be vocabulary highlights"
+    assert any(hit["term"].casefold() == "whose umbrella" and hit["type"] == "grammar" for hit in english), "English example must identify whose + noun"
+    assert any(hit["term"].casefold() == "this" and hit["type"] == "vocabulary" for hit in english), "English example must highlight meaningful vocabulary"
+    for language, sentence, hits in (("ja", "これ誰の傘ですか？", japanese), ("en", "Whose umbrella is this?", english)):
+        for hit in hits:
+            assert sentence[hit["start"]:hit["end"]] == hit["term"], language + " highlight offset mismatch"
+        ordered = sorted(hits, key=lambda hit: hit["start"])
+        assert all(left["end"] <= right["start"] for left, right in zip(ordered, ordered[1:])), language + " highlights overlap"
+
 
 def expansion(hits, kind, lang=None):
     output=[]; seen=set()
     for hit in hits:
         if hit["type"] != kind or hit["term"] in seen: continue
         seen.add(hit["term"])
-        output.append({"term":hit["term"],"meaning":hit["meaning"],"explanation":hit["explanation"]})
+        output.append({"term":hit["term"],"meaning":hit["meaning"],"explanation":hit["explanation"],"rule_id":hit.get("rule_id", "legacy"),"confidence":hit.get("confidence", "rule")})
         # Keep every displayed highlight explainable: make_hits caps sentence highlights at 8,
         # so expansion must not silently drop highlighted items after the fourth match.
         if len(output)>=8: break
     return output
 
 def main():
+    validate_annotation_rules()
     sentence_archive=download(SENTENCES_URL,CACHE/"sentences.tar.bz2")
     links_archive=download(LINKS_URL,CACHE/"links.tar.bz2")
     sentences,chinese={},{}
