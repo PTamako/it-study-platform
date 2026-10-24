@@ -824,6 +824,7 @@ function parseLanguageExpansion(value?: string): LanguageExpansion[] {
   } catch { return [] }
 }
 const fallbackHighlightNotes: Record<string, { meaning: string; explanation: string }> = {
+  '旅行': { meaning: '旅行、旅游', explanation: '名词，指外出旅行；在「旅行が楽しみです」中，是令人期待的事情。' },
   'もう一度': { meaning: '再一次', explanation: '用于请求对方重复说明、确认或操作。' },
   '確認': { meaning: '确认、核实', explanation: '职场常用词，常见搭配是「内容を確認する」。' },
   '連絡': { meaning: '联系', explanation: '常见于工作沟通，如「ご連絡します」。' },
@@ -854,6 +855,7 @@ const fallbackGrammarPatterns: Array<{ language: 'ja' | 'en'; pattern: RegExp; l
   { language: 'ja', pattern: /と思います/, label: '〜と思います', meaning: '我认为……', explanation: '用于表达个人意见或判断。' },
   { language: 'ja', pattern: /ので/, label: '〜ので', meaning: '因为……', explanation: '较柔和地说明原因。' },
   { language: 'ja', pattern: /ています/, label: '〜ています', meaning: '正在……／持续……', explanation: '表示动作进行或状态持续。' },
+  { language: 'ja', pattern: /が楽しみです/, label: 'N が楽しみです', meaning: '期待……／盼望……', explanation: '「が」标记期待的事情；「楽しみです」表达对未来事情的期待。例如「旅行が楽しみです」＝很期待这次旅行。这里的「楽しみ」表示盼望、期待，不是单纯的“有趣”。' },
   { language: 'ja', pattern: /たいです/, label: '〜たいです', meaning: '想要……', explanation: '用于表达愿望。' },
   { language: 'ja', pattern: /までに/, label: '〜までに', meaning: '在……之前', explanation: '表示截止时间。' },
   { language: 'en', pattern: /\bcould you\b/i, label: 'Could you + 动词原形', meaning: '礼貌请求句型', explanation: 'could you 后接动词原形，语气自然且委婉。' },
@@ -875,7 +877,7 @@ function languageHighlights(card: LanguageCard | null): LanguageHighlight[] {
     if (Array.isArray(parsed)) stored = parsed.filter((item): item is LanguageHighlight =>
       Number.isInteger(item?.start) && Number.isInteger(item?.end) &&
       item.start >= 0 && item.end > item.start && item.end <= card.term.length &&
-      ['vocabulary', 'grammar'].includes(item.type) && typeof item.term === 'string')
+      ['vocabulary', 'grammar'].includes(item.type) && typeof item.term === 'string' && !(item.type === 'vocabulary' && ['です', 'ます', 'でした', 'ました'].includes(item.term.trim())))
   } catch { stored = [] }
   stored.sort((a, b) => a.start - b.start || (a.type === b.type ? b.end - a.end : a.type === 'grammar' ? -1 : 1))
   const highlights: LanguageHighlight[] = []
