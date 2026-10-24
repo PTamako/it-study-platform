@@ -1941,13 +1941,13 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <p>{{ languagePracticeCard.explanation }}</p>
                   <section v-if="languageExpansions(languagePracticeCard, 'vocabulary').length" class="language-expansion">
                     <strong>🟨 高亮词汇逐项解释</strong>
-                    <div v-for="(item, index) in parseLanguageExpansion(languagePracticeCard.vocabulary_expansion_json)" :key="'practice-vocab-' + index">
+                    <div v-for="(item, index) in languageExpansions(languagePracticeCard, 'vocabulary')" :key="'practice-vocab-' + index">
                       <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                     </div>
                   </section>
                   <section v-if="languageExpansions(languagePracticeCard, 'grammar').length" class="language-expansion grammar">
                     <strong>{{ sentenceParts(languagePracticeCard).some(part => part.type === 'grammar') ? '🟦 高亮语法逐项解释' : '语法观察提示（未检测到明确结构）' }}</strong>
-                    <div v-for="(item, index) in parseLanguageExpansion(languagePracticeCard.grammar_expansion_json)" :key="'practice-grammar-' + index">
+                    <div v-for="(item, index) in languageExpansions(languagePracticeCard, 'grammar')" :key="'practice-grammar-' + index">
                       <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                     </div>
                   </section>
@@ -1996,13 +1996,13 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <p class="language-explanation">{{ card.explanation }}</p>
                 <section v-if="languageExpansions(card, 'vocabulary').length" class="language-expansion">
                   <strong>🟨 高亮词汇逐项解释</strong>
-                  <div v-for="(item, index) in parseLanguageExpansion(card.vocabulary_expansion_json)" :key="'vocab-' + index">
+                  <div v-for="(item, index) in languageExpansions(card, 'vocabulary')" :key="'vocab-' + index">
                     <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                   </div>
                 </section>
                 <section v-if="languageExpansions(card, 'grammar').length" class="language-expansion grammar">
                   <strong>{{ sentenceParts(card).some(part => part.type === 'grammar') ? '🟦 高亮语法逐项解释' : '语法观察提示（未检测到明确结构）' }}</strong>
-                  <div v-for="(item, index) in parseLanguageExpansion(card.grammar_expansion_json)" :key="'grammar-' + index">
+                  <div v-for="(item, index) in languageExpansions(card, 'grammar')" :key="'grammar-' + index">
                     <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                   </div>
                 </section>
