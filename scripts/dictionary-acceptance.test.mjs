@@ -174,3 +174,12 @@ test('question progress requests use a captured track and ignore stale responses
   assert.match(app, /if \(!response\.ok \|\| requestId !== questionProgressRequestId\) return/)
   assert.match(app, /if \(requestId !== questionProgressRequestId\) return/)
 })
+
+
+test('practice answer submission snapshots the selected question and answer', () => {
+  assert.match(app, /const answer = selectedOption\.value/)
+  assert.match(app, /question_id: question\.id,[\s\S]*?answer,/)
+  assert.match(app, /if \(data\.progress\) questionProgressById\.value\[question\.id\] = data\.progress/)
+  assert.match(app, /if \(requestId === practiceAnswerRequestId\) \{\s*quizError\.value/)
+  assert.match(app, /function nextPracticeQuestion\(\) \{\s*stopSpeech\(\)\s*practiceAnswerRequestId \+= 1/)
+})
