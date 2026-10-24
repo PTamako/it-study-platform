@@ -185,7 +185,10 @@ def main():
             result=[]
             for item in items:
                 kinds={hit["type"] for hit in make_hits(item[1],lang)}
-                if {"vocabulary","grammar"}.issubset(kinds) and not any(\n                hit["meaning"] in {"句中重点表达", "句子结构观察点", "句尾活用／表达观察点"}\n                or "未识别到明确" in hit["explanation"]\n                for hit in make_hits(item[1], lang))):
+                if {"vocabulary","grammar"}.issubset(kinds) and not any(
+                hit["meaning"] in {"句中重点表达", "句子结构观察点", "句尾活用／表达观察点"}
+                or "未识别到明确" in hit["explanation"]
+                for hit in make_hits(item[1], lang))):
                     result.append(item)
                     if len(result)>=limit: break
             return result
