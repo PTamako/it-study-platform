@@ -2167,7 +2167,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
           </section>
           </template>
           <section v-if="dictionaryView === 'saved'" class="section-block saved-vocabulary-block">
-            <div class="section-heading"><div><div class="section-kicker">MY WORDS</div><h2>个人生词本</h2><p>收藏的词条会保存在这台设备的浏览器中。</p></div><span class="section-index">{{ savedWords.length }} 个收藏</span></div>
+            <div class="section-heading"><div><div class="section-kicker">MY WORDS</div><h2>个人生词本</h2><p>收藏词条会尝试同步到云端，并在本设备保留副本；未同步成功时会显示提示。</p></div><span class="section-index">{{ savedWords.length }} 个收藏</span></div>
             <div v-if="savedVocabularyEntries.length" class="saved-vocabulary-list">
               <article v-for="entry in savedVocabularyEntries" :key="entry.term" class="saved-vocabulary-row">
                 <div class="saved-vocabulary-copy"><strong>{{ entry.term }}</strong><small v-if="entry.reading">{{ entry.reading }}</small><p v-if="entry.en">英语释义：{{ entry.en }}</p><p v-if="entry.translationJa">日语辅助理解：{{ entry.translationJa }}</p></div>
