@@ -237,6 +237,7 @@ type QuestionReviewProgress = { question_id: string; review_count: number; corre
 const questionProgressById = ref<Record<string, QuestionReviewProgress>>({})
 let questionProgressRequestId = 0
 let practiceLoadRequestId = 0
+let practiceAnswerRequestId = 0
 type PracticeQuestion = {
   id: string; track_id: string; topic: string; difficulty: string; prompt: string;
   options: PracticeOption[]; answer: string; explanation: string; source_type: string; source_reference?: string; language: string; exam_section?: 'A' | 'B' | null; exam_section_method?: 'explicit' | 'case_pattern' | 'default_a' | 'unclassified' | null
@@ -503,6 +504,7 @@ async function loadExamTracks() {
 }
 function selectExam(track: ExamTrack) {
   stopSpeech()
+  practiceAnswerRequestId += 1
   practiceLoadRequestId += 1
   questionProgressRequestId += 1
   questionBatchOffset.value = 0
@@ -520,6 +522,7 @@ function selectExam(track: ExamTrack) {
 
 async function selectQuestionSource(source: 'official' | 'generated') {
   stopSpeech()
+  practiceAnswerRequestId += 1
   practiceLoadRequestId += 1
   questionProgressRequestId += 1
   questionSourceFilter.value = source
@@ -549,6 +552,7 @@ async function loadQuestionProgress(trackId = selectedTrack.value?.id || '') {
 }
 function selectReviewMode(mode: 'all' | 'unlearned' | 'wrong' | 'due' | 'mastered') {
   stopSpeech()
+  practiceAnswerRequestId += 1
   practiceLoadRequestId += 1
   questionProgressRequestId += 1
   activeReviewMode.value = mode
@@ -630,25 +634,30 @@ async function nextQuestionBatch() {
 async function submitPracticeAnswer() {
   if (!currentQuestion.value || !selectedOption.value || quizSubmitted.value) return
   const question = currentQuestion.value
+  const answer = selectedOption.value
+  const requestId = ++practiceAnswerRequestId
   quizSubmitted.value = true
-  if (selectedOption.value === question.answer) quizCorrect.value += 1
+  if (answer === question.answer) quizCorrect.value += 1
   void translateQuestionExplanation(question)
   try {
     const response = await fetch('/api/attempts', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        question_id: currentQuestion.value.id,
-        answer: selectedOption.value,
+        question_id: question.id,
+        answer,
         duration_seconds: quizStartedAt.value ? Math.floor((Date.now() - quizStartedAt.value) / 1000) : 0,
       }),
     })
     const data = await response.json() as { error?: string; progress?: QuestionReviewProgress }
+    if (requestId !== practiceAnswerRequestId) return
     if (!response.ok) throw new Error(data.error || '本次答题已显示，但保存到学习记录失败。')
-    if (data.progress) questionProgressById.value[currentQuestion.value.id] = data.progress
+    if (data.progress) questionProgressById.value[question.id] = data.progress
     void loadCloudDashboard()
   } catch (error) {
-    quizError.value = error instanceof Error ? error.message : '网络异常：本次答题结果尚未保存到云端。'
+    if (requestId === practiceAnswerRequestId) {
+      quizError.value = error instanceof Error ? error.message : '网络异常：本次答题结果尚未保存到云端。'
+    }
   }
 }
 function getExplanationLanguage(question: PracticeQuestion): 'ja-JP' | 'en-US' | 'zh-CN' {
@@ -711,6 +720,7 @@ async function setQuestionMastery(questionId: string, mastered: boolean) {
 }
 function nextPracticeQuestion() {
   stopSpeech()
+  practiceAnswerRequestId += 1
   if (!isLastQuestion.value) {
     quizIndex.value += 1
     selectedOption.value = ''
