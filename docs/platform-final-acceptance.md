@@ -67,23 +67,23 @@
 
 ## 自动化质量门槛
 
-- [ ] `npm test`
-- [ ] `npm run typecheck`
-- [ ] `npm run build`
-- [ ] D1 migrations 从干净数据库按序执行成功。
-- [ ] Worker dry-run/bundle 成功；确认没有在验收阶段发布生产版本。
+- [x] `npm test`（最新主分支 Validate 工作流成功）。
+- [x] `npm run typecheck`（最新主分支 Validate 工作流成功）。
+- [x] `npm run build`（最新主分支 Validate 工作流成功）。
+- [x] D1 migrations 从干净数据库按序执行成功；生产 D1 无待应用迁移。
+- [x] Worker dry-run/bundle 成功。注意：合并后部署工作流已按现有发布配置部署生产 Worker，见部署记录 `40108970309`。
 - [ ] 对新增逻辑优先添加行为级测试；源码正则断言只能作为回归哨兵，不能替代真实浏览器行为测试。
 
 ## 设备矩阵与结果记录
 
 | 环境 | 测试范围 | 状态 |
 |---|---|---|
-| GitHub Actions | 测试、类型检查、构建、迁移、Worker bundle | 以最新 commit 的 Checks 为准 |
+| GitHub Actions | 测试、类型检查、构建、迁移、Worker bundle | **通过**（`e7f656f0`；run `40108970279` / `40108970309`） |
 | 桌面 Chrome | 页面导航、题库、词典、TTS、错误状态 | 待实际验收 |
 | 桌面 Safari | 页面导航、题库、词典、TTS、错误状态 | 待实际验收 |
 | iPhone Safari | 窄屏 UI、日语/英语 TTS、反复播放、模块切换 | **阻断项：待真实设备验收** |
 | Cloudflare 预览 | 关键页面、健康接口、关键 API、远程数据状态 | 待部署后验收 |
-| Cloudflare 生产 | 部署工作流、健康接口、关键流程回归 | 仅合并后验收 |
+| Cloudflare 生产 | 部署工作流、健康接口、关键流程回归 | **部署、`/api/health`、双语句子语料检查通过；完整关键 API 回归仍待完成** |
 
 ## 验收结论规则
 
