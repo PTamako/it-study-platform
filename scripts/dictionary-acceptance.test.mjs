@@ -87,6 +87,9 @@ test('speech never uses the operating system default voice before language voice
   assert.match(app, /synthesis\.addEventListener\('voiceschanged'/)
   assert.match(app, /系统语音已就绪，请再次点击播放/)
   assert.match(app, /availableVoices\.length > 0 && voices\.length === 0/)
+  assert.match(app, /exactLanguageVoices\.find\(candidate => candidate\.localService/)
+  assert.match(app, /播放请求已结束/)
+  assert.match(app, /语音：浏览器自动选择/)
 })
 
 test('speech stops when leaving a module or switching exam/practical content', () => {
