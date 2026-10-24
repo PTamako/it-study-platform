@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 
 const auth = await readFile(new URL('../worker/auth.ts', import.meta.url), 'utf8')
 const worker = await readFile(new URL('../worker/index.ts', import.meta.url), 'utf8')
-const migration = await readFile(new URL('../migrations/0072_auth_login_rate_limits.sql', import.meta.url), 'utf8')
+const migration = await readFile(new URL('../migrations/0081_auth_login_rate_limits.sql', import.meta.url), 'utf8')
 
 test('single-user auth uses hardened session cookies and expiry', () => {
   assert.match(auth, /HttpOnly; Secure; SameSite=Strict/)
