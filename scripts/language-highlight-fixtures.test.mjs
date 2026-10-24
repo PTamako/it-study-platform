@@ -6,6 +6,13 @@ const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
 const fixtureSection = app.split('const previewLanguageFixtures: LanguageCard[] = [')[1]?.split('\nconst languageCards =')[0]
 assert.ok(fixtureSection, 'preview language fixtures should be present')
 
+const expectedHighlightedText = {
+  'demo-ja-daily-001': { '0:4': 'もう一度', '6:15': 'していただけますか' },
+  'demo-ja-work-001': { '0:2': '確認', '2:6': 'してから', '10:16': 'ご連絡します' },
+  'demo-en-daily-001': { '0:13': 'Could you say', '19:32': 'one more time' },
+  'demo-en-work-001': { '0:6': 'I will', '7:12': 'check', '29:44': 'get back to you' },
+}
+
 test('preview sentence highlights stay within sentence bounds and do not overlap', () => {
   const starts = [...fixtureSection.matchAll(/id: '(demo-(?:ja|en)-(?:daily|work)-001)'/g)].map(match => ({ id: match[1], index: match.index ?? 0 }))
   assert.equal(starts.length, 4, 'Japanese and English daily/workplace preview fixtures should all exist')
@@ -30,6 +37,8 @@ test('preview sentence highlights stay within sentence bounds and do not overlap
         `${starts[i].id}: invalid span for ${highlight.term}`)
       assert.ok(highlight.start >= previousEnd,
         `${starts[i].id}: overlapping highlight ${highlight.term} would be silently dropped by sentenceParts()`)
+      assert.equal(sentence.slice(highlight.start, highlight.end), expectedHighlightedText[starts[i].id]?.[`${highlight.start}:${highlight.end}`],
+        `${starts[i].id}: highlight offset should point to the intended exact sentence substring`)
       previousEnd = highlight.end
     }
   }
