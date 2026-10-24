@@ -734,8 +734,7 @@ const previewLanguageFixtures: LanguageCard[] = [
     example_meaning_zh: '不好意思，你可以再说一遍吗？',
     source_type: 'preview-demo', content_type: 'sentence',
     highlight_json: JSON.stringify([
-      { start: 0, end: 13, type: 'grammar', term: 'Could you say', meaning: '你可以……吗', explanation: '常见的礼貌请求开头。' },
-      , meaning: '说', explanation: '情态动词 could 后接动词原形。' },
+      { start: 0, end: 13, type: 'grammar', term: 'Could you say', meaning: '你可以……吗', explanation: 'Could you + 动词原形构成自然、礼貌的请求句型。' },
       { start: 19, end: 32, type: 'vocabulary', term: 'one more time', meaning: '再一次', explanation: '自然表达“再来一次、再说一遍”。' },
     ]),
     vocabulary_expansion_json: JSON.stringify([
