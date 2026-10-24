@@ -189,7 +189,7 @@ def main():
     for start in range(0,len(values),5):
         # Each batch is a separate SQL statement to stay below D1's statement-size limit.
         batch = values[start:start+5]
-        lines.append(insert_prefix+"\\n"+",\\n".join(batch)+";")
+        lines.append(insert_prefix+"\n"+",\n".join(batch)+";")
     OUT.write_text("\n".join(lines)+"\n",encoding="utf-8")
     print("Generated exactly 3,000 Japanese + 3,000 English sentence cards in",OUT)
 if __name__=="__main__": main()
