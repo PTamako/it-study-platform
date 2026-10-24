@@ -914,9 +914,13 @@ function languageHighlights(card: LanguageCard | null): LanguageHighlight[] {
 function languageExpansions(card: LanguageCard | null, type: 'vocabulary' | 'grammar'): LanguageExpansion[] {
   if (!card) return []
   const stored = parseLanguageExpansion(type === 'vocabulary' ? card.vocabulary_expansion_json : card.grammar_expansion_json)
-  if (stored.length) return stored
   const highlights = languageHighlights(card).filter(item => item.type === type)
-  if (highlights.length) return highlights.map(item => ({ term: item.term, meaning: item.meaning || '结合整句理解', explanation: item.explanation || '请结合上下文理解该表达的用法。' }))
+  const merged = [...stored]
+  for (const item of highlights) {
+    if (merged.some(existing => existing.term.trim().toLocaleLowerCase() === item.term.trim().toLocaleLowerCase())) continue
+    merged.push({ term: item.term, meaning: item.meaning || '结合整句理解', explanation: item.explanation || '请结合上下文理解该表达的用法。' })
+  }
+  if (merged.length) return merged
   if (type === 'grammar') {
     const rule = fallbackGrammarPatterns.find(item => item.language === card.language && item.pattern.test(card.term))
     if (rule) return [{ term: rule.label, meaning: rule.meaning, explanation: rule.explanation }]
