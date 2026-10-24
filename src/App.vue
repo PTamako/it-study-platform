@@ -1148,9 +1148,19 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   const normalizedLang = normalize(lang)
   const prefix = normalizedLang.slice(0, 2)
   const availableVoices = synthesis.getVoices()
-  // Safari/iOS can initially return an empty voice list. Do not return early:
-  // setting utterance.lang is enough for the OS to select a matching voice, and returning
-  // here makes the first tap a no-op on devices that populate voices lazily.
+  // Safari/iOS can populate voices asynchronously. Never speak with an unknown OS
+  // default voice: wait for voiceschanged, then retry with the requested language.
+  if (availableVoices.length === 0) {
+    speechStatus.value = '系统语音列表尚未加载，正在等待语音就绪…'
+    synthesis.addEventListener('voiceschanged', () => {
+      if (synthesis.getVoices().length > 0 && requestId === speechRequestId) {
+        speak(spokenText, lang, statusTarget)
+      } else if (requestId === speechRequestId) {
+        speechStatus.value = '系统语音仍未就绪。请检查系统语音设置后重试。'
+      }
+    }, { once: true })
+    return
+  }
   const voices = availableVoices.filter(voice => normalize(voice.lang).startsWith(prefix))
   const voice = voices.find(candidate => normalize(candidate.lang) === normalizedLang && /natural|enhanced|premium|siri|daniel|karen|ava|alex|samantha|kyoko|otoya/i.test(candidate.name))
     || voices.find(candidate => normalize(candidate.lang) === normalizedLang && candidate.localService)
