@@ -402,3 +402,7 @@
 .language-expansion>strong{font-size:13px}
 .language-expansion>div>b{overflow-wrap:anywhere}
 @media(max-width:640px){.sentence-highlight-legend{gap:6px}.sentence-highlight-legend>span{font-size:11px;padding:5px 8px}.language-expansion>div{grid-template-columns:minmax(80px,.42fr) 1fr;gap:5px 8px}}
+
+
+/* Clearly distinguish read-only preview fixtures from real learning data. */
+.preview-demo-banner{position:relative;z-index:20;padding:10px 16px;background:#fff3d8;border-bottom:1px solid #f0d59a;color:#694b12;font-size:13px;line-height:1.5;text-align:center}.preview-demo-banner code{font-size:12px;background:#ffebbb;padding:2px 5px;border-radius:4px}
