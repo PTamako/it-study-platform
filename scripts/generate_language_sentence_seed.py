@@ -161,7 +161,18 @@ def make_hits(sentence, lang):
                 hits.append({"start":match.start(),"end":match.end(),"type":"grammar","term":match.group(),
                              "meaning":meaning,"explanation":explanation})
                 hits.sort(key=lambda item:(item["start"], -(item["end"]-item["start"]), 0 if item["type"]=="grammar" else 1))
-    return hits[:8]
+    limited = hits[:8]
+    # The UI must always be able to show at least one vocabulary and one grammar
+    # highlight, even when a sentence matches many candidate expressions.
+    for kind in ("vocabulary", "grammar"):
+        if not any(item["type"] == kind for item in limited):
+            candidate = next((item for item in hits if item["type"] == kind), None)
+            if candidate:
+                if len(limited) >= 8:
+                    limited[-1] = candidate
+                else:
+                    limited.append(candidate)
+    return sorted(limited, key=lambda item:(item["start"], -(item["end"]-item["start"]), 0 if item["type"]=="grammar" else 1))
 
 def expansion(hits, kind, lang=None):
     output=[]; seen=set()
