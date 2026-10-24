@@ -158,3 +158,19 @@ test('preview demo mode supplies isolated Japanese and English sample sentences 
   assert.match(app, /if \(previewDemoMode\) \{\s*languageCards\.value = previewLanguageFixtures\.filter\(card => card\.language === studyLanguage\.value\)/)
   assert.match(app, /预览演示模式：使用内置示例句子，不读取或写入云端学习数据/)
 })
+
+
+test('exam question loads are invalidated when switching track, source, or review mode', () => {
+  assert.match(app, /let practiceLoadRequestId = 0/)
+  assert.match(app, /const requestId = \+\+practiceLoadRequestId/)
+  assert.match(app, /if \(requestId !== practiceLoadRequestId\) return/)
+  assert.match(app, /practiceLoadRequestId \+= 1/)
+  assert.match(app, /if \(requestId === practiceLoadRequestId\) quizLoading\.value = false/)
+})
+
+test('question progress requests use a captured track and ignore stale responses', () => {
+  assert.match(app, /let questionProgressRequestId = 0/)
+  assert.match(app, /async function loadQuestionProgress\(trackId = selectedTrack\.value\?\.id \|\| ''\)/)
+  assert.match(app, /if \(!response\.ok \|\| requestId !== questionProgressRequestId\) return/)
+  assert.match(app, /if \(requestId !== questionProgressRequestId\) return/)
+})
