@@ -71,6 +71,7 @@ JP_VOCAB = [
  ("何","什么","疑问代词"), ("どこ","哪里","询问地点"), ("いつ","什么时候","询问时间"), ("誰","谁","询问人物"), ("なぜ","为什么","询问原因"), ("どう","怎样／如何","询问方式或状态"), ("いつも","总是／平时","频率副词"), ("よく","经常／很好","依语境表示频率或程度"), ("とても","非常","程度副词"), ("少し","一点儿","表示少量或轻微程度"), ("たくさん","很多","表示数量多"), ("一緒","一起","常见表达「一緒に」"), ("大切","重要／珍贵","な形容词"), ("予約","预约","可用于餐厅、医院、会议等场景"), ("電話","电话","可指电话设备或通话"), ("週","周","时间单位"), ("今日","今天","指当天"), ("明日","明天","指第二天"), ("昨日","昨天","指前一天")
 ]
 EN_VOCAB = [
+ ("this","这个／这","指向当前语境中可识别的人或物；作代词时可独立指代事物"), ("that","那个／那","指向语境中可识别的人或物；作代词时可独立指代事物"), ("umbrella","伞","遮雨或遮阳的工具，常见表达「an umbrella」"),
  ("could you","能否请你","礼貌请求，比 can you 更委婉"), ("would you","你愿意／能否","常用于礼貌请求"),
  ("thank you","谢谢","常见感谢表达"), ("please","请","礼貌请求标记"), ("confirm","确认","常见搭配 confirm the details"),
  ("schedule","日程／安排","名词或动词，常用于工作安排"), ("meeting","会议","常见搭配 attend a meeting"),
@@ -185,6 +186,23 @@ def make_hits(sentence, lang):
     return sorted(limited, key=lambda item: (item["start"], -(item["end"] - item["start"])))
 
 
+
+def validate_annotation_rules():
+    japanese = make_hits("これ誰の傘ですか？", "ja")
+    english = make_hits("Whose umbrella is this?", "en")
+    assert any(hit["term"] == "これ" and hit["type"] == "vocabulary" for hit in japanese), "Japanese example must highlight a meaningful vocabulary item"
+    assert any(hit["term"] == "誰の傘" and hit["type"] == "grammar" for hit in japanese), "Japanese example must identify the ownership structure"
+    assert any(hit["term"] == "ですか" and hit["type"] == "grammar" for hit in japanese), "Japanese example must identify polite question form"
+    assert not any(hit["term"] in {"です", "か"} and hit["type"] == "vocabulary" for hit in japanese), "Polite ending/particle must not be vocabulary highlights"
+    assert any(hit["term"].casefold() == "whose umbrella" and hit["type"] == "grammar" for hit in english), "English example must identify whose + noun"
+    assert any(hit["term"].casefold() == "this" and hit["type"] == "vocabulary" for hit in english), "English example must highlight meaningful vocabulary"
+    for language, sentence, hits in (("ja", "これ誰の傘ですか？", japanese), ("en", "Whose umbrella is this?", english)):
+        for hit in hits:
+            assert sentence[hit["start"]:hit["end"]] == hit["term"], language + " highlight offset mismatch"
+        ordered = sorted(hits, key=lambda hit: hit["start"])
+        assert all(left["end"] <= right["start"] for left, right in zip(ordered, ordered[1:])), language + " highlights overlap"
+
+
 def expansion(hits, kind, lang=None):
     output=[]; seen=set()
     for hit in hits:
@@ -197,6 +215,7 @@ def expansion(hits, kind, lang=None):
     return output
 
 def main():
+    validate_annotation_rules()
     sentence_archive=download(SENTENCES_URL,CACHE/"sentences.tar.bz2")
     links_archive=download(LINKS_URL,CACHE/"links.tar.bz2")
     sentences,chinese={},{}
