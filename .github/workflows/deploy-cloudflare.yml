@@ -34,6 +34,12 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Cache Tatoeba source exports
+        uses: actions/cache@v4
+        with:
+          path: /tmp/language-sentence-sources
+          key: tatoeba-sentence-exports-v1-${{ runner.os }}
+
       - name: Generate attributed Japanese and English sentence migration
         run: python scripts/generate_language_sentence_seed.py
 
@@ -84,6 +90,56 @@ jobs:
           done
           echo "::error::Deployment completed but health endpoint did not return HTTP 200."
           exit 1
+
+      - name: Verify unauthenticated access is denied for personal APIs
+        env:
+          BASE_URL: https://it-study-platform.yupan6706.workers.dev
+        run: |
+          node --input-type=module <<'NODE'
+          const base = process.env.BASE_URL
+          const protectedReads = [
+            '/api/dashboard',
+            '/api/exam-history',
+            '/api/attempts',
+            '/api/scenario-attempts',
+            '/api/language-progress',
+            '/api/language-review',
+            '/api/vocabulary/saved',
+            '/api/daily-tasks',
+            '/api/question-progress',
+            '/api/wrong-questions',
+            '/api/translate-explanation',
+          ]
+          const protectedWrites = [
+            ['POST', '/api/attempts'],
+            ['POST', '/api/scenario-attempts'],
+            ['POST', '/api/language-progress'],
+            ['POST', '/api/language-review'],
+            ['POST', '/api/vocabulary/saved'],
+            ['POST', '/api/daily-tasks'],
+            ['POST', '/api/question-progress'],
+            ['POST', '/api/translate-explanation'],
+            ['DELETE', '/api/exam-history'],
+          ]
+          for (const path of protectedReads) {
+            const response = await fetch(new URL(path, base), { redirect: 'manual' })
+            if (response.status !== 401) {
+              throw new Error(`Unauthenticated GET ${path}: expected 401, got ${response.status}`)
+            }
+          }
+          for (const [method, path] of protectedWrites) {
+            const response = await fetch(new URL(path, base), {
+              method,
+              headers: { 'content-type': 'application/json' },
+              body: method === 'DELETE' ? undefined : '{}',
+              redirect: 'manual',
+            })
+            if (response.status !== 401) {
+              throw new Error(`Unauthenticated ${method} ${path}: expected 401, got ${response.status}`)
+            }
+          }
+          console.log(`Verified unauthenticated denial for ${protectedReads.length} personal reads and ${protectedWrites.length} personal writes/deletes.`)
+          NODE
 
       - name: Verify production bilingual sentence corpus
         env:
