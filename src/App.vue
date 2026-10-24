@@ -1317,7 +1317,9 @@ function testAudioOutput() {
   // iOS Safari requires AudioContext to be resumed from the direct user gesture.
   // Do not schedule a very short tone until resume() has resolved: a suspended
   // context may otherwise consume the scheduled tone before it becomes audible.
+  // Keep the standard constructor first, but support older WebKit Safari builds too.
   const AudioContextConstructor = window.AudioContext
+    || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
   if (typeof AudioContextConstructor === 'undefined') {
     speechStatus.value = '当前浏览器不支持 Web Audio，无法执行设备声音测试。'
     return
