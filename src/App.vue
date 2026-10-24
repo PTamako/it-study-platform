@@ -108,19 +108,39 @@ async function loadCloudDashboard() {
     cloudDashboardError.value = error instanceof Error ? error.message : '云端学习统计暂不可用'
   }
 }
+const dailyTaskSaveQueues = new Map<string, Promise<void>>()
+const dailyTaskSaveRequestIds = new Map<string, number>()
 async function saveDailyTask(task: StudyTask) {
-  try {
-    const response = await fetch('/api/daily-tasks', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ task_id: task.id, study_date: todayKey, completed: task.done }),
-    })
-    if (!response.ok) {
-      const data = await response.json().catch(() => ({})) as { error?: string }
-      cloudDashboardError.value = data.error || '每日任务云端保存失败'
-    } else {
-      void loadCloudDashboard()
+  const taskId = task.id
+  const completed = task.done
+  const requestId = (dailyTaskSaveRequestIds.get(taskId) || 0) + 1
+  dailyTaskSaveRequestIds.set(taskId, requestId)
+
+  // Serialize writes for each task so a slow earlier toggle cannot overwrite the latest choice.
+  const previous = dailyTaskSaveQueues.get(taskId) || Promise.resolve()
+  const pending = previous.catch(() => undefined).then(async () => {
+    try {
+      const response = await fetch('/api/daily-tasks', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ task_id: taskId, study_date: todayKey, completed }),
+      })
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({})) as { error?: string }
+        throw new Error(data.error || '每日任务云端保存失败')
+      }
+      if (dailyTaskSaveRequestIds.get(taskId) === requestId) {
+        cloudDashboardError.value = ''
+        void loadCloudDashboard()
+      }
+    } catch (error) {
+      if (dailyTaskSaveRequestIds.get(taskId) === requestId) {
+        cloudDashboardError.value = error instanceof Error ? error.message : '网络异常：每日任务暂未同步到云端。'
+      }
     }
-  } catch { cloudDashboardError.value = '网络异常：每日任务暂未同步到云端。' }
+  })
+  dailyTaskSaveQueues.set(taskId, pending)
+  await pending
+  if (dailyTaskSaveQueues.get(taskId) === pending) dailyTaskSaveQueues.delete(taskId)
 }
 const examRecords = ref<ExamRecord[]>(readStored('zhixue:exam-records', []))
 const examHistorySyncing = ref(false)
