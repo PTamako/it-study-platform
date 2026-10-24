@@ -866,8 +866,8 @@ export default {
       const result = body.result === 'remembered' ? 'remembered' : body.result === 'again' ? 'again' : ''
       if (!cardId || !result) return json({ error: '需要 card_id 和有效的 result。' }, 400)
       try {
-        const card = await env.DB.prepare('SELECT id FROM language_cards WHERE id = ?').bind(cardId).first()
-        if (!card) return json({ error: '课程卡片不存在。' }, 404)
+        const card = await env.DB.prepare("SELECT id FROM language_cards WHERE id = ? AND content_type = 'sentence'").bind(cardId).first()
+        if (!card) return json({ error: '句子课程卡片不存在。' }, 404)
         const modifier = result === 'again' ? '+10 minutes' : '+1 day'
         await env.DB.prepare(
           `INSERT INTO language_card_reviews
