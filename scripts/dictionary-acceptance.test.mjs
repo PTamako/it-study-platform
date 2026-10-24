@@ -85,7 +85,7 @@ test('exam prep and practical training use Japanese-only speech targets and show
 test('speech never uses the operating system default voice before language voices load', () => {
   assert.match(app, /if \(availableVoices\.length === 0\) \{[\s\S]*?系统语音列表尚未加载，暂未播放/)
   assert.match(app, /synthesis\.addEventListener\('voiceschanged'/)
-  assert.match(app, /if \(synthesis\.getVoices\(\)\.length > 0 && requestId === speechRequestId\) \{\s*speak\(spokenText, lang, statusTarget\)/)
+  assert.match(app, /系统语音已就绪，请再次点击播放/)
   assert.match(app, /availableVoices\.length > 0 && voices\.length === 0/)
 })
 
