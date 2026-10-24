@@ -693,8 +693,8 @@ const previewLanguageFixtures: LanguageCard[] = [
     example_meaning_zh: '不好意思，可以请您再解释一次吗？',
     source_type: 'preview-demo', content_type: 'sentence',
     highlight_json: JSON.stringify([
-      { start: 0, end: 5, type: 'vocabulary', term: 'もう一度', meaning: '再一次', explanation: '用于请求重复动作。' },
-      { start: 8, end: 13, type: 'grammar', term: '〜ていただけますか', meaning: '可以请您……吗', explanation: '使用「て形＋いただけますか」委婉请求对方做某事。' },
+      { start: 0, end: 4, type: 'vocabulary', term: 'もう一度', meaning: '再一次', explanation: '用于请求重复动作。' },
+      { start: 6, end: 15, type: 'grammar', term: '〜ていただけますか', meaning: '可以请您……吗', explanation: '使用「て形＋いただけますか」委婉请求对方做某事。' },
     ]),
     vocabulary_expansion_json: JSON.stringify([
       { term: 'もう一度', meaning: '再一次', explanation: '用于请对方重复说明、确认或操作。' },
@@ -713,8 +713,8 @@ const previewLanguageFixtures: LanguageCard[] = [
     example_meaning_zh: '确认内容后，我会再联系您。',
     source_type: 'preview-demo', content_type: 'sentence',
     highlight_json: JSON.stringify([
-      { start: 0, end: 5, type: 'vocabulary', term: '確認して', meaning: '确认后', explanation: '「確認する」是职场常见的核实、确认。' },
-      { start: 11, end: 18, type: 'vocabulary', term: 'ご連絡します', meaning: '联系您', explanation: '「連絡する」加「ご」构成礼貌表达。' },
+      { start: 0, end: 2, type: 'vocabulary', term: '確認', meaning: '确认、核实', explanation: '「確認する」是职场常见的核实、确认。' },
+      { start: 10, end: 16, type: 'vocabulary', term: 'ご連絡します', meaning: '联系您', explanation: '「連絡する」加「ご」构成礼貌表达。' },
       { start: 0, end: 8, type: 'grammar', term: '〜てから', meaning: '做完……之后', explanation: '表示先完成前项动作，再进行后项动作。' },
     ]),
     vocabulary_expansion_json: JSON.stringify([
@@ -734,9 +734,8 @@ const previewLanguageFixtures: LanguageCard[] = [
     example_meaning_zh: '不好意思，你可以再说一遍吗？',
     source_type: 'preview-demo', content_type: 'sentence',
     highlight_json: JSON.stringify([
-      { start: 0, end: 8, type: 'vocabulary', term: 'Could you', meaning: '你可以……吗', explanation: '常见的礼貌请求开头。' },
-      { start: 9, end: 12, type: 'grammar', term: 'say', meaning: '说', explanation: '情态动词 could 后接动词原形。' },
-      { start: 22, end: 34, type: 'vocabulary', term: 'one more time', meaning: '再一次', explanation: '自然表达“再来一次、再说一遍”。' },
+      { start: 0, end: 13, type: 'grammar', term: 'Could you say', meaning: '可以请你再说一遍吗', explanation: 'Could you + 动词原形构成自然、礼貌的请求句型。' },
+      { start: 19, end: 32, type: 'vocabulary', term: 'one more time', meaning: '再一次', explanation: '自然表达“再来一次、再说一遍”。' },
     ]),
     vocabulary_expansion_json: JSON.stringify([
       { term: 'Could you…?', meaning: '可以请你……吗？', explanation: '比直接命令更礼貌，适用于日常和工作场景。' },
@@ -756,7 +755,7 @@ const previewLanguageFixtures: LanguageCard[] = [
     source_type: 'preview-demo', content_type: 'sentence',
     highlight_json: JSON.stringify([
       { start: 7, end: 12, type: 'vocabulary', term: 'check', meaning: '确认、核实', explanation: '工作场景中常用于核实信息。' },
-      { start: 28, end: 40, type: 'vocabulary', term: 'get back to you', meaning: '再回复你', explanation: '自然的职场表达，表示之后联系或回复。' },
+      { start: 29, end: 44, type: 'vocabulary', term: 'get back to you', meaning: '再回复你', explanation: '自然的职场表达，表示之后联系或回复。' },
       { start: 0, end: 6, type: 'grammar', term: 'I will', meaning: '我将会', explanation: 'will + 动词原形表示未来动作或承诺。' },
     ]),
     vocabulary_expansion_json: JSON.stringify([
