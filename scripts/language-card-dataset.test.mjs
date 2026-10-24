@@ -55,7 +55,7 @@ function parseSqlTuple(line) {
     fields.push(value)
     if (line[i] === ',') { i++; continue }
     if (line[i] === ')' || line[i] === ';') break
-    if (/\\s/.test(line[i] || '')) { i++; continue }
+    if (/\s/.test(line[i] || '')) { i++; continue }
     throw new Error('Unexpected SQL tuple delimiter: ' + line.slice(i, i + 20))
   }
   return fields
