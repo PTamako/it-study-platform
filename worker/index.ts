@@ -1,7 +1,11 @@
+import { handleAuthRequest, requireAuth } from './auth'
+
 export interface Env {
   DB: D1Database
   AI?: Ai
   APP_ENV?: string
+  AUTH_PASSWORD?: string
+  AUTH_SESSION_SECRET?: string
 }
 
 // 统一返回 JSON，并添加基础安全响应头。
@@ -640,6 +644,33 @@ export default {
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: { 'allow': 'GET, POST, DELETE, OPTIONS' } })
+    }
+
+    const authResponse = await handleAuthRequest(request, env)
+    if (authResponse) return authResponse
+
+    // All endpoints that read or mutate personal study state require a signed session.
+    const protectedPersonalPaths = new Set([
+      '/api/dashboard',
+      '/api/exam-history',
+      '/api/attempts',
+      '/api/scenario-attempts',
+      '/api/language-progress',
+      '/api/language-review',
+      '/api/vocabulary/saved',
+      '/api/daily-tasks',
+      '/api/question-progress',
+      '/api/wrong-questions',
+    ])
+    if (protectedPersonalPaths.has(url.pathname)) {
+      const authFailure = await requireAuth(request, env)
+      if (authFailure) return authFailure
+      if (request.method !== 'GET') {
+        const origin = request.headers.get('origin')
+        if (!origin || new URL(origin).origin !== url.origin) {
+          return json({ error: '请求来源验证失败。' }, 403)
+        }
+      }
     }
     const isWriteEndpoint = ['/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history', '/api/translate-explanation'].includes(url.pathname)
     const isExamHistoryDelete = request.method === 'DELETE' && url.pathname === '/api/exam-history'
