@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "migrations/0081_language_sentence_cards.sql"
 OUT_REFRESH = ROOT / "migrations/0082_refresh_language_sentence_annotations.sql"
-OUT_REFRESH_LATEST = ROOT / "migrations/0083_refresh_japanese_meaningful_annotations.sql"
+OUT_REFRESH_LATEST = ROOT / "migrations/0084_refresh_contextual_bilingual_annotations.sql"
 CACHE = Path("/tmp/language-sentence-sources")
 CACHE.mkdir(exist_ok=True)
 SENTENCES_URL = "https://downloads.tatoeba.org/exports/sentences.tar.bz2"
@@ -90,6 +90,9 @@ EN_VOCAB = [
  ("time","时间","可指时间点、时长或可用时间"), ("day","天／日子","时间单位"), ("week","周","时间单位"), ("month","月","时间单位"), ("year","年","时间单位"), ("today","今天","时间副词／名词"), ("tomorrow","明天","时间副词／名词"), ("yesterday","昨天","时间副词／名词"), ("people","人们","people 通常作复数意义"), ("person","人","单数名词"), ("family","家庭／家人","集合名词"), ("friend","朋友","表示朋友关系"), ("home","家","常作副词或名词"), ("house","房子","指建筑物"), ("school","学校","教育场所"), ("language","语言","交流系统"), ("money","钱","不可数名词"), ("problem","问题","困难或待解决事项"), ("question","问题／提问","可指疑问或提问"), ("answer","答案／回答","可作名词或动词"), ("place","地方","指地点"), ("train","火车／训练","依语境判断"), ("station","车站","交通场所"), ("store","商店","零售场所"), ("hospital","医院","医疗场所"), ("weather","天气","天气状况"), ("plan","计划","可作名词或动词"), ("idea","想法","观点或构思"), ("information","信息","不可数名词"), ("reason","原因","解释为何发生"), ("experience","经验／经历","可指经历或经验"), ("result","结果","事件或过程的结果"), ("change","改变／变化","可作名词或动词"), ("new","新的","形容词"), ("old","旧的／年长的","依语境判断"), ("high","高的","描述高度或程度"), ("low","低的","描述高度或程度"), ("early","早的／早地","可作形容词或副词"), ("late","晚的／迟的","可作形容词或副词")
 ]
 JP_GRAMMAR = [
+ (r"誰の[^、。！？!?\\s]+|何の[^、。！？!?\\s]+","疑問词＋の＋名词：所属・内容","「誰の＋名詞」は持ち主を、「何の＋名詞」は種類や内容を尋ねる。「の」は疑問詞と名詞をつなぐ。"),
+ (r"ですか(?=[。！？!?…]*$)","ですか：礼貌疑问句","名词或な形容词等后接「ですか」构成礼貌疑问；「か」标记疑问，不是独立的重点词汇。"),
+ (r"でしょうか(?=[。！？!?…]*$)","でしょうか：委婉疑问","比直接的「ですか」更委婉，常用于询问或确认。"),
  (r"が楽しみです","N が楽しみです","「が」标记期待的事情；「楽しみです」表示对未来事情的期待，如「旅行が楽しみです」"),
  (r"です$","です：礼貌体判断／说明","用于礼貌地说明身份、性质或状态；需结合前面的名词或形容词理解"),
  (r"ます$","动词ます形","动词的礼貌体形式；词干及具体时态需结合前文判断"),
@@ -111,6 +114,10 @@ JP_GRAMMAR = [
  (r"(?:です|でした)(?=[。！？!?…]*$)","礼貌体判断／说明","礼貌地说明身份、性质或状态；过去形式「でした」表示过去的判断或状态"),
 ]
 EN_GRAMMAR = [
+ (r"\b(?:who|whose|what|which)\b(?:\s+\w+){0,3}\?","疑问词问句","疑问词决定询问的人、所属、事物或选择；结合后续词语判断完整问句含义。"),
+ (r"\b(?:is|are|am|was|were)\s+\w+(?:\s+\w+){0,3}\?","be 动词一般疑问句","将 be 动词放在主语前构成一般疑问句，询问身份、状态或所属等信息。"),
+ (r"\b(?:do|does|did)\s+\w+\b[^.!?]*\?","do 助动词疑问句","do/does/did 放在主语前构成一般疑问；后接动词原形，did 表示过去时。"),
+ (r"\b(?:a|an|the)\s+\w+","冠词＋名词","a/an 通常引入一个非特定的可数单数对象；the 指向语境中可识别的特定对象。"),
  (r"\bwould you\b","Would you…? 礼貌请求","用 would you + 动词原形提出礼貌请求"),
  (r"\bcould you\b","Could you…? 礼貌请求","用 could you + 动词原形提出礼貌请求"),
  (r"\bwould like to\b","would like to + 动词","较礼貌地表达意愿"), (r"\bhave to\b","have to + 动词","表示外部要求或必要性"),
@@ -130,44 +137,60 @@ EN_GRAMMAR = [
 
 @lru_cache(maxsize=100000)
 def make_hits(sentence, lang):
+    """Create explainable, context-aware spans. Grammar structures win overlaps."""
     vocab = JP_VOCAB if lang == "ja" else EN_VOCAB
     grammar = JP_GRAMMAR if lang == "ja" else EN_GRAMMAR
-    candidates = []
-    for term, meaning, explanation in vocab:
-        if lang == "ja" and len(term) < 2:
+    grammar_hits = []
+    for rule_index, (pattern, meaning, explanation) in enumerate(grammar):
+        for match in re.finditer(pattern, sentence, re.I if lang == "en" else 0):
+            term = match.group()
+            if lang == "ja" and term in {"か", "の", "は", "が", "を", "に", "で", "と", "へ", "です", "ます"}:
+                continue
+            grammar_hits.append({"start": match.start(), "end": match.end(), "type": "grammar",
+                "term": term, "meaning": meaning, "explanation": explanation,
+                "rule_id": ("ja" if lang == "ja" else "en") + ".grammar." + str(rule_index + 1),
+                "confidence": "rule"})
+    grammar_hits.sort(key=lambda item: (item["start"], -(item["end"] - item["start"])))
+    selected_grammar = []
+    for item in grammar_hits:
+        if any(item["start"] < old["end"] and item["end"] > old["start"] for old in selected_grammar):
+            continue
+        selected_grammar.append(item)
+
+    vocab_hits = []
+    for rule_index, (term, meaning, explanation) in enumerate(vocab):
+        if lang == "ja" and (len(term) < 2 or term in {"です", "ます", "でした", "ました", "ください"}):
             continue
         for match in re.finditer(re.escape(term), sentence, re.I if lang == "en" else 0):
-            candidates.append({"start":match.start(),"end":match.end(),"type":"vocabulary","term":match.group(),"meaning":meaning,"explanation":explanation})
-    for pattern, term, explanation in grammar:
-        for match in re.finditer(pattern, sentence, re.I if lang == "en" else 0):
-            candidates.append({"start":match.start(),"end":match.end(),"type":"grammar","term":match.group(),"meaning":term,"explanation":explanation})
-    candidates.sort(key=lambda item:(item["start"],-(item["end"]-item["start"]),0 if item["type"]=="grammar" else 1))
-    hits=[]
-    for item in candidates:
-        if any(item["start"] < old["end"] and item["end"] > old["start"] for old in hits): continue
-        hits.append(item)
-    # Never fabricate a vocabulary or grammar annotation from an arbitrary substring.
-    # Cards without a recognized lexical item and a recognized grammar pattern are
-    # excluded by eligible() rather than being filled with generic placeholder text.
-    limited = hits[:8]
-    # The UI must always be able to show at least one vocabulary and one grammar
-    # highlight, even when a sentence matches many candidate expressions.
+            vocab_hits.append({"start": match.start(), "end": match.end(), "type": "vocabulary",
+                "term": match.group(), "meaning": meaning, "explanation": explanation,
+                "rule_id": ("ja" if lang == "ja" else "en") + ".vocab." + str(rule_index + 1),
+                "confidence": "lexicon"})
+    selected = list(selected_grammar)
+    vocab_hits.sort(key=lambda item: (item["start"], -(item["end"] - item["start"])))
+    for item in vocab_hits:
+        if any(item["start"] < old["end"] and item["end"] > old["start"] for old in selected):
+            continue
+        selected.append(item)
+    selected.sort(key=lambda item: (item["start"], -(item["end"] - item["start"])))
+    limited = selected[:8]
     for kind in ("vocabulary", "grammar"):
         if not any(item["type"] == kind for item in limited):
-            candidate = next((item for item in hits if item["type"] == kind), None)
+            candidate = next((item for item in selected if item["type"] == kind), None)
             if candidate:
                 if len(limited) >= 8:
                     limited[-1] = candidate
                 else:
                     limited.append(candidate)
-    return sorted(limited, key=lambda item:(item["start"], -(item["end"]-item["start"]), 0 if item["type"]=="grammar" else 1))
+    return sorted(limited, key=lambda item: (item["start"], -(item["end"] - item["start"])))
+
 
 def expansion(hits, kind, lang=None):
     output=[]; seen=set()
     for hit in hits:
         if hit["type"] != kind or hit["term"] in seen: continue
         seen.add(hit["term"])
-        output.append({"term":hit["term"],"meaning":hit["meaning"],"explanation":hit["explanation"]})
+        output.append({"term":hit["term"],"meaning":hit["meaning"],"explanation":hit["explanation"],"rule_id":hit.get("rule_id", "legacy"),"confidence":hit.get("confidence", "rule")})
         # Keep every displayed highlight explainable: make_hits caps sentence highlights at 8,
         # so expansion must not silently drop highlighted items after the fourth match.
         if len(output)>=8: break
