@@ -34,6 +34,7 @@ function parseSqlTuple(line) {
   const fields = []
   let i = line.indexOf('(') + 1
   while (i > 0 && i < line.length) {
+    while (/\s/.test(line[i] || '')) i++
     if (line[i] !== "'") throw new Error('Expected SQL string field in: ' + line.slice(0, 80))
     i++
     let value = ''
