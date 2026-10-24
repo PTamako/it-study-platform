@@ -439,8 +439,12 @@ async function loadScenarios() {
     scenariosLoading.value = false
   }
 }
+let scenarioSubmissionId = 0
 function nextScenario() {
   stopSpeech()
+  // Invalidate any in-flight submission so its response cannot overwrite the next scenario.
+  scenarioSubmissionId += 1
+  scenarioSubmitting.value = false
   if (!scenarios.value.length) return
   const index = scenarios.value.findIndex(item => item.id === currentScenario.value?.id)
   const next = scenarios.value[(index + 1) % scenarios.value.length]
@@ -451,7 +455,10 @@ function nextScenario() {
 }
 
 async function submitScenario() {
-  if (!currentScenario.value || !selectedScenarioOption.value || scenarioSubmitting.value || scenarioResult.value) return
+  const submittedScenario = currentScenario.value
+  const submittedOption = selectedScenarioOption.value
+  if (!submittedScenario || !submittedOption || scenarioSubmitting.value || scenarioResult.value) return
+  const requestId = ++scenarioSubmissionId
   scenarioSubmitting.value = true
   scenariosError.value = ''
   try {
@@ -459,13 +466,16 @@ async function submitScenario() {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        scenario_id: currentScenario.value.id,
-        selected_option: selectedScenarioOption.value,
+        scenario_id: submittedScenario.id,
+        selected_option: submittedOption,
         duration_seconds: 0,
       }),
     })
     const data = await response.json() as { score?: number; best_option?: string; correct?: boolean; feedback?: string; error?: string }
     if (!response.ok) throw new Error(data.error || '实战结果保存失败')
+    // A newer scenario may be selected while the server is scoring this attempt.
+    // Keep the saved attempt, but do not paint its result onto a different scenario.
+    if (requestId !== scenarioSubmissionId || currentScenario.value?.id !== submittedScenario.id) return
     const feedback = String(data.feedback || '')
     scenarioResult.value = {
       score: Number(data.score || 0),
@@ -473,12 +483,13 @@ async function submitScenario() {
       correct: Boolean(data.correct),
       feedback,
     }
-    void translateScenarioExplanation(currentScenario.value.id, feedback)
+    void translateScenarioExplanation(submittedScenario.id, feedback)
     void loadCloudDashboard()
   } catch (error) {
+    if (requestId !== scenarioSubmissionId) return
     scenariosError.value = error instanceof Error ? error.message : '实战结果保存失败，请稍后重试。'
   } finally {
-    scenarioSubmitting.value = false
+    if (requestId === scenarioSubmissionId) scenarioSubmitting.value = false
   }
 }
 watch([selectedTrackId, examTracks, activeModule], () => {
