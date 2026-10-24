@@ -420,23 +420,28 @@ function speakScenario(scenario: PracticalScenario | null) {
   speakJapaneseQuestion(`${scenario.title}。状況：${scenario.situation}。課題：${scenario.task}。選択肢：${options}`, `practical:${scenario.id}`)
 }
 
+let scenarioLoadRequestId = 0
 async function loadScenarios() {
-  if (!selectedTrack.value) { scenarios.value = []; return }
+  const requestId = ++scenarioLoadRequestId
+  const trackId = selectedTrack.value?.id
+  if (!trackId) { scenarios.value = []; scenariosLoading.value = false; return }
   scenariosLoading.value = true
   scenariosError.value = ''
   scenarioResult.value = null
   selectedScenarioOption.value = ''
   try {
-    const response = await fetch('/api/scenarios?track=' + encodeURIComponent(selectedTrack.value.id))
+    const response = await fetch('/api/scenarios?track=' + encodeURIComponent(trackId))
     const data = await response.json() as { items?: PracticalScenario[]; error?: string }
+    if (requestId !== scenarioLoadRequestId) return
     if (!response.ok) throw new Error(data.error || '实战任务加载失败')
     scenarios.value = data.items || []
     selectedScenarioId.value = scenarios.value[0]?.id || ''
   } catch (error) {
+    if (requestId !== scenarioLoadRequestId) return
     scenariosError.value = error instanceof Error ? error.message : '实战任务加载失败，请稍后重试。'
     scenarios.value = []
   } finally {
-    scenariosLoading.value = false
+    if (requestId === scenarioLoadRequestId) scenariosLoading.value = false
   }
 }
 let scenarioSubmissionId = 0
