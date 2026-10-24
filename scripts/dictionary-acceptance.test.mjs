@@ -158,3 +158,17 @@ test('preview demo mode supplies isolated Japanese and English sample sentences 
   assert.match(app, /if \(previewDemoMode\) \{\s*languageCards\.value = previewLanguageFixtures\.filter\(card => card\.language === studyLanguage\.value\)/)
   assert.match(app, /预览演示模式：使用内置示例句子，不读取或写入云端学习数据/)
 })
+
+
+test('practical submission snapshots the scenario and ignores stale responses after switching', () => {
+  const start = app.indexOf('let scenarioSubmissionId = 0')
+  const end = app.indexOf('watch([selectedTrackId', start)
+  const handlers = app.slice(start, end)
+  assert.ok(start >= 0 && end > start, 'practical submission handlers should be found')
+  assert.match(handlers, /const submittedScenario = currentScenario\.value/)
+  assert.match(handlers, /const submittedOption = selectedScenarioOption\.value/)
+  assert.match(handlers, /scenarioSubmissionId \+= 1/)
+  assert.match(handlers, /requestId !== scenarioSubmissionId \|\| currentScenario\.value\?\.id !== submittedScenario\.id/)
+  assert.match(handlers, /translateScenarioExplanation\(submittedScenario\.id, feedback\)/)
+  assert.match(handlers, /if \(requestId === scenarioSubmissionId\) scenarioSubmitting\.value = false/)
+})
