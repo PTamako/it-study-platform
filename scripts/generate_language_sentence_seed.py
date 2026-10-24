@@ -74,7 +74,7 @@ EN_VOCAB = [
  ("when","当……时","引导时间从句"), ("before","在……之前","表示时间先后"), ("after","在……之后","表示时间先后"),
 ]
 JP_GRAMMAR = [
- (r"が楽しみです","N が楽しみです","「が」标记期待的事情；「楽しみです」表示对未来事情的期待，如「旅行が楽しみです」"),
+ (r"が楽しみです","N が楽しみです","「が」标记期待的事情；「楽しみです」表示对未来事情的期待，如「旅行が楽しみです」"),\n (r"です$","です：礼貌体判断／说明","用于礼貌地说明身份、性质或状态；需结合前面的名词或形容词理解"),\n (r"ます$","动词ます形","动词的礼貌体形式；词干及具体时态需结合前文判断"),
     (r"なければなりません|なければならない","必须……","表达义务或必要性"),
  (r"てもいいですか|てもいいです","可以……吗／可以……","表示许可；疑问形式用于征求许可"),
  (r"てください","请……","动词て形＋ください，用于礼貌请求"),
@@ -117,54 +117,9 @@ def make_hits(sentence, lang):
     for item in candidates:
         if any(item["start"] < old["end"] and item["end"] > old["start"] for old in hits): continue
         hits.append(item)
-    if not any(item["type"]=="vocabulary" for item in hits):
-        if lang == "ja":
-            match = re.search(r"[\u3040-\u30ff\u3400-\u9fff]{2,5}", sentence)
-        else:
-            match = next((m for m in re.finditer(r"\b[A-Za-z]{3,}\b", sentence)
-                          if m.group().lower() not in {"the","and","you","are","was","for","with","that","this","have","has","not"}), None)
-        # Every card needs a real, exact source substring to highlight. Very short
-        # or punctuation-heavy sentences may not contain a token matching the
-        # language-specific heuristic, so fall back to the first non-whitespace
-        # span rather than leaving the card without a vocabulary highlight.
-        if match is None:
-            match = re.search(r"\S+", sentence)
-        if match:
-            hits.append({"start":match.start(),"end":match.end(),"type":"vocabulary","term":match.group(),"meaning":"句中重点表达","explanation":"结合整句语境理解词义和用法。"})
-            hits.sort(key=lambda item:item["start"])
-    # Guarantee a visible grammar/structure highlight on every sentence card. Prefer
-    # a recognizable sentence ending or predicate; if no pattern is recognized, use
-    # an exact source substring and clearly label it as a study prompt, not a parse.
-    if not any(item["type"] == "grammar" for item in hits):
-        clean = re.sub(r"[。！？!?…]+$", "", sentence).rstrip()
-        match = None
-        if lang == "ja":
-            match = re.search(r"(?:ていただけますか|てください|てから|なければなりません|なければならない|てもいいですか|てもいいです|と思います|かもしれません|ませんでした|ません|ました|でしょう|でした|ます|です|だった|ない|たいです|ています|ている|までに|について|ので|けど|かな|か|ね|よ)$", clean)
-            if match is None:
-                match = re.search(r"[ぁ-ゖァ-ヶ一-龯]{1,4}$", clean)
-            meaning = "句尾活用／表达观察点"
-            explanation = "自动规则未识别到明确语法模式；请结合整句观察句尾活用、助词与语气。这是学习提示，不是完整语法解析。"
-        else:
-            words = list(re.finditer(r"\b[A-Za-z][A-Za-z'-]*\b", clean))
-            match = next((item for item in reversed(words)
-                          if item.group().lower() not in {"a", "an", "the", "and", "or", "but", "to", "of", "in", "on", "at", "for", "with"}), None)
-            if match is None and words:
-                match = words[-1]
-            meaning = "句子结构观察点"
-            explanation = "自动规则未识别到明确句型；请观察该词在句中的作用及其前后搭配。这是学习提示，不是完整语法解析。"
-        if match is None:
-            match = re.search(r"\S+", clean)
-        if match:
-            start, end = match.start(), match.end()
-            if any(start < item["end"] and end > item["start"] for item in hits):
-                alternatives = (list(re.finditer(r"[ぁ-ゖァ-ヶ一-龯]{1,4}", clean)) if lang == "ja"
-                                else list(re.finditer(r"\b[A-Za-z][A-Za-z'-]*\b", clean)))
-                match = next((item for item in reversed(alternatives)
-                              if not any(item.start() < hit["end"] and item.end() > hit["start"] for hit in hits)), None)
-            if match:
-                hits.append({"start":match.start(),"end":match.end(),"type":"grammar","term":match.group(),
-                             "meaning":meaning,"explanation":explanation})
-                hits.sort(key=lambda item:(item["start"], -(item["end"]-item["start"]), 0 if item["type"]=="grammar" else 1))
+    # Never fabricate a vocabulary or grammar annotation from an arbitrary substring.
+    # Cards without a recognized lexical item and a recognized grammar pattern are
+    # excluded by eligible() rather than being filled with generic placeholder text.
     limited = hits[:8]
     # The UI must always be able to show at least one vocabulary and one grammar
     # highlight, even when a sentence matches many candidate expressions.
@@ -187,14 +142,6 @@ def expansion(hits, kind, lang=None):
         # Keep every displayed highlight explainable: make_hits caps sentence highlights at 8,
         # so expansion must not silently drop highlighted items after the fourth match.
         if len(output)>=8: break
-    # Every card gets a useful structural prompt even when the heuristic matcher
-    # cannot confidently identify a named grammar pattern in the sentence.
-    if kind == "grammar" and not output:
-        output.append({
-            "term": "句型结构" if lang == "ja" else "Sentence structure",
-            "meaning": "观察助词、活用和句尾表达" if lang == "ja" else "Observe word order, verb form, and sentence ending",
-            "explanation": "结合整句找出主语、谓语、修饰关系及语气；这是学习提示，不是自动判定的唯一语法分析。" if lang == "ja" else "Identify the subject, verb, modifiers, and tone in context; this is a study prompt, not a definitive automatic parse."
-        })
     return output
 
 def main():
@@ -236,7 +183,7 @@ def main():
             result=[]
             for item in items:
                 kinds={hit["type"] for hit in make_hits(item[1],lang)}
-                if {"vocabulary","grammar"}.issubset(kinds):
+                if {"vocabulary","grammar"}.issubset(kinds) and not any(\n                hit["meaning"] in {"句中重点表达", "句子结构观察点", "句尾活用／表达观察点"}\n                or "未识别到明确" in hit["explanation"]\n                for hit in make_hits(item[1], lang))):
                     result.append(item)
                     if len(result)>=limit: break
             return result
@@ -282,7 +229,7 @@ def main():
         )
     OUT_REFRESH.write_text("\n".join(refresh)+"\n",encoding="utf-8")
     OUT_REFRESH_LATEST.write_text("\n".join(refresh)+"\n",encoding="utf-8")
-    print("Generated exactly 3,000 Japanese + 3,000 English sentence cards in",OUT)
+    # Whole-corpus quality summary: every accepted card must have concrete, non-overlapping\n    # source spans and non-placeholder explanations. Fail closed if any generic filler leaks in.\n    quality = {"ja": {"vocabulary": 0, "grammar": 0}, "en": {"vocabulary": 0, "grammar": 0}}\n    for card in cards:\n        sentence = card["term"]\n        highlights = json.loads(card["highlight_json"])\n        for hit in highlights:\n            if sentence[hit["start"]:hit["end"]] != hit["term"]:\n                raise RuntimeError("Invalid highlight offsets for " + card["id"])\n            if hit["meaning"] in {"句中重点表达", "句子结构观察点", "句尾活用／表达观察点"} or "未识别到明确" in hit["explanation"]:\n                raise RuntimeError("Placeholder annotation detected for " + card["id"])\n            quality[card["language"]][hit["type"]] += 1\n        for left, right in zip(sorted(highlights, key=lambda hit: hit["start"]), sorted(highlights, key=lambda hit: hit["start"])[1:]):\n            if left["end"] > right["start"]:\n                raise RuntimeError("Overlapping highlights for " + card["id"])\n        for kind, column in (("vocabulary", "vocabulary_expansion_json"), ("grammar", "grammar_expansion_json")):\n            expansions = json.loads(card[column])\n            if not expansions:\n                raise RuntimeError("Missing " + kind + " explanation for " + card["id"])\n            highlighted_terms = {hit["term"] for hit in highlights if hit["type"] == kind}\n            if not highlighted_terms.issubset({entry["term"] for entry in expansions}):\n                raise RuntimeError("Unexplained " + kind + " highlight for " + card["id"])\n    print("Whole-corpus annotation quality counts:", json.dumps(quality, ensure_ascii=False, sort_keys=True))\n    print("Generated exactly 3,000 Japanese + 3,000 English sentence cards in",OUT)
     print("Generated annotation refresh migration for existing sentence cards in",OUT_REFRESH)
     print("Generated latest Japanese annotation refresh migration in",OUT_REFRESH_LATEST)
 if __name__=="__main__": main()
