@@ -1168,9 +1168,14 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
     return
   }
   const voices = availableVoices.filter(voice => normalize(voice.lang).startsWith(prefix))
-  const voice = voices.find(candidate => normalize(candidate.lang) === normalizedLang && /natural|enhanced|premium|siri|daniel|karen|ava|alex|samantha|kyoko|otoya/i.test(candidate.name))
-    || voices.find(candidate => normalize(candidate.lang) === normalizedLang && candidate.localService)
-    || voices.find(candidate => normalize(candidate.lang) === normalizedLang)
+  // Prefer an on-device voice first. On iOS, a remote/enhanced voice can sometimes
+  // fire onstart/onend while producing no audible output (for example, if its asset
+  // is unavailable). Only use the preferred-name heuristic within local voices.
+  const exactLanguageVoices = voices.filter(candidate => normalize(candidate.lang) === normalizedLang)
+  const voice = exactLanguageVoices.find(candidate => candidate.localService && /natural|enhanced|premium|siri|daniel|karen|ava|alex|samantha|kyoko|otoya/i.test(candidate.name))
+    || exactLanguageVoices.find(candidate => candidate.localService)
+    || exactLanguageVoices.find(candidate => /natural|enhanced|premium|siri|daniel|karen|ava|alex|samantha|kyoko|otoya/i.test(candidate.name))
+    || exactLanguageVoices[0]
 
   // Never fall back to voices[0]: that voice may be Chinese or the opposite target language.
   // If the browser has loaded voices but none for this language, fail visibly rather than
@@ -1189,7 +1194,10 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
     if (requestId === speechRequestId) speechStatus.value = '正在播放：' + spokenText
   }
   utterance.onend = () => {
-    if (requestId === speechRequestId) speechStatus.value = '播放完成：' + spokenText
+    if (requestId === speechRequestId) {
+      const voiceLabel = voice ? '；语音：' + voice.name + (voice.localService ? '（设备本地）' : '（系统提供）') : '；语音：浏览器自动选择'
+      speechStatus.value = '播放请求已结束' + voiceLabel + '。如果仍然无声，请确认 iPhone 媒体音量并重试。'
+    }
   }
   utterance.onerror = event => {
     if (requestId !== speechRequestId || ['canceled', 'interrupted'].includes(String(event.error))) return
