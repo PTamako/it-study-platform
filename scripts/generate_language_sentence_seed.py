@@ -234,7 +234,29 @@ def main():
         )
     OUT_REFRESH.write_text("\n".join(refresh)+"\n",encoding="utf-8")
     OUT_REFRESH_LATEST.write_text("\n".join(refresh)+"\n",encoding="utf-8")
-    # Whole-corpus quality summary: every accepted card must have concrete, non-overlapping\n    # source spans and non-placeholder explanations. Fail closed if any generic filler leaks in.\n    quality = {"ja": {"vocabulary": 0, "grammar": 0}, "en": {"vocabulary": 0, "grammar": 0}}\n    for card in cards:\n        sentence = card["term"]\n        highlights = json.loads(card["highlight_json"])\n        for hit in highlights:\n            if sentence[hit["start"]:hit["end"]] != hit["term"]:\n                raise RuntimeError("Invalid highlight offsets for " + card["id"])\n            if hit["meaning"] in {"句中重点表达", "句子结构观察点", "句尾活用／表达观察点"} or "未识别到明确" in hit["explanation"]:\n                raise RuntimeError("Placeholder annotation detected for " + card["id"])\n            quality[card["language"]][hit["type"]] += 1\n        for left, right in zip(sorted(highlights, key=lambda hit: hit["start"]), sorted(highlights, key=lambda hit: hit["start"])[1:]):\n            if left["end"] > right["start"]:\n                raise RuntimeError("Overlapping highlights for " + card["id"])\n        for kind, column in (("vocabulary", "vocabulary_expansion_json"), ("grammar", "grammar_expansion_json")):\n            expansions = json.loads(card[column])\n            if not expansions:\n                raise RuntimeError("Missing " + kind + " explanation for " + card["id"])\n            highlighted_terms = {hit["term"] for hit in highlights if hit["type"] == kind}\n            if not highlighted_terms.issubset({entry["term"] for entry in expansions}):\n                raise RuntimeError("Unexplained " + kind + " highlight for " + card["id"])\n    print("Whole-corpus annotation quality counts:", json.dumps(quality, ensure_ascii=False, sort_keys=True))\n    print("Generated exactly 3,000 Japanese + 3,000 English sentence cards in",OUT)
+    # Whole-corpus quality summary: every accepted card must have concrete, non-overlapping
+    # source spans and non-placeholder explanations. Fail closed if any generic filler leaks in.
+    quality = {"ja": {"vocabulary": 0, "grammar": 0}, "en": {"vocabulary": 0, "grammar": 0}}
+    for card in cards:
+        sentence = card["term"]
+        highlights = json.loads(card["highlight_json"])
+        for hit in highlights:
+            if sentence[hit["start"]:hit["end"]] != hit["term"]:
+                raise RuntimeError("Invalid highlight offsets for " + card["id"])
+            if hit["meaning"] in {"句中重点表达", "句子结构观察点", "句尾活用／表达观察点"} or "未识别到明确" in hit["explanation"]:
+                raise RuntimeError("Placeholder annotation detected for " + card["id"])
+            quality[card["language"]][hit["type"]] += 1
+        ordered_hits = sorted(highlights, key=lambda hit: hit["start"])
+        for left, right in zip(ordered_hits, ordered_hits[1:]):
+            if left["end"] > right["start"]:
+                raise RuntimeError("Overlapping highlights for " + card["id"])
+        for kind, column in (("vocabulary", "vocabulary_expansion_json"), ("grammar", "grammar_expansion_json")):
+            expansions = json.loads(card[column])
+            if not expansions:
+                raise RuntimeError("Missing " + kind + " explanation for " + card["id"])
+            highlighted_terms = {hit["term"] for hit in highlights if hit["type"] == kind}
+            if not highlighted_terms.issubset({entry["term"] for entry in expansions}):
+                raise RuntimeError("Unexplained " + kind + " highlight for " + card["id"])
     print("Generated annotation refresh migration for existing sentence cards in",OUT_REFRESH)
     print("Generated latest Japanese annotation refresh migration in",OUT_REFRESH_LATEST)
 if __name__=="__main__": main()
