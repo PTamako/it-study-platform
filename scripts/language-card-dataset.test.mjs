@@ -105,6 +105,14 @@ test('every sentence card has usable translations, grounded highlights, and voca
       assert.ok(Number.isInteger(hit.start) && Number.isInteger(hit.end), id + ': highlight offsets must be integers')
       assert.ok(hit.start >= 0 && hit.end > hit.start && hit.end <= sentence.length, id + ': highlight offsets must be in range')
       assert.equal(sentence.slice(hit.start, hit.end), hit.term, id + ': highlight must match the exact sentence substring')
+      assert.ok(!['句中重点表达', '句子结构观察点', '句尾活用／表达观察点'].includes(hit.meaning), id + ': generic placeholder meaning is not acceptable')
+      assert.ok(!/未识别到明确/.test(hit.explanation), id + ': generic fallback grammar explanation is not acceptable')
+      const expansions = hit.type === 'vocabulary' ? vocabulary : grammar
+      assert.ok(expansions.some(item => item.term === hit.term), id + ': every highlighted item must have a matching expansion')
+    }
+    const ordered = [...highlights].sort((a, b) => a.start - b.start || b.end - a.end)
+    for (let index = 1; index < ordered.length; index++) {
+      assert.ok(ordered[index - 1].end <= ordered[index].start, id + ': highlights must not overlap')
     }
   }
   assert.equal(grammarHighlighted, rows.length, 'every card must contain a directly highlighted grammar/structure point')
