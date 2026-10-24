@@ -321,12 +321,12 @@ def main():
     ]
     for start in range(0, len(values), 5):
         batch = values[start:start+5]
-        rebuild.append(insert_prefix + "\\n" + ",\\n".join(batch) + ";")
+        rebuild.append(insert_prefix + "\n" + ",\n".join(batch) + ";")
     rebuild.extend([
         "INSERT OR REPLACE INTO language_card_progress (card_id, mastered, updated_at) SELECT b.card_id, b.mastered, b.updated_at FROM language_card_progress_rebuild_backup b JOIN language_cards c ON c.id = b.card_id WHERE c.content_type = 'sentence';",
         "DROP TABLE language_card_progress_rebuild_backup;",
     ])
-    OUT_REBUILD.write_text("\\n".join(rebuild) + "\\n", encoding="utf-8")
+    OUT_REBUILD.write_text("\n".join(rebuild) + "\n", encoding="utf-8")
 
     # Whole-corpus quality summary: every accepted card must have concrete, non-overlapping
     # source spans and non-placeholder explanations. Fail closed if any generic filler leaks in.
