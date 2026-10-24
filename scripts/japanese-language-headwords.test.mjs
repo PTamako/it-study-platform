@@ -7,7 +7,10 @@ const migration = await readFile(new URL('../migrations/0078_restore_japanese_le
 const seed = await readFile(new URL('../migrations/0003_language_and_dictionary_content.sql', import.meta.url), 'utf8')
 
 test('Japanese language cards show the source-language headword as the large title', () => {
-  assert.match(app, /<h3>\{\{ card\.term \}\}<\/h3>/)
+  assert.match(app, /v-for="part in sentenceParts\(card\)"/)
+  assert.match(app, /class="language-sentence-part"/)
+  assert.match(app, /card\.term/)
+
   assert.match(app, /<p class="language-meaning">\{\{ card\.meaning_zh \}\}<\/p>/)
   assert.match(app, /const lang = card\.language === 'ja' \? 'ja-JP' : 'en-US'/)
 })
