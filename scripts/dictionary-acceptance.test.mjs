@@ -165,7 +165,7 @@ test('saved dictionary changes update local state only after the cloud confirms 
   const end = app.indexOf('async function lookupDictionary()', start)
   const handler = app.slice(start, end)
   assert.ok(start >= 0 && end > start, 'saved-word handler should be found')
-  assert.match(handler, /const savedWordRequests = new Set<string>()/)
+  assert.match(app, /const savedWordRequests = new Set<string>()/)
   assert.match(handler, /if \(savedWordRequests\.has\(term\)\) return/)
   assert.match(handler, /const response = await fetch\('\/api\/vocabulary\/saved'/)
   assert.match(handler, /if \(!response\.ok\) throw new Error/)
