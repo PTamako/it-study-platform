@@ -136,7 +136,9 @@ def expansion(hits, kind, lang=None):
         if hit["type"] != kind or hit["term"] in seen: continue
         seen.add(hit["term"])
         output.append({"term":hit["term"],"meaning":hit["meaning"],"explanation":hit["explanation"]})
-        if len(output)>=4: break
+        # Keep every displayed highlight explainable: make_hits caps sentence highlights at 8,
+        # so expansion must not silently drop highlighted items after the fourth match.
+        if len(output)>=8: break
     # Every card gets a useful structural prompt even when the heuristic matcher
     # cannot confidently identify a named grammar pattern in the sentence.
     if kind == "grammar" and not output:

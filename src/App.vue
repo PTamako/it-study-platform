@@ -681,6 +681,93 @@ type LanguageCard = {
   example_source_url?: string; source_url?: string; source_type: string; content_type?: string;
   highlight_json?: string; vocabulary_expansion_json?: string; grammar_expansion_json?: string
 }
+const previewDemoMode = new URLSearchParams(window.location.search).get('demo') === '1'
+const previewLanguageFixtures: LanguageCard[] = [
+  {
+    id: 'demo-ja-daily-001', language: 'ja', category: '日常句子',
+    term: 'もう一度説明していただけますか。',
+    reading: 'もういちど せつめいしていただけますか。',
+    meaning_zh: '可以请您再解释一次吗？',
+    explanation: '礼貌地请求对方重复说明，适合日常沟通与不确定时使用。',
+    example: 'すみません、もう一度説明していただけますか。',
+    example_meaning_zh: '不好意思，可以请您再解释一次吗？',
+    source_type: 'preview-demo', content_type: 'sentence',
+    highlight_json: JSON.stringify([
+      { start: 0, end: 5, type: 'vocabulary', term: 'もう一度', meaning: '再一次', explanation: '用于请求重复动作。' },
+      { start: 8, end: 13, type: 'grammar', term: '〜ていただけますか', meaning: '可以请您……吗', explanation: '使用「て形＋いただけますか」委婉请求对方做某事。' },
+    ]),
+    vocabulary_expansion_json: JSON.stringify([
+      { term: 'もう一度', meaning: '再一次', explanation: '用于请对方重复说明、确认或操作。' },
+    ]),
+    grammar_expansion_json: JSON.stringify([
+      { term: '〜ていただけますか', meaning: '可以请您……吗', explanation: '比「〜てください」更委婉，适合对不熟悉的人或职场沟通。' },
+    ]),
+  },
+  {
+    id: 'demo-ja-work-001', language: 'ja', category: '职场语言',
+    term: '確認してから、改めてご連絡します。',
+    reading: 'かくにんしてから、あらためてごれんらくします。',
+    meaning_zh: '确认之后，我会再联系您。',
+    explanation: '适合暂时不能立即答复，需要核实信息后再回复的职场场景。',
+    example: '内容を確認してから、改めてご連絡します。',
+    example_meaning_zh: '确认内容后，我会再联系您。',
+    source_type: 'preview-demo', content_type: 'sentence',
+    highlight_json: JSON.stringify([
+      { start: 0, end: 5, type: 'vocabulary', term: '確認して', meaning: '确认后', explanation: '「確認する」是职场常见的核实、确认。' },
+      { start: 11, end: 18, type: 'vocabulary', term: 'ご連絡します', meaning: '联系您', explanation: '「連絡する」加「ご」构成礼貌表达。' },
+      { start: 0, end: 8, type: 'grammar', term: '〜てから', meaning: '做完……之后', explanation: '表示先完成前项动作，再进行后项动作。' },
+    ]),
+    vocabulary_expansion_json: JSON.stringify([
+      { term: '確認する', meaning: '确认、核实', explanation: '常见表达：内容を確認します。' },
+      { term: 'ご連絡します', meaning: '联系您', explanation: '适用于工作邮件、电话及进度沟通。' },
+    ]),
+    grammar_expansion_json: JSON.stringify([
+      { term: '〜てから', meaning: '……之后', explanation: '连接动作的先后顺序，例如「調べてから回答します」。' },
+    ]),
+  },
+  {
+    id: 'demo-en-daily-001', language: 'en', category: '日常句子',
+    term: 'Could you say that one more time?',
+    meaning_zh: '你可以再说一遍吗？',
+    explanation: '自然、礼貌地请求对方重复刚才的话。',
+    example: 'Sorry, could you say that one more time?',
+    example_meaning_zh: '不好意思，你可以再说一遍吗？',
+    source_type: 'preview-demo', content_type: 'sentence',
+    highlight_json: JSON.stringify([
+      { start: 0, end: 8, type: 'vocabulary', term: 'Could you', meaning: '你可以……吗', explanation: '常见的礼貌请求开头。' },
+      { start: 9, end: 12, type: 'grammar', term: 'say', meaning: '说', explanation: '情态动词 could 后接动词原形。' },
+      { start: 22, end: 34, type: 'vocabulary', term: 'one more time', meaning: '再一次', explanation: '自然表达“再来一次、再说一遍”。' },
+    ]),
+    vocabulary_expansion_json: JSON.stringify([
+      { term: 'Could you…?', meaning: '可以请你……吗？', explanation: '比直接命令更礼貌，适用于日常和工作场景。' },
+      { term: 'one more time', meaning: '再一次', explanation: '可用于请求重复动作或内容。' },
+    ]),
+    grammar_expansion_json: JSON.stringify([
+      { term: 'Could + 主语 + 动词原形', meaning: '礼貌请求句型', explanation: 'could 在此表示委婉请求，后接动词原形。' },
+    ]),
+  },
+  {
+    id: 'demo-en-work-001', language: 'en', category: '职场语言',
+    term: 'I will check the details and get back to you.',
+    meaning_zh: '我会确认具体情况后再回复你。',
+    explanation: '适合需要先确认信息、之后再答复同事或客户的场景。',
+    example: 'Let me check the details and get back to you this afternoon.',
+    example_meaning_zh: '我先确认具体情况，今天下午再回复你。',
+    source_type: 'preview-demo', content_type: 'sentence',
+    highlight_json: JSON.stringify([
+      { start: 7, end: 12, type: 'vocabulary', term: 'check', meaning: '确认、核实', explanation: '工作场景中常用于核实信息。' },
+      { start: 28, end: 40, type: 'vocabulary', term: 'get back to you', meaning: '再回复你', explanation: '自然的职场表达，表示之后联系或回复。' },
+      { start: 0, end: 6, type: 'grammar', term: 'I will', meaning: '我将会', explanation: 'will + 动词原形表示未来动作或承诺。' },
+    ]),
+    vocabulary_expansion_json: JSON.stringify([
+      { term: 'check the details', meaning: '确认具体情况', explanation: '可用于工作任务、订单、计划与资料核对。' },
+      { term: 'get back to you', meaning: '之后回复你', explanation: '比正式的「respond」更口语、自然。' },
+    ]),
+    grammar_expansion_json: JSON.stringify([
+      { term: 'will + 动词原形', meaning: '将会做某事', explanation: '常用于承诺、计划或即时决定。' },
+    ]),
+  },
+]
 const languageCards = ref<LanguageCard[]>([])
 const languageCategories = computed(() => [
   { title: '全部', desc: '全部句子', icon: BookOpen },
@@ -783,6 +870,11 @@ async function loadLanguageCards() {
   languageCardsLoading.value = true
   languageCardsError.value = ''
   languageCards.value = []
+  if (previewDemoMode) {
+    languageCards.value = previewLanguageFixtures.filter(card => card.language === studyLanguage.value)
+    languageCardsLoading.value = false
+    return
+  }
   try {
     const response = await fetch('/api/language-cards?lang=' + encodeURIComponent(studyLanguage.value))
     const data = await response.json() as { items?: LanguageCard[]; error?: string }
@@ -1114,6 +1206,16 @@ function speakJapaneseQuestion(text: string, statusTarget = '') {
   // Use the same synchronous path as the dictionary play buttons to avoid Safari activation loss.
   speak(text, 'ja-JP', statusTarget)
 }
+// Where supported, request a media-playback audio session for speech so iOS can route it
+// like page media rather than a short ambient sound. This is best-effort only: Safari/iOS
+// decides whether the API is supported and how system volume/silent mode are applied.
+type BrowserAudioSession = { type: string }
+function setSpeechAudioSessionType(type: 'playback' | 'auto') {
+  const audioSession = (navigator as Navigator & { audioSession?: BrowserAudioSession }).audioSession
+  if (!audioSession) return
+  try { audioSession.type = type } catch { /* Unsupported/locked audio-session implementation. */ }
+}
+
 function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', statusTarget = '') {
   speechStatusTarget.value = statusTarget
   const spokenText = text.trim()
@@ -1132,7 +1234,10 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   const requestId = ++speechRequestId
   speechPaused.value = false
   try {
-    synthesis.cancel()
+    // iOS Safari can silently drop the first utterance when cancel() is called
+    // while the speech queue is already idle. Cancel only an actual queued/current
+    // utterance; for a fresh tap, preserve the user-activation playback path.
+    if (synthesis.speaking || synthesis.pending) synthesis.cancel()
     if (synthesis.paused) synthesis.resume()
   } catch {
     // Continue and report playback failure via utterance.onerror if needed.
@@ -1148,21 +1253,31 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   const normalizedLang = normalize(lang)
   const prefix = normalizedLang.slice(0, 2)
   const availableVoices = synthesis.getVoices()
-  // Some browsers (notably Safari/iOS) populate the voice list asynchronously. If it is
-  // empty, never let the OS silently choose its default voice (which may be Chinese).
+  // Safari/iOS can populate voices asynchronously. Never speak with an unknown OS
+  // default voice: wait for voiceschanged, then retry with the requested language.
   if (availableVoices.length === 0) {
-    speechStatus.value = '系统语音列表尚未加载，暂未播放。请稍候再点一次；若仍无声音，请检查系统日语语音设置。'
+    speechStatus.value = '系统语音列表尚未加载，暂未播放；正在等待语音就绪。'
     synthesis.addEventListener('voiceschanged', () => {
       if (synthesis.getVoices().length > 0 && requestId === speechRequestId) {
-        speechStatus.value = '系统语音已加载，请再次点击日语发音。'
+        // Do not call speak() from this asynchronous event: iOS Safari may reject
+        // speech started outside the original tap's user activation. Ask for one
+        // explicit tap after voices are ready instead of silently failing.
+        speechStatus.value = '系统语音已就绪，请再次点击播放。'
+      } else if (requestId === speechRequestId) {
+        speechStatus.value = '系统语音仍未就绪。请检查系统语音设置后重试。'
       }
     }, { once: true })
     return
   }
   const voices = availableVoices.filter(voice => normalize(voice.lang).startsWith(prefix))
-  const voice = voices.find(candidate => normalize(candidate.lang) === normalizedLang && /natural|enhanced|premium|siri|daniel|karen|ava|alex|samantha|kyoko|otoya/i.test(candidate.name))
-    || voices.find(candidate => normalize(candidate.lang) === normalizedLang && candidate.localService)
-    || voices.find(candidate => normalize(candidate.lang) === normalizedLang)
+  // Prefer an on-device voice first. On iOS, a remote/enhanced voice can sometimes
+  // fire onstart/onend while producing no audible output (for example, if its asset
+  // is unavailable). Only use the preferred-name heuristic within local voices.
+  const exactLanguageVoices = voices.filter(candidate => normalize(candidate.lang) === normalizedLang)
+  const voice = exactLanguageVoices.find(candidate => candidate.localService && /natural|enhanced|premium|siri|daniel|karen|ava|alex|samantha|kyoko|otoya/i.test(candidate.name))
+    || exactLanguageVoices.find(candidate => candidate.localService)
+    || exactLanguageVoices.find(candidate => /natural|enhanced|premium|siri|daniel|karen|ava|alex|samantha|kyoko|otoya/i.test(candidate.name))
+    || exactLanguageVoices[0]
 
   // Never fall back to voices[0]: that voice may be Chinese or the opposite target language.
   // If the browser has loaded voices but none for this language, fail visibly rather than
@@ -1181,13 +1296,21 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
     if (requestId === speechRequestId) speechStatus.value = '正在播放：' + spokenText
   }
   utterance.onend = () => {
-    if (requestId === speechRequestId) speechStatus.value = '播放完成：' + spokenText
+    setSpeechAudioSessionType('auto')
+    if (requestId === speechRequestId) {
+      const voiceLabel = voice ? '；语音：' + voice.name + (voice.localService ? '（设备本地）' : '（系统提供）') : '；语音：浏览器自动选择'
+      speechStatus.value = '播放请求已结束' + voiceLabel + '。若实际无声，请检查 iPhone「声音与触感」中的着信音与通知音量及静音状态；iOS 系统语音可能受这些设置影响。此状态不代表已确认听到声音。'
+    }
   }
   utterance.onerror = event => {
+    setSpeechAudioSessionType('auto')
     if (requestId !== speechRequestId || ['canceled', 'interrupted'].includes(String(event.error))) return
-    speechStatus.value = '播放失败（' + String(event.error) + '）。请检查浏览器声音、设备静音状态和系统中的英语/日语语音。'
+    const languageName = lang === 'ja-JP' ? '日语' : lang === 'en-US' ? '英语' : '中文'
+    speechStatus.value = '播放失败（' + String(event.error) + '）。请检查浏览器声音、设备静音状态和系统中的' + languageName + '语音。'
   }
 
+  // Audio Session API is not available in every Safari version; use it only when present.
+  setSpeechAudioSessionType('playback')
   speechStatus.value = '正在请求播放：' + spokenText
   try {
     synthesis.speak(utterance)
@@ -1196,11 +1319,78 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
     // "requesting playback" message forever. This watchdog does not delay speak().
     window.setTimeout(() => {
       if (requestId === speechRequestId && !hasStarted && speechStatus.value === '正在请求播放：' + spokenText) {
+        setSpeechAudioSessionType('auto')
         speechStatus.value = '浏览器尚未启动语音播放。请检查系统英语/日语语音、浏览器权限与设备静音状态后重试。'
       }
     }, 3500)
   } catch {
+    setSpeechAudioSessionType('auto')
     speechStatus.value = '浏览器没有接受这次语音请求，请再次点击播放。'
+  }
+}
+
+function testAudioOutput() {
+  // iOS Safari requires AudioContext to be resumed from the direct user gesture.
+  // Do not schedule a very short tone until resume() has resolved: a suspended
+  // context may otherwise consume the scheduled tone before it becomes audible.
+  // Keep the standard constructor first, but support older WebKit Safari builds too.
+  const AudioContextConstructor = window.AudioContext
+    || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  if (typeof AudioContextConstructor === 'undefined') {
+    speechStatus.value = '当前浏览器不支持 Web Audio，无法执行设备声音测试。'
+    return
+  }
+
+  const requestId = ++speechRequestId
+  const synthesis = window.speechSynthesis
+  try {
+    if (synthesis && (synthesis.speaking || synthesis.pending)) synthesis.cancel()
+    speechPaused.value = false
+
+    const context = new AudioContextConstructor()
+    speechStatus.value = '正在启动设备声音测试……'
+    // Call resume immediately while the tap still has user activation.
+    const resumePromise = context.resume()
+    void resumePromise.then(() => {
+      if (requestId !== speechRequestId) {
+        void context.close().catch(() => undefined)
+        return
+      }
+      if (context.state !== 'running') {
+        speechStatus.value = '浏览器音频上下文未进入运行状态（' + context.state + '）。请重新点击测试。'
+        void context.close().catch(() => undefined)
+        return
+      }
+
+      // Schedule the tone only AFTER the context is running. Use a longer,
+      // comfortably audible tone with a short fade so iOS has time to output it.
+      const oscillator = context.createOscillator()
+      const gain = context.createGain()
+      const now = context.currentTime
+      oscillator.type = 'sine'
+      oscillator.frequency.setValueAtTime(880, now)
+      gain.gain.setValueAtTime(0.0001, now)
+      gain.gain.exponentialRampToValueAtTime(0.2, now + 0.04)
+      gain.gain.setValueAtTime(0.2, now + 0.55)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.7)
+      oscillator.connect(gain)
+      gain.connect(context.destination)
+      oscillator.onended = () => {
+        if (requestId === speechRequestId) {
+          speechStatus.value = '设备测试音已提交到运行中的音频输出（AudioContext=running）。请确认是否实际听到；此结果仍不能证明语音合成正常。'
+        }
+        void context.close().catch(() => undefined)
+      }
+      oscillator.start(now + 0.03)
+      oscillator.stop(now + 0.72)
+    }).catch(() => {
+      if (requestId === speechRequestId) {
+        speechStatus.value = '浏览器无法启动音频上下文。请检查 Safari 页面状态与 iPhone 音频输出后重试。'
+      }
+      void context.close().catch(() => undefined)
+    })
+  } catch {
+    speechStatus.value = '设备声音测试启动失败。请检查 iPhone 音频输出与浏览器状态。'
   }
 }
 
@@ -1218,6 +1408,7 @@ function toggleSpeechPause() {
   }
 }
 function stopSpeech() {
+  setSpeechAudioSessionType('auto')
   const synthesis = window.speechSynthesis
   speechRequestId += 1
   try { synthesis?.cancel() } catch { /* The browser may already have stopped playback. */ }
@@ -1247,6 +1438,9 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
 </script>
 
 <template>
+  <div v-if="previewDemoMode" class="preview-demo-banner" role="status">
+    预览演示模式：使用内置示例句子，不读取或写入云端学习数据。退出演示请移除网址中的 <code>?demo=1</code>。
+  </div>
   <div class="app-shell">
     <aside class="sidebar">
       <button class="brand" @click="navigate('home')" aria-label="返回首页">
@@ -1452,7 +1646,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <h3 class="question-prompt">{{ currentQuestion.prompt }}</h3>
                   <button type="button" class="secondary-button question-speak-button" @click="speakQuestion(currentQuestion)"><Volume2 :size="16" /> 日语语音读题</button>
                 </div>
-                <div v-if="speechStatus && speechStatusTarget === 'exam:' + currentQuestion.id" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
+                <div v-if="speechStatus && speechStatusTarget === 'exam:' + currentQuestion.id" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button type="button" class="text-link" @click="testAudioOutput">测试设备声音</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 <div class="question-options">
                   <button v-for="option in currentQuestion.options" :key="option.id" class="question-option" :class="{ selected: selectedOption === option.id, correct: quizSubmitted && option.id === currentQuestion.answer, incorrect: quizSubmitted && selectedOption === option.id && option.id !== currentQuestion.answer }" :disabled="quizSubmitted" @click="selectedOption = option.id">
                     <span>{{ option.id.toUpperCase() }}</span><strong>{{ option.text }}</strong><CheckCircle2 v-if="quizSubmitted && option.id === currentQuestion.answer" :size="17" />
@@ -1582,7 +1776,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <h3 class="question-prompt">{{ currentScenario.title }}</h3>
                 <button type="button" class="secondary-button question-speak-button" @click="speakScenario(currentScenario)"><Volume2 :size="16" /> 日语语音读题</button>
               </div>
-              <div v-if="speechStatus && speechStatusTarget === 'practical:' + currentScenario.id" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
+              <div v-if="speechStatus && speechStatusTarget === 'practical:' + currentScenario.id" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button type="button" class="text-link" @click="testAudioOutput">测试设备声音</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
               <p class="scenario-situation">{{ currentScenario.situation }}</p>
               <h4>{{ currentScenario.task }}</h4>
               <div class="question-options">
@@ -1641,22 +1835,24 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               <div v-if="languagePracticeCard" class="language-practice-content">
                 <span class="dict-tag">{{ languagePracticeCard.category }}</span>
                 <div v-if="languagePracticeRevealed" class="language-practice-revealed-sentence">
+                  <div class="sentence-highlight-legend" role="note" aria-label="句子高亮图例"><span class="sentence-legend-vocabulary"><i aria-hidden="true"></i>单词 / 短语</span><span class="sentence-legend-grammar"><i aria-hidden="true"></i>语法结构</span></div>
                   <h4 class="language-sentence"><span v-for="(part, index) in sentenceParts(languagePracticeCard)" :key="index" :class="part.type ? 'sentence-highlight-' + part.type : ''" :title="part.detail">{{ part.text }}</span></h4>
+                  <p class="sentence-highlight-hint">黄色标出需要理解的词汇，蓝色标出句中的语法结构；下方会按颜色分别解释每一项。</p>
                   <p v-if="languagePracticeCard.reading" class="language-reading">{{ languagePracticeCard.reading }}</p>
                   <div class="language-speech-actions"><button type="button" class="play-button" @click="speakLanguageCard(languagePracticeCard, false, true)"><Volume2 :size="16" /> 播放原文</button><button v-if="languagePracticeCard.example" type="button" class="play-button" @click="speakLanguageCard(languagePracticeCard, true, true)"><Volume2 :size="16" /> 播放例句</button></div>
-                  <div v-if="speechStatus && speechStatusTarget.startsWith('language-practice:' + languagePracticeCard.id + ':')" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
+                  <div v-if="speechStatus && speechStatusTarget.startsWith('language-practice:' + languagePracticeCard.id + ':')" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button type="button" class="text-link" @click="testAudioOutput">测试设备声音</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 </div>
                 <div v-if="languagePracticeRevealed" class="language-practice-answer">
                   <strong>{{ languagePracticeCard.meaning_zh }}</strong>
                   <p>{{ languagePracticeCard.explanation }}</p>
                   <section v-if="parseLanguageExpansion(languagePracticeCard.vocabulary_expansion_json).length" class="language-expansion">
-                    <strong>单词拓展</strong>
+                    <strong>🟨 高亮词汇逐项解释</strong>
                     <div v-for="(item, index) in parseLanguageExpansion(languagePracticeCard.vocabulary_expansion_json)" :key="'practice-vocab-' + index">
                       <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                     </div>
                   </section>
                   <section v-if="parseLanguageExpansion(languagePracticeCard.grammar_expansion_json).length" class="language-expansion grammar">
-                    <strong>语法拓展</strong>
+                    <strong>{{ sentenceParts(languagePracticeCard).some(part => part.type === 'grammar') ? '🟦 高亮语法逐项解释' : '语法观察提示（未检测到明确结构）' }}</strong>
                     <div v-for="(item, index) in parseLanguageExpansion(languagePracticeCard.grammar_expansion_json)" :key="'practice-grammar-' + index">
                       <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                     </div>
@@ -1698,25 +1894,27 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             <div v-else class="language-card-list">
               <article v-for="card in paginatedLanguageCards" :key="card.id" class="language-study-card" :class="{ completed: completedLanguageCards.includes(card.id) }">
                 <div class="language-card-top"><span class="dict-tag">{{ card.category }}</span><span class="language-source">{{ completedLanguageCards.includes(card.id) ? '已掌握' : isLanguageCardUnlearned(card) ? '未学习' : '学习中' }}</span><button class="language-done-button" @click="toggleLanguageCard(card.id)">{{ completedLanguageCards.includes(card.id) ? '取消掌握' : '标记已掌握' }}</button></div>
+                <div class="sentence-highlight-legend" role="note" aria-label="句子高亮图例"><span class="sentence-legend-vocabulary"><i aria-hidden="true"></i>单词 / 短语</span><span class="sentence-legend-grammar"><i aria-hidden="true"></i>语法结构</span></div>
                 <h3 class="language-sentence"><span v-for="(part, index) in sentenceParts(card)" :key="index" :class="part.type ? 'sentence-highlight-' + part.type : ''" :title="part.detail">{{ part.text }}</span></h3>
+                <p class="sentence-highlight-hint">黄色标出需要理解的词汇，蓝色标出句中的语法结构；下方会按颜色分别解释每一项。</p>
                 <p v-if="card.reading" class="language-reading">{{ card.reading }}</p>
                 <p class="language-meaning language-sentence-translation">{{ card.meaning_zh }}</p>
                 <p class="language-explanation">{{ card.explanation }}</p>
                 <section v-if="parseLanguageExpansion(card.vocabulary_expansion_json).length" class="language-expansion">
-                  <strong>单词拓展</strong>
+                  <strong>🟨 高亮词汇逐项解释</strong>
                   <div v-for="(item, index) in parseLanguageExpansion(card.vocabulary_expansion_json)" :key="'vocab-' + index">
                     <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                   </div>
                 </section>
                 <section v-if="parseLanguageExpansion(card.grammar_expansion_json).length" class="language-expansion grammar">
-                  <strong>语法拓展</strong>
+                  <strong>{{ sentenceParts(card).some(part => part.type === 'grammar') ? '🟦 高亮语法逐项解释' : '语法观察提示（未检测到明确结构）' }}</strong>
                   <div v-for="(item, index) in parseLanguageExpansion(card.grammar_expansion_json)" :key="'grammar-' + index">
                     <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                   </div>
                 </section>
                 <a v-if="card.source_url" class="language-source-link" :href="card.source_url" target="_blank" rel="noopener noreferrer">查看句子来源 ↗</a>
                 <div class="language-speech-actions"><button type="button" class="play-button" @click="speakLanguageCard(card)"><Volume2 :size="17" /> 播放原文</button><button v-if="card.example" type="button" class="play-button" @click="speakLanguageCard(card, true)"><Volume2 :size="17" /> 播放例句</button></div>
-                <div v-if="speechStatus && speechStatusTarget.startsWith('language-card:' + card.id + ':')" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
+                <div v-if="speechStatus && speechStatusTarget.startsWith('language-card:' + card.id + ':')" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button type="button" class="text-link" @click="testAudioOutput">测试设备声音</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 <small class="language-source">{{ card.source_type === 'licensed' ? '开放词库数据' : '平台自编学习内容' }}</small>
               </article>
               <div v-if="visibleLanguageCards.length > languagePageSize" class="language-pagination">
@@ -1767,7 +1965,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <p v-if="entry.translationJa" class="dictionary-translation-ja">日语辅助理解：{{ entry.translationJa }}</p>
                   <p v-if="entry.example" class="dict-example">例句：{{ entry.example }}</p>
                   <p v-if="entry.technical" class="dictionary-tech-note">来自 IT 专业词汇库</p>
-                  <div v-if="speechStatus && speechStatusTarget === entry.term" class="dictionary-speech-controls"><p class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
+                  <div v-if="speechStatus && speechStatusTarget === entry.term" class="dictionary-speech-controls"><p class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p><button type="button" class="text-link" @click="testAudioOutput">测试设备声音</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 </div>
                 <div class="dict-actions"><button class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + (entry.englishTerm || entry.term)" title="播放英语原音；缺少对应词时会提示"><Volume2 :size="14" /><span>EN</span></button><button class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语辅助读音：' + (entry.englishTerm || entry.term)" title="播放日语辅助读音；缺少假名时会提示"><Languages :size="14" /><span>日</span></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
               </article>

@@ -82,10 +82,23 @@ test('exam prep and practical training use Japanese-only speech targets and show
   assert.match(app, /@click="stopSpeech">停止/)
 })
 
+test('speech requests media playback audio session when the browser supports it', () => {
+  assert.match(app, /type BrowserAudioSession = \{ type: string \}/)
+  assert.match(app, /setSpeechAudioSessionType\('playback'\)/)
+  assert.match(app, /setSpeechAudioSessionType\('auto'\)/)
+  assert.match(app, /audioSession\?: BrowserAudioSession/)
+})
+
 test('speech never uses the operating system default voice before language voices load', () => {
   assert.match(app, /if \(availableVoices\.length === 0\) \{[\s\S]*?系统语音列表尚未加载，暂未播放/)
   assert.match(app, /synthesis\.addEventListener\('voiceschanged'/)
+  assert.match(app, /系统语音已就绪，请再次点击播放/)
   assert.match(app, /availableVoices\.length > 0 && voices\.length === 0/)
+  assert.match(app, /exactLanguageVoices\.find\(candidate => candidate\.localService/)
+  assert.match(app, /播放请求已结束/)
+  assert.match(app, /着信音与通知音量及静音状态/)
+  assert.match(app, /此状态不代表已确认听到声音/)
+  assert.match(app, /语音：浏览器自动选择/)
 })
 
 test('speech stops when leaving a module or switching exam/practical content', () => {
@@ -119,4 +132,29 @@ test('every dictionary result and saved word exposes both English and Japanese p
   assert.equal(dictionaryResults.includes('v-else-if="entry.reading || entry.language === \'ja\'"'), false)
   assert.match(dictionaryResults, /缺少对应词时会提示/)
   assert.match(dictionaryResults, /缺少假名时会提示/)
+})
+
+test('speech UI schedules its diagnostic tone only after iOS AudioContext is running', () => {
+  assert.match(app, /function testAudioOutput\(\)/)
+  assert.match(app, /window\.AudioContext/)
+  assert.match(app, /webkitAudioContext\?: typeof AudioContext/)
+  assert.match(app, /new AudioContextConstructor\(\)/)
+  assert.match(app, /const resumePromise = context\.resume\(\)/)
+  assert.match(app, /if \(context\.state !== 'running'\)/)
+  assert.match(app, /Schedule the tone only AFTER the context is running/)
+  assert.match(app, /oscillator\.frequency\.setValueAtTime\(880, now\)/)
+  assert.match(app, /oscillator\.start\(now \+ 0\.03\)/)
+  assert.match(app, /@click="testAudioOutput">测试设备声音/)
+  assert.match(app, /此结果仍不能证明语音合成正常/)
+})
+
+test('preview demo mode supplies isolated Japanese and English sample sentences without loading cloud language data', () => {
+  assert.match(app, /new URLSearchParams\(window\.location\.search\)\.get\('demo'\) === '1'/)
+  assert.match(app, /const previewLanguageFixtures: LanguageCard\[\] = \[/)
+  assert.match(app, /id: 'demo-ja-daily-001'/)
+  assert.match(app, /id: 'demo-ja-work-001'/)
+  assert.match(app, /id: 'demo-en-daily-001'/)
+  assert.match(app, /id: 'demo-en-work-001'/)
+  assert.match(app, /if \(previewDemoMode\) \{\s*languageCards\.value = previewLanguageFixtures\.filter\(card => card\.language === studyLanguage\.value\)/)
+  assert.match(app, /预览演示模式：使用内置示例句子，不读取或写入云端学习数据/)
 })
