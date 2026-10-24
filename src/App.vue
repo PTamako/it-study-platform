@@ -1288,7 +1288,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   utterance.onend = () => {
     if (requestId === speechRequestId) {
       const voiceLabel = voice ? '；语音：' + voice.name + (voice.localService ? '（设备本地）' : '（系统提供）') : '；语音：浏览器自动选择'
-      speechStatus.value = '播放请求已结束' + voiceLabel + '。如果仍然无声，请确认 iPhone 媒体音量并重试。'
+      speechStatus.value = '播放请求已结束' + voiceLabel + '。若实际无声，请检查 iPhone「声音与触感」中的着信音与通知音量及静音状态；iOS 系统语音可能受这些设置影响。此状态不代表已确认听到声音。'
     }
   }
   utterance.onerror = event => {
