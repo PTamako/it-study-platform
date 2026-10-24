@@ -681,6 +681,93 @@ type LanguageCard = {
   example_source_url?: string; source_url?: string; source_type: string; content_type?: string;
   highlight_json?: string; vocabulary_expansion_json?: string; grammar_expansion_json?: string
 }
+const previewDemoMode = new URLSearchParams(window.location.search).get('demo') === '1'
+const previewLanguageFixtures: LanguageCard[] = [
+  {
+    id: 'demo-ja-daily-001', language: 'ja', category: '日常句子',
+    term: 'もう一度説明していただけますか。',
+    reading: 'もういちど せつめいしていただけますか。',
+    meaning_zh: '可以请您再解释一次吗？',
+    explanation: '礼貌地请求对方重复说明，适合日常沟通与不确定时使用。',
+    example: 'すみません、もう一度説明していただけますか。',
+    example_meaning_zh: '不好意思，可以请您再解释一次吗？',
+    source_type: 'preview-demo', content_type: 'sentence',
+    highlight_json: JSON.stringify([
+      { start: 0, end: 5, type: 'vocabulary', term: 'もう一度', meaning: '再一次', explanation: '用于请求重复动作。' },
+      { start: 8, end: 13, type: 'grammar', term: '〜ていただけますか', meaning: '可以请您……吗', explanation: '使用「て形＋いただけますか」委婉请求对方做某事。' },
+    ]),
+    vocabulary_expansion_json: JSON.stringify([
+      { term: 'もう一度', meaning: '再一次', explanation: '用于请对方重复说明、确认或操作。' },
+    ]),
+    grammar_expansion_json: JSON.stringify([
+      { term: '〜ていただけますか', meaning: '可以请您……吗', explanation: '比「〜てください」更委婉，适合对不熟悉的人或职场沟通。' },
+    ]),
+  },
+  {
+    id: 'demo-ja-work-001', language: 'ja', category: '职场语言',
+    term: '確認してから、改めてご連絡します。',
+    reading: 'かくにんしてから、あらためてごれんらくします。',
+    meaning_zh: '确认之后，我会再联系您。',
+    explanation: '适合暂时不能立即答复，需要核实信息后再回复的职场场景。',
+    example: '内容を確認してから、改めてご連絡します。',
+    example_meaning_zh: '确认内容后，我会再联系您。',
+    source_type: 'preview-demo', content_type: 'sentence',
+    highlight_json: JSON.stringify([
+      { start: 0, end: 5, type: 'vocabulary', term: '確認して', meaning: '确认后', explanation: '「確認する」是职场常见的核实、确认。' },
+      { start: 11, end: 18, type: 'vocabulary', term: 'ご連絡します', meaning: '联系您', explanation: '「連絡する」加「ご」构成礼貌表达。' },
+      { start: 0, end: 8, type: 'grammar', term: '〜てから', meaning: '做完……之后', explanation: '表示先完成前项动作，再进行后项动作。' },
+    ]),
+    vocabulary_expansion_json: JSON.stringify([
+      { term: '確認する', meaning: '确认、核实', explanation: '常见表达：内容を確認します。' },
+      { term: 'ご連絡します', meaning: '联系您', explanation: '适用于工作邮件、电话及进度沟通。' },
+    ]),
+    grammar_expansion_json: JSON.stringify([
+      { term: '〜てから', meaning: '……之后', explanation: '连接动作的先后顺序，例如「調べてから回答します」。' },
+    ]),
+  },
+  {
+    id: 'demo-en-daily-001', language: 'en', category: '日常句子',
+    term: 'Could you say that one more time?',
+    meaning_zh: '你可以再说一遍吗？',
+    explanation: '自然、礼貌地请求对方重复刚才的话。',
+    example: 'Sorry, could you say that one more time?',
+    example_meaning_zh: '不好意思，你可以再说一遍吗？',
+    source_type: 'preview-demo', content_type: 'sentence',
+    highlight_json: JSON.stringify([
+      { start: 0, end: 8, type: 'vocabulary', term: 'Could you', meaning: '你可以……吗', explanation: '常见的礼貌请求开头。' },
+      { start: 9, end: 12, type: 'grammar', term: 'say', meaning: '说', explanation: '情态动词 could 后接动词原形。' },
+      { start: 22, end: 34, type: 'vocabulary', term: 'one more time', meaning: '再一次', explanation: '自然表达“再来一次、再说一遍”。' },
+    ]),
+    vocabulary_expansion_json: JSON.stringify([
+      { term: 'Could you…?', meaning: '可以请你……吗？', explanation: '比直接命令更礼貌，适用于日常和工作场景。' },
+      { term: 'one more time', meaning: '再一次', explanation: '可用于请求重复动作或内容。' },
+    ]),
+    grammar_expansion_json: JSON.stringify([
+      { term: 'Could + 主语 + 动词原形', meaning: '礼貌请求句型', explanation: 'could 在此表示委婉请求，后接动词原形。' },
+    ]),
+  },
+  {
+    id: 'demo-en-work-001', language: 'en', category: '职场语言',
+    term: 'I will check the details and get back to you.',
+    meaning_zh: '我会确认具体情况后再回复你。',
+    explanation: '适合需要先确认信息、之后再答复同事或客户的场景。',
+    example: 'Let me check the details and get back to you this afternoon.',
+    example_meaning_zh: '我先确认具体情况，今天下午再回复你。',
+    source_type: 'preview-demo', content_type: 'sentence',
+    highlight_json: JSON.stringify([
+      { start: 7, end: 12, type: 'vocabulary', term: 'check', meaning: '确认、核实', explanation: '工作场景中常用于核实信息。' },
+      { start: 28, end: 40, type: 'vocabulary', term: 'get back to you', meaning: '再回复你', explanation: '自然的职场表达，表示之后联系或回复。' },
+      { start: 0, end: 6, type: 'grammar', term: 'I will', meaning: '我将会', explanation: 'will + 动词原形表示未来动作或承诺。' },
+    ]),
+    vocabulary_expansion_json: JSON.stringify([
+      { term: 'check the details', meaning: '确认具体情况', explanation: '可用于工作任务、订单、计划与资料核对。' },
+      { term: 'get back to you', meaning: '之后回复你', explanation: '比正式的「respond」更口语、自然。' },
+    ]),
+    grammar_expansion_json: JSON.stringify([
+      { term: 'will + 动词原形', meaning: '将会做某事', explanation: '常用于承诺、计划或即时决定。' },
+    ]),
+  },
+]
 const languageCards = ref<LanguageCard[]>([])
 const languageCategories = computed(() => [
   { title: '全部', desc: '全部句子', icon: BookOpen },
@@ -783,6 +870,11 @@ async function loadLanguageCards() {
   languageCardsLoading.value = true
   languageCardsError.value = ''
   languageCards.value = []
+  if (previewDemoMode) {
+    languageCards.value = previewLanguageFixtures.filter(card => card.language === studyLanguage.value)
+    languageCardsLoading.value = false
+    return
+  }
   try {
     const response = await fetch('/api/language-cards?lang=' + encodeURIComponent(studyLanguage.value))
     const data = await response.json() as { items?: LanguageCard[]; error?: string }
@@ -1308,6 +1400,9 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
 </script>
 
 <template>
+  <div v-if="previewDemoMode" class="preview-demo-banner" role="status">
+    预览演示模式：使用内置示例句子，不读取或写入云端学习数据。退出演示请移除网址中的 <code>?demo=1</code>。
+  </div>
   <div class="app-shell">
     <aside class="sidebar">
       <button class="brand" @click="navigate('home')" aria-label="返回首页">
