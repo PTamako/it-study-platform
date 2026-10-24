@@ -1661,7 +1661,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                     </div>
                   </section>
                   <section v-if="parseLanguageExpansion(languagePracticeCard.grammar_expansion_json).length" class="language-expansion grammar">
-                    <strong>🟦 高亮语法逐项解释</strong>
+                    <strong>{{ sentenceParts(languagePracticeCard).some(part => part.type === 'grammar') ? '🟦 高亮语法逐项解释' : '语法观察提示（未检测到明确结构）' }}</strong>
                     <div v-for="(item, index) in parseLanguageExpansion(languagePracticeCard.grammar_expansion_json)" :key="'practice-grammar-' + index">
                       <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                     </div>
@@ -1716,7 +1716,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   </div>
                 </section>
                 <section v-if="parseLanguageExpansion(card.grammar_expansion_json).length" class="language-expansion grammar">
-                  <strong>🟦 高亮语法逐项解释</strong>
+                  <strong>{{ sentenceParts(card).some(part => part.type === 'grammar') ? '🟦 高亮语法逐项解释' : '语法观察提示（未检测到明确结构）' }}</strong>
                   <div v-for="(item, index) in parseLanguageExpansion(card.grammar_expansion_json)" :key="'grammar-' + index">
                     <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                   </div>
