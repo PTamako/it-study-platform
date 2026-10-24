@@ -147,8 +147,21 @@ def make_hits(sentence, lang):
         for match in re.finditer(pattern, sentence, re.I if lang == "en" else 0):
             term = match.group()
             # Isolated particles and polite endings are not complete grammar structures.
-            if lang == "ja" and term in {"か", "の", "は", "が", "を", "に", "で", "と", "へ", "です", "ます"}:
+            if lang == "ja" and term in {"です", "ます"}:
                 continue
+            if lang == "ja" and term in {"か", "の", "は", "が", "を", "に", "で", "と", "へ"}:
+                particle_notes = {
+                    "か": ("句末助词「か」：疑问", "放在句末标记疑问；若前面是「です」，两者合起来构成礼貌疑问「ですか」。"),
+                    "の": ("助词「の」：所属／连接", "连接所属者与物品或名词与名词；例如「誰の傘」表示“谁的伞”。"),
+                    "は": ("助词「は」：提示主题", "提示这句话正在谈论的对象，后面说明该对象的状态或相关信息。"),
+                    "が": ("助词「が」：主语／关注对象", "标记句中被描述、发生动作或成为关注点的对象；具体功能要结合谓语理解。"),
+                    "を": ("助词「を」：动作对象", "通常标记动作直接作用的对象，例如「本を読む」中的「本」。"),
+                    "に": ("助词「に」：目标／时间／对象", "可标记到达点、时间或动作对象；此处需结合相邻词语判断。"),
+                    "で": ("助词「で」：动作场所／手段", "常标记动作发生的场所或使用的手段，具体含义取决于句中动词。"),
+                    "と": ("助词「と」：共同对象／引用", "可表示“和／与”，也可引出引用内容；需结合前后文判断。"),
+                    "へ": ("助词「へ」：方向", "标记动作前往的方向或目的地。"),
+                }
+                meaning, explanation = particle_notes[term]
             candidates.append({"start": match.start(), "end": match.end(), "type": "grammar",
                 "term": term, "meaning": meaning, "explanation": explanation,
                 "rule_id": ("ja" if lang == "ja" else "en") + ".grammar." + str(rule_index + 1),
