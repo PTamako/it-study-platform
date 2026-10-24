@@ -1253,7 +1253,7 @@ function testAudioOutput() {
     oscillator.stop(now + 0.23)
     void context.resume().then(() => {
       if (requestId === speechRequestId) {
-        speechStatus.value = '已发出约 0.2 秒的设备测试音；请确认是否实际听到。此测试不代表语音合成已正常。'
+        speechStatus.value = '已触发约 0.2 秒的设备测试音请求；请确认是否实际听到。此测试不代表语音合成已正常。'
       }
       window.setTimeout(() => { void context.close().catch(() => undefined) }, 600)
     }).catch(() => {
