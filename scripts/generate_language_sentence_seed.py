@@ -139,53 +139,46 @@ EN_GRAMMAR = [
 
 @lru_cache(maxsize=100000)
 def make_hits(sentence, lang):
-    """Create explainable, context-aware spans. Grammar structures win overlaps."""
+    """Select context-aware spans with deterministic overlap resolution."""
     vocab = JP_VOCAB if lang == "ja" else EN_VOCAB
     grammar = JP_GRAMMAR if lang == "ja" else EN_GRAMMAR
-    grammar_hits = []
+    candidates = []
     for rule_index, (pattern, meaning, explanation) in enumerate(grammar):
         for match in re.finditer(pattern, sentence, re.I if lang == "en" else 0):
             term = match.group()
+            # Isolated particles and polite endings are not complete grammar structures.
             if lang == "ja" and term in {"か", "の", "は", "が", "を", "に", "で", "と", "へ", "です", "ます"}:
                 continue
-            grammar_hits.append({"start": match.start(), "end": match.end(), "type": "grammar",
+            candidates.append({"start": match.start(), "end": match.end(), "type": "grammar",
                 "term": term, "meaning": meaning, "explanation": explanation,
                 "rule_id": ("ja" if lang == "ja" else "en") + ".grammar." + str(rule_index + 1),
                 "confidence": "rule"})
-    grammar_hits.sort(key=lambda item: (item["start"], -(item["end"] - item["start"])))
-    selected_grammar = []
-    for item in grammar_hits:
-        if any(item["start"] < old["end"] and item["end"] > old["start"] for old in selected_grammar):
-            continue
-        selected_grammar.append(item)
-
-    vocab_hits = []
     for rule_index, (term, meaning, explanation) in enumerate(vocab):
         if lang == "ja" and (len(term) < 2 or term in {"です", "ます", "でした", "ました", "ください"}):
             continue
         for match in re.finditer(re.escape(term), sentence, re.I if lang == "en" else 0):
-            vocab_hits.append({"start": match.start(), "end": match.end(), "type": "vocabulary",
+            candidates.append({"start": match.start(), "end": match.end(), "type": "vocabulary",
                 "term": match.group(), "meaning": meaning, "explanation": explanation,
                 "rule_id": ("ja" if lang == "ja" else "en") + ".vocab." + str(rule_index + 1),
                 "confidence": "lexicon"})
-    selected = list(selected_grammar)
-    vocab_hits.sort(key=lambda item: (item["start"], -(item["end"] - item["start"])))
-    for item in vocab_hits:
-        if any(item["start"] < old["end"] and item["end"] > old["start"] for old in selected):
+    # Earlier spans win; at the same position, the longer and more structural span wins.
+    candidates.sort(key=lambda item: (item["start"], -(item["end"] - item["start"]),
+                                      0 if item["type"] == "grammar" else 1))
+    hits = []
+    for item in candidates:
+        if any(item["start"] < old["end"] and item["end"] > old["start"] for old in hits):
             continue
-        selected.append(item)
-    selected.sort(key=lambda item: (item["start"], -(item["end"] - item["start"])))
-    limited = selected[:8]
+        hits.append(item)
+    limited = hits[:8]
     for kind in ("vocabulary", "grammar"):
         if not any(item["type"] == kind for item in limited):
-            candidate = next((item for item in selected if item["type"] == kind), None)
+            candidate = next((item for item in hits if item["type"] == kind), None)
             if candidate:
                 if len(limited) >= 8:
                     limited[-1] = candidate
                 else:
                     limited.append(candidate)
     return sorted(limited, key=lambda item: (item["start"], -(item["end"] - item["start"])))
-
 
 
 def validate_annotation_rules():
