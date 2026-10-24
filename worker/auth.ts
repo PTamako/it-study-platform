@@ -173,3 +173,27 @@ export async function requireAuth(request: Request, env: AuthEnv): Promise<Respo
     ? null
     : json({ error: '请先登录后再访问个人学习数据。', code: 'AUTH_REQUIRED' }, 401)
 }
+
+// Durable write throttling: at most 60 state-changing personal API requests per client per minute.
+export async function checkWriteRateLimit(request: Request, env: AuthEnv): Promise<Response | null> {
+  if (!configured(env)) return json({ error: '认证配置缺失。' }, 503)
+  const now = Math.floor(Date.now() / 1000)
+  const windowStart = Math.floor(now / 60)
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown-client'
+  const key = base64url(await hmac(env.AUTH_SESSION_SECRET!, `write:${ip}:${windowStart}`))
+  try {
+    const row = await env.DB.prepare(`INSERT INTO auth_write_rate_limits (bucket_key, requests, expires_at)
+      VALUES (?, 1, ?)
+      ON CONFLICT(bucket_key) DO UPDATE SET
+        requests = CASE WHEN requests >= 61 THEN 61 ELSE requests + 1 END,
+        expires_at = excluded.expires_at
+      RETURNING requests`).bind(key, (windowStart + 1) * 60).first<{ requests: number }>()
+    if (Number(row?.requests || 0) > 60) {
+      return json({ error: '操作过于频繁，请稍后再试。' }, 429, { 'retry-after': String(Math.max(1, (windowStart + 1) * 60 - now)) })
+    }
+    return null
+  } catch {
+    // Fail closed: do not allow writes if the persistent limiter is unavailable.
+    return json({ error: '写入安全检查暂不可用，请稍后重试。' }, 503)
+  }
+}
