@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 const migration = await readFile(new URL('../migrations/0081_language_sentence_cards.sql', import.meta.url), 'utf8')
-const refreshMigration = await readFile(new URL('../migrations/0083_refresh_japanese_meaningful_annotations.sql', import.meta.url), 'utf8')
+const refreshMigration = await readFile(new URL('../migrations/0084_refresh_contextual_bilingual_annotations.sql', import.meta.url), 'utf8')
 const refreshStatements = refreshMigration.split('\n').filter(line => /^UPDATE language_cards SET highlight_json = /.test(line))
 const rows = migration.split('\n').filter(line => /^\s*\('(ja|en)-sentence-/.test(line))
 const ja = rows.filter(line => /^\s*\('ja-sentence-/.test(line))
