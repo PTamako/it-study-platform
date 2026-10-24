@@ -128,6 +128,39 @@ def make_hits(sentence, lang):
         if match:
             hits.append({"start":match.start(),"end":match.end(),"type":"vocabulary","term":match.group(),"meaning":"句中重点表达","explanation":"结合整句语境理解词义和用法。"})
             hits.sort(key=lambda item:item["start"])
+    # Guarantee a visible grammar/structure highlight on every sentence card. Prefer
+    # a recognizable sentence ending or predicate; if no pattern is recognized, use
+    # an exact source substring and clearly label it as a study prompt, not a parse.
+    if not any(item["type"] == "grammar" for item in hits):
+        clean = re.sub(r"[。！？!?…]+$", "", sentence).rstrip()
+        match = None
+        if lang == "ja":
+            match = re.search(r"(?:ていただけますか|てください|てから|なければなりません|なければならない|てもいいですか|てもいいです|と思います|かもしれません|ませんでした|ません|ました|でしょう|でした|ます|です|だった|ない|たいです|ています|ている|までに|について|ので|けど|かな|か|ね|よ)$", clean)
+            if match is None:
+                match = re.search(r"[ぁ-ゖァ-ヶ一-龯]{1,4}$", clean)
+            meaning = "句尾活用／表达观察点"
+            explanation = "自动规则未识别到明确语法模式；请结合整句观察句尾活用、助词与语气。这是学习提示，不是完整语法解析。"
+        else:
+            words = list(re.finditer(r"\b[A-Za-z][A-Za-z'-]*\b", clean))
+            match = next((item for item in reversed(words)
+                          if item.group().lower() not in {"a", "an", "the", "and", "or", "but", "to", "of", "in", "on", "at", "for", "with"}), None)
+            if match is None and words:
+                match = words[-1]
+            meaning = "句子结构观察点"
+            explanation = "自动规则未识别到明确句型；请观察该词在句中的作用及其前后搭配。这是学习提示，不是完整语法解析。"
+        if match is None:
+            match = re.search(r"\S+", clean)
+        if match:
+            start, end = match.start(), match.end()
+            if any(start < item["end"] and end > item["start"] for item in hits):
+                alternatives = (list(re.finditer(r"[ぁ-ゖァ-ヶ一-龯]{1,4}", clean)) if lang == "ja"
+                                else list(re.finditer(r"\b[A-Za-z][A-Za-z'-]*\b", clean)))
+                match = next((item for item in reversed(alternatives)
+                              if not any(item.start() < hit["end"] and item.end() > hit["start"] for hit in hits)), None)
+            if match:
+                hits.append({"start":match.start(),"end":match.end(),"type":"grammar","term":match.group(),
+                             "meaning":meaning,"explanation":explanation})
+                hits.sort(key=lambda item:(item["start"], -(item["end"]-item["start"]), 0 if item["type"]=="grammar" else 1))
     return hits[:8]
 
 def expansion(hits, kind, lang=None):
