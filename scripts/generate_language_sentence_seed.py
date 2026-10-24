@@ -146,9 +146,7 @@ def make_hits(sentence, lang):
     for rule_index, (pattern, meaning, explanation) in enumerate(grammar):
         for match in re.finditer(pattern, sentence, re.I if lang == "en" else 0):
             term = match.group()
-            # Isolated particles and polite endings are not complete grammar structures.
-            if lang == "ja" and term in {"です", "ます"}:
-                continue
+            # Particles receive context-specific explanations; polite endings remain grammar, never vocabulary.
             if lang == "ja" and term in {"か", "の", "は", "が", "を", "に", "で", "と", "へ"}:
                 particle_notes = {
                     "か": ("句末助词「か」：疑问", "放在句末标记疑问；若前面是「です」，两者合起来构成礼貌疑问「ですか」。"),
