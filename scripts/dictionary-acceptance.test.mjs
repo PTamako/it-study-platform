@@ -195,3 +195,62 @@ test('saved dictionary removal does not discard local state before the cloud con
 test('saved vocabulary UI does not imply cloud-backed terms are device-only', () => {
   assert.match(app, /收藏词条会尝试同步到云端，并在本设备保留副本；未同步成功时会显示提示/)
 })
+
+
+test('practical submission snapshots the scenario and ignores stale responses after switching', () => {
+  const start = app.indexOf('let scenarioSubmissionId = 0')
+  const end = app.indexOf('watch([selectedTrackId', start)
+  const handlers = app.slice(start, end)
+  assert.ok(start >= 0 && end > start, 'practical submission handlers should be found')
+  assert.match(handlers, /const submittedScenario = currentScenario\.value/)
+  assert.match(handlers, /const submittedOption = selectedScenarioOption\.value/)
+  assert.match(handlers, /scenarioSubmissionId \+= 1/)
+  assert.match(handlers, /requestId !== scenarioSubmissionId \|\| currentScenario\.value\?\.id !== submittedScenario\.id/)
+  assert.match(handlers, /translateScenarioExplanation\(submittedScenario\.id, feedback\)/)
+  assert.match(handlers, /if \(requestId === scenarioSubmissionId\) scenarioSubmitting\.value = false/)
+})
+
+
+test('practical scenario list ignores late responses from an earlier track request', () => {
+  const start = app.indexOf('let scenarioLoadRequestId = 0')
+  const end = app.indexOf('function nextScenario()', start)
+  const loader = app.slice(start, end)
+  assert.ok(start >= 0 && end > start, 'scenario loader should be found')
+  assert.match(loader, /const requestId = \+\+scenarioLoadRequestId/)
+  assert.match(loader, /const trackId = selectedTrack\.value\?\.id/)
+  assert.match(loader, /if \(requestId !== scenarioLoadRequestId\) return/)
+  assert.match(loader, /if \(requestId === scenarioLoadRequestId\) scenariosLoading\.value = false/)
+})
+
+test('exam question loads are invalidated when switching track, source, or review mode', () => {
+  assert.match(app, /let practiceLoadRequestId = 0/)
+  assert.match(app, /const requestId = \+\+practiceLoadRequestId/)
+  assert.match(app, /if \(requestId !== practiceLoadRequestId\) return/)
+  assert.match(app, /practiceLoadRequestId \+= 1/)
+  assert.match(app, /if \(requestId === practiceLoadRequestId\) quizLoading\.value = false/)
+})
+
+test('question progress requests use a captured track and ignore stale responses', () => {
+  assert.match(app, /let questionProgressRequestId = 0/)
+  assert.match(app, /async function loadQuestionProgress\(trackId = selectedTrack\.value\?\.id \|\| ''\)/)
+  assert.match(app, /if \(!response\.ok \|\| requestId !== questionProgressRequestId\) return/)
+  assert.match(app, /if \(requestId !== questionProgressRequestId\) return/)
+})
+
+
+test('practice answer submission snapshots the selected question and answer', () => {
+  assert.match(app, /const answer = selectedOption\.value/)
+  assert.match(app, /question_id: question\.id,[\s\S]*?answer,/)
+  assert.match(app, /if \(data\.progress\) questionProgressById\.value\[question\.id\] = data\.progress/)
+  assert.match(app, /if \(requestId === practiceAnswerRequestId\) \{\s*quizError\.value/)
+  assert.match(app, /function nextPracticeQuestion\(\) \{\s*stopSpeech\(\)\s*practiceAnswerRequestId \+= 1/)
+})
+
+test('daily task writes are serialized per task and use a snapshot of each toggle', () => {
+  assert.match(app, /const dailyTaskSaveQueues = new Map<string, Promise<void>>\(\)/)
+  assert.match(app, /const completed = task\.done/)
+  assert.match(app, /const previous = dailyTaskSaveQueues\.get\(taskId\) \|\| Promise\.resolve\(\)/)
+  assert.match(app, /previous\.catch\(\(\) => undefined\)\.then\(async \(\) =>/)
+  assert.match(app, /completed\s*\}\),/)
+  assert.match(app, /dailyTaskSaveRequestIds\.get\(taskId\) === requestId/)
+})
