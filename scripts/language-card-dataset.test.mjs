@@ -134,7 +134,7 @@ test('contextual bilingual annotation rules avoid isolated Japanese particles an
 
 
 test('new migration rebuilds all 6,000 sentence cards and preserves mastery for stable IDs', () => {
-  const rebuiltRows = [...rebuildMigration.matchAll(/\\('(ja|en)-sentence-/g)]
+  const rebuiltRows = [...rebuildMigration.matchAll(/\('(ja|en)-sentence-/g)]
   assert.equal(rebuiltRows.length, 6000, 'rebuild migration must contain exactly 6,000 regenerated sentence rows')
   assert.equal(rebuiltRows.filter(match => match[1] === 'ja').length, 3000)
   assert.equal(rebuiltRows.filter(match => match[1] === 'en').length, 3000)
@@ -142,6 +142,6 @@ test('new migration rebuilds all 6,000 sentence cards and preserves mastery for 
   const insertAt = rebuildMigration.indexOf('INSERT OR IGNORE INTO language_cards')
   assert.ok(deleteAt >= 0 && insertAt > deleteAt, 'old sentence rows must be deleted before regenerated rows are inserted')
   assert.match(rebuildMigration, /CREATE TABLE IF NOT EXISTS language_card_progress_rebuild_backup/)
-  assert.match(rebuildMigration, /INSERT OR REPLACE INTO language_card_progress \\(card_id, mastered, updated_at\\)/)
+  assert.match(rebuildMigration, /INSERT OR REPLACE INTO language_card_progress \(card_id, mastered, updated_at\)/)
   assert.match(rebuildMigration, /DROP TABLE language_card_progress_rebuild_backup/)
 })
