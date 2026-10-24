@@ -1233,31 +1233,51 @@ const displayedEntries = computed(() => {
   return [...remote, ...local]
 })
 
-function toggleSaved(term: string) {
-  if (savedWords.value.includes(term)) {
-    savedWords.value = savedWords.value.filter(word => word !== term)
-    savedDictionaryEntries.value = savedDictionaryEntries.value.filter(entry => entry.term !== term)
-    void fetch('/api/vocabulary/saved', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ term, action: 'remove' }),
-    }).then(response => { if (!response.ok) cloudDashboardError.value = '云端生词删除失败。'; else void loadCloudDashboard() })
-      .catch(() => { cloudDashboardError.value = '网络异常：生词删除未同步到云端。' })
-    return
-  }
-  savedWords.value = [...savedWords.value, term]
-  const entry = displayedEntries.value.find(item => item.term === term) ||
-    recentDictionaryEntries.value.find(item => item.term === term)
-  if (entry && !savedDictionaryEntries.value.some(item => item.term === term)) {
-    savedDictionaryEntries.value = [entry, ...savedDictionaryEntries.value]
-    void fetch('/api/vocabulary/saved', {
+const savedWordRequests = new Set<string>()
+async function toggleSaved(term: string) {
+  // Serialize changes for the same term and update the UI only after the cloud write succeeds.
+  if (savedWordRequests.has(term)) return
+  savedWordRequests.add(term)
+  try {
+    if (savedWords.value.includes(term)) {
+      const response = await fetch('/api/vocabulary/saved', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ term, action: 'remove' }),
+      })
+      const data = await response.json().catch(() => ({})) as { error?: string }
+      if (!response.ok) throw new Error(data.error || '云端生词删除失败；本地收藏状态未更改。')
+      savedWords.value = savedWords.value.filter(word => word !== term)
+      savedDictionaryEntries.value = savedDictionaryEntries.value.filter(entry => entry.term !== term)
+      void loadCloudDashboard()
+      return
+    }
+
+    const entry = displayedEntries.value.find(item => item.term === term) ||
+      recentDictionaryEntries.value.find(item => item.term === term)
+    if (!entry) {
+      // Preserve an explicitly local-only save, but never imply it reached D1.
+      savedWords.value = [...savedWords.value, term]
+      cloudDashboardError.value = '该词条没有可保存的释义快照，已仅保存在本设备；请先联网查到词条后再收藏以同步云端。'
+      return
+    }
+
+    const response = await fetch('/api/vocabulary/saved', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ term, language: entry.language || 'auto', entry }),
-    }).then(async response => {
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({})) as { error?: string }
-        cloudDashboardError.value = data.error || '生词未能保存到云端。'
-      } else { void loadCloudDashboard() }
-    }).catch(() => { cloudDashboardError.value = '网络异常：生词暂未同步到云端。' })
+    })
+    const data = await response.json().catch(() => ({})) as { error?: string }
+    if (!response.ok) throw new Error(data.error || '生词未能保存到云端；本地收藏状态未更改。')
+    savedWords.value = [...savedWords.value, term]
+    if (!savedDictionaryEntries.value.some(item => item.term === term)) {
+      savedDictionaryEntries.value = [entry, ...savedDictionaryEntries.value]
+    }
+    void loadCloudDashboard()
+  } catch (error) {
+    cloudDashboardError.value = error instanceof Error
+      ? error.message
+      : '网络异常：生词本未能同步到云端，本地收藏状态未更改。'
+  } finally {
+    savedWordRequests.delete(term)
   }
 }
 async function lookupDictionary() {
@@ -2147,7 +2167,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
           </section>
           </template>
           <section v-if="dictionaryView === 'saved'" class="section-block saved-vocabulary-block">
-            <div class="section-heading"><div><div class="section-kicker">MY WORDS</div><h2>个人生词本</h2><p>收藏的词条会保存在这台设备的浏览器中。</p></div><span class="section-index">{{ savedWords.length }} 个收藏</span></div>
+            <div class="section-heading"><div><div class="section-kicker">MY WORDS</div><h2>个人生词本</h2><p>收藏词条会尝试同步到云端，并在本设备保留副本；未同步成功时会显示提示。</p></div><span class="section-index">{{ savedWords.length }} 个收藏</span></div>
             <div v-if="savedVocabularyEntries.length" class="saved-vocabulary-list">
               <article v-for="entry in savedVocabularyEntries" :key="entry.term" class="saved-vocabulary-row">
                 <div class="saved-vocabulary-copy"><strong>{{ entry.term }}</strong><small v-if="entry.reading">{{ entry.reading }}</small><p v-if="entry.en">英语释义：{{ entry.en }}</p><p v-if="entry.translationJa">日语辅助理解：{{ entry.translationJa }}</p></div>

@@ -158,3 +158,40 @@ test('preview demo mode supplies isolated Japanese and English sample sentences 
   assert.match(app, /if \(previewDemoMode\) \{\s*languageCards\.value = previewLanguageFixtures\.filter\(card => card\.language === studyLanguage\.value\)/)
   assert.match(app, /预览演示模式：使用内置示例句子，不读取或写入云端学习数据/)
 })
+
+
+test('saved dictionary changes update local state only after the cloud confirms the write', () => {
+  const start = app.indexOf('async function toggleSaved(term: string)')
+  const end = app.indexOf('async function lookupDictionary()', start)
+  const handler = app.slice(start, end)
+  assert.ok(start >= 0 && end > start, 'saved-word handler should be found')
+  assert.match(app, /const savedWordRequests = new Set<string>()/)
+  assert.match(handler, /if \(savedWordRequests\.has\(term\)\) return/)
+  assert.match(handler, /const response = await fetch\('\/api\/vocabulary\/saved'/)
+  assert.match(handler, /if \(!response\.ok\) throw new Error/)
+  assert.match(handler, /本地收藏状态未更改/)
+  assert.match(handler, /savedWordRequests\.delete\(term\)/)
+})
+
+test('dictionary terms without a saved entry snapshot are explicitly local-only', () => {
+  const start = app.indexOf('async function toggleSaved(term: string)')
+  const end = app.indexOf('async function lookupDictionary()', start)
+  const handler = app.slice(start, end)
+  assert.match(handler, /if \(!entry\) \{[\s\S]*?仅保存在本设备[\s\S]*?return/)
+})
+
+test('saved dictionary removal does not discard local state before the cloud confirms deletion', () => {
+  const start = app.indexOf('async function toggleSaved(term: string)')
+  const end = app.indexOf('async function lookupDictionary()', start)
+  const handler = app.slice(start, end)
+  const removeStart = handler.indexOf('action: \'remove\'')
+  const removeEnd = handler.indexOf('return', removeStart)
+  const removeHandler = handler.slice(0, removeEnd)
+  assert.ok(removeStart >= 0 && removeEnd > removeStart, 'remove handler should be found')
+  assert.ok(removeHandler.indexOf('if (!response.ok) throw new Error') < removeHandler.indexOf('savedWords.value = savedWords.value.filter'))
+})
+
+
+test('saved vocabulary UI does not imply cloud-backed terms are device-only', () => {
+  assert.match(app, /收藏词条会尝试同步到云端，并在本设备保留副本；未同步成功时会显示提示/)
+})
