@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "migrations/0081_language_sentence_cards.sql"
 OUT_REFRESH = ROOT / "migrations/0082_refresh_language_sentence_annotations.sql"
 OUT_REFRESH_LATEST = ROOT / "migrations/0084_refresh_contextual_bilingual_annotations.sql"
+OUT_REBUILD = ROOT / "migrations/0085_rebuild_contextual_bilingual_sentence_cards.sql"
 CACHE = Path("/tmp/language-sentence-sources")
 CACHE.mkdir(exist_ok=True)
 SENTENCES_URL = "https://downloads.tatoeba.org/exports/sentences.tar.bz2"
@@ -308,6 +309,25 @@ def main():
         )
     OUT_REFRESH.write_text("\n".join(refresh)+"\n",encoding="utf-8")
     OUT_REFRESH_LATEST.write_text("\n".join(refresh)+"\n",encoding="utf-8")
+    # Rebuild the sentence corpus from the freshly generated dataset, rather than
+    # merely updating annotations in rows seeded by an older algorithm. Preserve
+    # per-card mastery before ON DELETE CASCADE removes the old sentence rows.
+    rebuild = [
+        "-- Rebuild the complete bilingual sentence corpus using the current annotation rules.",
+        "-- Preserve existing mastery for stable IDs; unrelated cards and saved vocabulary are untouched.",
+        "CREATE TABLE IF NOT EXISTS language_card_progress_rebuild_backup (card_id TEXT PRIMARY KEY, mastered INTEGER NOT NULL, updated_at TEXT NOT NULL);",
+        "INSERT OR REPLACE INTO language_card_progress_rebuild_backup (card_id, mastered, updated_at) SELECT p.card_id, p.mastered, p.updated_at FROM language_card_progress p JOIN language_cards c ON c.id = p.card_id WHERE c.content_type = 'sentence';",
+        "DELETE FROM language_cards WHERE content_type = 'sentence';",
+    ]
+    for start in range(0, len(values), 5):
+        batch = values[start:start+5]
+        rebuild.append(insert_prefix + "\n" + ",\n".join(batch) + ";")
+    rebuild.extend([
+        "INSERT OR REPLACE INTO language_card_progress (card_id, mastered, updated_at) SELECT b.card_id, b.mastered, b.updated_at FROM language_card_progress_rebuild_backup b JOIN language_cards c ON c.id = b.card_id WHERE c.content_type = 'sentence';",
+        "DROP TABLE language_card_progress_rebuild_backup;",
+    ])
+    OUT_REBUILD.write_text("\n".join(rebuild) + "\n", encoding="utf-8")
+
     # Whole-corpus quality summary: every accepted card must have concrete, non-overlapping
     # source spans and non-placeholder explanations. Fail closed if any generic filler leaks in.
     quality = {"ja": {"vocabulary": 0, "grammar": 0}, "en": {"vocabulary": 0, "grammar": 0}}
