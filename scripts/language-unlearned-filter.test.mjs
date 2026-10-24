@@ -45,7 +45,7 @@ test('active recall prompts from Chinese before revealing the target-language se
 
 test('language review uses spaced repetition intervals and validates the target card', () => {
   assert.match(worker, /url\.pathname === '\/api\/language-review'/)
-  assert.match(worker, /SELECT id FROM language_cards WHERE id = \?/)
+  assert.match(worker, /SELECT id FROM language_cards WHERE id = \? AND content_type = 'sentence'/)
   assert.match(worker, /WHEN excluded\.last_result = 'again' THEN '\+10 minutes'/)
   assert.match(worker, /WHEN 1 THEN '\+1 day' WHEN 2 THEN '\+3 days' WHEN 3 THEN '\+7 days' ELSE '\+14 days'/)
   assert.match(worker, /correct_streak = CASE WHEN excluded\.last_result = 'remembered'/)
