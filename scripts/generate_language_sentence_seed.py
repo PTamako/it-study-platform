@@ -120,13 +120,21 @@ def make_hits(sentence, lang):
             hits.sort(key=lambda item:item["start"])
     return hits[:8]
 
-def expansion(hits, kind):
+def expansion(hits, kind, lang=None):
     output=[]; seen=set()
     for hit in hits:
         if hit["type"] != kind or hit["term"] in seen: continue
         seen.add(hit["term"])
         output.append({"term":hit["term"],"meaning":hit["meaning"],"explanation":hit["explanation"]})
         if len(output)>=4: break
+    # Every card gets a useful structural prompt even when the heuristic matcher
+    # cannot confidently identify a named grammar pattern in the sentence.
+    if kind == "grammar" and not output:
+        output.append({
+            "term": "句型结构" if lang == "ja" else "Sentence structure",
+            "meaning": "观察助词、活用和句尾表达" if lang == "ja" else "Observe word order, verb form, and sentence ending",
+            "explanation": "结合整句找出主语、谓语、修饰关系及语气；这是学习提示，不是自动判定的唯一语法分析。" if lang == "ja" else "Identify the subject, verb, modifiers, and tone in context; this is a study prompt, not a definitive automatic parse."
+        })
     return output
 
 def main():
@@ -179,8 +187,8 @@ def main():
               "example":"","example_meaning_zh":"","example_source_url":"",
               "source_url":"https://tatoeba.org/en/sentences/show/"+sid,"source_type":"licensed","content_type":"sentence",
               "highlight_json":json.dumps(hits,ensure_ascii=False,separators=(",",":")),
-              "vocabulary_expansion_json":json.dumps(expansion(hits,"vocabulary"),ensure_ascii=False,separators=(",",":")),
-              "grammar_expansion_json":json.dumps(expansion(hits,"grammar"),ensure_ascii=False,separators=(",",":"))})
+              "vocabulary_expansion_json":json.dumps(expansion(hits,"vocabulary",lang),ensure_ascii=False,separators=(",",":")),
+              "grammar_expansion_json":json.dumps(expansion(hits,"grammar",lang),ensure_ascii=False,separators=(",",":"))})
     if len({item["id"] for item in cards})!=6000: raise RuntimeError("Duplicate sentence IDs")
     columns=["id","language","category","term","reading","meaning_zh","explanation","example","example_meaning_zh","example_source_url","source_type","content_type","source_url","highlight_json","vocabulary_expansion_json","grammar_expansion_json"]
     lines=["-- Generated from Tatoeba community sentences and Chinese translations. Sentence URLs provide attribution.","-- Tatoeba data: CC BY 2.0 FR; see https://tatoeba.org/en/terms_of_use."]
