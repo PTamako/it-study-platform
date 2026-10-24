@@ -877,7 +877,14 @@ function languageHighlights(card: LanguageCard | null): LanguageHighlight[] {
       item.start >= 0 && item.end > item.start && item.end <= card.term.length &&
       ['vocabulary', 'grammar'].includes(item.type) && typeof item.term === 'string')
   } catch { stored = [] }
-  const highlights = [...stored]
+  stored.sort((a, b) => a.start - b.start || (a.type === 'grammar' ? -1 : 1) || (b.end - a.end))
+  const highlights: LanguageHighlight[] = []
+  let lastEnd = 0
+  for (const item of stored) {
+    if (item.start < lastEnd) continue
+    highlights.push(item)
+    lastEnd = item.end
+  }
   const grammarPresent = highlights.some(item => item.type === 'grammar')
   if (!grammarPresent) {
     for (const rule of fallbackGrammarPatterns.filter(item => item.language === card.language)) {
