@@ -235,6 +235,8 @@ async function removeExamRecords() {
 type PracticeOption = { id: string; text: string }
 type QuestionReviewProgress = { question_id: string; review_count: number; correct_streak: number; last_result: 'again' | 'remembered'; next_review_at: string; mastered: number }
 const questionProgressById = ref<Record<string, QuestionReviewProgress>>({})
+let questionProgressRequestId = 0
+let practiceLoadRequestId = 0
 type PracticeQuestion = {
   id: string; track_id: string; topic: string; difficulty: string; prompt: string;
   options: PracticeOption[]; answer: string; explanation: string; source_type: string; source_reference?: string; language: string; exam_section?: 'A' | 'B' | null; exam_section_method?: 'explicit' | 'case_pattern' | 'default_a' | 'unclassified' | null
@@ -501,6 +503,8 @@ async function loadExamTracks() {
 }
 function selectExam(track: ExamTrack) {
   stopSpeech()
+  practiceLoadRequestId += 1
+  questionProgressRequestId += 1
   questionBatchOffset.value = 0
   questionBankTotal.value = 0
   questionBankHasMore.value = false
@@ -516,6 +520,8 @@ function selectExam(track: ExamTrack) {
 
 async function selectQuestionSource(source: 'official' | 'generated') {
   stopSpeech()
+  practiceLoadRequestId += 1
+  questionProgressRequestId += 1
   questionSourceFilter.value = source
   questionBatchOffset.value = 0
   activeReviewMode.value = 'all'
@@ -530,17 +536,21 @@ async function selectQuestionSource(source: 'official' | 'generated') {
   quizError.value = ''
   await startPractice()
 }
-async function loadQuestionProgress() {
-  if (!selectedTrack.value) return
+async function loadQuestionProgress(trackId = selectedTrack.value?.id || '') {
+  if (!trackId) return
+  const requestId = ++questionProgressRequestId
   try {
-    const response = await fetch('/api/question-progress?track=' + encodeURIComponent(selectedTrack.value.id))
-    if (!response.ok) return
+    const response = await fetch('/api/question-progress?track=' + encodeURIComponent(trackId))
+    if (!response.ok || requestId !== questionProgressRequestId) return
     const data = await response.json() as { items?: QuestionReviewProgress[] }
+    if (requestId !== questionProgressRequestId) return
     questionProgressById.value = Object.fromEntries((data.items || []).map(item => [item.question_id, item]))
   } catch { /* Keep the last known progress visible if the network is temporarily unavailable. */ }
 }
 function selectReviewMode(mode: 'all' | 'unlearned' | 'wrong' | 'due' | 'mastered') {
   stopSpeech()
+  practiceLoadRequestId += 1
+  questionProgressRequestId += 1
   activeReviewMode.value = mode
   questionBatchOffset.value = 0
   questionBankTotal.value = 0
@@ -555,6 +565,8 @@ function selectReviewMode(mode: 'all' | 'unlearned' | 'wrong' | 'due' | 'mastere
 }
 async function startPractice() {
   stopSpeech()
+  const requestId = ++practiceLoadRequestId
+  const trackId = selectedTrack.value?.id || ''
   if (!selectedTrack.value) { quizError.value = '尚未加载考试列表，请刷新页面后重试。'; return }
   if (!selectedTrack.value.question_count) {
     quizError.value = '该考试尚未接入题库。目前正式接入的是 SG；不会用其他考试题目代替。'
@@ -579,6 +591,7 @@ async function startPractice() {
         data.has_more = false
       }
     }
+    if (requestId !== practiceLoadRequestId) return
     if (!response.ok) throw new Error(data.error || '题库加载失败')
     if (!data.items?.length) {
       const messages = {
@@ -601,11 +614,11 @@ async function startPractice() {
     quizCorrect.value = 0
     quizFinished.value = false
     quizStartedAt.value = Date.now()
-    await loadQuestionProgress()
+    await loadQuestionProgress(trackId)
   } catch (error) {
-    quizError.value = error instanceof Error ? error.message : '题库加载失败，请稍后重试。'
+    if (requestId === practiceLoadRequestId) quizError.value = error instanceof Error ? error.message : '题库加载失败，请稍后重试。'
   } finally {
-    quizLoading.value = false
+    if (requestId === practiceLoadRequestId) quizLoading.value = false
   }
 }
 async function nextQuestionBatch() {
