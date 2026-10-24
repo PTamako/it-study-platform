@@ -877,7 +877,7 @@ function languageHighlights(card: LanguageCard | null): LanguageHighlight[] {
       item.start >= 0 && item.end > item.start && item.end <= card.term.length &&
       ['vocabulary', 'grammar'].includes(item.type) && typeof item.term === 'string')
   } catch { stored = [] }
-  stored.sort((a, b) => a.start - b.start || (a.type === 'grammar' ? -1 : 1) || (b.end - a.end))
+  stored.sort((a, b) => a.start - b.start || (a.type === b.type ? b.end - a.end : a.type === 'grammar' ? -1 : 1))
   const highlights: LanguageHighlight[] = []
   let lastEnd = 0
   for (const item of stored) {
