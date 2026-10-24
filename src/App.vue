@@ -673,29 +673,20 @@ const modules = [
   { id: 'dictionary' as const, title: '英日发音与 IT 术语', en: 'DICTIONARY', desc: '英语原音 · 日语辅助读音 · 本地 IT 词库', icon: BookMarked, tone: 'blue', count: '英语词汇与专业术语' },
 ]
 
+type LanguageHighlight = { start: number; end: number; type: 'vocabulary' | 'grammar'; term: string; meaning: string; explanation: string }
+type LanguageExpansion = { term: string; meaning: string; explanation: string }
 type LanguageCard = {
   id: string; language: 'ja' | 'en'; category: string; term: string; reading?: string;
-  meaning_zh: string; explanation: string; example: string; example_meaning_zh: string; example_source_url?: string; source_type: string
+  meaning_zh: string; explanation: string; example: string; example_meaning_zh: string;
+  example_source_url?: string; source_url?: string; source_type: string; content_type?: string;
+  highlight_json?: string; vocabulary_expansion_json?: string; grammar_expansion_json?: string
 }
 const languageCards = ref<LanguageCard[]>([])
-const languageCategories = computed(() => {
-  const preferredOrder = [
-    '日常与情景会话', '职场与商务语言', '词汇与语法',
-    'JLPT N5', 'JLPT N4', 'JLPT N3', 'JLPT N2', 'JLPT N1',
-    'Oxford 3000 核心词汇', '大学英语四级', '大学英语六级', '雅思词汇', '托福词汇', '高频词汇',
-  ]
-  const categories = [...new Set(languageCards.value.map(card => card.category))]
-  categories.sort((a, b) => {
-    const ai = preferredOrder.indexOf(a)
-    const bi = preferredOrder.indexOf(b)
-    if (ai >= 0 || bi >= 0) return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi)
-    return a.localeCompare(b, 'zh-CN')
-  })
-  return [
-    { title: '全部', desc: '所有已发布的课程卡', icon: BookOpen },
-    ...categories.map(title => ({ title, desc: '按学习等级或词汇类别筛选', icon: BookMarked })),
-  ]
-})
+const languageCategories = computed(() => [
+  { title: '全部', desc: '全部句子', icon: BookOpen },
+  { title: '日常句子', desc: '日常生活中自然会说的话', icon: BookMarked },
+  { title: '职场语言', desc: '工作沟通、确认、汇报与协作', icon: BookMarked },
+])
 const languageCardsLoading = ref(false)
 const languageCardsError = ref('')
 type LanguageReview = { card_id: string; review_count: number; correct_streak: number; next_review_at: string; last_reviewed_at: string; last_result: 'again' | 'remembered'; is_due?: number }
@@ -740,6 +731,31 @@ const languagePracticeRevealed = ref(false)
 const languagePracticeCard = computed(() => visibleLanguageCards.value.length
   ? visibleLanguageCards.value[languagePracticeIndex.value % visibleLanguageCards.value.length]
   : null)
+function parseLanguageExpansion(value?: string): LanguageExpansion[] {
+  try {
+    const parsed = JSON.parse(value || '[]')
+    return Array.isArray(parsed) ? parsed.filter((item): item is LanguageExpansion => Boolean(item && typeof item.term === 'string')) : []
+  } catch { return [] }
+}
+function sentenceParts(card: LanguageCard | null): Array<{ text: string; type: string; detail: string }> {
+  if (!card) return []
+  let highlights: LanguageHighlight[] = []
+  try {
+    const parsed = JSON.parse(card.highlight_json || '[]')
+    if (Array.isArray(parsed)) highlights = parsed.filter(item => Number.isInteger(item.start) && Number.isInteger(item.end) && item.start >= 0 && item.end > item.start && item.end <= card.term.length)
+  } catch { highlights = [] }
+  highlights.sort((a, b) => a.start - b.start || (a.type === 'grammar' ? -1 : 1))
+  const parts: Array<{ text: string; type: string; detail: string }> = []
+  let cursor = 0
+  for (const item of highlights) {
+    if (item.start < cursor) continue
+    if (item.start > cursor) parts.push({ text: card.term.slice(cursor, item.start), type: '', detail: '' })
+    parts.push({ text: card.term.slice(item.start, item.end), type: item.type, detail: [item.term, item.meaning, item.explanation].filter(Boolean).join(' · ') })
+    cursor = item.end
+  }
+  if (cursor < card.term.length) parts.push({ text: card.term.slice(cursor), type: '', detail: '' })
+  return parts.length ? parts : [{ text: card.term, type: '', detail: '' }]
+}
 function speakLanguageCard(card: LanguageCard | null, example = false, practice = false) {
   if (!card) return
   const text = example ? card.example : card.term
@@ -881,8 +897,7 @@ async function hydrateCloudProgress() {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ term, language: entry.language || 'auto', entry }),
       })
-      if (!response.ok) vocabularyImportOk = false
-    } catch { vocabularyImportOk = false }
+      if (!response.ok) vocabularyImportOk = false    } catch { vocabularyImportOk = false }
   }
 
   try {
@@ -1620,27 +1635,45 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             </div>
             <section class="language-practice panel" aria-label="主动回忆练习">
               <div class="language-practice-heading">
-                <div><span class="banner-tag">ACTIVE RECALL</span><h3>先回忆，再看答案</h3><p>比反复阅读更主动的练习：先试着说出意思，再翻开解释。</p></div>
+                <div><span class="banner-tag">ACTIVE RECALL</span><h3>先回忆，再看答案</h3><p>先看中文提示，尝试说出完整的日语或英语句子，再揭晓原句并复习重点。</p></div>
                 <span class="language-practice-count">待复习 {{ dueLanguageReviewCount }} · {{ visibleLanguageCards.length }} 张</span>
               </div>
               <div v-if="languagePracticeCard" class="language-practice-content">
                 <span class="dict-tag">{{ languagePracticeCard.category }}</span>
-                <h4>{{ languagePracticeCard.term }}</h4>
-                <p v-if="languagePracticeCard.reading" class="language-reading">{{ languagePracticeCard.reading }}</p>
-                <div class="language-speech-actions"><button type="button" class="play-button" @click="speakLanguageCard(languagePracticeCard, false, true)"><Volume2 :size="16" /> 播放原文</button><button v-if="languagePracticeCard.example" type="button" class="play-button" @click="speakLanguageCard(languagePracticeCard, true, true)"><Volume2 :size="16" /> 播放例句</button></div>
-                <div v-if="speechStatus && speechStatusTarget.startsWith('language-practice:' + languagePracticeCard.id + ':')" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
+                <div v-if="languagePracticeRevealed" class="language-practice-revealed-sentence">
+                  <h4 class="language-sentence"><span v-for="(part, index) in sentenceParts(languagePracticeCard)" :key="index" :class="part.type ? 'sentence-highlight-' + part.type : ''" :title="part.detail">{{ part.text }}</span></h4>
+                  <p v-if="languagePracticeCard.reading" class="language-reading">{{ languagePracticeCard.reading }}</p>
+                  <div class="language-speech-actions"><button type="button" class="play-button" @click="speakLanguageCard(languagePracticeCard, false, true)"><Volume2 :size="16" /> 播放原文</button><button v-if="languagePracticeCard.example" type="button" class="play-button" @click="speakLanguageCard(languagePracticeCard, true, true)"><Volume2 :size="16" /> 播放例句</button></div>
+                  <div v-if="speechStatus && speechStatusTarget.startsWith('language-practice:' + languagePracticeCard.id + ':')" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
+                </div>
                 <div v-if="languagePracticeRevealed" class="language-practice-answer">
                   <strong>{{ languagePracticeCard.meaning_zh }}</strong>
                   <p>{{ languagePracticeCard.explanation }}</p>
-                  <div class="language-example"><strong>例句</strong><p>{{ languagePracticeCard.example }}</p><span>{{ languagePracticeCard.example_meaning_zh }}</span></div>
+                  <section v-if="parseLanguageExpansion(languagePracticeCard.vocabulary_expansion_json).length" class="language-expansion">
+                    <strong>单词拓展</strong>
+                    <div v-for="(item, index) in parseLanguageExpansion(languagePracticeCard.vocabulary_expansion_json)" :key="'practice-vocab-' + index">
+                      <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
+                    </div>
+                  </section>
+                  <section v-if="parseLanguageExpansion(languagePracticeCard.grammar_expansion_json).length" class="language-expansion grammar">
+                    <strong>语法拓展</strong>
+                    <div v-for="(item, index) in parseLanguageExpansion(languagePracticeCard.grammar_expansion_json)" :key="'practice-grammar-' + index">
+                      <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
+                    </div>
+                  </section>
+                  <a v-if="languagePracticeCard.source_url" class="language-source-link" :href="languagePracticeCard.source_url" target="_blank" rel="noopener noreferrer">查看句子来源 ↗</a>
                 </div>
-                <p v-else class="language-practice-prompt">试着回忆中文意思、使用场景，或自己造一个句子。</p>
+                <div v-else class="language-practice-recall-prompt">
+                  <span class="banner-tag">先回忆，再揭晓</span>
+                  <strong>{{ languagePracticeCard.meaning_zh || '请先尝试回忆这句话的意思。' }}</strong>
+                  <p class="language-practice-prompt">请根据中文提示，用{{ studyLanguage === 'ja' ? '日语' : '英语' }}说出完整句子。说完后再显示原句，检查词汇、语法和表达是否自然。</p>
+                </div>
                 <div v-if="languageReviews.some(item => item.card_id === languagePracticeCard?.id)" class="language-review-meta">
                   <span>复习 {{ languageReviews.find(item => item.card_id === languagePracticeCard?.id)?.review_count || 0 }} 次</span>
                   <span>连续记住 {{ languageReviews.find(item => item.card_id === languagePracticeCard?.id)?.correct_streak || 0 }} 次</span>
                 </div>
                 <div class="language-practice-actions">
-                  <button class="secondary-button" @click="languagePracticeRevealed = !languagePracticeRevealed">{{ languagePracticeRevealed ? '收起答案' : '显示答案' }}</button>
+                  <button class="secondary-button" @click="languagePracticeRevealed = !languagePracticeRevealed">{{ languagePracticeRevealed ? '隐藏原句' : '显示原句与解析' }}</button>
                   <button class="primary-button" @click="nextLanguagePractice">跳过 <ArrowRight :size="15" /></button>
                   <button class="language-review-again" :disabled="languageReviewBusy === languagePracticeCard.id" @click="submitLanguageReview('again')">还不熟 · 稍后再练</button>
                   <button class="language-review-remembered" :disabled="languageReviewBusy === languagePracticeCard.id" @click="submitLanguageReview('remembered')">记住了 · 安排复习</button>
@@ -1658,18 +1691,30 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               <button :class="{ chosen: selectedLanguageMastery === 'unmastered' }" @click="selectedLanguageMastery = 'unmastered'">学习中 / 待复习 {{ languageCards.filter(card => !completedLanguageCards.includes(card.id) && !isLanguageCardUnlearned(card)).length }}</button>
               <button :class="{ chosen: selectedLanguageMastery === 'mastered' }" @click="selectedLanguageMastery = 'mastered'">已掌握 {{ languageCards.filter(card => completedLanguageCards.includes(card.id)).length }}</button>
             </div>
-            <p v-if="studyLanguage === 'ja'" class="language-source">日语词库：<a href="https://github.com/evanclan/OpenJLPT" target="_blank" rel="noopener noreferrer">OpenJLPT</a> / <a href="https://www.edrdg.org/jmdict/j_jmdict.html" target="_blank" rel="noopener noreferrer">JMdict</a>（<a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer">CC BY-SA 4.0</a>）；中文释义：<a href="https://github.com/tomoshi-app/tomoshi-dict-data" target="_blank" rel="noopener noreferrer">Tomoshi 开放词库</a>；例句：<a href="https://tatoeba.org" target="_blank" rel="noopener noreferrer">Tatoeba</a>（CC BY 2.0 FR）。JLPT 等级为社区参考，并非官方公布词表。</p>
-            <p v-else class="language-source">英语词库：<a href="https://github.com/skywind3000/ECDICT" target="_blank" rel="noopener noreferrer">ECDICT</a>（<a href="https://github.com/skywind3000/ECDICT/blob/bc015ed2e24a7abef49fc6dbbb7fe32c1dadaf8b/LICENSE" target="_blank" rel="noopener noreferrer">MIT</a>）；按核心词汇与词频排序，分为三个 1,000 词学习阶段。</p>
+            <p v-if="studyLanguage === 'ja'" class="language-source">日语句子来自 <a href="https://tatoeba.org" target="_blank" rel="noopener noreferrer">Tatoeba</a> 开放例句；每条句子保留来源链接，句中标注词汇与语法。</p>
+            <p v-else class="language-source">英语句子来自 <a href="https://tatoeba.org" target="_blank" rel="noopener noreferrer">Tatoeba</a> 开放例句；每条句子保留来源链接，句中标注词汇与语法。</p>
             <p v-if="languageCardsLoading" class="dictionary-status">正在从学习内容库读取课程…</p>
             <p v-else-if="languageCardsError" class="dictionary-status dictionary-error">{{ languageCardsError }} 请先应用最新的 D1 数据库迁移。</p>
             <div v-else class="language-card-list">
               <article v-for="card in paginatedLanguageCards" :key="card.id" class="language-study-card" :class="{ completed: completedLanguageCards.includes(card.id) }">
                 <div class="language-card-top"><span class="dict-tag">{{ card.category }}</span><span class="language-source">{{ completedLanguageCards.includes(card.id) ? '已掌握' : isLanguageCardUnlearned(card) ? '未学习' : '学习中' }}</span><button class="language-done-button" @click="toggleLanguageCard(card.id)">{{ completedLanguageCards.includes(card.id) ? '取消掌握' : '标记已掌握' }}</button></div>
-                <h3>{{ card.term }}</h3>
+                <h3 class="language-sentence"><span v-for="(part, index) in sentenceParts(card)" :key="index" :class="part.type ? 'sentence-highlight-' + part.type : ''" :title="part.detail">{{ part.text }}</span></h3>
                 <p v-if="card.reading" class="language-reading">{{ card.reading }}</p>
-                <p class="language-meaning">{{ card.meaning_zh }}</p>
+                <p class="language-meaning language-sentence-translation">{{ card.meaning_zh }}</p>
                 <p class="language-explanation">{{ card.explanation }}</p>
-                <div v-if="card.example" class="language-example"><strong>例句</strong><p>{{ card.example }}</p><span v-if="card.example_meaning_zh">{{ card.example_meaning_zh }}</span><a v-if="card.example_source_url" :href="card.example_source_url" target="_blank" rel="noopener noreferrer">例句来源：Tatoeba</a></div>
+                <section v-if="parseLanguageExpansion(card.vocabulary_expansion_json).length" class="language-expansion">
+                  <strong>单词拓展</strong>
+                  <div v-for="(item, index) in parseLanguageExpansion(card.vocabulary_expansion_json)" :key="'vocab-' + index">
+                    <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
+                  </div>
+                </section>
+                <section v-if="parseLanguageExpansion(card.grammar_expansion_json).length" class="language-expansion grammar">
+                  <strong>语法拓展</strong>
+                  <div v-for="(item, index) in parseLanguageExpansion(card.grammar_expansion_json)" :key="'grammar-' + index">
+                    <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
+                  </div>
+                </section>
+                <a v-if="card.source_url" class="language-source-link" :href="card.source_url" target="_blank" rel="noopener noreferrer">查看句子来源 ↗</a>
                 <div class="language-speech-actions"><button type="button" class="play-button" @click="speakLanguageCard(card)"><Volume2 :size="17" /> 播放原文</button><button v-if="card.example" type="button" class="play-button" @click="speakLanguageCard(card, true)"><Volume2 :size="17" /> 播放例句</button></div>
                 <div v-if="speechStatus && speechStatusTarget.startsWith('language-card:' + card.id + ':')" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 <small class="language-source">{{ card.source_type === 'licensed' ? '开放词库数据' : '平台自编学习内容' }}</small>

@@ -497,8 +497,7 @@ async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Prom
 
 async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' | 'it' = 'auto', db?: D1Database): Promise<DictionaryApiEntry[]> {
   let technicalItems: DictionaryApiEntry[] = []
-  if (db) {
-    try {
+  if (db) {    try {
       technicalItems = await searchTechnicalVocabulary(db, query)
     } catch {
       // Ordinary English/Japanese lookups may continue to dictionary providers if a local
@@ -783,9 +782,9 @@ export default {
       if (!['ja', 'en'].includes(language)) return json({ items: [], error: 'lang 只支持 ja 或 en。' }, 400)
       try {
         const { results } = await env.DB.prepare(
-          `SELECT id, language, category, term, reading, meaning_zh, explanation, example, example_meaning_zh, example_source_url, source_type
-           FROM language_cards WHERE language = ? AND (? = '' OR category = ?)
-           ORDER BY category, id`,
+          `SELECT id, language, category, term, reading, meaning_zh, explanation, example, example_meaning_zh, example_source_url, source_url, source_type, content_type, highlight_json, vocabulary_expansion_json, grammar_expansion_json
+           FROM language_cards WHERE content_type = 'sentence' AND language = ? AND (? = '' OR category = ?)
+           ORDER BY CASE category WHEN '日常句子' THEN 0 WHEN '职场语言' THEN 1 ELSE 2 END, id`,
         ).bind(language, category, category).all()
         return json({ items: results })
       } catch {
@@ -799,7 +798,7 @@ export default {
         const [attempts, scenarios, language, saved, tasks] = await Promise.all([
           env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(is_correct), 0) AS correct FROM study_attempts').first() as Promise<Record<string, unknown>>,
           env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(AVG(score), 0) AS average_score FROM scenario_attempts').first() as Promise<Record<string, unknown>>,
-          env.DB.prepare('SELECT (SELECT COUNT(*) FROM language_cards) AS total, COALESCE((SELECT SUM(mastered) FROM language_card_progress), 0) AS mastered').first() as Promise<Record<string, unknown>>,
+          env.DB.prepare(`SELECT (SELECT COUNT(*) FROM language_cards WHERE content_type = 'sentence') AS total, COALESCE((SELECT SUM(p.mastered) FROM language_card_progress p JOIN language_cards c ON c.id = p.card_id WHERE c.content_type = 'sentence'), 0) AS mastered`).first() as Promise<Record<string, unknown>>,
           env.DB.prepare('SELECT COUNT(*) AS total FROM saved_vocabulary_entries').first() as Promise<Record<string, unknown>>,
           env.DB.prepare("SELECT COUNT(*) AS total, COALESCE(SUM(completed), 0) AS completed FROM daily_task_completions WHERE study_date = date('now')").first() as Promise<Record<string, unknown>>,
         ])
@@ -835,7 +834,7 @@ export default {
       const mastered = body.mastered === true || body.mastered === 1
       if (!cardId) return json({ error: '缺少 card_id。' }, 400)
       try {
-        const card = await env.DB.prepare('SELECT id FROM language_cards WHERE id = ?').bind(cardId).first()
+        const card = await env.DB.prepare("SELECT id FROM language_cards WHERE id = ? AND content_type = 'sentence'").bind(cardId).first()
         if (!card) return json({ error: '课程卡片不存在。' }, 404)
         await env.DB.prepare(
           'INSERT INTO language_card_progress (card_id, mastered, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(card_id) DO UPDATE SET mastered = excluded.mastered, updated_at = CURRENT_TIMESTAMP',
@@ -867,8 +866,8 @@ export default {
       const result = body.result === 'remembered' ? 'remembered' : body.result === 'again' ? 'again' : ''
       if (!cardId || !result) return json({ error: '需要 card_id 和有效的 result。' }, 400)
       try {
-        const card = await env.DB.prepare('SELECT id FROM language_cards WHERE id = ?').bind(cardId).first()
-        if (!card) return json({ error: '课程卡片不存在。' }, 404)
+        const card = await env.DB.prepare("SELECT id FROM language_cards WHERE id = ? AND content_type = 'sentence'").bind(cardId).first()
+        if (!card) return json({ error: '句子课程卡片不存在。' }, 404)
         const modifier = result === 'again' ? '+10 minutes' : '+1 day'
         await env.DB.prepare(
           `INSERT INTO language_card_reviews
@@ -997,8 +996,7 @@ export default {
                   (SELECT MAX(wa.answered_at) FROM study_attempts wa WHERE wa.question_id = q.id AND wa.is_correct = 0) AS last_wrong_at,
                   COUNT(*) OVER() AS filtered_total
            FROM questions q
-           LEFT JOIN question_review_state s ON s.question_id = q.id
-           WHERE q.track_id = ? AND (? = '' OR q.source_type = ?) AND (
+           LEFT JOIN question_review_state s ON s.question_id = q.id           WHERE q.track_id = ? AND (? = '' OR q.source_type = ?) AND (
              (? = 'wrong' AND COALESCE(s.mastered, 0) = 0 AND EXISTS (
                SELECT 1 FROM study_attempts wa WHERE wa.question_id = q.id AND wa.is_correct = 0
              ))

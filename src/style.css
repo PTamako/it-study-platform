@@ -365,3 +365,24 @@
 .pronunciation-button{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;width:39px;height:39px;border-radius:10px;background:#f7f8ff;color:#5e6adb}
 .pronunciation-button span{font-size:8px;font-weight:800;line-height:1;letter-spacing:.2px}
 .pronunciation-button:hover{background:#eff0ff;border-color:#dfe2ff}
+
+
+/* Sentence-first language learning */
+.language-sentence { line-height: 1.9; overflow-wrap: anywhere; }
+.sentence-highlight-vocabulary { background: #fff0c2; color: #6c4810; border-radius: 4px; padding: 0 2px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.sentence-highlight-grammar { background: #dceeff; color: #174d83; border-bottom: 2px solid #6aa8e5; border-radius: 3px; padding: 0 2px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.language-sentence-translation { font-size: 1rem; line-height: 1.7; }
+.language-expansion { display: grid; gap: 8px; margin-top: 14px; padding: 12px; border-radius: 12px; background: #fff8e8; }
+.language-expansion.grammar { background: #eef6ff; }
+.language-expansion > strong { margin-bottom: 2px; }
+.language-expansion > div { display: grid; grid-template-columns: minmax(90px, 0.4fr) 1fr; gap: 4px 10px; }
+.language-expansion > div small { grid-column: 1 / -1; opacity: .8; line-height: 1.55; }
+.language-source-link { display: inline-block; margin-top: 10px; font-size: .8rem; }
+
+
+/* Active recall: show the native-language cue before revealing the target sentence. */
+.language-practice-recall-prompt{display:grid;gap:10px;margin:16px 0;padding:18px;border:1px solid #d9e5f5;border-radius:14px;background:linear-gradient(135deg,#f7faff 0%,#fffaf2 100%)}
+.language-practice-recall-prompt>strong{font-size:1.15rem;line-height:1.8;color:#24354d}
+.language-practice-recall-prompt .language-practice-prompt{margin:0;color:#617087;line-height:1.7}
+.language-practice-revealed-sentence{padding-top:12px}
+@media(max-width:560px){.language-practice-recall-prompt{padding:14px}.language-practice-recall-prompt>strong{font-size:1.05rem}}
