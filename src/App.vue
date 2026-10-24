@@ -1641,7 +1641,9 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               <div v-if="languagePracticeCard" class="language-practice-content">
                 <span class="dict-tag">{{ languagePracticeCard.category }}</span>
                 <div v-if="languagePracticeRevealed" class="language-practice-revealed-sentence">
+                  <div class="sentence-highlight-legend" role="note" aria-label="句子高亮图例"><span class="sentence-legend-vocabulary"><i aria-hidden="true"></i>单词 / 短语</span><span class="sentence-legend-grammar"><i aria-hidden="true"></i>语法结构</span></div>
                   <h4 class="language-sentence"><span v-for="(part, index) in sentenceParts(languagePracticeCard)" :key="index" :class="part.type ? 'sentence-highlight-' + part.type : ''" :title="part.detail">{{ part.text }}</span></h4>
+                  <p class="sentence-highlight-hint">黄色标出需要理解的词汇，蓝色标出句中的语法结构；下方会按颜色分别解释每一项。</p>
                   <p v-if="languagePracticeCard.reading" class="language-reading">{{ languagePracticeCard.reading }}</p>
                   <div class="language-speech-actions"><button type="button" class="play-button" @click="speakLanguageCard(languagePracticeCard, false, true)"><Volume2 :size="16" /> 播放原文</button><button v-if="languagePracticeCard.example" type="button" class="play-button" @click="speakLanguageCard(languagePracticeCard, true, true)"><Volume2 :size="16" /> 播放例句</button></div>
                   <div v-if="speechStatus && speechStatusTarget.startsWith('language-practice:' + languagePracticeCard.id + ':')" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechStatus.startsWith('正在') || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
@@ -1650,13 +1652,13 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <strong>{{ languagePracticeCard.meaning_zh }}</strong>
                   <p>{{ languagePracticeCard.explanation }}</p>
                   <section v-if="parseLanguageExpansion(languagePracticeCard.vocabulary_expansion_json).length" class="language-expansion">
-                    <strong>单词拓展</strong>
+                    <strong>🟨 高亮词汇逐项解释</strong>
                     <div v-for="(item, index) in parseLanguageExpansion(languagePracticeCard.vocabulary_expansion_json)" :key="'practice-vocab-' + index">
                       <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                     </div>
                   </section>
                   <section v-if="parseLanguageExpansion(languagePracticeCard.grammar_expansion_json).length" class="language-expansion grammar">
-                    <strong>语法拓展</strong>
+                    <strong>🟦 高亮语法逐项解释</strong>
                     <div v-for="(item, index) in parseLanguageExpansion(languagePracticeCard.grammar_expansion_json)" :key="'practice-grammar-' + index">
                       <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                     </div>
@@ -1698,18 +1700,20 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             <div v-else class="language-card-list">
               <article v-for="card in paginatedLanguageCards" :key="card.id" class="language-study-card" :class="{ completed: completedLanguageCards.includes(card.id) }">
                 <div class="language-card-top"><span class="dict-tag">{{ card.category }}</span><span class="language-source">{{ completedLanguageCards.includes(card.id) ? '已掌握' : isLanguageCardUnlearned(card) ? '未学习' : '学习中' }}</span><button class="language-done-button" @click="toggleLanguageCard(card.id)">{{ completedLanguageCards.includes(card.id) ? '取消掌握' : '标记已掌握' }}</button></div>
+                <div class="sentence-highlight-legend" role="note" aria-label="句子高亮图例"><span class="sentence-legend-vocabulary"><i aria-hidden="true"></i>单词 / 短语</span><span class="sentence-legend-grammar"><i aria-hidden="true"></i>语法结构</span></div>
                 <h3 class="language-sentence"><span v-for="(part, index) in sentenceParts(card)" :key="index" :class="part.type ? 'sentence-highlight-' + part.type : ''" :title="part.detail">{{ part.text }}</span></h3>
+                <p class="sentence-highlight-hint">黄色标出需要理解的词汇，蓝色标出句中的语法结构；下方会按颜色分别解释每一项。</p>
                 <p v-if="card.reading" class="language-reading">{{ card.reading }}</p>
                 <p class="language-meaning language-sentence-translation">{{ card.meaning_zh }}</p>
                 <p class="language-explanation">{{ card.explanation }}</p>
                 <section v-if="parseLanguageExpansion(card.vocabulary_expansion_json).length" class="language-expansion">
-                  <strong>单词拓展</strong>
+                  <strong>🟨 高亮词汇逐项解释</strong>
                   <div v-for="(item, index) in parseLanguageExpansion(card.vocabulary_expansion_json)" :key="'vocab-' + index">
                     <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                   </div>
                 </section>
                 <section v-if="parseLanguageExpansion(card.grammar_expansion_json).length" class="language-expansion grammar">
-                  <strong>语法拓展</strong>
+                  <strong>🟦 高亮语法逐项解释</strong>
                   <div v-for="(item, index) in parseLanguageExpansion(card.grammar_expansion_json)" :key="'grammar-' + index">
                     <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                   </div>
