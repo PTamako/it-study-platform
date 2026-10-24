@@ -45,6 +45,7 @@ def rows_in_tar(path, suffix):
 JP_WORK = re.compile(r"会社|仕事|職場|会議|打ち合わせ|報告|資料|確認|連絡|お客様|メール|電話|納期|依頼|申請|提出|対応|営業|面接|プロジェクト|システム|契約|請求|休暇|残業|出勤|退勤|上司|同僚|担当|共有|相談|予定|予約|変更|説明|承認|見積|部署|勤務")
 EN_WORK = re.compile(r"\b(company|work|office|meeting|report|document|confirm|contact|client|customer|email|phone|deadline|request|application|submit|support|sales|interview|project|system|contract|invoice|leave|overtime|manager|colleague|team|share|discuss|schedule|appointment|change|explain|approve|estimate|department|presentation|coworker)\b", re.I)
 JP_VOCAB = [
+ ("これ","这个／这","指向当前语境中可识别的事物；「これ誰の傘ですか」中的「これ」指眼前的伞"), ("それ","那个／那","指向听话人附近或前文提到的事物"), ("あれ","那个（较远处）","指说话人与听话人都相对较远的事物"), ("誰","谁","疑问代词，用于询问人物；「誰の＋名词」询问所属者"),
  ("旅行","旅行、旅游","表示外出旅行；在「旅行が楽しみです」中，是令人期待的事情"),
  ("よろしくお願いします","麻烦你了／请多关照","用于请求、协作或初次见面后的礼貌表达"),
  ("ありがとうございます","非常感谢","礼貌感谢"), ("すみません","不好意思／对不起","可用于道歉、搭话或轻度致谢"),
