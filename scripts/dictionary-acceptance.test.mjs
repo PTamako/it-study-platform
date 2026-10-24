@@ -190,3 +190,8 @@ test('saved dictionary removal does not discard local state before the cloud con
   assert.ok(removeStart >= 0 && removeEnd > removeStart, 'remove handler should be found')
   assert.ok(removeHandler.indexOf('if (!response.ok) throw new Error') < removeHandler.indexOf('savedWords.value = savedWords.value.filter'))
 })
+
+
+test('saved vocabulary UI does not imply cloud-backed terms are device-only', () => {
+  assert.match(app, /收藏词条会尝试同步到云端，并在本设备保留副本；未同步成功时会显示提示/)
+})
