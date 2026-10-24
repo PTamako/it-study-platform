@@ -3,18 +3,28 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
 const migration = await readFile(new URL('../migrations/0081_language_sentence_cards.sql', import.meta.url), 'utf8')
-const refreshMigration = await readFile(new URL('../migrations/0082_refresh_language_sentence_annotations.sql', import.meta.url), 'utf8')
+const refreshMigration = await readFile(new URL('../migrations/0083_refresh_japanese_meaningful_annotations.sql', import.meta.url), 'utf8')
 const refreshStatements = refreshMigration.split('\n').filter(line => /^UPDATE language_cards SET highlight_json = /.test(line))
 const rows = migration.split('\n').filter(line => /^\s*\('(ja|en)-sentence-/.test(line))
 const ja = rows.filter(line => /^\s*\('ja-sentence-/.test(line))
 const en = rows.filter(line => /^\s*\('en-sentence-/.test(line))
 
-test('annotation refresh migration repairs existing production rows for all 6,000 cards', () => {
+test('latest annotation refresh migration repairs existing production rows for all 6,000 cards', () => {
   assert.equal(refreshStatements.length, 6000)
   assert.match(refreshMigration, /highlight_json = /)
   assert.match(refreshMigration, /vocabulary_expansion_json = /)
   assert.match(refreshMigration, /grammar_expansion_json = /)
   assert.match(refreshMigration, /content_type = 'sentence'/)
+})
+
+
+test('Japanese travel sentence uses meaningful vocabulary and grammar instead of highlighting です as vocabulary', () => {
+  const generator = readFile(new URL('./generate_language_sentence_seed.py', import.meta.url), 'utf8')
+  return generator.then(source => {
+    assert.match(source, /\("旅行","旅行、旅游"/)
+    assert.match(source, /\(r"が楽しみです","N が楽しみです"/)
+    assert.doesNotMatch(source, /\("です","是／为","礼貌体判断表达"\)/)
+  })
 })
 
 test('sentence curriculum contains exactly 3,000 Japanese and 3,000 English sentences', () => {
@@ -95,6 +105,14 @@ test('every sentence card has usable translations, grounded highlights, and voca
       assert.ok(Number.isInteger(hit.start) && Number.isInteger(hit.end), id + ': highlight offsets must be integers')
       assert.ok(hit.start >= 0 && hit.end > hit.start && hit.end <= sentence.length, id + ': highlight offsets must be in range')
       assert.equal(sentence.slice(hit.start, hit.end), hit.term, id + ': highlight must match the exact sentence substring')
+      assert.ok(!['句中重点表达', '句子结构观察点', '句尾活用／表达观察点'].includes(hit.meaning), id + ': generic placeholder meaning is not acceptable')
+      assert.ok(!/未识别到明确/.test(hit.explanation), id + ': generic fallback grammar explanation is not acceptable')
+      const expansions = hit.type === 'vocabulary' ? vocabulary : grammar
+      assert.ok(expansions.some(item => item.term === hit.term), id + ': every highlighted item must have a matching expansion')
+    }
+    const ordered = [...highlights].sort((a, b) => a.start - b.start || b.end - a.end)
+    for (let index = 1; index < ordered.length; index++) {
+      assert.ok(ordered[index - 1].end <= ordered[index].start, id + ': highlights must not overlap')
     }
   }
   assert.equal(grammarHighlighted, rows.length, 'every card must contain a directly highlighted grammar/structure point')
