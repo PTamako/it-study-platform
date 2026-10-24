@@ -104,7 +104,7 @@ def make_hits(sentence, lang):
     candidates = []
     for term, meaning, explanation in vocab:
         for match in re.finditer(re.escape(term), sentence, re.I if lang == "en" else 0):
-            candidates.append({"start":match.start(),"end":match.end(),"type":"vocabulary","term":term,"meaning":meaning,"explanation":explanation})
+            candidates.append({"start":match.start(),"end":match.end(),"type":"vocabulary","term":match.group(),"meaning":meaning,"explanation":explanation})
     for pattern, term, explanation in grammar:
         for match in re.finditer(pattern, sentence, re.I if lang == "en" else 0):
             candidates.append({"start":match.start(),"end":match.end(),"type":"grammar","term":match.group(),"meaning":term,"explanation":explanation})
