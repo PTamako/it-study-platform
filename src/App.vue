@@ -1132,7 +1132,10 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   const requestId = ++speechRequestId
   speechPaused.value = false
   try {
-    synthesis.cancel()
+    // iOS Safari can silently drop the first utterance when cancel() is called
+    // while the speech queue is already idle. Cancel only an actual queued/current
+    // utterance; for a fresh tap, preserve the user-activation playback path.
+    if (synthesis.speaking || synthesis.pending) synthesis.cancel()
     if (synthesis.paused) synthesis.resume()
   } catch {
     // Continue and report playback failure via utterance.onerror if needed.
