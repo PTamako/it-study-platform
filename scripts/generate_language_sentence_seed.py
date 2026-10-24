@@ -183,12 +183,13 @@ def main():
               "grammar_expansion_json":json.dumps(expansion(hits,"grammar"),ensure_ascii=False,separators=(",",":"))})
     if len({item["id"] for item in cards})!=6000: raise RuntimeError("Duplicate sentence IDs")
     columns=["id","language","category","term","reading","meaning_zh","explanation","example","example_meaning_zh","example_source_url","source_type","content_type","source_url","highlight_json","vocabulary_expansion_json","grammar_expansion_json"]
-    lines=["-- Generated from Tatoeba community sentences and Chinese translations. Sentence URLs provide attribution.","-- Tatoeba data: CC BY 2.0 FR; see https://tatoeba.org/en/terms_of_use.","INSERT OR IGNORE INTO language_cards ("+", ".join(columns)+") VALUES"]
+    lines=["-- Generated from Tatoeba community sentences and Chinese translations. Sentence URLs provide attribution.","-- Tatoeba data: CC BY 2.0 FR; see https://tatoeba.org/en/terms_of_use."]
+    insert_prefix = "INSERT OR IGNORE INTO language_cards ("+", ".join(columns)+") VALUES"
     values=["("+", ".join(sql(item[column]) for column in columns)+")" for item in cards]
     for start in range(0,len(values),5):
-        # Keep each SQLite statement comfortably below D1's statement-size limit.
+        # Each batch is a separate SQL statement to stay below D1's statement-size limit.
         batch = values[start:start+5]
-        lines.append(",\n".join(batch)+(";" if start+5>=len(values) else ","))
+        lines.append(insert_prefix+"\\n"+",\\n".join(batch)+";")
     OUT.write_text("\n".join(lines)+"\n",encoding="utf-8")
     print("Generated exactly 3,000 Japanese + 3,000 English sentence cards in",OUT)
 if __name__=="__main__": main()
