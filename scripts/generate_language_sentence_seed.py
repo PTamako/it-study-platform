@@ -6,6 +6,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "migrations/0081_language_sentence_cards.sql"
 OUT_REFRESH = ROOT / "migrations/0082_refresh_language_sentence_annotations.sql"
+OUT_REFRESH_LATEST = ROOT / "migrations/0083_refresh_japanese_meaningful_annotations.sql"
 CACHE = Path("/tmp/language-sentence-sources")
 CACHE.mkdir(exist_ok=True)
 SENTENCES_URL = "https://downloads.tatoeba.org/exports/sentences.tar.bz2"
@@ -43,6 +44,7 @@ def rows_in_tar(path, suffix):
 JP_WORK = re.compile(r"会社|仕事|職場|会議|打ち合わせ|報告|資料|確認|連絡|お客様|メール|電話|納期|依頼|申請|提出|対応|営業|面接|プロジェクト|システム|契約|請求|休暇|残業|出勤|退勤|上司|同僚|担当|共有|相談|予定|予約|変更|説明|承認|見積|部署|勤務")
 EN_WORK = re.compile(r"\b(company|work|office|meeting|report|document|confirm|contact|client|customer|email|phone|deadline|request|application|submit|support|sales|interview|project|system|contract|invoice|leave|overtime|manager|colleague|team|share|discuss|schedule|appointment|change|explain|approve|estimate|department|presentation|coworker)\b", re.I)
 JP_VOCAB = [
+ ("旅行","旅行、旅游","表示外出旅行；在「旅行が楽しみです」中，是令人期待的事情"),
  ("よろしくお願いします","麻烦你了／请多关照","用于请求、协作或初次见面后的礼貌表达"),
  ("ありがとうございます","非常感谢","礼貌感谢"), ("すみません","不好意思／对不起","可用于道歉、搭话或轻度致谢"),
  ("お願いします","拜托了／请","礼貌提出请求"), ("確認","确认","职场常见词，可说「確認します」"),
@@ -54,7 +56,7 @@ JP_VOCAB = [
  ("明日","明天","时间表达"), ("今日","今天","时间表达"), ("時間","时间","常见搭配「時間があります」"),
  ("仕事","工作","可指工作内容或职业"), ("会社","公司","职场与商务常用词"), ("ください","请","接在动词て形后构成礼貌请求"),
  ("思います","我认为","表达个人判断或意见"), ("できます","能／可以","表示能力或可行性"),
- ("行きます","去","礼貌体动词"), ("します","做","する的礼貌体"), ("です","是／为","礼貌体判断表达"),
+ ("行きます","去","礼貌体动词"), ("します","做","する的礼貌体"), 
 ]
 EN_VOCAB = [
  ("could you","能否请你","礼貌请求，比 can you 更委婉"), ("would you","你愿意／能否","常用于礼貌请求"),
@@ -72,7 +74,8 @@ EN_VOCAB = [
  ("when","当……时","引导时间从句"), ("before","在……之前","表示时间先后"), ("after","在……之后","表示时间先后"),
 ]
 JP_GRAMMAR = [
- (r"なければなりません|なければならない","必须……","表达义务或必要性"),
+ (r"が楽しみです","N が楽しみです","「が」标记期待的事情；「楽しみです」表示对未来事情的期待，如「旅行が楽しみです」"),
+    (r"なければなりません|なければならない","必须……","表达义务或必要性"),
  (r"てもいいですか|てもいいです","可以……吗／可以……","表示许可；疑问形式用于征求许可"),
  (r"てください","请……","动词て形＋ください，用于礼貌请求"),
  (r"ていただけますか","能否请您……","更礼貌的请求表达"), (r"と思います","我认为……","用于表达个人意见或判断"),
@@ -278,6 +281,8 @@ def main():
             " WHERE id = " + sql(item["id"]) + " AND content_type = 'sentence';"
         )
     OUT_REFRESH.write_text("\n".join(refresh)+"\n",encoding="utf-8")
+    OUT_REFRESH_LATEST.write_text("\n".join(refresh)+"\n",encoding="utf-8")
     print("Generated exactly 3,000 Japanese + 3,000 English sentence cards in",OUT)
     print("Generated annotation refresh migration for existing sentence cards in",OUT_REFRESH)
+    print("Generated latest Japanese annotation refresh migration in",OUT_REFRESH_LATEST)
 if __name__=="__main__": main()
