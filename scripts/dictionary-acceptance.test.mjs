@@ -172,3 +172,15 @@ test('practical submission snapshots the scenario and ignores stale responses af
   assert.match(handlers, /translateScenarioExplanation\(submittedScenario\.id, feedback\)/)
   assert.match(handlers, /if \(requestId === scenarioSubmissionId\) scenarioSubmitting\.value = false/)
 })
+
+
+test('practical scenario list ignores late responses from an earlier track request', () => {
+  const start = app.indexOf('let scenarioLoadRequestId = 0')
+  const end = app.indexOf('function nextScenario()', start)
+  const loader = app.slice(start, end)
+  assert.ok(start >= 0 && end > start, 'scenario loader should be found')
+  assert.match(loader, /const requestId = \+\+scenarioLoadRequestId/)
+  assert.match(loader, /const trackId = selectedTrack\.value\?\.id/)
+  assert.match(loader, /if \(requestId !== scenarioLoadRequestId\) return/)
+  assert.match(loader, /if \(requestId === scenarioLoadRequestId\) scenariosLoading\.value = false/)
+})
