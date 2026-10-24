@@ -26,9 +26,9 @@ Cloudflare 官方支持直接在 Worker 层启用 Access；这样会同时保护
 如果这些请求都被 Access 保护，未经认证的 GitHub Actions 请求会被重定向到登录页或拒绝，导致部署后的验证失败。因此：
 
 - 不要为了让 CI 通过而给所有人开放整个 Worker。
-- 推荐为现有 Access 应用创建 **Service Auth** 策略，并生成 Cloudflare Access Service Token。
+- 为现有 Access 应用创建 **Service Auth** 策略，并生成 Cloudflare Access Service Token。
 - 将客户端 ID 和客户端 Secret 分别保存为 GitHub Actions Secrets：`CF_ACCESS_CLIENT_ID`、`CF_ACCESS_CLIENT_SECRET`；不要写进仓库、前端或日志。
-- 在部署工作流的健康检查和语言语料验证请求中添加 `CF-Access-Client-Id` 与 `CF-Access-Client-Secret` 请求头，然后再启用 Access 并部署。
+- 确认 PR #37 的工作流改动已合并，并将客户端 ID 和 Secret 分别保存为上面的 GitHub Actions Secrets；然后再启用 Access 并部署。
 - 该工作流改造和 Service Token 验证完成前，不要把 PR 合并触发生产部署。
 
 Service Token 应仅用于受保护应用的自动化验证；不要把它注入前端。若以后增加其他公开 API，必须重新评估其是否应该绕过 Access。
