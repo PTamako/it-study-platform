@@ -82,6 +82,13 @@ test('exam prep and practical training use Japanese-only speech targets and show
   assert.match(app, /@click="stopSpeech">停止/)
 })
 
+test('speech requests media playback audio session when the browser supports it', () => {
+  assert.match(app, /type BrowserAudioSession = \{ type: string \}/)
+  assert.match(app, /setSpeechAudioSessionType\('playback'\)/)
+  assert.match(app, /setSpeechAudioSessionType\('auto'\)/)
+  assert.match(app, /audioSession\?: BrowserAudioSession/)
+})
+
 test('speech never uses the operating system default voice before language voices load', () => {
   assert.match(app, /if \(availableVoices\.length === 0\) \{[\s\S]*?系统语音列表尚未加载，暂未播放/)
   assert.match(app, /synthesis\.addEventListener\('voiceschanged'/)
