@@ -406,3 +406,21 @@
 
 /* Clearly distinguish read-only preview fixtures from real learning data. */
 .preview-demo-banner{position:relative;z-index:20;padding:10px 16px;background:#fff3d8;border-bottom:1px solid #f0d59a;color:#694b12;font-size:13px;line-height:1.5;text-align:center}.preview-demo-banner code{font-size:12px;background:#ffebbb;padding:2px 5px;border-radius:4px}
+
+
+/* Free single-user authentication screen */
+.auth-screen{min-height:100dvh;display:grid;place-items:center;padding:24px;background:radial-gradient(ellipse at top,#f7efff 0%,#f6f8ff 42%,#f9fbff 100%)}
+.auth-card{width:min(100%,420px);padding:32px;border:1px solid #e6e8f0;border-radius:24px;background:rgba(255,255,255,.96);box-shadow:0 18px 55px rgba(49,55,88,.10);display:flex;flex-direction:column;gap:14px}
+.auth-mark{width:54px;height:54px;display:grid;place-items:center;border-radius:17px;background:#eee8ff;color:#6d4acb}
+.auth-card h1{margin:0;color:#20243a;font-size:28px;letter-spacing:-.04em}
+.auth-eyebrow{margin:0;color:#7a6ba8;font-size:10px;font-weight:800;letter-spacing:.14em}
+.auth-description,.auth-card>p:not(.auth-eyebrow):not(.auth-error){margin:0;color:#6c7184;font-size:13px;line-height:1.7}
+.auth-label{margin-top:8px;color:#34394d;font-size:13px;font-weight:700}
+.auth-input{width:100%;min-height:48px;border:1px solid #d9ddea;border-radius:12px;padding:0 14px;background:#fff;color:#252a3e;font:inherit;outline-offset:3px}
+.auth-input:focus{border-color:#8d72dc;box-shadow:0 0 0 3px rgba(141,114,220,.13)}
+.auth-submit{min-height:48px;border:0;border-radius:12px;background:#6e55c6;color:#fff;font:inherit;font-weight:700;cursor:pointer}
+.auth-submit:disabled{opacity:.5;cursor:not-allowed}
+.auth-error{margin:0;padding:10px 12px;border-radius:10px;background:#fff0f0;color:#a12d3b;font-size:13px;line-height:1.55}
+.auth-footnote{padding-top:6px;border-top:1px solid #eef0f5}
+.auth-logout{position:fixed;z-index:50;top:12px;right:12px;min-height:40px;padding:0 13px;border:1px solid #e0e3ec;border-radius:12px;background:rgba(255,255,255,.94);color:#525970;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 3px 12px rgba(35,40,70,.06)}
+@media(max-width:480px){.auth-screen{padding:18px}.auth-card{padding:24px 20px;border-radius:20px}.auth-card h1{font-size:25px}}
