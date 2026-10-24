@@ -422,5 +422,5 @@
 .auth-submit:disabled{opacity:.5;cursor:not-allowed}
 .auth-error{margin:0;padding:10px 12px;border-radius:10px;background:#fff0f0;color:#a12d3b;font-size:13px;line-height:1.55}
 .auth-footnote{padding-top:6px;border-top:1px solid #eef0f5}
-.auth-logout{position:fixed;z-index:50;top:12px;right:12px;min-height:40px;padding:0 13px;border:1px solid #e0e3ec;border-radius:12px;background:rgba(255,255,255,.94);color:#525970;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 3px 12px rgba(35,40,70,.06)}
+.auth-logout{position:relative;flex-shrink:0;min-height:40px;padding:0 13px;border:1px solid #e0e3ec;border-radius:12px;background:rgba(255,255,255,.94);color:#525970;font-size:12px;font-weight:700;cursor:pointer;box-shadow:0 3px 12px rgba(35,40,70,.06);white-space:nowrap}
 @media(max-width:480px){.auth-screen{padding:18px}.auth-card{padding:24px 20px;border-radius:20px}.auth-card h1{font-size:25px}}
