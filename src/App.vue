@@ -1151,7 +1151,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   // Safari/iOS can populate voices asynchronously. Never speak with an unknown OS
   // default voice: wait for voiceschanged, then retry with the requested language.
   if (availableVoices.length === 0) {
-    speechStatus.value = '系统语音列表尚未加载，正在等待语音就绪…'
+    speechStatus.value = '系统语音列表尚未加载，暂未播放；正在等待语音就绪。'
     synthesis.addEventListener('voiceschanged', () => {
       if (synthesis.getVoices().length > 0 && requestId === speechRequestId) {
         speak(spokenText, lang, statusTarget)
