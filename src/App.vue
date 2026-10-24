@@ -1319,10 +1319,12 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
     // "requesting playback" message forever. This watchdog does not delay speak().
     window.setTimeout(() => {
       if (requestId === speechRequestId && !hasStarted && speechStatus.value === '正在请求播放：' + spokenText) {
+        setSpeechAudioSessionType('auto')
         speechStatus.value = '浏览器尚未启动语音播放。请检查系统英语/日语语音、浏览器权限与设备静音状态后重试。'
       }
     }, 3500)
   } catch {
+    setSpeechAudioSessionType('auto')
     speechStatus.value = '浏览器没有接受这次语音请求，请再次点击播放。'
   }
 }
