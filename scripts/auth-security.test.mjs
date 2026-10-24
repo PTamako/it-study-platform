@@ -50,3 +50,19 @@ test('every personal data endpoint is explicitly registered behind the auth gate
     'auth gate must run before personal endpoint handlers',
   )
 })
+
+const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
+
+test('destructive exam history deletion requires typed second confirmation', () => {
+  const start = app.indexOf('async function removeExamRecords()')
+  assert.notEqual(start, -1, 'exam history delete handler must exist')
+  const end = app.indexOf('\n}', start)
+  const handler = app.slice(start, end)
+  const firstConfirm = handler.indexOf('window.confirm(')
+  const typedConfirm = handler.indexOf("window.prompt('二次确认")
+  const deleteRequest = handler.indexOf("fetch('/api/exam-history', { method: 'DELETE' })")
+  assert.ok(firstConfirm >= 0, 'first confirmation must be present')
+  assert.ok(typedConfirm > firstConfirm, 'typed confirmation must follow first confirmation')
+  assert.ok(deleteRequest > typedConfirm, 'DELETE request must occur only after both confirmations')
+  assert.match(handler, /confirmation !== '清除'/)
+})
