@@ -89,6 +89,8 @@ test('speech never uses the operating system default voice before language voice
   assert.match(app, /availableVoices\.length > 0 && voices\.length === 0/)
   assert.match(app, /exactLanguageVoices\.find\(candidate => candidate\.localService/)
   assert.match(app, /播放请求已结束/)
+  assert.match(app, /着信音与通知音量及静音状态/)
+  assert.match(app, /此状态不代表已确认听到声音/)
   assert.match(app, /语音：浏览器自动选择/)
 })
 
