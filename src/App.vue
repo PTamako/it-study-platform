@@ -1154,7 +1154,10 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
     speechStatus.value = '系统语音列表尚未加载，暂未播放；正在等待语音就绪。'
     synthesis.addEventListener('voiceschanged', () => {
       if (synthesis.getVoices().length > 0 && requestId === speechRequestId) {
-        speak(spokenText, lang, statusTarget)
+        // Do not call speak() from this asynchronous event: iOS Safari may reject
+        // speech started outside the original tap's user activation. Ask for one
+        // explicit tap after voices are ready instead of silently failing.
+        speechStatus.value = '系统语音已就绪，请再次点击播放。'
       } else if (requestId === speechRequestId) {
         speechStatus.value = '系统语音仍未就绪。请检查系统语音设置后重试。'
       }
