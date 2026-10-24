@@ -1314,46 +1314,65 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
 }
 
 function testAudioOutput() {
-  // Diagnostic only: this short Web Audio tone checks whether the browser can output
-  // any sound. It does not replace speech playback or prove that SpeechSynthesis works.
+  // iOS Safari requires AudioContext to be resumed from the direct user gesture.
+  // Do not schedule a very short tone until resume() has resolved: a suspended
+  // context may otherwise consume the scheduled tone before it becomes audible.
   const AudioContextConstructor = window.AudioContext
   if (typeof AudioContextConstructor === 'undefined') {
-    speechStatus.value = '当前浏览器不支持设备声音测试。'
+    speechStatus.value = '当前浏览器不支持 Web Audio，无法执行设备声音测试。'
     return
   }
 
   const requestId = ++speechRequestId
+  const synthesis = window.speechSynthesis
   try {
-    const synthesis = window.speechSynthesis
     if (synthesis && (synthesis.speaking || synthesis.pending)) synthesis.cancel()
     speechPaused.value = false
 
-    // Create/resume the audio context directly from this tap to satisfy iOS Safari's
-    // user-activation requirement. The tone is short and fades out to avoid a click.
     const context = new AudioContextConstructor()
-    const oscillator = context.createOscillator()
-    const gain = context.createGain()
-    const now = context.currentTime
-    oscillator.type = 'sine'
-    oscillator.frequency.setValueAtTime(660, now)
-    gain.gain.setValueAtTime(0.0001, now)
-    gain.gain.exponentialRampToValueAtTime(0.12, now + 0.025)
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22)
-    oscillator.connect(gain)
-    gain.connect(context.destination)
-    oscillator.start(now)
-    oscillator.stop(now + 0.23)
-    void context.resume().then(() => {
-      if (requestId === speechRequestId) {
-        speechStatus.value = '已触发约 0.2 秒的设备测试音请求；请确认是否实际听到。此测试不代表语音合成已正常。'
+    speechStatus.value = '正在启动设备声音测试……'
+    // Call resume immediately while the tap still has user activation.
+    const resumePromise = context.resume()
+    void resumePromise.then(() => {
+      if (requestId !== speechRequestId) {
+        void context.close().catch(() => undefined)
+        return
       }
-      window.setTimeout(() => { void context.close().catch(() => undefined) }, 600)
+      if (context.state !== 'running') {
+        speechStatus.value = '浏览器音频上下文未进入运行状态（' + context.state + '）。请重新点击测试。'
+        void context.close().catch(() => undefined)
+        return
+      }
+
+      // Schedule the tone only AFTER the context is running. Use a longer,
+      // comfortably audible tone with a short fade so iOS has time to output it.
+      const oscillator = context.createOscillator()
+      const gain = context.createGain()
+      const now = context.currentTime
+      oscillator.type = 'sine'
+      oscillator.frequency.setValueAtTime(880, now)
+      gain.gain.setValueAtTime(0.0001, now)
+      gain.gain.exponentialRampToValueAtTime(0.2, now + 0.04)
+      gain.gain.setValueAtTime(0.2, now + 0.55)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.7)
+      oscillator.connect(gain)
+      gain.connect(context.destination)
+      oscillator.onended = () => {
+        if (requestId === speechRequestId) {
+          speechStatus.value = '设备测试音已提交到运行中的音频输出（AudioContext=running）。请确认是否实际听到；此结果仍不能证明语音合成正常。'
+        }
+        void context.close().catch(() => undefined)
+      }
+      oscillator.start(now + 0.03)
+      oscillator.stop(now + 0.72)
     }).catch(() => {
-      if (requestId === speechRequestId) speechStatus.value = '设备声音测试启动失败。请检查 iPhone 媒体音量与浏览器状态。'
+      if (requestId === speechRequestId) {
+        speechStatus.value = '浏览器无法启动音频上下文。请检查 Safari 页面状态与 iPhone 音频输出后重试。'
+      }
       void context.close().catch(() => undefined)
     })
   } catch {
-    speechStatus.value = '设备声音测试启动失败。请检查浏览器音频支持与 iPhone 媒体音量。'
+    speechStatus.value = '设备声音测试启动失败。请检查 iPhone 音频输出与浏览器状态。'
   }
 }
 
