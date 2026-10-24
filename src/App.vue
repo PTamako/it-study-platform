@@ -7,6 +7,59 @@ import {
 } from 'lucide-vue-next'
 
 type ModuleId = 'home' | 'exam' | 'practical' | 'language' | 'dictionary'
+
+const authenticated = ref(false)
+const authReady = ref(false)
+const authConfigured = ref(true)
+const authPassword = ref('')
+const authError = ref('')
+const authLoading = ref(false)
+
+async function checkAuth() {
+  try {
+    const response = await fetch('/api/auth/session', { cache: 'no-store' })
+    const result = await response.json() as { authenticated?: boolean; configured?: boolean }
+    authConfigured.value = result.configured !== false
+    authenticated.value = response.ok && result.authenticated === true
+  } catch {
+    authenticated.value = false
+    authError.value = '暂时无法连接登录服务，请检查网络后重试。'
+  } finally {
+    authReady.value = true
+  }
+}
+
+async function login() {
+  authLoading.value = true
+  authError.value = ''
+  try {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password: authPassword.value }),
+    })
+    const result = await response.json() as { error?: string; authenticated?: boolean }
+    if (!response.ok || result.authenticated !== true) throw new Error(result.error || '登录失败，请稍后重试。')
+    authenticated.value = true
+    authPassword.value = ''
+    void syncExamHistory()
+    void hydrateCloudProgress()
+  } catch (error) {
+    authError.value = error instanceof Error ? error.message : '登录失败，请稍后重试。'
+  } finally {
+    authLoading.value = false
+  }
+}
+
+async function logout() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' })
+  } finally {
+    authenticated.value = false
+    authPassword.value = ''
+    authError.value = ''
+  }
+}
 const activeModule = ref<ModuleId>('home')
 const searchText = ref('')
 const dictSourceLang = ref<'auto' | 'ja' | 'en' | 'it'>('auto')
@@ -1134,7 +1187,7 @@ async function hydrateCloudProgress() {
     // Keep local data usable if the cloud is unavailable or an import partially fails.
   }
 }
-onMounted(() => { void syncExamHistory(); void hydrateCloudProgress() })
+onMounted(async () => { await checkAuth(); if (authenticated.value) { void syncExamHistory(); void hydrateCloudProgress() } })
 
 type DictionaryEntry = {
   term: string
@@ -1541,7 +1594,27 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
   <div v-if="previewDemoMode" class="preview-demo-banner" role="status">
     预览演示模式：使用内置示例句子，不读取或写入云端学习数据。退出演示请移除网址中的 <code>?demo=1</code>。
   </div>
-  <div class="app-shell">
+  <section v-if="!authReady" class="auth-screen" aria-live="polite">
+    <div class="auth-card"><div class="auth-mark"><BookOpen :size="28" /></div><h1>知学</h1><p>正在确认登录状态…</p></div>
+  </section>
+  <section v-else-if="!authenticated" class="auth-screen">
+    <form class="auth-card" @submit.prevent="login">
+      <div class="auth-mark"><ShieldCheck :size="28" /></div>
+      <p class="auth-eyebrow">PERSONAL STUDY SPACE</p>
+      <h1>欢迎回来</h1>
+      <p class="auth-description">这是你的私人学习空间。登录后才能访问个人统计、答题记录和学习进度。</p>
+      <label class="auth-label" for="study-password">登录密码</label>
+      <input id="study-password" v-model="authPassword" class="auth-input" type="password" autocomplete="current-password" required minlength="1" maxlength="256" placeholder="输入你设置的登录密码" :disabled="authLoading || !authConfigured" />
+      <p v-if="!authConfigured" class="auth-error" role="alert">登录服务尚未配置。请先按免费登录配置文档，在 Cloudflare Worker Secrets 中设置密码和会话密钥。</p>
+      <p v-else-if="authError" class="auth-error" role="alert">{{ authError }}</p>
+      <button class="auth-submit" type="submit" :disabled="authLoading || !authConfigured || !authPassword">
+        {{ authLoading ? '正在登录…' : '登录学习平台' }}
+      </button>
+      <p class="auth-footnote">使用现有 Cloudflare Workers + D1，不需要开通 Zero Trust 或填写付款信息。</p>
+    </form>
+  </section>
+  <div v-else class="app-shell">
+    <button class="auth-logout" type="button" @click="logout" aria-label="退出登录">退出登录</button>
     <aside class="sidebar">
       <button class="brand" @click="navigate('home')" aria-label="返回首页">
         <span class="brand-mark"><BookOpen :size="23" /></span>
