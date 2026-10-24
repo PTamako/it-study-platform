@@ -132,3 +132,14 @@ test('speech UI provides a separate short-tone diagnostic for silent iOS audio o
   assert.match(app, /@click="testAudioOutput">测试设备声音/)
   assert.match(app, /此测试不代表语音合成已正常/)
 })
+
+test('preview demo mode supplies isolated Japanese and English sample sentences without loading cloud language data', () => {
+  assert.match(app, /new URLSearchParams\(window\.location\.search\)\.get\('demo'\) === '1'/)
+  assert.match(app, /const previewLanguageFixtures: LanguageCard\[\] = \[/)
+  assert.match(app, /id: 'demo-ja-daily-001'/)
+  assert.match(app, /id: 'demo-ja-work-001'/)
+  assert.match(app, /id: 'demo-en-daily-001'/)
+  assert.match(app, /id: 'demo-en-work-001'/)
+  assert.match(app, /if \(previewDemoMode\) \{\s*languageCards\.value = previewLanguageFixtures\.filter\(card => card\.language === studyLanguage\.value\)/)
+  assert.match(app, /预览演示模式：使用内置示例句子，不读取或写入云端学习数据/)
+})
