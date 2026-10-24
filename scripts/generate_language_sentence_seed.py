@@ -213,7 +213,14 @@ def main():
             if sentence_lang!=lang or sid not in translations: continue
             key=sentence.casefold() if lang=="en" else sentence
             if key in seen: continue
-            seen.add(key); candidates.append((sid,sentence,translations[sid]))
+            seen.add(key)
+            hits = make_hits(sentence, lang)
+            # Only publish sentences where both kinds of highlight can be rendered
+            # as separate, non-overlapping spans with corresponding explanations.
+            kinds = {item["type"] for item in hits}
+            if not {"vocabulary", "grammar"}.issubset(kinds):
+                continue
+            candidates.append((sid,sentence,translations[sid]))
         pattern=JP_WORK if lang=="ja" else EN_WORK
         workplace=sorted((item for item in candidates if pattern.search(item[1])),key=lambda item:(len(item[1]),item[0]))
         daily=sorted((item for item in candidates if not pattern.search(item[1])),key=lambda item:(len(item[1]),item[0]))
