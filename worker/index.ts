@@ -1,4 +1,4 @@
-import { handleAuthRequest, requireAuth } from './auth'
+import { checkWriteRateLimit, handleAuthRequest, requireAuth } from './auth'
 
 // Personal state is never readable or writable without an authenticated session.
 const protectedPersonalPaths = new Set([
@@ -671,6 +671,8 @@ export default {
         let originMatches = false
         try { originMatches = Boolean(origin) && new URL(origin!).origin === url.origin } catch { originMatches = false }
         if (!originMatches) return json({ error: '请求来源验证失败。' }, 403)
+        const rateLimitFailure = await checkWriteRateLimit(request, env)
+        if (rateLimitFailure) return rateLimitFailure
       }
     }
     const isWriteEndpoint = ['/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history', '/api/translate-explanation'].includes(url.pathname)
