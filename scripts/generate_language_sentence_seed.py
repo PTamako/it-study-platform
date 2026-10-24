@@ -191,8 +191,8 @@ def main():
         for row in rows:
             if len(row)<3: continue
             sid,lang,sentence=row[0],row[1],norm(row[2])
-            if lang == "jpn" and 4 <= len(sentence) <= 180: sentences[sid] = ("ja", sentence)
-            elif lang == "eng" and 4 <= len(sentence) <= 180: sentences[sid] = ("en", sentence)
+            if lang == "jpn" and 6 <= len(sentence) <= 180: sentences[sid] = ("ja", sentence)
+            elif lang == "eng" and 4 <= len(sentence) <= 180 and len(re.findall(r"\b[A-Za-z][A-Za-z'-]*\b", sentence)) >= 2: sentences[sid] = ("en", sentence)
             elif lang == "cmn" and 4 <= len(sentence) <= 180: chinese[sid] = sentence
     finally: archive.close()
     print("Loaded Tatoeba Japanese/English and Chinese sentences:",len(sentences),len(chinese))
