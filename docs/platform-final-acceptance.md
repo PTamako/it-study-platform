@@ -71,14 +71,14 @@
 - [x] `npm run typecheck`（最新主分支 Validate 工作流成功）。
 - [x] `npm run build`（最新主分支 Validate 工作流成功）。
 - [x] D1 migrations 从干净数据库按序执行成功；生产 D1 无待应用迁移。
-- [x] Worker dry-run/bundle 成功。注意：合并后部署工作流已按现有发布配置部署生产 Worker；最近一次主分支部署记录为 `40110519880`，在 PR #46 对应提交 `1cd7f1e` 上成功。
+- [x] Worker dry-run/bundle 成功。最新主分支部署 run `40111807112` 在提交 `ec17c32542db7cd944e06f2dadfd28d87f02b1b8` 上成功。
 - [ ] 对新增逻辑优先添加行为级测试；源码正则断言只能作为回归哨兵，不能替代真实浏览器行为测试。
 
 ## 设备矩阵与结果记录
 
 | 环境 | 测试范围 | 状态 |
 |---|---|---|
-| GitHub Actions | 测试、类型检查、构建、迁移、Worker bundle | **通过**（最新主分支提交 `1cd7f1e`；Validate run `40110519903`） |
+| GitHub Actions | 测试、类型检查、构建、迁移、Worker bundle | **通过**（主分支提交 `ec17c32542db7cd944e06f2dadfd28d87f02b1b8`；Validate run `40111807052`） |
 | 桌面 Chrome | 页面导航、题库、词典、TTS、错误状态 | 待实际验收 |
 | 桌面 Safari | 页面导航、题库、词典、TTS、错误状态 | 待实际验收 |
 | iPhone Safari | 窄屏 UI、日语/英语 TTS、反复播放、模块切换 | 日语/英语播放、连续播放、暂停/继续、模块切换停止旧语音：用户报告通过；窄屏 UI 与异常边界待验收 |
@@ -110,8 +110,8 @@
 
 ## 2026-10-25 生产验收续记（PR #47 同一验收 PR）
 
-- [x] 主分支提交 `1cd7f1ea01cce7792040f931930445570f08c8c3` 的 Validate 工作流成功（run `40110519903`）。
-- [x] 对应生产部署成功（run `40110519880`）：D1 migrations、Worker 与静态资源部署、生产 `/api/health`、日英各 3000 条语言卡及标注结构检查均通过。
+- [x] 主分支提交 `ec17c32542db7cd944e06f2dadfd28d87f02b1b8` 的 Validate 工作流成功（run `40111807052`）。
+- [x] 对应生产部署成功（run `40111807112`）：D1 migrations、Worker 与静态资源部署、生产 `/api/health`、个人 API 未登录拒绝检查、日英各 3000 条语言卡及标注结构检查均通过。
 - [x] PR #47 合并后部署 run `40111807112` 实际执行并通过生产未登录个人 API 安全冒烟测试：11 个个人数据 GET 与 9 个 POST/DELETE 请求均按预期返回 HTTP 401。
 - [x] PR #47 复用 Tatoeba 导出数据缓存，减少重复语料生成耗时。
 - [x] PR #47 已合并；后续同一轮验收继续集中在单个 PR，避免拆分成多个小 PR。
