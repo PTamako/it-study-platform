@@ -715,7 +715,7 @@ const previewLanguageFixtures: LanguageCard[] = [
     highlight_json: JSON.stringify([
       { start: 0, end: 2, type: 'vocabulary', term: '確認', meaning: '确认、核实', explanation: '「確認する」是职场常见的核实、确认。' },
       { start: 10, end: 16, type: 'vocabulary', term: 'ご連絡します', meaning: '联系您', explanation: '「連絡する」加「ご」构成礼貌表达。' },
-      { start: 0, end: 8, type: 'grammar', term: '〜てから', meaning: '做完……之后', explanation: '表示先完成前项动作，再进行后项动作。' },
+      { start: 2, end: 6, type: 'grammar', term: '〜てから', meaning: '做完……之后', explanation: '表示先完成前项动作，再进行后项动作。' },
     ]),
     vocabulary_expansion_json: JSON.stringify([
       { term: '確認する', meaning: '确认、核实', explanation: '常见表达：内容を確認します。' },
