@@ -124,3 +124,11 @@ test('every dictionary result and saved word exposes both English and Japanese p
   assert.match(dictionaryResults, /缺少对应词时会提示/)
   assert.match(dictionaryResults, /缺少假名时会提示/)
 })
+
+test('speech UI provides a separate short-tone diagnostic for silent iOS audio output', () => {
+  assert.match(app, /function testAudioOutput\(\)/)
+  assert.match(app, /new AudioContextConstructor\(\)/)
+  assert.match(app, /oscillator\.frequency\.setValueAtTime\(660, now\)/)
+  assert.match(app, /@click="testAudioOutput">测试设备声音/)
+  assert.match(app, /此测试不代表语音合成已正常/)
+})
