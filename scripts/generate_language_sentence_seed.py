@@ -107,7 +107,7 @@ def make_hits(sentence, lang):
             candidates.append({"start":match.start(),"end":match.end(),"type":"vocabulary","term":term,"meaning":meaning,"explanation":explanation})
     for pattern, term, explanation in grammar:
         for match in re.finditer(pattern, sentence, re.I if lang == "en" else 0):
-            candidates.append({"start":match.start(),"end":match.end(),"type":"grammar","term":term,"meaning":term,"explanation":explanation})
+            candidates.append({"start":match.start(),"end":match.end(),"type":"grammar","term":match.group(),"meaning":term,"explanation":explanation})
     candidates.sort(key=lambda item:(item["start"],-(item["end"]-item["start"]),0 if item["type"]=="grammar" else 1))
     hits=[]
     for item in candidates:
