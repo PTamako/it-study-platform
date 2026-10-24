@@ -185,6 +185,8 @@ export async function checkWriteRateLimit(request: Request, env: AuthEnv): Promi
   const ip = request.headers.get('cf-connecting-ip') || 'unknown-client'
   const key = base64url(await hmac(env.AUTH_SESSION_SECRET!, `write:${ip}:${windowStart}`))
   try {
+    // Prune expired write buckets during normal authenticated writes as well as logins.
+    await env.DB.prepare('DELETE FROM auth_write_rate_limits WHERE expires_at <= ?').bind(now).run()
     const row = await env.DB.prepare(`INSERT INTO auth_write_rate_limits (bucket_key, requests, expires_at)
       VALUES (?, 1, ?)
       ON CONFLICT(bucket_key) DO UPDATE SET
