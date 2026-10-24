@@ -119,6 +119,9 @@ async function login(request: Request, env: AuthEnv, url: URL): Promise<Response
   const now = Math.floor(Date.now() / 1000)
   const bucket = await clientBucket(request, env.AUTH_SESSION_SECRET!, now)
   try {
+    // Opportunistically remove expired buckets so the tiny D1 limiter tables stay bounded.
+    await env.DB.prepare('DELETE FROM auth_login_rate_limits WHERE expires_at <= ?').bind(now).run()
+    await env.DB.prepare('DELETE FROM auth_write_rate_limits WHERE expires_at <= ?').bind(now).run()
     const row = await env.DB.prepare('SELECT failures FROM auth_login_rate_limits WHERE bucket_key = ? AND expires_at > ?').bind(bucket.key, now).first<{ failures: number }>()
     if (Number(row?.failures || 0) >= LOGIN_MAX_FAILURES) {
       return json({ error: '尝试次数过多，请 15 分钟后再试。' }, 429, { 'retry-after': String(Math.max(1, bucket.expires - now)) })
