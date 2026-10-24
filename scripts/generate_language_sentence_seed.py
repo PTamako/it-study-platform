@@ -114,7 +114,17 @@ def make_hits(sentence, lang):
         if any(item["start"] < old["end"] and item["end"] > old["start"] for old in hits): continue
         hits.append(item)
     if not any(item["type"]=="vocabulary" for item in hits):
-        match = re.search(r"[\u3040-\u30ff\u3400-\u9fff]{2,5}",sentence) if lang=="ja" else next((m for m in re.finditer(r"\b[A-Za-z]{3,}\b",sentence) if m.group().lower() not in {"the","and","you","are","was","for","with","that","this","have","has","not"}),None)
+        if lang == "ja":
+            match = re.search(r"[\u3040-\u30ff\u3400-\u9fff]{2,5}", sentence)
+        else:
+            match = next((m for m in re.finditer(r"\b[A-Za-z]{3,}\b", sentence)
+                          if m.group().lower() not in {"the","and","you","are","was","for","with","that","this","have","has","not"}), None)
+        # Every card needs a real, exact source substring to highlight. Very short
+        # or punctuation-heavy sentences may not contain a token matching the
+        # language-specific heuristic, so fall back to the first non-whitespace
+        # span rather than leaving the card without a vocabulary highlight.
+        if match is None:
+            match = re.search(r"\S+", sentence)
         if match:
             hits.append({"start":match.start(),"end":match.end(),"type":"vocabulary","term":match.group(),"meaning":"句中重点表达","explanation":"结合整句语境理解词义和用法。"})
             hits.sort(key=lambda item:item["start"])
