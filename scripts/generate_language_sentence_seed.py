@@ -320,7 +320,7 @@ EN_GRAMMAR = [
  (r"\bnot only\b","not only… 递进结构","强调不止一种情况"), (r"\btoo\b","too 的常见用法","可表示“太……”或“也”，需看语境"),
 
  (r"\b(?:I|you|we|they|he|she|it|this|that|there)\s+(?:am|is|are|was|were|have|has|had|do|does|did|can|could|will|would|should|must|may|might)\b","主语＋助动词／系动词","先识别主语，再看助动词或系动词表达的时态、能力、义务或状态"),
- (r"\b(?:I|you|we|they|he|she|it)\s+[A-Za-z]+(?:ed|ing|s)\b","主语＋谓语","主语后面的动词形式可提示时态或动作状态；需结合完整句子判断"),
+ # Removed overly broad subject+verb span: it swallowed the verb and prevented vocabulary morphology highlights.
  (r"\b(?:a|an|the)\s+[A-Za-z]+\b","冠词＋名词短语","冠词提示名词的泛指或特指；a/an 通常引入单数可数名词，the 指向特定对象"),
 ]
 
