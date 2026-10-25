@@ -153,7 +153,7 @@ jobs:
             const payload = await response.json()
             if (!Array.isArray(payload.items)) throw new Error(`${language}: API did not return an items array`)
             const items = payload.items
-            if (items.length !== 3000) throw new Error(`${language}: expected 3000 cards, got ${items.length}`)
+            if (items.length !== 5000) throw new Error(`${language}: expected 5000 cards, got ${items.length}`)
             const categories = new Set()
             for (const card of items) {
               if (card.language !== language || card.content_type !== 'sentence') {
