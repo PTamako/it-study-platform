@@ -67,7 +67,7 @@ self.addEventListener('fetch', (event) => {
       const cached = await caches.match(request)
       if (cached) return cached
       const response = await fetch(request)
-      if (response.ok) event.waitUntil(cacheSuccessfulResponse(request, response.clone()).catch(() => {}))
+      if (response.ok) await cacheSuccessfulResponse(request, response.clone()).catch(() => {})
       return response
     })())
     return
