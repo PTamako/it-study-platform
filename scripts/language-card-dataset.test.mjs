@@ -10,8 +10,8 @@ const rows = migration.split('\n').filter(line => /^\s*\('(ja|en)-sentence-/.tes
 const ja = rows.filter(line => /^\s*\('ja-sentence-/.test(line))
 const en = rows.filter(line => /^\s*\('en-sentence-/.test(line))
 
-test('latest annotation refresh migration repairs existing production rows for all 6,000 cards', () => {
-  assert.equal(refreshStatements.length, 6000)
+test('latest annotation refresh migration repairs existing production rows for all 10,000 cards', () => {
+  assert.equal(refreshStatements.length, 10000)
   assert.match(refreshMigration, /highlight_json = /)
   assert.match(refreshMigration, /vocabulary_expansion_json = /)
   assert.match(refreshMigration, /grammar_expansion_json = /)
@@ -28,10 +28,10 @@ test('Japanese travel sentence uses meaningful vocabulary and grammar instead of
   })
 })
 
-test('sentence curriculum contains exactly 3,000 Japanese and 3,000 English sentences', () => {
-  assert.equal(rows.length, 6000)
-  assert.equal(ja.length, 3000)
-  assert.equal(en.length, 3000)
+test('sentence curriculum contains exactly 5,000 Japanese and 5,000 English sentences', () => {
+  assert.equal(rows.length, 10000)
+  assert.equal(ja.length, 5000)
+  assert.equal(en.length, 5000)
   assert.match(migration, /日常句子/)
   assert.match(migration, /职场语言/)
   assert.match(migration, /highlight_json/)
@@ -43,8 +43,8 @@ test('sentence curriculum contains exactly 3,000 Japanese and 3,000 English sent
 
 test('sentence curriculum has stable unique IDs and only the two requested categories', () => {
   const ids = rows.map(line => line.match(/^\s*\('([^']+)'/)?.[1]).filter(Boolean)
-  assert.equal(ids.length, 6000)
-  assert.equal(new Set(ids).size, 6000)
+  assert.equal(ids.length, 10000)
+  assert.equal(new Set(ids).size, 10000)
   for (const line of rows) {
     assert.match(line, /'日常句子'|'职场语言'/)
     assert.match(line, /'sentence'/)
@@ -135,9 +135,9 @@ test('contextual bilingual annotation rules avoid isolated Japanese particles an
 
 test('new migration rebuilds all 6,000 sentence cards and preserves mastery for stable IDs', () => {
   const rebuiltRows = [...rebuildMigration.matchAll(/\('(ja|en)-sentence-/g)]
-  assert.equal(rebuiltRows.length, 6000, 'rebuild migration must contain exactly 6,000 regenerated sentence rows')
-  assert.equal(rebuiltRows.filter(match => match[1] === 'ja').length, 3000)
-  assert.equal(rebuiltRows.filter(match => match[1] === 'en').length, 3000)
+  assert.equal(rebuiltRows.length, 10000, 'rebuild migration must contain exactly 10,000 regenerated sentence rows')
+  assert.equal(rebuiltRows.filter(match => match[1] === 'ja').length, 5000)
+  assert.equal(rebuiltRows.filter(match => match[1] === 'en').length, 5000)
   const deleteAt = rebuildMigration.indexOf("DELETE FROM language_cards WHERE content_type = 'sentence'")
   const insertAt = rebuildMigration.indexOf('INSERT OR IGNORE INTO language_cards')
   assert.ok(deleteAt >= 0 && insertAt > deleteAt, 'old sentence rows must be deleted before regenerated rows are inserted')
