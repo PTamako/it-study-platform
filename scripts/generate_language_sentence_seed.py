@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate 8,000 attributed sentence cards from Tatoeba's public exports."""
+"""Generate 10,000 attributed sentence cards from Tatoeba's public exports."""
 import csv, hashlib, io, json, re, tarfile, urllib.request
 from functools import lru_cache
 from pathlib import Path
@@ -111,6 +111,32 @@ JP_GRAMMAR = [
  (r"てから","……之后","表示先完成前项再进行后项"), (r"までに","在……之前","表示截止时间"),
  (r"について","关于……","表示谈论的主题"), (r"ために","为了……","表示目的或原因，依上下文判断"),
  (r"んです|のです","说明／强调语气","用于解释背景或强调说明"),
+ (r"ないでください","请不要……","动词ない形＋でください，用于礼貌地请求对方不要做某事"),
+ (r"なくてもいい(?:です)?","不……也可以","表示某动作不是必须的，允许不做"),
+ (r"たほうがいい","最好……","用于提出建议，表示某做法更合适"),
+ (r"ことにしました|ことにする","决定……","表示说话人作出的决定或选择"),
+ (r"ことになりました|ことになる","决定为……／规定为……","表示经过安排或规则形成的决定"),
+ (r"ようになりました|ようになる","变得能够……／开始……","表示能力、习惯或状态发生变化"),
+ (r"ようと思います|ようと思う","打算……","动词意向形＋と思う，用于表达打算或意图"),
+ (r"てみます|てみる","试着……","て形＋みる，表示尝试某个动作"),
+ (r"てしまいました|てしまった|てしまう","……完了／不小心……","表示动作完成，也可能带有遗憾或非预期的语气"),
+ (r"ておきます|ておく","事先……／先……","表示为后续行动预先做好某事"),
+ (r"てあります","已经……好","表示某动作的结果状态被保留，常见于有意准备的情境"),
+ (r"てくれます|てくれる","为我／我方做……","表示他人为说话人或说话人一方做某事"),
+ (r"てもらいます|てもらう","请别人为我做……","表示说话人接受他人提供的动作或帮助"),
+ (r"てあげます|てあげる","为别人做……","表示说话人或相关人物为他人做某事"),
+ (r"たらどうですか","……怎么样","用于向对方提出建议"),
+ (r"ばいいですか","……就可以吗","用于询问适当的方法或条件"),
+ (r"かどうか","是否……","将一个问题或不确定事项作为句子成分"),
+ (r"だけでなく","不仅……","表示后项之外还有其他内容，常与「も」呼应"),
+ (r"しかありません|しかない","只能……／只有……","与否定形式搭配，表示范围或选择受限"),
+ (r"つもりです|つもりだ","打算……","表示说话人的计划或意图"),
+ (r"そうです","看起来……／听说……","可表示样态或传闻，需根据接续形式和上下文区分"),
+ (r"らしいです|らしい","似乎……／有……特点","可表达传闻或典型特征，需结合上下文判断"),
+ (r"みたいです|みたい","好像……","口语中用于比喻或不确定判断"),
+ (r"のが好きです|のが得意です|のが苦手です","动词普通形＋のが……","将动作名词化后说明喜好、擅长或不擅长"),
+ (r"に行きます|に行く|に来ます|に来る","动词ます形词干＋に行く／来る","表示前往某地进行某项动作"),
+ (r"たり.*たりします|たり.*たりする","たり……たりする","列举代表性动作或状态，不表示穷尽全部情况"),
 
  (r"(?<=[ぁ-んァ-ヶ一-龯])(?:から|まで|より|だけ|しか|は|が|を|に|で|と|へ|の)","名词／短语＋助词","助词标记主题、对象、地点、方向、所属或范围；具体功能要结合句意判断"),
  (r"(?:私|僕|彼|彼女|これ|それ|あれ|誰|何)は","主题提示：N は","「は」提示谈话主题，后续说明主题相关的信息"),
@@ -267,15 +293,15 @@ def main():
                     result.append(item)
                     if len(result)>=limit: break
             return result
-        workplace=eligible(workplace,4000)
-        daily=eligible(daily,4000)
-        chosen=[(item,"职场语言") for item in workplace[:1200]]
-        chosen += [(item,"日常句子") for item in daily[:4000-len(chosen)]]
-        if len(chosen)<4000:
+        workplace=eligible(workplace,5000)
+        daily=eligible(daily,5000)
+        chosen=[(item,"职场语言") for item in workplace[:1500]]
+        chosen += [(item,"日常句子") for item in daily[:5000-len(chosen)]]
+        if len(chosen)<5000:
             used={entry[0][0] for entry in chosen}
-            chosen += [(item,"职场语言") for item in workplace[1200:] if item[0] not in used][:4000-len(chosen)]
-        if len(chosen)!=4000:
-            raise RuntimeError("Need 4,000 distinct Tatoeba sentences with Chinese translations for "+lang+", got "+str(len(chosen)))
+            chosen += [(item,"职场语言") for item in workplace[1500:] if item[0] not in used][:5000-len(chosen)]
+        if len(chosen)!=5000:
+            raise RuntimeError("Need 5,000 distinct Tatoeba sentences with Chinese translations for "+lang+", got "+str(len(chosen)))
         for (sid,sentence,translation),category in chosen:
             hits=make_hits(sentence,lang)
             card_id=lang+"-sentence-"+hashlib.sha1((lang+":"+sid).encode()).hexdigest()[:16]
@@ -286,7 +312,7 @@ def main():
               "highlight_json":json.dumps(hits,ensure_ascii=False,separators=(",",":")),
               "vocabulary_expansion_json":json.dumps(expansion(hits,"vocabulary",lang),ensure_ascii=False,separators=(",",":")),
               "grammar_expansion_json":json.dumps(expansion(hits,"grammar",lang),ensure_ascii=False,separators=(",",":"))})
-    if len({item["id"] for item in cards})!=8000: raise RuntimeError("Duplicate sentence IDs")
+    if len({item["id"] for item in cards})!=10000: raise RuntimeError("Duplicate sentence IDs")
     columns=["id","language","category","term","reading","meaning_zh","explanation","example","example_meaning_zh","example_source_url","source_type","content_type","source_url","highlight_json","vocabulary_expansion_json","grammar_expansion_json"]
     lines=["-- Generated from Tatoeba community sentences and Chinese translations. Sentence URLs provide attribution.","-- Tatoeba data: CC BY 2.0 FR; see https://tatoeba.org/en/terms_of_use."]
     insert_prefix = "INSERT OR IGNORE INTO language_cards ("+", ".join(columns)+") VALUES"
