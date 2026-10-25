@@ -21,3 +21,13 @@ test('mobile navigation exposes expanded state and the controlled navigation reg
 test('selecting a mobile navigation item closes the menu through the shared navigation handler', () => {
   assert.match(app, /function navigate\(id: ModuleId\) \{[\s\S]*?activeModule\.value = id[\s\S]*?showMobileMenu\.value = false/)
 })
+
+
+test('shared UI tokens keep cards, controls and mobile interaction states consistent', () => {
+  assert.match(styles, /--radius-control:10px/)
+  assert.match(styles, /--radius-card:15px/)
+  assert.match(styles, /--primary-soft:#eff0ff/)
+  assert.match(styles, /\.module-card,\.category-card,\.exam-card,\.dictionary-card/)
+  assert.match(styles, /prefers-reduced-motion:reduce/)
+  assert.match(styles, /max-height:calc\(100dvh - 61px\);overflow-y:auto/)
+})
