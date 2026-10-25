@@ -224,7 +224,7 @@ jobs:
                 ['彼は', '主题'],
                 ['の', 'ドア'],
                 ['に', '位置'],
-                ['を', '藏'],
+                ['を', '对象'],
               ]
               for (const [term, expected] of contextualParticles) {
                 const hit = sampleGrammar.find(entry => entry.term === term)
