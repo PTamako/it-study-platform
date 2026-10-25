@@ -34,7 +34,8 @@ test('cloud review hydration preserves local-only review records during sync', (
 
 
 test('active recall prompts from Chinese before revealing the target-language sentence', () => {
-  assert.match(app, /先根据中文提示回忆原句/)
+  assert.match(app, /先回忆，再揭晓/)
+  assert.doesNotMatch(app, /请根据中文提示，用.*说出完整句子/)
   assert.match(app, /v-if="languagePracticeRevealed" class="language-practice-revealed-sentence"/)
   assert.match(app, /v-else class="language-practice-recall-prompt"/)
   assert.match(app, /languagePracticeCard\.meaning_zh \|\| '请先尝试回忆这句话的意思。'/)
