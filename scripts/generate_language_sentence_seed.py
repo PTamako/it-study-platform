@@ -162,15 +162,40 @@ def english_surface_forms(lemma):
     if lemma not in EN_VERB_LEMMAS or not re.fullmatch(r"[A-Za-z]+", lemma):
         return {}
     lower = lemma.lower()
+    irregular = {
+        "go": {"went", "gone"}, "come": {"came"},
+        "get": {"got", "gotten"}, "give": {"gave", "given"},
+        "find": {"found"}, "tell": {"told"}, "speak": {"spoke", "spoken"},
+        "read": set(), "write": {"wrote", "written"}, "eat": {"ate", "eaten"},
+        "drink": {"drank", "drunk"}, "buy": {"bought"}, "make": {"made"},
+        "take": {"took", "taken"}, "think": {"thought"}, "understand": {"understood"},
+        "know": {"knew", "known"}, "see": {"saw", "seen"}, "hear": {"heard"},
+        "forget": {"forgot", "forgotten"}, "feel": {"felt"}, "send": {"sent"},
+        "meet": {"met"}, "teach": {"taught"}, "have": {"had"}, "leave": {"left"},
+        "keep": {"kept"}, "hold": {"held"}, "bring": {"brought"}, "run": {"ran"},
+        "sit": {"sat"}, "stand": {"stood"}, "pay": {"paid"}, "win": {"won"},
+        "lose": {"lost"}, "choose": {"chose", "chosen"}, "drive": {"drove", "driven"},
+        "break": {"broke", "broken"}, "begin": {"began", "begun"},
+    }
     forms = {lower}
+    if lower in irregular:
+        forms.update(irregular[lower])
+        if lower == "read":
+            forms.add("reading")
+        else:
+            forms.add(lower + "ing" if lower.endswith("e") else lower + "ing")
+        forms.add(lower + "s")
+        return {form: lemma for form in forms}
     if lower.endswith("y") and len(lower) > 1 and lower[-2] not in "aeiou":
-        forms.update({lower[:-1] + "ies", lower[:-1] + "ied", lower[:-1] + "ying"})
+        forms.update({lower[:-1] + "ies", lower[:-1] + "ied", lower + "ing"})
+    elif lower.endswith("e"):
+        forms.update({lower + "s", lower + "d", lower[:-1] + "ing"})
+        if lower.endswith(("s", "sh", "ch", "x", "z", "o")):
+            forms.add(lower + "es")
     else:
         forms.update({lower + "s", lower + "ed", lower + "ing"})
         if lower.endswith(("s", "sh", "ch", "x", "z", "o")):
             forms.add(lower + "es")
-        if lower.endswith("e") and not lower.endswith("ee"):
-            forms.update({lower[:-1] + "ing", lower + "d"})
         if len(lower) >= 3 and lower[-1] not in "aeiouwxy" and lower[-2] in "aeiou" and lower[-3] not in "aeiou":
             forms.update({lower + lower[-1] + "ed", lower + lower[-1] + "ing"})
     return {form: lemma for form in forms}
