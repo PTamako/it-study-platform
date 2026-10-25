@@ -267,15 +267,15 @@ def main():
                     result.append(item)
                     if len(result)>=limit: break
             return result
-        workplace=eligible(workplace,3000)
-        daily=eligible(daily,3000)
-        chosen=[(item,"职场语言") for item in workplace[:1200]]
-        chosen += [(item,"日常句子") for item in daily[:3000-len(chosen)]]
-        if len(chosen)<3000:
+        workplace=eligible(workplace,5000)
+        daily=eligible(daily,5000)
+        chosen=[(item,"职场语言") for item in workplace[:1500]]
+        chosen += [(item,"日常句子") for item in daily[:5000-len(chosen)]]
+        if len(chosen)<5000:
             used={entry[0][0] for entry in chosen}
-            chosen += [(item,"职场语言") for item in workplace[1200:] if item[0] not in used][:3000-len(chosen)]
-        if len(chosen)!=3000:
-            raise RuntimeError("Need 3,000 distinct Tatoeba sentences with Chinese translations for "+lang+", got "+str(len(chosen)))
+            chosen += [(item,"职场语言") for item in workplace[1500:] if item[0] not in used][:5000-len(chosen)]
+        if len(chosen)!=5000:
+            raise RuntimeError("Need 5,000 distinct Tatoeba sentences with Chinese translations for "+lang+", got "+str(len(chosen)))
         for (sid,sentence,translation),category in chosen:
             hits=make_hits(sentence,lang)
             card_id=lang+"-sentence-"+hashlib.sha1((lang+":"+sid).encode()).hexdigest()[:16]
@@ -286,7 +286,7 @@ def main():
               "highlight_json":json.dumps(hits,ensure_ascii=False,separators=(",",":")),
               "vocabulary_expansion_json":json.dumps(expansion(hits,"vocabulary",lang),ensure_ascii=False,separators=(",",":")),
               "grammar_expansion_json":json.dumps(expansion(hits,"grammar",lang),ensure_ascii=False,separators=(",",":"))})
-    if len({item["id"] for item in cards})!=6000: raise RuntimeError("Duplicate sentence IDs")
+    if len({item["id"] for item in cards})!=10000: raise RuntimeError("Duplicate sentence IDs")
     columns=["id","language","category","term","reading","meaning_zh","explanation","example","example_meaning_zh","example_source_url","source_type","content_type","source_url","highlight_json","vocabulary_expansion_json","grammar_expansion_json"]
     lines=["-- Generated from Tatoeba community sentences and Chinese translations. Sentence URLs provide attribution.","-- Tatoeba data: CC BY 2.0 FR; see https://tatoeba.org/en/terms_of_use."]
     insert_prefix = "INSERT OR IGNORE INTO language_cards ("+", ".join(columns)+") VALUES"
