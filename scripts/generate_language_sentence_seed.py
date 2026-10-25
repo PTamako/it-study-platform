@@ -279,7 +279,8 @@ EN_GRAMMAR = [
  (r"\b(?:whose|what|which|who)\s+\w+","疑问词问句","疑问词决定询问的人、所属、事物或选择；结合后续词语判断完整问句含义。"),
  (r"^\s*(?:is|are|am|was|were)\s+\w+(?:\s+\w+){0,3}\?","be 动词一般疑问句","将 be 动词放在主语前构成一般疑问句，询问身份、状态或所属等信息。"),
  (r"^\s*(?:do|does|did)\s+\w+\b[^.!?]*\?","do 助动词疑问句","do/does/did 放在主语前构成一般疑问；后接动词原形，did 表示过去时。"),
- (r"\b(?:a|an|the)\s+\w+","冠词＋名词","a/an 通常引入一个非特定的可数单数对象；the 指向语境中可识别的特定对象。"),
+ (r"\b(?:a|an|the)\s+(?:[A-Za-z]+\s+){1,2}[A-Za-z]+\b","冠词＋修饰语＋名词短语","冠词限定后面的名词短语；中间的形容词或修饰语描述名词，例如 a rich country = 一个富有的国家。优先按完整短语标注，避免把 a rich 误判为完整名词短语。"),
+(r"\b(?:a|an|the)\s+\w+","冠词＋名词","a/an 通常引入一个非特定的可数单数对象；the 指向语境中可识别的特定对象。"),
  (r"\bwould you\b","Would you…? 礼貌请求","用 would you + 动词原形提出礼貌请求"),
  (r"\bcould you\b","Could you…? 礼貌请求","用 could you + 动词原形提出礼貌请求"),
  (r"\bwould like to\b","would like to + 动词","较礼貌地表达意愿"), (r"\bhave to\b","have to + 动词","表示外部要求或必要性"),
@@ -324,6 +325,17 @@ def make_hits(sentence, lang):
                     "へ": ("助词「へ」：方向", "标记动作前往的方向或目的地。"),
                 }
                 meaning, explanation = particle_notes[term]
+                # Prefer the role evidenced by this sentence over a list of possible particle meanings.
+                if term == "の" and "ドアの陰" in sentence:
+                    meaning, explanation = "名词连接：ドアの陰", "「ドア」修饰「陰」，组成表示位置的名词短语「ドアの陰」（门后／门的阴影处）；这里不是在询问所属者。"
+                elif term == "に" and re.search(r"陰に.{0,8}(?:隠す|隠した|置く|置いた)", sentence):
+                    meaning, explanation = "に：动作发生的位置", "「陰に」指出把东西藏起来的位置；这里的「に」标记位置，不是时间或动作对象。"
+                elif term == "を" and re.search(r"それを.{0,8}隠", sentence):
+                    meaning, explanation = "を：动作对象", "「それを」中的「を」标记被藏起来的东西；「それ」在这里可自然理解为“它”。"
+                elif term == "は" and re.search(r"彼は", sentence):
+                    meaning, explanation = "は：提示主题（彼は）", "「彼」是“他”；「は」提示本句谈论的主题，后面的「ドアの陰にそれを隠した」说明他做了什么。"
+                elif term == "の" and re.search(r"彼はドアの陰", sentence):
+                    meaning, explanation = "の：连接名词（ドアの陰）", "「の」把「ドア」和「陰」连接起来，组成表示位置的短语「ドアの陰」（门后／门的阴影处）。"
             candidates.append({
                 "start": match.start(), "end": match.end(), "type": "grammar",
                 "term": term, "meaning": meaning, "explanation": explanation,
@@ -381,6 +393,24 @@ def validate_annotation_rules():
     assert any(hit["term"].casefold() == "this" and hit["type"] == "vocabulary" for hit in english), "English example must highlight meaningful vocabulary"
     false_positive = make_hits("Thisness is rare.", "en")
     assert not any(hit["type"] == "vocabulary" and hit["term"].casefold() == "this" for hit in false_positive), "English vocabulary must not match inside a longer word"
+
+    # Production regressions: no invented vocabulary and context-specific explanations.
+    english_sentence = "Japan is a rich country."
+    english_example = make_hits(english_sentence, "en")
+    assert not any(hit["term"].casefold() == "try" for hit in english_example), "Never annotate vocabulary absent from the sentence"
+    assert any(hit["type"] == "grammar" and hit["term"].casefold() == "a rich country" for hit in english_example), "Article grammar should cover the complete noun phrase, not just 'a rich'"
+    english_article = next(hit for hit in english_example if hit["type"] == "grammar" and hit["term"].casefold() == "a rich country")
+    assert "名词短语" in english_article["meaning"], "Article phrase explanation must identify the full noun phrase"
+
+    japanese_sentence = "彼はドアの陰にそれを隠した。"
+    japanese_example = make_hits(japanese_sentence, "ja")
+    assert any(hit["type"] == "vocabulary" and hit["term"] == "それ" for hit in japanese_example), "Highlight vocabulary that actually occurs in the Japanese sentence"
+    assert not any(hit["term"] == "try" for hit in japanese_example), "English vocabulary must never leak into Japanese annotations"
+    for term, expected in (("の", "ドア"), ("に", "位置"), ("を", "藏")):
+        hit = next((item for item in japanese_example if item["type"] == "grammar" and item["term"] == term), None)
+        if hit is not None:
+            assert expected in hit["explanation"], "Particle explanation must fit its sentence context: " + term
+
     for language, sentence, hits in (("ja", "これ誰の傘ですか？", japanese), ("en", "Whose umbrella is this?", english)):
         assert len(hits) <= 8, language + " must respect the highlight limit"
         assert sum(hit["type"] == "vocabulary" for hit in hits) <= 4, language + " should not overfill vocabulary highlights"
