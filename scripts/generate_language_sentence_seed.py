@@ -149,6 +149,32 @@ JP_VOCAB = [
  ("自分","自己","指说话人或语境中的相关人物本人"),
  ("一緒に","一起","表示与他人共同进行某项动作"),
 ]
+# Inflect a curated set of common English verbs so surface forms link to lemmas.
+EN_VERB_LEMMAS = {
+    "try", "go", "come", "get", "give", "use", "find", "tell", "ask", "work",
+    "live", "like", "love", "feel", "look", "see", "hear", "speak", "read",
+    "write", "eat", "drink", "buy", "help", "start", "finish", "learn", "study",
+    "understand", "remember", "forget", "wait", "make", "take", "want", "need",
+    "know", "think", "confirm", "discuss", "prepare", "send", "meet", "change",
+    "explain", "approve", "share", "support", "submit", "request", "schedule",
+}
+def english_surface_forms(lemma):
+    if lemma not in EN_VERB_LEMMAS or not re.fullmatch(r"[A-Za-z]+", lemma):
+        return {}
+    lower = lemma.lower()
+    forms = {lower}
+    if lower.endswith("y") and len(lower) > 1 and lower[-2] not in "aeiou":
+        forms.update({lower[:-1] + "ies", lower[:-1] + "ied", lower[:-1] + "ying"})
+    else:
+        forms.update({lower + "s", lower + "ed", lower + "ing"})
+        if lower.endswith(("s", "sh", "ch", "x", "z", "o")):
+            forms.add(lower + "es")
+        if lower.endswith("e") and not lower.endswith("ee"):
+            forms.update({lower[:-1] + "ing", lower + "d"})
+        if len(lower) >= 3 and lower[-1] not in "aeiouwxy" and lower[-2] in "aeiou" and lower[-3] not in "aeiou":
+            forms.update({lower + lower[-1] + "ed", lower + lower[-1] + "ing"})
+    return {form: lemma for form in forms}
+
 EN_VOCAB = [
  ("this","这个／这","指向当前语境中可识别的人或物；作代词时可独立指代事物"), ("that","那个／那","指向语境中可识别的人或物；作代词时可独立指代事物"), ("umbrella","伞","遮雨或遮阳的工具，常见表达「an umbrella」"),
  ("could you","能否请你","礼貌请求，比 can you 更委婉"), ("would you","你愿意／能否","常用于礼貌请求"),
@@ -279,7 +305,7 @@ EN_GRAMMAR = [
  (r"\b(?:whose|what|which|who)\s+\w+","疑问词问句","疑问词决定询问的人、所属、事物或选择；结合后续词语判断完整问句含义。"),
  (r"^\s*(?:is|are|am|was|were)\s+\w+(?:\s+\w+){0,3}\?","be 动词一般疑问句","将 be 动词放在主语前构成一般疑问句，询问身份、状态或所属等信息。"),
  (r"^\s*(?:do|does|did)\s+\w+\b[^.!?]*\?","do 助动词疑问句","do/does/did 放在主语前构成一般疑问；后接动词原形，did 表示过去时。"),
- (r"\b(?:a|an|the)\s+(?:[A-Za-z]+\s+){1,2}[A-Za-z]+\b","冠词＋修饰语＋名词短语","冠词限定后面的名词短语；中间的形容词或修饰语描述名词，例如 a rich country = 一个富有的国家。优先按完整短语标注，避免把 a rich 误判为完整名词短语。"),
+ (r"\b(?:a|an|the)\s+(?:[A-Za-z]+\s+){1,3}[A-Za-z]+\b","完整名词短语","冠词与后续修饰语、中心名词共同构成名词短语；例如 a very rich country = 一个非常富有的国家。优先标注完整短语，而不是截断成 a rich。"),
 (r"\b(?:a|an|the)\s+\w+","冠词＋名词","a/an 通常引入一个非特定的可数单数对象；the 指向语境中可识别的特定对象。"),
  (r"\bwould you\b","Would you…? 礼貌请求","用 would you + 动词原形提出礼貌请求"),
  (r"\bcould you\b","Could you…? 礼貌请求","用 could you + 动词原形提出礼貌请求"),
@@ -297,6 +323,55 @@ EN_GRAMMAR = [
  (r"\b(?:I|you|we|they|he|she|it)\s+[A-Za-z]+(?:ed|ing|s)\b","主语＋谓语","主语后面的动词形式可提示时态或动作状态；需结合完整句子判断"),
  (r"\b(?:a|an|the)\s+[A-Za-z]+\b","冠词＋名词短语","冠词提示名词的泛指或特指；a/an 通常引入单数可数名词，the 指向特定对象"),
 ]
+
+# Curated Japanese verb classes support dictionary-form explanations for common inflections.
+JP_VERB_CLASSES = {
+    "食べる": ("ichidan", "吃"), "見る": ("ichidan", "看／查看"),
+    "寝る": ("ichidan", "睡觉"), "起きる": ("ichidan", "起床／醒来"),
+    "できる": ("ichidan", "能／可以"), "考える": ("ichidan", "思考"),
+    "飲む": ("mu", "喝"), "読む": ("mu", "读"), "住む": ("mu", "居住"),
+    "休む": ("mu", "休息"), "遊ぶ": ("bu", "玩"), "呼ぶ": ("bu", "呼叫"),
+    "死ぬ": ("nu", "死"), "聞く": ("ku", "听／询问"), "書く": ("ku", "写"),
+    "行く": ("iku", "去"), "泳ぐ": ("gu", "游泳"), "急ぐ": ("gu", "赶快"),
+    "話す": ("su", "说／交谈"), "隠す": ("su", "藏起来／隐藏"),
+    "買う": ("u", "买"), "会う": ("u", "见面"), "思う": ("u", "认为"),
+    "使う": ("u", "使用"), "言う": ("u", "说"), "待つ": ("tsu", "等待"),
+    "持つ": ("tsu", "拿／持有"), "立つ": ("tsu", "站立"),
+    "帰る": ("ru", "回去／回家"), "取る": ("ru", "拿取"),
+    "作る": ("ru", "制作"), "入る": ("ru", "进入"), "する": ("suru", "做"),
+    "来る": ("kuru", "来"),
+}
+def japanese_surface_forms(lemma):
+    info = JP_VERB_CLASSES.get(lemma)
+    if not info:
+        return {}
+    cls, zh = info
+    forms = {lemma}
+    if cls == "ichidan":
+        stem = lemma[:-1]
+        forms.update({stem+x for x in ("ます", "ました", "ません", "ませんでした", "ない", "なかった", "て", "た")})
+    elif cls == "suru":
+        forms.update({"します", "しました", "しません", "しない", "して", "した"})
+    elif cls == "kuru":
+        forms.update({"来ます", "来ました", "来ません", "来ない", "来て", "来た"})
+    else:
+        stem, ending = lemma[:-1], lemma[-1]
+        rows = {
+            "u": ("わ","い","い","った","って","わない","わなかった"),
+            "tsu": ("た","ち","ち","った","って","たない","たなかった"),
+            "ru": ("ら","り","り","った","って","らない","らなかった"),
+            "mu": ("ま","み","み","んだ","んで","まない","まなかった"),
+            "bu": ("ば","び","び","んだ","んで","ばない","ばなかった"),
+            "nu": ("な","に","に","んだ","んで","なない","ななかった"),
+            "ku": ("か","き","き","いた","いて","かない","かなかった"),
+            "iku": ("か","き","き","った","って","かない","かなかった"),
+            "gu": ("が","ぎ","ぎ","いだ","いで","がない","がなかった"),
+            "su": ("さ","し","し","した","して","さない","さなかった"),
+        }
+        a, i, _i2, past, te, negative, neg_past = rows[cls]
+        forms.update({stem+i+"ます", stem+i+"ました", stem+i+"ません", stem+a+"ない",
+                      stem+a+"なかった", stem+te, stem+past})
+    return {form: (lemma, zh) for form in forms}
 
 @lru_cache(maxsize=100000)
 def make_hits(sentence, lang):
@@ -359,6 +434,34 @@ def make_hits(sentence, lang):
                 "confidence": "lexicon", "rule_priority": len(vocab) - rule_index,
             })
 
+    if lang == "en":
+        for rule_index, (lemma, meaning, explanation) in enumerate(vocab):
+            for surface in english_surface_forms(lemma):
+                if surface.casefold() == lemma.casefold():
+                    continue
+                pattern = r"(?<![A-Za-z])" + re.escape(surface) + r"(?![A-Za-z])"
+                for match in re.finditer(pattern, sentence, re.I):
+                    candidates.append({
+                        "start": match.start(), "end": match.end(), "type": "vocabulary",
+                        "term": match.group(), "meaning": meaning + "（原形 " + lemma + " 的词形变化）",
+                        "explanation": "原形为 " + lemma + "；句中形式 " + match.group() + " 是其常见动词变化，具体时态需结合句子判断。原义：" + explanation,
+                        "rule_id": "en.vocab.inflection." + str(rule_index + 1),
+                        "confidence": "morphology", "rule_priority": len(vocab) - rule_index + 20,
+                    })
+    else:
+        for rule_index, (lemma, meaning, explanation) in enumerate(vocab):
+            for surface, (base, zh) in japanese_surface_forms(lemma).items():
+                if surface == lemma:
+                    continue
+                for match in re.finditer(re.escape(surface), sentence):
+                    candidates.append({
+                        "start": match.start(), "end": match.end(), "type": "vocabulary",
+                        "term": match.group(), "meaning": zh + "（原形：" + base + "）",
+                        "explanation": "原形为「" + base + "」；句中「" + match.group() + "」是其活用形式。结合句中语境理解时态、礼貌程度或否定含义。",
+                        "rule_id": "ja.vocab.inflection." + str(rule_index + 1),
+                        "confidence": "morphology", "rule_priority": len(vocab) - rule_index + 20,
+                    })
+
     # Resolve overlaps by preferring complete phrases, then specific rules, then grammar
     # over vocabulary only when both spans are otherwise equally strong.
     candidates.sort(key=lambda item: (
@@ -393,6 +496,16 @@ def validate_annotation_rules():
     assert any(hit["term"].casefold() == "this" and hit["type"] == "vocabulary" for hit in english), "English example must highlight meaningful vocabulary"
     false_positive = make_hits("Thisness is rare.", "en")
     assert not any(hit["type"] == "vocabulary" and hit["term"].casefold() == "this" for hit in false_positive), "English vocabulary must not match inside a longer word"
+
+    # Morphology and phrase coverage must work beyond the originally reported examples.
+    english_inflected = make_hits("She tries to understand the difficult question.", "en")
+    tries = next((hit for hit in english_inflected if hit["type"] == "vocabulary" and hit["term"].casefold() == "tries"), None)
+    assert tries and "try" in tries["explanation"] and "原形" in tries["explanation"], "English inflections should link surface form to lemma"
+    english_long_phrase = make_hits("They live in a very large office.", "en")
+    assert any(hit["type"] == "grammar" and hit["term"].casefold() == "a very large office" for hit in english_long_phrase), "English noun phrase rules should cover multiple modifiers"
+    japanese_inflected = make_hits("毎日ご飯を食べました。", "ja")
+    tabemashita = next((hit for hit in japanese_inflected if hit["type"] == "vocabulary" and hit["term"] == "食べました"), None)
+    assert tabemashita and "食べる" in tabemashita["explanation"], "Japanese inflections should link surface form to dictionary form"
 
     # Production regressions: no invented vocabulary and context-specific explanations.
     english_sentence = "Japan is a rich country."
