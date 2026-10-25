@@ -180,11 +180,11 @@ def english_surface_forms(lemma):
     forms = {lower}
     if lower in irregular:
         forms.update(irregular[lower])
-        if lower == "read":
-            forms.add("reading")
+        forms.add(lower[:-1] + "ing" if lower.endswith("e") else lower + "ing")
+        if lower.endswith(("s", "sh", "ch", "x", "z", "o")):
+            forms.add(lower + "es")
         else:
-            forms.add(lower + "ing" if lower.endswith("e") else lower + "ing")
-        forms.add(lower + "s")
+            forms.add(lower + "s")
         return {form: lemma for form in forms}
     if lower.endswith("y") and len(lower) > 1 and lower[-2] not in "aeiou":
         forms.update({lower[:-1] + "ies", lower[:-1] + "ied", lower + "ing"})
