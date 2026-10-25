@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 
 const migration = await readFile(new URL('../migrations/0081_language_sentence_cards.sql', import.meta.url), 'utf8')
 const refreshMigration = await readFile(new URL('../migrations/0084_refresh_contextual_bilingual_annotations.sql', import.meta.url), 'utf8')
-const rebuildMigration = await readFile(new URL('../migrations/0085_rebuild_contextual_bilingual_sentence_cards.sql', import.meta.url), 'utf8')
+const rebuildMigration = await readFile(new URL('../migrations/0086_rebuild_contextual_bilingual_sentence_cards.sql', import.meta.url), 'utf8')
 const refreshStatements = refreshMigration.split('\n').filter(line => /^UPDATE language_cards SET highlight_json = /.test(line))
 const rows = migration.split('\n').filter(line => /^\s*\('(ja|en)-sentence-/.test(line))
 const ja = rows.filter(line => /^\s*\('ja-sentence-/.test(line))
@@ -133,7 +133,7 @@ test('contextual bilingual annotation rules avoid isolated Japanese particles an
 })
 
 
-test('new migration rebuilds all 6,000 sentence cards and preserves mastery for stable IDs', () => {
+test('new migration rebuilds all 10,000 sentence cards and preserves mastery for stable IDs', () => {
   const rebuiltRows = [...rebuildMigration.matchAll(/\('(ja|en)-sentence-/g)]
   assert.equal(rebuiltRows.length, 10000, 'rebuild migration must contain exactly 10,000 regenerated sentence rows')
   assert.equal(rebuiltRows.filter(match => match[1] === 'ja').length, 5000)
