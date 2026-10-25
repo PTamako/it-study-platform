@@ -1032,7 +1032,7 @@ async function submitLanguageReview(result: 'again' | 'remembered') {
         ? (languagePracticeIndex.value + 1) % visibleLanguageCards.value.length : 0
     }
   } catch (error) {
-    languageCardsError.value = error instanceof Error ? error.message : '复习记录暂时无法保存。请确认已应用最新 D1 迁移。'
+    languageCardsError.value = error instanceof Error ? error.message : '复习记录暂时无法保存，请稍后重试。'
   } finally {
     languageReviewBusy.value = ''
   }
@@ -1624,7 +1624,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
           </section>
 
           <section class="progress-dashboard">
-            <div class="section-heading"><div><h2>云端学习数据</h2></div><span class="source-pill">{{ cloudDashboard?.generated_from || '连接中' }}</span></div>
+            <div class="section-heading"><div><h2>云端学习数据</h2></div></div>
             <p v-if="cloudDashboardError" class="dictionary-status dictionary-error">{{ cloudDashboardError }}</p>
             <div v-if="cloudDashboard" class="metric-grid">
               <div class="panel metric-card"><span class="metric-icon"><CheckCircle2 :size="18" /></span><small>云端答题</small><strong>{{ cloudDashboard.exam.attempted_questions }}</strong><span>{{ cloudDashboard.exam.accuracy_percent === null ? '暂无记录' : '正确率 ' + cloudDashboard.exam.accuracy_percent + '%' }}</span></div>
@@ -1689,7 +1689,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
         <template v-else-if="activeModule === 'exam'">
           <section class="section-block module-page-section">
             <div class="section-heading"><div><h2>选择要准备的考试</h2></div></div>
-            <p v-if="tracksLoading" class="dictionary-status">正在读取 D1 中已启用的考试…</p>
+            <p v-if="tracksLoading" class="dictionary-status">正在加载可用考试…</p>
             <p v-else-if="tracksError" class="dictionary-status dictionary-error">{{ tracksError }}</p>
             <div class="exam-list">
               <button v-for="exam in examTracks" :key="exam.id" class="exam-card" :class="{ 'exam-card-selected': selectedTrackId === exam.id }" @click="selectExam(exam)">
@@ -1697,7 +1697,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <span class="exam-info"><strong>{{ exam.title }}</strong><small>{{ exam.subtitle }}</small></span>
                 <span class="exam-progress">{{ '真题 ' + (exam.official_question_count || 0) + ' · 预测 ' + (exam.prediction_question_count || 0) }}</span><ChevronRight :size="18" class="muted" />
               </button>
-              <div v-if="!tracksLoading && !tracksError && examTracks.length === 0" class="empty-state"><GraduationCap :size="25" /><strong>暂无已启用的考试</strong><p>请先在 D1 学习模块表中启用考试。</p></div>
+              <div v-if="!tracksLoading && !tracksError && examTracks.length === 0" class="empty-state"><GraduationCap :size="25" /><strong>暂无已启用的考试</strong><p>目前没有可用的考试内容，请稍后刷新。</p></div>
             </div>
 
             <section class="practice-section">
@@ -1727,7 +1727,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <template v-else>
                   <div class="practice-start-icon"><GraduationCap :size="25" /></div>
                   <h3>准备好开始练习了吗？</h3>
-                  <p v-if="selectedTrack?.question_count">从 D1 读取 {{ selectedTrack.title }} 题目，提交后查看正确答案与解析。</p>
+                  <p v-if="selectedTrack?.question_count">{{ selectedTrack.title }} 题目，提交后查看正确答案与解析。</p>
                   <p v-else>目前开放的考试可直接进入练习。</p>
                   <div class="practice-start-actions">
                     <button class="primary-button" @click="startPractice" :disabled="quizLoading || !selectedTrack || selectedTrack.question_count === 0">{{ quizLoading ? '正在加载题目…' : selectedTrack?.question_count ? '开始练习（最多 10 题）' : '当前暂无可练习题目' }} <ArrowRight :size="16" /></button>
@@ -1749,7 +1749,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <a v-if="currentQuestion.source_type === 'official' && currentQuestion.source_reference" class="language-source" :href="currentQuestion.source_reference" target="_blank" rel="noreferrer">IPA 官方原卷 ↗</a>
                 <div class="question-prompt-row">
                   <h3 class="question-prompt">{{ currentQuestion.prompt }}</h3>
-                  <button type="button" class="secondary-button question-speak-button" @click="speakQuestion(currentQuestion)"><Volume2 :size="16" /> 日语语音读题</button>
+                  <button type="button" class="question-speak-button" @click="speakQuestion(currentQuestion)" aria-label="日语朗读题目" title="日语朗读题目"><Volume2 :size="14" /> 听题</button>
                 </div>
                 <div v-if="speechStatus && speechStatusTarget === 'exam:' + currentQuestion.id" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 <div class="question-options">
@@ -1818,7 +1818,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <a v-if="question.source_type === 'official' && question.source_reference" class="language-source" :href="question.source_reference" target="_blank" rel="noreferrer">IPA 官方原卷 ↗</a>
                   <div class="question-prompt-row">
                     <h3 class="question-prompt">{{ question.prompt }}</h3>
-                    <button type="button" class="secondary-button question-speak-button" @click="speakQuestion(question)"><Volume2 :size="16" /> 日语语音读题</button>
+                    <button type="button" class="question-speak-button" @click="speakQuestion(question)" aria-label="日语朗读题目" title="日语朗读题目"><Volume2 :size="14" /> 听题</button>
                   </div>
                   <div v-if="speechStatus && speechStatusTarget === 'exam:' + question.id" class="dictionary-speech-controls" role="status" aria-live="polite">
                     <p class="dictionary-status">{{ speechStatus }}</p>
@@ -1877,18 +1877,18 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 </button>
               </div>
             </div>
-            <p v-if="scenariosLoading" class="dictionary-status">正在从 D1 读取实战情境…</p>
+            <p v-if="scenariosLoading" class="dictionary-status">正在加载实战情境…</p>
             <p v-else-if="scenariosError" class="dictionary-status dictionary-error">{{ scenariosError }}</p>
             <div v-else-if="!currentScenario" class="empty-state">
               <ShieldCheck :size="25" /><strong>实战情境暂时为空</strong>
-              <p>页面和接口已接通，但当前数据库没有可用情境。请确认最新 D1 迁移已应用；迁移完成后刷新此页面。</p>
+              <p>暂时没有可用的实战情境，请稍后刷新再试。</p>
               <button class="secondary-button" @click="loadScenarios">重新加载</button>
             </div>
             <article v-else class="panel question-card practical-scenario-card">
               <div class="question-topline"><span>{{ currentScenario.category }} · {{ currentScenario.difficulty === 'intermediate' ? '中等' : '标准' }}</span><span class="source-pill">{{ currentScenario.source_type === 'official' ? '官方来源' : '平台原创情境' }}</span></div>
               <div class="question-prompt-row">
                 <h3 class="question-prompt">{{ currentScenario.title }}</h3>
-                <button type="button" class="secondary-button question-speak-button" @click="speakScenario(currentScenario)"><Volume2 :size="16" /> 日语语音读题</button>
+                <button type="button" class="secondary-button question-speak-button" @click="speakScenario(currentScenario)" aria-label="日语语音朗读实战情境" title="日语语音朗读实战情境"><Volume2 :size="14" /> 听情境</button>
               </div>
               <div v-if="speechStatus && speechStatusTarget === 'practical:' + currentScenario.id" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
               <p class="scenario-situation">{{ currentScenario.situation }}</p>
@@ -2004,7 +2004,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             <p v-if="studyLanguage === 'ja'" class="language-source">日语句子来自 <a href="https://tatoeba.org" target="_blank" rel="noopener noreferrer">Tatoeba</a> 开放例句；每条句子保留来源链接，句中标注词汇与语法。</p>
             <p v-else class="language-source">英语句子来自 <a href="https://tatoeba.org" target="_blank" rel="noopener noreferrer">Tatoeba</a> 开放例句；每条句子保留来源链接，句中标注词汇与语法。</p>
             <p v-if="languageCardsLoading" class="dictionary-status">正在从学习内容库读取课程…</p>
-            <p v-else-if="languageCardsError" class="dictionary-status dictionary-error">{{ languageCardsError }} 请先应用最新的 D1 数据库迁移。</p>
+            <p v-else-if="languageCardsError" class="dictionary-status dictionary-error">{{ languageCardsError }} 请稍后刷新再试。</p>
             <div v-else class="language-card-list">
               <article v-for="card in paginatedLanguageCards" :key="card.id" class="language-study-card" :class="{ completed: completedLanguageCards.includes(card.id) }">
                 <div class="language-card-top"><span class="dict-tag">{{ card.category }}</span><span class="language-source">{{ completedLanguageCards.includes(card.id) ? '已掌握' : isLanguageCardUnlearned(card) ? '未学习' : '学习中' }}</span><button class="language-done-button" @click="toggleLanguageCard(card.id)">{{ completedLanguageCards.includes(card.id) ? '取消掌握' : '标记已掌握' }}</button></div>
