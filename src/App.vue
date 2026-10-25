@@ -795,92 +795,6 @@ type LanguageCard = {
   example_source_url?: string; source_url?: string; source_type: string; content_type?: string;
   highlight_json?: string; vocabulary_expansion_json?: string; grammar_expansion_json?: string
 }
-const previewDemoMode = new URLSearchParams(window.location.search).get('demo') === '1'
-const previewLanguageFixtures: LanguageCard[] = [
-  {
-    id: 'demo-ja-daily-001', language: 'ja', category: '日常句子',
-    term: 'もう一度説明していただけますか。',
-    reading: 'もういちど せつめいしていただけますか。',
-    meaning_zh: '可以请您再解释一次吗？',
-    explanation: '礼貌地请求对方重复说明，适合日常沟通与不确定时使用。',
-    example: 'すみません、もう一度説明していただけますか。',
-    example_meaning_zh: '不好意思，可以请您再解释一次吗？',
-    source_type: 'preview-demo', content_type: 'sentence',
-    highlight_json: JSON.stringify([
-      { start: 0, end: 4, type: 'vocabulary', term: 'もう一度', meaning: '再一次', explanation: '用于请求重复动作。' },
-      { start: 6, end: 15, type: 'grammar', term: '〜ていただけますか', meaning: '可以请您……吗', explanation: '使用「て形＋いただけますか」委婉请求对方做某事。' },
-    ]),
-    vocabulary_expansion_json: JSON.stringify([
-      { term: 'もう一度', meaning: '再一次', explanation: '用于请对方重复说明、确认或操作。' },
-    ]),
-    grammar_expansion_json: JSON.stringify([
-      { term: '〜ていただけますか', meaning: '可以请您……吗', explanation: '比「〜てください」更委婉，适合对不熟悉的人或职场沟通。' },
-    ]),
-  },
-  {
-    id: 'demo-ja-work-001', language: 'ja', category: '职场语言',
-    term: '確認してから、改めてご連絡します。',
-    reading: 'かくにんしてから、あらためてごれんらくします。',
-    meaning_zh: '确认之后，我会再联系您。',
-    explanation: '适合暂时不能立即答复，需要核实信息后再回复的职场场景。',
-    example: '内容を確認してから、改めてご連絡します。',
-    example_meaning_zh: '确认内容后，我会再联系您。',
-    source_type: 'preview-demo', content_type: 'sentence',
-    highlight_json: JSON.stringify([
-      { start: 0, end: 2, type: 'vocabulary', term: '確認', meaning: '确认后', explanation: '「確認する」是职场常见的核实、确认。' },
-      { start: 10, end: 16, type: 'vocabulary', term: 'ご連絡します', meaning: '联系您', explanation: '「連絡する」加「ご」构成礼貌表达。' },
-      { start: 2, end: 6, type: 'grammar', term: '〜てから', meaning: '做完……之后', explanation: '表示先完成前项动作，再进行后项动作。' },
-    ]),
-    vocabulary_expansion_json: JSON.stringify([
-      { term: '確認する', meaning: '确认、核实', explanation: '常见表达：内容を確認します。' },
-      { term: 'ご連絡します', meaning: '联系您', explanation: '适用于工作邮件、电话及进度沟通。' },
-    ]),
-    grammar_expansion_json: JSON.stringify([
-      { term: '〜てから', meaning: '……之后', explanation: '连接动作的先后顺序，例如「調べてから回答します」。' },
-    ]),
-  },
-  {
-    id: 'demo-en-daily-001', language: 'en', category: '日常句子',
-    term: 'Could you say that one more time?',
-    meaning_zh: '你可以再说一遍吗？',
-    explanation: '自然、礼貌地请求对方重复刚才的话。',
-    example: 'Sorry, could you say that one more time?',
-    example_meaning_zh: '不好意思，你可以再说一遍吗？',
-    source_type: 'preview-demo', content_type: 'sentence',
-    highlight_json: JSON.stringify([
-      { start: 0, end: 13, type: 'grammar', term: 'Could you say', meaning: '你可以……吗', explanation: 'Could you + 动词原形构成自然、礼貌的请求句型。' },
-      { start: 19, end: 32, type: 'vocabulary', term: 'one more time', meaning: '再一次', explanation: '自然表达“再来一次、再说一遍”。' },
-    ]),
-    vocabulary_expansion_json: JSON.stringify([
-      { term: 'Could you…?', meaning: '可以请你……吗？', explanation: '比直接命令更礼貌，适用于日常和工作场景。' },
-      { term: 'one more time', meaning: '再一次', explanation: '可用于请求重复动作或内容。' },
-    ]),
-    grammar_expansion_json: JSON.stringify([
-      { term: 'Could + 主语 + 动词原形', meaning: '礼貌请求句型', explanation: 'could 在此表示委婉请求，后接动词原形。' },
-    ]),
-  },
-  {
-    id: 'demo-en-work-001', language: 'en', category: '职场语言',
-    term: 'I will check the details and get back to you.',
-    meaning_zh: '我会确认具体情况后再回复你。',
-    explanation: '适合需要先确认信息、之后再答复同事或客户的场景。',
-    example: 'Let me check the details and get back to you this afternoon.',
-    example_meaning_zh: '我先确认具体情况，今天下午再回复你。',
-    source_type: 'preview-demo', content_type: 'sentence',
-    highlight_json: JSON.stringify([
-      { start: 7, end: 12, type: 'vocabulary', term: 'check', meaning: '确认、核实', explanation: '工作场景中常用于核实信息。' },
-      { start: 29, end: 44, type: 'vocabulary', term: 'get back to you', meaning: '再回复你', explanation: '自然的职场表达，表示之后联系或回复。' },
-      { start: 0, end: 6, type: 'grammar', term: 'I will', meaning: '我将会', explanation: 'will + 动词原形表示未来动作或承诺。' },
-    ]),
-    vocabulary_expansion_json: JSON.stringify([
-      { term: 'check the details', meaning: '确认具体情况', explanation: '可用于工作任务、订单、计划与资料核对。' },
-      { term: 'get back to you', meaning: '之后回复你', explanation: '比正式的「respond」更口语、自然。' },
-    ]),
-    grammar_expansion_json: JSON.stringify([
-      { term: 'will + 动词原形', meaning: '将会做某事', explanation: '常用于承诺、计划或即时决定。' },
-    ]),
-  },
-]
 const languageCards = ref<LanguageCard[]>([])
 const languageCategories = computed(() => [
   { title: '全部', desc: '全部句子', icon: BookOpen },
@@ -1084,12 +998,7 @@ async function loadLanguageCards() {
   languageCardsLoading.value = true
   languageCardsError.value = ''
   languageCards.value = []
-  if (previewDemoMode) {
-    languageCards.value = previewLanguageFixtures.filter(card => card.language === studyLanguage.value)
-    languageCardsLoading.value = false
-    return
-  }
-  try {
+try {
     const response = await fetch('/api/language-cards?lang=' + encodeURIComponent(studyLanguage.value))
     const data = await response.json() as { items?: LanguageCard[]; error?: string }
     if (!response.ok) throw new Error(data.error || '语言学习内容加载失败')
@@ -1319,7 +1228,7 @@ async function toggleSaved(term: string) {
     if (!entry) {
       // Preserve an explicitly local-only save, but never imply it reached D1.
       savedWords.value = [...savedWords.value, term]
-      cloudDashboardError.value = '该词条没有可保存的释义快照，已仅保存在本设备；请先联网查到词条后再收藏以同步云端。'
+      cloudDashboardError.value = '请先查询到完整词条，再收藏以同步到生词本。'
       return
     }
 
@@ -1493,15 +1402,15 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   // Safari/iOS can populate voices asynchronously. Never speak with an unknown OS
   // default voice: wait for voiceschanged, then retry with the requested language.
   if (availableVoices.length === 0) {
-    speechStatus.value = '系统语音列表尚未加载，暂未播放；正在等待语音就绪。'
+    speechStatus.value = '语音暂不可用，请稍后重试。'
     synthesis.addEventListener('voiceschanged', () => {
       if (synthesis.getVoices().length > 0 && requestId === speechRequestId) {
         // Do not call speak() from this asynchronous event: iOS Safari may reject
         // speech started outside the original tap's user activation. Ask for one
         // explicit tap after voices are ready instead of silently failing.
-        speechStatus.value = '系统语音已就绪，请再次点击播放。'
+        speechStatus.value = '语音已就绪，请再次点击播放。'
       } else if (requestId === speechRequestId) {
-        speechStatus.value = '系统语音仍未就绪。请检查系统语音设置后重试。'
+        speechStatus.value = '语音暂不可用，请检查设备语音设置后重试。'
       }
     }, { once: true })
     return
@@ -1541,8 +1450,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
     if (requestId === speechRequestId) {
       speechPlaying.value = false
       speechPaused.value = false
-      const voiceLabel = voice ? '；语音：' + voice.name + (voice.localService ? '（设备本地）' : '（系统提供）') : '；语音：浏览器自动选择'
-      speechStatus.value = '播放请求已结束' + voiceLabel + '。若实际无声，请检查 iPhone「声音与触感」中的着信音与通知音量及静音状态；iOS 系统语音可能受这些设置影响。此状态不代表已确认听到声音。'
+      speechStatus.value = '播放完成。'
     }
   }
   utterance.onerror = event => {
@@ -1571,72 +1479,6 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   } catch {
     setSpeechAudioSessionType('auto')
     speechStatus.value = '浏览器没有接受这次语音请求，请再次点击播放。'
-  }
-}
-
-function testAudioOutput() {
-  // iOS Safari requires AudioContext to be resumed from the direct user gesture.
-  // Do not schedule a very short tone until resume() has resolved: a suspended
-  // context may otherwise consume the scheduled tone before it becomes audible.
-  // Keep the standard constructor first, but support older WebKit Safari builds too.
-  const AudioContextConstructor = window.AudioContext
-    || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-  if (typeof AudioContextConstructor === 'undefined') {
-    speechStatus.value = '当前浏览器不支持 Web Audio，无法执行设备声音测试。'
-    return
-  }
-
-  const requestId = ++speechRequestId
-  const synthesis = window.speechSynthesis
-  try {
-    if (synthesis && (synthesis.speaking || synthesis.pending)) synthesis.cancel()
-    speechPaused.value = false
-    speechPlaying.value = false
-
-    const context = new AudioContextConstructor()
-    speechStatus.value = '正在启动设备声音测试……'
-    // Call resume immediately while the tap still has user activation.
-    const resumePromise = context.resume()
-    void resumePromise.then(() => {
-      if (requestId !== speechRequestId) {
-        void context.close().catch(() => undefined)
-        return
-      }
-      if (context.state !== 'running') {
-        speechStatus.value = '浏览器音频上下文未进入运行状态（' + context.state + '）。请重新点击测试。'
-        void context.close().catch(() => undefined)
-        return
-      }
-
-      // Schedule the tone only AFTER the context is running. Use a longer,
-      // comfortably audible tone with a short fade so iOS has time to output it.
-      const oscillator = context.createOscillator()
-      const gain = context.createGain()
-      const now = context.currentTime
-      oscillator.type = 'sine'
-      oscillator.frequency.setValueAtTime(880, now)
-      gain.gain.setValueAtTime(0.0001, now)
-      gain.gain.exponentialRampToValueAtTime(0.2, now + 0.04)
-      gain.gain.setValueAtTime(0.2, now + 0.55)
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.7)
-      oscillator.connect(gain)
-      gain.connect(context.destination)
-      oscillator.onended = () => {
-        if (requestId === speechRequestId) {
-          speechStatus.value = '设备测试音已提交到运行中的音频输出（AudioContext=running）。请确认是否实际听到；此结果仍不能证明语音合成正常。'
-        }
-        void context.close().catch(() => undefined)
-      }
-      oscillator.start(now + 0.03)
-      oscillator.stop(now + 0.72)
-    }).catch(() => {
-      if (requestId === speechRequestId) {
-        speechStatus.value = '浏览器无法启动音频上下文。请检查 Safari 页面状态与 iPhone 音频输出后重试。'
-      }
-      void context.close().catch(() => undefined)
-    })
-  } catch {
-    speechStatus.value = '设备声音测试启动失败。请检查 iPhone 音频输出与浏览器状态。'
   }
 }
 
@@ -1687,33 +1529,29 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
 </script>
 
 <template>
-  <div v-if="previewDemoMode" class="preview-demo-banner" role="status">
-    预览演示模式：使用内置示例句子，不读取或写入云端学习数据。退出演示请移除网址中的 <code>?demo=1</code>。
-  </div>
-  <section v-if="!authReady" class="auth-screen" aria-live="polite">
+<section v-if="!authReady" class="auth-screen" aria-live="polite">
     <div class="auth-card"><div class="auth-mark"><BookOpen :size="28" /></div><h1>知学</h1><p>正在确认登录状态…</p></div>
   </section>
   <section v-else-if="!authenticated" class="auth-screen">
     <form class="auth-card" @submit.prevent="login">
       <div class="auth-mark"><ShieldCheck :size="28" /></div>
-      <p class="auth-eyebrow">PERSONAL STUDY SPACE</p>
-      <h1>欢迎回来</h1>
-      <p class="auth-description">这是你的私人学习空间。登录后才能访问个人统计、答题记录和学习进度。</p>
+          <h1>欢迎回来</h1>
+
       <label class="auth-label" for="study-password">登录密码</label>
       <input id="study-password" v-model="authPassword" class="auth-input" type="password" autocomplete="current-password" required minlength="1" maxlength="256" placeholder="输入你设置的登录密码" :disabled="authLoading || !authConfigured" />
-      <p v-if="!authConfigured" class="auth-error" role="alert">登录服务尚未配置。请先按免费登录配置文档，在 Cloudflare Worker Secrets 中设置密码和会话密钥。</p>
+      <p v-if="!authConfigured" class="auth-error" role="alert">登录暂不可用，请联系管理员。</p>
       <p v-else-if="authError" class="auth-error" role="alert">{{ authError }}</p>
       <button class="auth-submit" type="submit" :disabled="authLoading || !authConfigured || !authPassword">
         {{ authLoading ? '正在登录…' : '登录学习平台' }}
       </button>
-      <p class="auth-footnote">使用现有 Cloudflare Workers + D1，不需要开通 Zero Trust 或填写付款信息。</p>
+
     </form>
   </section>
   <div v-else class="app-shell">
     <aside class="sidebar">
       <button class="brand" @click="navigate('home')" aria-label="返回首页">
         <span class="brand-mark"><BookOpen :size="23" /></span>
-        <span class="brand-copy"><strong>知学</strong><small>PERSONAL STUDY SPACE</small></span>
+        <span class="brand-copy"><strong>知学</strong></span>
       </button>
       <div class="side-label">学习空间</div>
       <nav class="nav-list">
@@ -1727,7 +1565,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
           <span class="focus-symbol"><Flame :size="17" /></span>
           <div><strong>每天进步一点点</strong><p>稳定练习，比一次学很多更重要。</p></div>
         </div>
-        <div class="profile-row"><div class="avatar">知</div><div class="profile-text"><strong>我的学习空间</strong><small>个人模式 · 本地体验版</small></div><Menu :size="17" class="muted" /></div>
+        <div class="profile-row"><div class="avatar">知</div><div class="profile-text"><strong>我的学习空间</strong><small>个人学习</small></div><Menu :size="17" class="muted" /></div>
       </div>
     </aside>
 
@@ -1759,24 +1597,23 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
         <template v-if="activeModule === 'home'">
           <section class="hero-panel">
             <div class="hero-content">
-              <div class="hero-kicker"><Sparkles :size="15" /> 给未来的自己，多一点底气</div>
+
               <h2>学习不必赶路，<br /><span>但每一步都算数。</span></h2>
-              <p>考试、语言和专业词汇分区管理。学过的内容可以收藏、回顾，再慢慢变成自己的知识。</p>
+
               <button class="primary-button" @click="navigate('exam')">继续我的学习 <ArrowRight :size="17" /></button>
-              <div class="hero-note"><ShieldCheck :size="15" /> 个人学习 · 清晰分类 · 持续积累</div>
+
             </div>
             <div class="hero-art" aria-hidden="true">
               <div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div>
               <div class="art-sun"></div>
               <div class="art-book"><div class="book-page page-left"></div><div class="book-page page-right"></div><div class="book-spine"></div><span class="book-star">✳</span></div>
-              <div class="float-note note-top"><span class="mini-check"><CheckCircle2 :size="15" /></span><span><b>一点点积累</b><small>Build your own knowledge</small></span></div>
-              <div class="float-note note-bottom"><span class="mini-spark">✦</span><span><b>Keep learning</b><small>让进步看得见</small></span></div>
+
               <span class="art-spark spark-a">✦</span><span class="art-spark spark-b">✳</span><span class="art-dot dot-a"></span><span class="art-dot dot-b"></span>
             </div>
           </section>
 
           <section class="section-block">
-            <div class="section-heading"><div><div class="section-kicker">EXPLORE YOUR SPACE</div><h2>你想从哪里开始？</h2><p>四个模块，共享生词与学习记录，各自专注不同目标。</p></div><span class="section-index">01 / 04</span></div>
+            <div class="section-heading"><div><h2>你想从哪里开始？</h2></div></div>
             <div class="module-grid">
               <button v-for="item in modules" :key="item.id" class="module-card" @click="navigate(item.id)">
                 <div class="module-card-top"><span class="module-icon" :class="item.tone"><component :is="item.icon" :size="22" /></span><span class="card-arrow"><ArrowRight :size="17" /></span></div>
@@ -1786,9 +1623,8 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             </div>
           </section>
 
-
           <section class="progress-dashboard">
-            <div class="section-heading"><div><div class="section-kicker">CLOUD LEARNING DATA</div><h2>云端学习数据</h2><p>以下统计来自 D1 已保存的答题、实战、生词收藏与课程进度；不是演示数字。</p></div><span class="source-pill">{{ cloudDashboard?.generated_from || '连接中' }}</span></div>
+            <div class="section-heading"><div><h2>云端学习数据</h2></div><span class="source-pill">{{ cloudDashboard?.generated_from || '连接中' }}</span></div>
             <p v-if="cloudDashboardError" class="dictionary-status dictionary-error">{{ cloudDashboardError }}</p>
             <div v-if="cloudDashboard" class="metric-grid">
               <div class="panel metric-card"><span class="metric-icon"><CheckCircle2 :size="18" /></span><small>云端答题</small><strong>{{ cloudDashboard.exam.attempted_questions }}</strong><span>{{ cloudDashboard.exam.accuracy_percent === null ? '暂无记录' : '正确率 ' + cloudDashboard.exam.accuracy_percent + '%' }}</span></div>
@@ -1797,7 +1633,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             </div>
           </section>
           <section class="progress-dashboard">
-            <div class="section-heading"><div><div class="section-kicker">YOUR DAILY MOMENTUM</div><h2>今日进度</h2><p>完成任务后会自动保存到当前设备，明天开始新的每日计划。</p></div><span class="section-index">{{ completedMinutes }} / {{ dailyGoalMinutes }} 分钟</span></div>
+            <div class="section-heading"><div><h2>今日进度</h2></div></div>
             <div class="progress-overview">
               <div class="panel daily-progress-panel">
                 <div class="progress-title"><span class="metric-icon"><Target :size="18" /></span><div><strong>每日学习目标</strong><small>目标 {{ dailyGoalMinutes }} 分钟</small></div><b>{{ dailyPercent }}%</b></div>
@@ -1815,14 +1651,14 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             </div>
           </section>
           <section class="progress-dashboard">
-            <div class="section-heading"><div><div class="section-kicker">MEASURE WHAT MATTERS</div><h2>学习成果一览</h2><p>正确率与曲线只根据你记录的练习成绩计算，不用虚构数据填充。</p></div><button class="text-link" @click="navigate('exam')">查看考试记录 <ArrowRight :size="14" /></button></div>
+            <div class="section-heading"><div><h2>学习成果一览</h2></div><button class="text-link" @click="navigate('exam')">查看考试记录 <ArrowRight :size="14" /></button></div>
             <div class="metric-grid">
               <div class="panel metric-card"><span class="metric-icon"><CheckCircle2 :size="18" /></span><small>累计答题</small><strong>{{ totalAnswered }}</strong><span>道题</span></div>
               <div class="panel metric-card"><span class="metric-icon"><Target :size="18" /></span><small>总体正确率</small><strong>{{ overallAccuracy === null ? '—' : overallAccuracy + '%' }}</strong><span>{{ overallAccuracy === null ? '记录首次练习后显示' : totalCorrect + ' 道答对' }}</span></div>
               <div class="panel metric-card"><span class="metric-icon"><TrendingUp :size="18" /></span><small>最近一次练习</small><strong>{{ latestRecord ? Math.round(latestRecord.correct / latestRecord.total * 100) + '%' : '—' }}</strong><span>{{ latestRecord ? latestRecord.exam + ' · ' + latestRecord.date : '暂无历史成绩' }}</span></div>
             </div>
             <div class="panel curve-panel">
-              <div class="panel-heading"><div><h3>近 7 天正确率曲线</h3><p>按每天已记录的答题数加权计算；没有记录的日期会留空。</p></div><span class="curve-legend"><i></i>正确率</span></div>
+              <div class="panel-heading"><div><h3>近 7 天正确率曲线</h3></div><span class="curve-legend"><i></i>正确率</span></div>
               <div v-if="examRecords.length" class="curve-chart">
                 <div v-for="day in curveRecords" :key="day.date" class="curve-column">
                   <div class="curve-value">{{ day.accuracy === null ? '—' : day.accuracy + '%' }}</div>
@@ -1830,7 +1666,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <small>{{ day.label }}</small>
                 </div>
               </div>
-              <div v-else class="curve-empty-state"><TrendingUp :size="24" /><strong>完成第一次练习，学习曲线就会开始生长</strong><p>进入考试备考，点击“记录一次练习成绩”即可开始积累历史记录。</p><button class="text-link" @click="navigate('exam')">去记录成绩 <ArrowRight :size="14" /></button></div>
+              <div v-else class="curve-empty-state"><TrendingUp :size="24" /><strong>完成第一次练习，学习曲线就会开始生长</strong><button class="text-link" @click="navigate('exam')">去记录成绩 <ArrowRight :size="14" /></button></div>
             </div>
           </section>
           <section class="bottom-grid">
@@ -1845,14 +1681,14 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               <div v-if="recentDictionaryEntries.length === 0" class="recent-dictionary-empty">查过的词会显示在这里，方便继续复习。</div>
             </div>
             <div class="panel daily-panel">
-              <div class="daily-icon"><Clock3 :size="19" /></div><div class="daily-copy"><div class="section-kicker">A SMALL DAILY GOAL</div><h3>给今天设一个小目标</h3><p>做 5 道题、听 3 分钟，或记住一个新词，都很好。</p><button class="text-link" @click="navigate('language')">开始轻量练习 <ArrowRight :size="14" /></button></div>
+              <div class="daily-icon"><Clock3 :size="19" /></div><div class="daily-copy"><h3>今日小目标</h3><button class="text-link" @click="navigate('language')">开始轻量练习 <ArrowRight :size="14" /></button></div>
             </div>
           </section>
         </template>
 
         <template v-else-if="activeModule === 'exam'">
           <section class="section-block module-page-section">
-            <div class="section-heading"><div><div class="section-kicker">YOUR EXAM ROADMAP</div><h2>选择要准备的考试</h2></div><span class="section-index">EXAM</span></div>
+            <div class="section-heading"><div><h2>选择要准备的考试</h2></div></div>
             <p v-if="tracksLoading" class="dictionary-status">正在读取 D1 中已启用的考试…</p>
             <p v-else-if="tracksError" class="dictionary-status dictionary-error">{{ tracksError }}</p>
             <div class="exam-list">
@@ -1865,7 +1701,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             </div>
 
             <section class="practice-section">
-              <div class="section-heading practice-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2></div></div>
+              <div class="section-heading practice-heading"><div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2></div></div>
               <div class="question-source-filters" role="group" aria-label="题目来源筛选">
                 <button v-for="filter in questionSourceFilters" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" @click="selectQuestionSource(filter.id)">{{ filter.label }}（{{ filter.id === 'official' ? (selectedTrack?.official_question_count || 0) : (selectedTrack?.prediction_question_count || 0) }}）</button>
               </div>
@@ -1892,7 +1728,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <div class="practice-start-icon"><GraduationCap :size="25" /></div>
                   <h3>准备好开始练习了吗？</h3>
                   <p v-if="selectedTrack?.question_count">从 D1 读取 {{ selectedTrack.title }} 题目，提交后查看正确答案与解析。</p>
-                  <p v-else>你可以选择不同考试。目前 SG 已接入专项练习题库；其他考试将在题库准备完成后开放。</p>
+                  <p v-else>目前开放的考试可直接进入练习。</p>
                   <div class="practice-start-actions">
                     <button class="primary-button" @click="startPractice" :disabled="quizLoading || !selectedTrack || selectedTrack.question_count === 0">{{ quizLoading ? '正在加载题目…' : selectedTrack?.question_count ? '开始练习（最多 10 题）' : '当前暂无可练习题目' }} <ArrowRight :size="16" /></button>
                   </div>
@@ -1900,7 +1736,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 </template>
               </div>
               <div v-else-if="currentQuestion" class="panel question-card">
-                <div class="question-topline"><span>{{ selectedTrack?.title || '考试练习' }} · 第 {{ quizIndex + 1 }} / {{ quizQuestions.length }} 题 · {{ currentQuestion.exam_section ? '科目' + currentQuestion.exam_section : '题型待复核' }}<template v-if="currentQuestion.exam_section && currentQuestion.exam_section_method !== 'explicit'">（规则推定）</template></span><span class="source-pill">{{ currentQuestion?.source_type === 'generated' ? '预测题库 · 原创' : currentQuestion?.source_type === 'official' ? '历年真题' : '其他题目' }}</span></div>
+                <div class="question-topline"><span>{{ selectedTrack?.title || '考试练习' }} · 第 {{ quizIndex + 1 }} / {{ quizQuestions.length }} 题 · {{ currentQuestion.exam_section ? '科目' + currentQuestion.exam_section : '题型待复核' }}<template v-if="currentQuestion.exam_section && currentQuestion.exam_section_method !== 'explicit'"></template></span><span class="source-pill">{{ currentQuestion?.source_type === 'generated' ? '预测题库 · 原创' : currentQuestion?.source_type === 'official' ? '历年真题' : '其他题目' }}</span></div>
                 <div class="question-progress"><span :style="{ width: ((quizIndex + 1) / quizQuestions.length * 100) + '%' }"></span></div>
                 <div class="question-topic">{{ currentQuestion.topic }}</div>
                 <div class="question-mastery-row">
@@ -1915,7 +1751,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <h3 class="question-prompt">{{ currentQuestion.prompt }}</h3>
                   <button type="button" class="secondary-button question-speak-button" @click="speakQuestion(currentQuestion)"><Volume2 :size="16" /> 日语语音读题</button>
                 </div>
-                <div v-if="speechStatus && speechStatusTarget === 'exam:' + currentQuestion.id" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button type="button" class="text-link" @click="testAudioOutput">测试设备声音</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
+                <div v-if="speechStatus && speechStatusTarget === 'exam:' + currentQuestion.id" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 <div class="question-options">
                   <button v-for="option in currentQuestion.options" :key="option.id" class="question-option" :class="{ selected: selectedOption === option.id, correct: quizSubmitted && option.id === currentQuestion.answer, incorrect: quizSubmitted && selectedOption === option.id && option.id !== currentQuestion.answer }" :disabled="quizSubmitted" @click="selectedOption = option.id">
                     <span>{{ option.id.toUpperCase() }}</span><strong>{{ option.text }}</strong><CheckCircle2 v-if="quizSubmitted && option.id === currentQuestion.answer" :size="17" />
@@ -1948,7 +1784,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               </div>
             </section>
             <section class="section-block mock-exam-section">
-              <div class="section-heading"><div><div class="section-kicker">TIMED MOCK EXAM</div><h2>限时模拟考试</h2><p>共 60 题，限时 120 分钟。</p></div><span class="source-pill">A 48 题 · B 12 题</span></div>
+              <div class="section-heading"><div><h2>限时模拟考试</h2><p>共 60 题，限时 120 分钟。</p></div><span class="source-pill">A 48 题 · B 12 题</span></div>
               <div v-if="!mockStarted && !mockSubmitted" class="panel practice-start-card">
                 <div class="practice-start-icon"><Clock3 :size="25" /></div><h3>模拟真实考试节奏</h3>
                 <p>当前题库有 {{ selectedTrack?.question_count || 0 }} 道可用题目。正式模拟固定 60 题、每题 2 分、满分 120 分、限时 120 分钟；题量不足时不会用重复题补足。</p>
@@ -1978,7 +1814,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <button class="primary-button" @click="finishMockExam(false)">交卷并查看结果</button>
                 </div>
                 <article v-for="(question, index) in mockQuestions" :key="question.id" class="panel question-card mock-question-card">
-                  <div class="question-topline"><span>第 {{ index + 1 }} / {{ mockQuestions.length }} 题 · 科目{{ question.exam_section }}<template v-if="question.exam_section_method !== 'explicit'">（规则推定）</template> · {{ question.topic }}</span><span class="source-pill">{{ question.source_type === 'generated' ? '预测题库 · 原创' : question.source_type === 'official' ? '历年真题' : '其他题目' }}</span></div>
+                  <div class="question-topline"><span>第 {{ index + 1 }} / {{ mockQuestions.length }} 题 · 科目{{ question.exam_section }} · {{ question.topic }}</span><span class="source-pill">{{ question.source_type === 'generated' ? '预测题库 · 原创' : question.source_type === 'official' ? '历年真题' : '其他题目' }}</span></div>
                   <a v-if="question.source_type === 'official' && question.source_reference" class="language-source" :href="question.source_reference" target="_blank" rel="noreferrer">IPA 官方原卷 ↗</a>
                   <div class="question-prompt-row">
                     <h3 class="question-prompt">{{ question.prompt }}</h3>
@@ -1986,7 +1822,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   </div>
                   <div v-if="speechStatus && speechStatusTarget === 'exam:' + question.id" class="dictionary-speech-controls" role="status" aria-live="polite">
                     <p class="dictionary-status">{{ speechStatus }}</p>
-                    <button type="button" class="text-link" @click="testAudioOutput">测试设备声音</button>
+                    
                     <button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button>
                     <button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button>
                   </div>
@@ -2000,7 +1836,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               </div>
             </section>
             <section class="exam-performance">
-              <div class="section-heading"><div><div class="section-kicker">YOUR SCORE HISTORY</div><h2>正确率与历史成绩</h2></div><button class="primary-button" @click="addExamRecord"><PlusCircle :size="16" /> 记录一次练习成绩</button></div>
+              <div class="section-heading"><div><h2>正确率与历史成绩</h2></div><button class="primary-button" @click="addExamRecord"><PlusCircle :size="16" /> 记录一次练习成绩</button></div>
               <div class="metric-grid">
                 <div class="panel metric-card"><span class="metric-icon"><CheckCircle2 :size="18" /></span><small>累计答题</small><strong>{{ totalAnswered }}</strong><span>道题</span></div>
                 <div class="panel metric-card"><span class="metric-icon"><Target :size="18" /></span><small>总体正确率</small><strong>{{ overallAccuracy === null ? '—' : overallAccuracy + '%' }}</strong><span>{{ overallAccuracy === null ? '暂无成绩，记录后自动计算' : totalCorrect + ' 道答对' }}</span></div>
@@ -2030,9 +1866,9 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
 
         <template v-else-if="activeModule === 'practical'">
           <section class="section-block module-page-section">
-            <div class="section-heading"><div><div class="section-kicker">PRACTICAL SECURITY LAB</div><h2>把知识用在真实工作情境里</h2><p>日语题干与选项，支持日语语音播报；提交后显示日文原文和中文解析。</p></div><span class="section-index">{{ scenarios.length }} 个情境</span></div>
+            <div class="section-heading"><div><h2>把知识用在真实工作情境里</h2></div></div>
             <div class="panel practice-start-card">
-              <div class="section-heading"><div><h3>选择训练方向</h3><p>当前提供 SG 信息安全管理情境，共 400 个日语原创情境。</p></div></div>
+              <div class="section-heading"><div><h3>选择训练方向</h3></div></div>
               <div class="exam-list">
                 <button v-for="exam in examTracks" :key="exam.id" class="exam-card" :class="{ 'exam-card-selected': selectedTrackId === exam.id }" @click="selectExam(exam)">
                   <span class="exam-code purple">{{ exam.id.split('-').pop()?.toUpperCase() }}</span>
@@ -2054,7 +1890,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <h3 class="question-prompt">{{ currentScenario.title }}</h3>
                 <button type="button" class="secondary-button question-speak-button" @click="speakScenario(currentScenario)"><Volume2 :size="16" /> 日语语音读题</button>
               </div>
-              <div v-if="speechStatus && speechStatusTarget === 'practical:' + currentScenario.id" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button type="button" class="text-link" @click="testAudioOutput">测试设备声音</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
+              <div v-if="speechStatus && speechStatusTarget === 'practical:' + currentScenario.id" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
               <p class="scenario-situation">{{ currentScenario.situation }}</p>
               <h4>{{ currentScenario.task }}</h4>
               <div class="question-options">
@@ -2107,7 +1943,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             </div>
             <section class="language-practice panel" aria-label="主动回忆练习">
               <div class="language-practice-heading">
-                <div><span class="banner-tag">ACTIVE RECALL</span><h3>先回忆，再看答案</h3><p>先看中文提示，尝试说出完整的日语或英语句子，再揭晓原句并复习重点。</p></div>
+                <div><span class="banner-tag">ACTIVE RECALL</span><h3>先回忆，再看答案</h3></div>
                 <span class="language-practice-count">待复习 {{ dueLanguageReviewCount }} · {{ visibleLanguageCards.length }} 张</span>
               </div>
               <div v-if="languagePracticeCard" class="language-practice-content">
@@ -2115,10 +1951,10 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <div v-if="languagePracticeRevealed" class="language-practice-revealed-sentence">
                   <div class="sentence-highlight-legend" role="note" aria-label="句子高亮图例"><span class="sentence-legend-vocabulary"><i aria-hidden="true"></i>单词 / 短语</span><span class="sentence-legend-grammar"><i aria-hidden="true"></i>语法结构</span></div>
                   <h4 class="language-sentence"><span v-for="(part, index) in sentenceParts(languagePracticeCard)" :key="index" :class="part.type ? 'sentence-highlight-' + part.type : ''" :title="part.detail">{{ part.text }}</span></h4>
-                  <p class="sentence-highlight-hint">黄色标出需要理解的词汇，蓝色标出句中的语法结构；下方会按颜色分别解释每一项。</p>
+
                   <p v-if="languagePracticeCard.reading" class="language-reading">{{ languagePracticeCard.reading }}</p>
                   <div class="language-speech-actions"><button type="button" class="play-button" @click="speakLanguageCard(languagePracticeCard, false, true)"><Volume2 :size="16" /> 播放原文</button><button v-if="languagePracticeCard.example" type="button" class="play-button" @click="speakLanguageCard(languagePracticeCard, true, true)"><Volume2 :size="16" /> 播放例句</button></div>
-                  <div v-if="speechStatus && speechStatusTarget.startsWith('language-practice:' + languagePracticeCard.id + ':')" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button type="button" class="text-link" @click="testAudioOutput">测试设备声音</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
+                  <div v-if="speechStatus && speechStatusTarget.startsWith('language-practice:' + languagePracticeCard.id + ':')" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 </div>
                 <div v-if="languagePracticeRevealed" class="language-practice-answer">
                   <strong>{{ languagePracticeCard.meaning_zh }}</strong>
@@ -2140,7 +1976,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <div v-else class="language-practice-recall-prompt">
                   <span class="banner-tag">先回忆，再揭晓</span>
                   <strong>{{ languagePracticeCard.meaning_zh || '请先尝试回忆这句话的意思。' }}</strong>
-                  <p class="language-practice-prompt">请根据中文提示，用{{ studyLanguage === 'ja' ? '日语' : '英语' }}说出完整句子。说完后再显示原句，检查词汇、语法和表达是否自然。</p>
+                  
                 </div>
                 <div v-if="languageReviews.some(item => item.card_id === languagePracticeCard?.id)" class="language-review-meta">
                   <span>复习 {{ languageReviews.find(item => item.card_id === languagePracticeCard?.id)?.review_count || 0 }} 次</span>
@@ -2192,7 +2028,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 </section>
                 <a v-if="card.source_url" class="language-source-link" :href="card.source_url" target="_blank" rel="noopener noreferrer">查看句子来源 ↗</a>
                 <div class="language-speech-actions"><button type="button" class="play-button" @click="speakLanguageCard(card)"><Volume2 :size="17" /> 播放原文</button><button v-if="card.example" type="button" class="play-button" @click="speakLanguageCard(card, true)"><Volume2 :size="17" /> 播放例句</button></div>
-                <div v-if="speechStatus && speechStatusTarget.startsWith('language-card:' + card.id + ':')" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button type="button" class="text-link" @click="testAudioOutput">测试设备声音</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
+                <div v-if="speechStatus && speechStatusTarget.startsWith('language-card:' + card.id + ':')" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 <small class="language-source">{{ card.source_type === 'licensed' ? '开放词库数据' : '平台自编学习内容' }}</small>
               </article>
               <div v-if="visibleLanguageCards.length > languagePageSize" class="language-pagination">
@@ -2227,13 +2063,13 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               <button v-if="searchText" class="clear-search" @click="clearDictionarySearch">清空</button>
               <button class="dictionary-search-button" :disabled="dictionaryLoading" @click="lookupDictionary">{{ dictionaryLoading ? '查找中…' : '查词' }}</button>
             </div>
-            <p>以英语学习为主：分别播放英语原音与日语辅助读音；结合 IPA 音标和片假名近似提示练习。日语查询可查看对应英文释义。IT 术语优先使用本地词库，无需在线翻译。</p>
+
             <p v-if="dictionaryLoading" class="dictionary-status">正在查词…</p>
             <p v-else-if="dictionaryError" class="dictionary-status dictionary-error">{{ dictionaryError }} <button type="button" class="text-link" @click="lookupDictionary">重试</button></p>
             <div v-if="!searchText.trim() && !dictionaryLoading" class="dictionary-quick-start"><span>试试查询</span><button @click="quickDictionarySearch('hello', 'en')">hello <small>英语</small></button><button @click="quickDictionarySearch('こんにちは', 'ja')">こんにちは <small>日语</small></button><button @click="quickDictionarySearch('認証', 'it')">認証 <small>IT</small></button><button @click="quickDictionarySearch('ハッシュ', 'it')">ハッシュ <small>安全</small></button><button @click="quickDictionarySearch('API', 'it')">API <small>接口</small></button><button @click="quickDictionarySearch('トランザクション', 'it')">トランザクション <small>数据库</small></button><button @click="quickDictionarySearch('CORS', 'it')">CORS <small>跨域</small></button><button @click="quickDictionarySearch('コンポーネント', 'it')">コンポーネント <small>前端</small></button><button @click="quickDictionarySearch('Cloudflare D1', 'it')">Cloudflare D1 <small>云数据库</small></button><button @click="quickDictionarySearch('プルリクエスト', 'it')">プルリクエスト <small>Git协作</small></button></div>
           </section>
           <section class="section-block">
-            <div class="section-heading"><div><div class="section-kicker">ENGLISH PRONUNCIATION</div><h2>英日词典与 IT 术语</h2><p>英语释义 · IPA 音标 · 日语假名辅助发音 · 例句</p></div><span class="section-index">{{ displayedEntries.length }} 个结果</span></div>
+            <div class="section-heading"><div><h2>英日词典与 IT 术语</h2></div></div>
             <div class="dictionary-list">
               <article v-for="entry in displayedEntries" :key="entry.term + (entry.tag || '') + (entry.en || '')" class="dictionary-card">
                 <div class="dict-main">
@@ -2243,16 +2079,16 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <p v-if="entry.translationJa" class="dictionary-translation-ja">日语辅助理解：{{ entry.translationJa }}</p>
                   <p v-if="entry.example" class="dict-example">例句：{{ entry.example }}</p>
                   <p v-if="entry.technical" class="dictionary-tech-note">来自 IT 专业词汇库</p>
-                  <div v-if="speechStatus && speechStatusTarget === entry.term" class="dictionary-speech-controls"><p class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p><button type="button" class="text-link" @click="testAudioOutput">测试设备声音</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
+                  <div v-if="speechStatus && speechStatusTarget === entry.term" class="dictionary-speech-controls"><p class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 </div>
-                <div class="dict-actions"><button class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + (entry.englishTerm || entry.term)" title="播放英语原音；缺少对应词时会提示"><Volume2 :size="14" /><span>EN</span></button><button class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语辅助读音：' + (entry.englishTerm || entry.term)" title="播放日语辅助读音；缺少假名时会提示"><Languages :size="14" /><span>日</span></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
+                <div class="dict-actions"><button class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + (entry.englishTerm || entry.term)" title="播放英语发音"><Volume2 :size="14" /><span>EN</span></button><button class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语辅助读音：' + (entry.englishTerm || entry.term)" title="播放日语辅助读音"><Languages :size="14" /><span>日</span></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
               </article>
               <div v-if="lastSearchedTerm.trim().toLowerCase() === searchText.trim().toLowerCase() && displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>没有找到匹配词条</strong><p>可试试别名、英语缩写或日语术语；查 IT 专业词请选「IT」，该模式只查本地词库，不请求在线翻译。</p></div>
             </div>
           </section>
           </template>
           <section v-if="dictionaryView === 'saved'" class="section-block saved-vocabulary-block">
-            <div class="section-heading"><div><div class="section-kicker">MY WORDS</div><h2>个人生词本</h2><p>收藏词条会尝试同步到云端，并在本设备保留副本；未同步成功时会显示提示。</p></div><span class="section-index">{{ savedWords.length }} 个收藏</span></div>
+            <div class="section-heading"><div><h2>个人生词本</h2></div></div>
             <div v-if="savedVocabularyEntries.length" class="saved-vocabulary-list">
               <article v-for="entry in savedVocabularyEntries" :key="entry.term" class="saved-vocabulary-row">
                 <div class="saved-vocabulary-copy"><strong>{{ entry.term }}</strong><small v-if="entry.reading">{{ entry.reading }}</small><p v-if="entry.en">英语释义：{{ entry.en }}</p><p v-if="entry.translationJa">日语辅助理解：{{ entry.translationJa }}</p></div>
@@ -2266,7 +2102,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
           </section>
         </template>
 
-        <footer class="footer"><span>知学 · 把每天的小进步，累积成自己的能力。</span><span>Vue 3 · TypeScript · Cloudflare</span></footer>
+        <footer class="footer"><span>知学</span></footer>
       </div>
     </main>
   </div>
