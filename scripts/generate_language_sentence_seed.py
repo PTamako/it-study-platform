@@ -400,17 +400,23 @@ def make_hits(sentence, lang):
                     "へ": ("助词「へ」：方向", "标记动作前往的方向或目的地。"),
                 }
                 meaning, explanation = particle_notes[term]
-                # Prefer the role evidenced by this sentence over a list of possible particle meanings.
-                if term == "の" and "ドアの陰" in sentence:
-                    meaning, explanation = "名词连接：ドアの陰", "「ドア」修饰「陰」，组成表示位置的名词短语「ドアの陰」（门后／门的阴影处）；这里不是在询问所属者。"
-                elif term == "に" and re.search(r"陰に.{0,8}(?:隠す|隠した|置く|置いた)", sentence):
-                    meaning, explanation = "に：动作发生的位置", "「陰に」指出把东西藏起来的位置；这里的「に」标记位置，不是时间或动作对象。"
-                elif term == "を" and re.search(r"それを.{0,8}隠", sentence):
-                    meaning, explanation = "を：动作对象", "「それを」中的「を」标记被藏起来的东西；「それ」在这里可自然理解为“它”。"
-                elif term == "は" and re.search(r"彼は", sentence):
-                    meaning, explanation = "は：提示主题（彼は）", "「彼」是“他”；「は」提示本句谈论的主题，后面的「ドアの陰にそれを隠した」说明他做了什么。"
-                elif term == "の" and re.search(r"彼はドアの陰", sentence):
-                    meaning, explanation = "の：连接名词（ドアの陰）", "「の」把「ドア」和「陰」连接起来，组成表示位置的短语「ドアの陰」（门后／门的阴影处）。"
+                # Explain particles from their local construction and nearby predicate,
+                # rather than special-casing one example sentence.
+                left = sentence[max(0, match.start() - 8):match.start()]
+                right = sentence[match.end():match.end() + 12]
+                local = sentence[max(0, match.start() - 4):min(len(sentence), match.end() + 4)]
+                if term == "の" and left and right:
+                    meaning = "の：连接名词／构成修饰关系"
+                    explanation = "「" + local + "」中的「の」连接前后名词，前面的名词修饰或限定后面的名词；具体关系要结合这组名词理解。"
+                elif term == "に" and re.search(r"(?:陰|中|上|下|前|後ろ|隣|近く|外|内|場所|部屋|駅|会社|学校|家|ここ|そこ|あそこ)に", sentence[max(0, match.start()-8):match.end()+1]) and re.search(r"(?:隠|置|座|立|住|入|向|着|行|来|戻|泊|残|止|並|書|貼|載|落)", right):
+                    meaning = "に：动作地点／目的地"
+                    explanation = "「" + local + "」中的「に」结合后面的动作动词，标记动作发生的位置或移动到达的地点；本句要按动词和地点词一起理解。"
+                elif term == "を" and re.match(r"(?:隠|置|読|見|聞|話|食|飲|買|書|作|使|探|待|持|取|開|閉|始|終|確認|提出|変更|説明|連絡|対応|共有|申請|決|選|見せ|教え|手伝|知|思|考)", right):
+                    meaning = "を：动作对象"
+                    explanation = "「" + local + "」中的「を」标记后面动词所作用的对象；可与后面的动词连起来理解“对什么做了什么”。"
+                elif term == "は" and left:
+                    meaning = "は：提示主题"
+                    explanation = "「" + left[-4:] + "は」中的「は」提示本句的谈话主题，后面的谓语或说明围绕这个主题展开。"
             candidates.append({
                 "start": match.start(), "end": match.end(), "type": "grammar",
                 "term": term, "meaning": meaning, "explanation": explanation,
