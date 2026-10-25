@@ -406,10 +406,11 @@ def validate_annotation_rules():
     japanese_example = make_hits(japanese_sentence, "ja")
     assert any(hit["type"] == "vocabulary" and hit["term"] == "それ" for hit in japanese_example), "Highlight vocabulary that actually occurs in the Japanese sentence"
     assert not any(hit["term"] == "try" for hit in japanese_example), "English vocabulary must never leak into Japanese annotations"
+    assert any(hit["type"] == "grammar" and hit["term"] == "彼は" for hit in japanese_example), "Japanese topic phrase must be highlighted as a contextual grammar unit"
     for term, expected in (("の", "ドア"), ("に", "位置"), ("を", "藏")):
         hit = next((item for item in japanese_example if item["type"] == "grammar" and item["term"] == term), None)
-        if hit is not None:
-            assert expected in hit["explanation"], "Particle explanation must fit its sentence context: " + term
+        assert hit is not None, "Japanese sample must annotate contextual particle: " + term
+        assert expected in hit["explanation"], "Particle explanation must fit its sentence context: " + term
 
     for language, sentence, hits in (("ja", "これ誰の傘ですか？", japanese), ("en", "Whose umbrella is this?", english)):
         assert len(hits) <= 8, language + " must respect the highlight limit"
