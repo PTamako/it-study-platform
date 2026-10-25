@@ -1713,7 +1713,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
     <aside class="sidebar">
       <button class="brand" @click="navigate('home')" aria-label="返回首页">
         <span class="brand-mark"><BookOpen :size="23" /></span>
-        <span class="brand-copy"><strong>知学</strong><small>PERSONAL STUDY SPACE</small></span>
+        <span class="brand-copy"><strong>知学</strong></span>
       </button>
       <div class="side-label">学习空间</div>
       <nav class="nav-list">
@@ -1759,24 +1759,24 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
         <template v-if="activeModule === 'home'">
           <section class="hero-panel">
             <div class="hero-content">
-              <div class="hero-kicker"><Sparkles :size="15" /> 给未来的自己，多一点底气</div>
+
               <h2>学习不必赶路，<br /><span>但每一步都算数。</span></h2>
-              
+
               <button class="primary-button" @click="navigate('exam')">继续我的学习 <ArrowRight :size="17" /></button>
-              
+
             </div>
             <div class="hero-art" aria-hidden="true">
               <div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div>
               <div class="art-sun"></div>
               <div class="art-book"><div class="book-page page-left"></div><div class="book-page page-right"></div><div class="book-spine"></div><span class="book-star">✳</span></div>
-              
-              <div class="float-note note-bottom"><span class="mini-spark">✦</span><span><b>Keep learning</b><small>让进步看得见</small></span></div>
+
+
               <span class="art-spark spark-a">✦</span><span class="art-spark spark-b">✳</span><span class="art-dot dot-a"></span><span class="art-dot dot-b"></span>
             </div>
           </section>
 
           <section class="section-block">
-            <div class="section-heading"><div><div class="section-kicker">EXPLORE YOUR SPACE</div><h2>你想从哪里开始？</h2></div><span class="section-index">01 / 04</span></div>
+            <div class="section-heading"><div><h2>你想从哪里开始？</h2></div></div>
             <div class="module-grid">
               <button v-for="item in modules" :key="item.id" class="module-card" @click="navigate(item.id)">
                 <div class="module-card-top"><span class="module-icon" :class="item.tone"><component :is="item.icon" :size="22" /></span><span class="card-arrow"><ArrowRight :size="17" /></span></div>
@@ -1788,7 +1788,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
 
 
           <section class="progress-dashboard">
-            <div class="section-heading"><div><div class="section-kicker">CLOUD LEARNING DATA</div><h2>云端学习数据</h2></div><span class="source-pill">{{ cloudDashboard?.generated_from || '连接中' }}</span></div>
+            <div class="section-heading"><div><h2>云端学习数据</h2></div><span class="source-pill">{{ cloudDashboard?.generated_from || '连接中' }}</span></div>
             <p v-if="cloudDashboardError" class="dictionary-status dictionary-error">{{ cloudDashboardError }}</p>
             <div v-if="cloudDashboard" class="metric-grid">
               <div class="panel metric-card"><span class="metric-icon"><CheckCircle2 :size="18" /></span><small>云端答题</small><strong>{{ cloudDashboard.exam.attempted_questions }}</strong><span>{{ cloudDashboard.exam.accuracy_percent === null ? '暂无记录' : '正确率 ' + cloudDashboard.exam.accuracy_percent + '%' }}</span></div>
@@ -1797,7 +1797,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             </div>
           </section>
           <section class="progress-dashboard">
-            <div class="section-heading"><div><div class="section-kicker">YOUR DAILY MOMENTUM</div><h2>今日进度</h2></div><span class="section-index">{{ completedMinutes }} / {{ dailyGoalMinutes }} 分钟</span></div>
+            <div class="section-heading"><div><h2>今日进度</h2></div></div>
             <div class="progress-overview">
               <div class="panel daily-progress-panel">
                 <div class="progress-title"><span class="metric-icon"><Target :size="18" /></span><div><strong>每日学习目标</strong><small>目标 {{ dailyGoalMinutes }} 分钟</small></div><b>{{ dailyPercent }}%</b></div>
@@ -1815,7 +1815,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             </div>
           </section>
           <section class="progress-dashboard">
-            <div class="section-heading"><div><div class="section-kicker">MEASURE WHAT MATTERS</div><h2>学习成果一览</h2></div><button class="text-link" @click="navigate('exam')">查看考试记录 <ArrowRight :size="14" /></button></div>
+            <div class="section-heading"><div><h2>学习成果一览</h2></div><button class="text-link" @click="navigate('exam')">查看考试记录 <ArrowRight :size="14" /></button></div>
             <div class="metric-grid">
               <div class="panel metric-card"><span class="metric-icon"><CheckCircle2 :size="18" /></span><small>累计答题</small><strong>{{ totalAnswered }}</strong><span>道题</span></div>
               <div class="panel metric-card"><span class="metric-icon"><Target :size="18" /></span><small>总体正确率</small><strong>{{ overallAccuracy === null ? '—' : overallAccuracy + '%' }}</strong><span>{{ overallAccuracy === null ? '记录首次练习后显示' : totalCorrect + ' 道答对' }}</span></div>
@@ -1852,7 +1852,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
 
         <template v-else-if="activeModule === 'exam'">
           <section class="section-block module-page-section">
-            <div class="section-heading"><div><div class="section-kicker">YOUR EXAM ROADMAP</div><h2>选择要准备的考试</h2></div><span class="section-index">EXAM</span></div>
+            <div class="section-heading"><div><h2>选择要准备的考试</h2></div></div>
             <p v-if="tracksLoading" class="dictionary-status">正在读取 D1 中已启用的考试…</p>
             <p v-else-if="tracksError" class="dictionary-status dictionary-error">{{ tracksError }}</p>
             <div class="exam-list">
@@ -1865,7 +1865,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             </div>
 
             <section class="practice-section">
-              <div class="section-heading practice-heading"><div><div class="section-kicker">PRACTICE ROOM</div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2></div></div>
+              <div class="section-heading practice-heading"><div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2></div></div>
               <div class="question-source-filters" role="group" aria-label="题目来源筛选">
                 <button v-for="filter in questionSourceFilters" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" @click="selectQuestionSource(filter.id)">{{ filter.label }}（{{ filter.id === 'official' ? (selectedTrack?.official_question_count || 0) : (selectedTrack?.prediction_question_count || 0) }}）</button>
               </div>
@@ -1948,7 +1948,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               </div>
             </section>
             <section class="section-block mock-exam-section">
-              <div class="section-heading"><div><div class="section-kicker">TIMED MOCK EXAM</div><h2>限时模拟考试</h2><p>共 60 题，限时 120 分钟。</p></div><span class="source-pill">A 48 题 · B 12 题</span></div>
+              <div class="section-heading"><div><h2>限时模拟考试</h2><p>共 60 题，限时 120 分钟。</p></div><span class="source-pill">A 48 题 · B 12 题</span></div>
               <div v-if="!mockStarted && !mockSubmitted" class="panel practice-start-card">
                 <div class="practice-start-icon"><Clock3 :size="25" /></div><h3>模拟真实考试节奏</h3>
                 <p>当前题库有 {{ selectedTrack?.question_count || 0 }} 道可用题目。正式模拟固定 60 题、每题 2 分、满分 120 分、限时 120 分钟；题量不足时不会用重复题补足。</p>
@@ -2000,7 +2000,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               </div>
             </section>
             <section class="exam-performance">
-              <div class="section-heading"><div><div class="section-kicker">YOUR SCORE HISTORY</div><h2>正确率与历史成绩</h2></div><button class="primary-button" @click="addExamRecord"><PlusCircle :size="16" /> 记录一次练习成绩</button></div>
+              <div class="section-heading"><div><h2>正确率与历史成绩</h2></div><button class="primary-button" @click="addExamRecord"><PlusCircle :size="16" /> 记录一次练习成绩</button></div>
               <div class="metric-grid">
                 <div class="panel metric-card"><span class="metric-icon"><CheckCircle2 :size="18" /></span><small>累计答题</small><strong>{{ totalAnswered }}</strong><span>道题</span></div>
                 <div class="panel metric-card"><span class="metric-icon"><Target :size="18" /></span><small>总体正确率</small><strong>{{ overallAccuracy === null ? '—' : overallAccuracy + '%' }}</strong><span>{{ overallAccuracy === null ? '暂无成绩，记录后自动计算' : totalCorrect + ' 道答对' }}</span></div>
@@ -2030,7 +2030,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
 
         <template v-else-if="activeModule === 'practical'">
           <section class="section-block module-page-section">
-            <div class="section-heading"><div><div class="section-kicker">PRACTICAL SECURITY LAB</div><h2>把知识用在真实工作情境里</h2></div><span class="section-index">{{ scenarios.length }} 个情境</span></div>
+            <div class="section-heading"><div><h2>把知识用在真实工作情境里</h2></div></div>
             <div class="panel practice-start-card">
               <div class="section-heading"><div><h3>选择训练方向</h3></div></div>
               <div class="exam-list">
@@ -2115,7 +2115,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <div v-if="languagePracticeRevealed" class="language-practice-revealed-sentence">
                   <div class="sentence-highlight-legend" role="note" aria-label="句子高亮图例"><span class="sentence-legend-vocabulary"><i aria-hidden="true"></i>单词 / 短语</span><span class="sentence-legend-grammar"><i aria-hidden="true"></i>语法结构</span></div>
                   <h4 class="language-sentence"><span v-for="(part, index) in sentenceParts(languagePracticeCard)" :key="index" :class="part.type ? 'sentence-highlight-' + part.type : ''" :title="part.detail">{{ part.text }}</span></h4>
-                  
+
                   <p v-if="languagePracticeCard.reading" class="language-reading">{{ languagePracticeCard.reading }}</p>
                   <div class="language-speech-actions"><button type="button" class="play-button" @click="speakLanguageCard(languagePracticeCard, false, true)"><Volume2 :size="16" /> 播放原文</button><button v-if="languagePracticeCard.example" type="button" class="play-button" @click="speakLanguageCard(languagePracticeCard, true, true)"><Volume2 :size="16" /> 播放例句</button></div>
                   <div v-if="speechStatus && speechStatusTarget.startsWith('language-practice:' + languagePracticeCard.id + ':')" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button type="button" class="text-link" @click="testAudioOutput">测试设备声音</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
@@ -2227,13 +2227,13 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               <button v-if="searchText" class="clear-search" @click="clearDictionarySearch">清空</button>
               <button class="dictionary-search-button" :disabled="dictionaryLoading" @click="lookupDictionary">{{ dictionaryLoading ? '查找中…' : '查词' }}</button>
             </div>
-            
+
             <p v-if="dictionaryLoading" class="dictionary-status">正在查词…</p>
             <p v-else-if="dictionaryError" class="dictionary-status dictionary-error">{{ dictionaryError }} <button type="button" class="text-link" @click="lookupDictionary">重试</button></p>
             <div v-if="!searchText.trim() && !dictionaryLoading" class="dictionary-quick-start"><span>试试查询</span><button @click="quickDictionarySearch('hello', 'en')">hello <small>英语</small></button><button @click="quickDictionarySearch('こんにちは', 'ja')">こんにちは <small>日语</small></button><button @click="quickDictionarySearch('認証', 'it')">認証 <small>IT</small></button><button @click="quickDictionarySearch('ハッシュ', 'it')">ハッシュ <small>安全</small></button><button @click="quickDictionarySearch('API', 'it')">API <small>接口</small></button><button @click="quickDictionarySearch('トランザクション', 'it')">トランザクション <small>数据库</small></button><button @click="quickDictionarySearch('CORS', 'it')">CORS <small>跨域</small></button><button @click="quickDictionarySearch('コンポーネント', 'it')">コンポーネント <small>前端</small></button><button @click="quickDictionarySearch('Cloudflare D1', 'it')">Cloudflare D1 <small>云数据库</small></button><button @click="quickDictionarySearch('プルリクエスト', 'it')">プルリクエスト <small>Git协作</small></button></div>
           </section>
           <section class="section-block">
-            <div class="section-heading"><div><div class="section-kicker">ENGLISH PRONUNCIATION</div><h2>英日词典与 IT 术语</h2></div><span class="section-index">{{ displayedEntries.length }} 个结果</span></div>
+            <div class="section-heading"><div><h2>英日词典与 IT 术语</h2></div></div>
             <div class="dictionary-list">
               <article v-for="entry in displayedEntries" :key="entry.term + (entry.tag || '') + (entry.en || '')" class="dictionary-card">
                 <div class="dict-main">
@@ -2252,7 +2252,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
           </section>
           </template>
           <section v-if="dictionaryView === 'saved'" class="section-block saved-vocabulary-block">
-            <div class="section-heading"><div><div class="section-kicker">MY WORDS</div><h2>个人生词本</h2></div><span class="section-index">{{ savedWords.length }} 个收藏</span></div>
+            <div class="section-heading"><div><h2>个人生词本</h2></div></div>
             <div v-if="savedVocabularyEntries.length" class="saved-vocabulary-list">
               <article v-for="entry in savedVocabularyEntries" :key="entry.term" class="saved-vocabulary-row">
                 <div class="saved-vocabulary-copy"><strong>{{ entry.term }}</strong><small v-if="entry.reading">{{ entry.reading }}</small><p v-if="entry.en">英语释义：{{ entry.en }}</p><p v-if="entry.translationJa">日语辅助理解：{{ entry.translationJa }}</p></div>
