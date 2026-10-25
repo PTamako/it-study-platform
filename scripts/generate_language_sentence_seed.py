@@ -384,7 +384,12 @@ def validate_annotation_rules():
     assert not any(hit["term"] in {"です", "か"} and hit["type"] == "vocabulary" for hit in japanese), "Polite ending/particle must not be vocabulary highlights"
     assert any(hit["term"].casefold() == "whose umbrella" and hit["type"] == "grammar" for hit in english), "English example must identify whose + noun"
     assert any(hit["term"].casefold() == "this" and hit["type"] == "vocabulary" for hit in english), "English example must highlight meaningful vocabulary"
+    false_positive = make_hits("Thisness is rare.", "en")
+    assert not any(hit["type"] == "vocabulary" and hit["term"].casefold() == "this" for hit in false_positive), "English vocabulary must not match inside a longer word"
     for language, sentence, hits in (("ja", "これ誰の傘ですか？", japanese), ("en", "Whose umbrella is this?", english)):
+        assert len(hits) <= 8, language + " must respect the highlight limit"
+        assert sum(hit["type"] == "vocabulary" for hit in hits) <= 4, language + " should not overfill vocabulary highlights"
+        assert sum(hit["type"] == "grammar" for hit in hits) <= 4, language + " should not overfill grammar highlights"
         for hit in hits:
             assert sentence[hit["start"]:hit["end"]] == hit["term"], language + " highlight offset mismatch"
         ordered = sorted(hits, key=lambda hit: hit["start"])
