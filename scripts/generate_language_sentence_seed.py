@@ -299,14 +299,18 @@ EN_GRAMMAR = [
 
 @lru_cache(maxsize=100000)
 def make_hits(sentence, lang):
-    """Select context-aware spans with deterministic overlap resolution."""
+    """Find meaningful, context-aware spans with language-specific boundaries and balanced coverage."""
     vocab = JP_VOCAB if lang == "ja" else EN_VOCAB
     grammar = JP_GRAMMAR if lang == "ja" else EN_GRAMMAR
     candidates = []
+
+    # Structural rules are ordered from specific constructions to broad patterns.
+    # Earlier rules therefore win when spans have equal length and start position.
     for rule_index, (pattern, meaning, explanation) in enumerate(grammar):
         for match in re.finditer(pattern, sentence, re.I if lang == "en" else 0):
             term = match.group()
-            # Particles receive context-specific explanations; polite endings remain grammar, never vocabulary.
+            if not term.strip():
+                continue
             if lang == "ja" and term in {"か", "の", "は", "が", "を", "に", "で", "と", "へ"}:
                 particle_notes = {
                     "か": ("句末助词「か」：疑问", "放在句末标记疑问；若前面是「です」，两者合起来构成礼貌疑问「ですか」。"),
@@ -320,37 +324,56 @@ def make_hits(sentence, lang):
                     "へ": ("助词「へ」：方向", "标记动作前往的方向或目的地。"),
                 }
                 meaning, explanation = particle_notes[term]
-            candidates.append({"start": match.start(), "end": match.end(), "type": "grammar",
+            candidates.append({
+                "start": match.start(), "end": match.end(), "type": "grammar",
                 "term": term, "meaning": meaning, "explanation": explanation,
                 "rule_id": ("ja" if lang == "ja" else "en") + ".grammar." + str(rule_index + 1),
-                "confidence": "rule"})
+                "confidence": "rule", "rule_priority": len(grammar) - rule_index,
+            })
+
     for rule_index, (term, meaning, explanation) in enumerate(vocab):
         if lang == "ja" and (len(term) < 2 or term in {"です", "ます", "でした", "ました", "ください"}):
             continue
-        for match in re.finditer(re.escape(term), sentence, re.I if lang == "en" else 0):
-            candidates.append({"start": match.start(), "end": match.end(), "type": "vocabulary",
+        # English lexicon entries must match whole words/phrases, never substrings
+        # such as "he" inside "the" or "art" inside "party".
+        pattern = re.escape(term)
+        if lang == "en":
+            pattern = r"(?<![A-Za-z])" + pattern + r"(?![A-Za-z])"
+        for match in re.finditer(pattern, sentence, re.I if lang == "en" else 0):
+            candidates.append({
+                "start": match.start(), "end": match.end(), "type": "vocabulary",
                 "term": match.group(), "meaning": meaning, "explanation": explanation,
                 "rule_id": ("ja" if lang == "ja" else "en") + ".vocab." + str(rule_index + 1),
-                "confidence": "lexicon"})
-    # Earlier spans win; at the same position, the longer and more structural span wins.
-    candidates.sort(key=lambda item: (item["start"], -(item["end"] - item["start"]),
-                                      0 if item["type"] == "grammar" else 1))
-    hits = []
-    for item in candidates:
-        if any(item["start"] < old["end"] and item["end"] > old["start"] for old in hits):
-            continue
-        hits.append(item)
-    limited = hits[:8]
-    for kind in ("vocabulary", "grammar"):
-        if not any(item["type"] == kind for item in limited):
-            candidate = next((item for item in hits if item["type"] == kind), None)
-            if candidate:
-                if len(limited) >= 8:
-                    limited[-1] = candidate
-                else:
-                    limited.append(candidate)
-    return sorted(limited, key=lambda item: (item["start"], -(item["end"] - item["start"])))
+                "confidence": "lexicon", "rule_priority": len(vocab) - rule_index,
+            })
 
+    # Resolve overlaps by preferring complete phrases, then specific rules, then grammar
+    # over vocabulary only when both spans are otherwise equally strong.
+    candidates.sort(key=lambda item: (
+        item["start"], -(item["end"] - item["start"]),
+        -item["rule_priority"], 0 if item["type"] == "grammar" else 1,
+    ))
+    non_overlapping = []
+    for item in candidates:
+        if any(item["start"] < old["end"] and item["end"] > old["start"] for old in non_overlapping):
+            continue
+        non_overlapping.append(item)
+
+    # Avoid filling the card with particles or one annotation type. Keep at most four
+    # vocabulary and four grammar highlights, then fill unused slots by span quality.
+    selected = []
+    for kind in ("vocabulary", "grammar"):
+        kind_hits = [item for item in non_overlapping if item["type"] == kind]
+        selected.extend(kind_hits[:4])
+    selected_ids = {(item["start"], item["end"], item["type"], item["term"]) for item in selected}
+    for item in non_overlapping:
+        if len(selected) >= 8:
+            break
+        identity = (item["start"], item["end"], item["type"], item["term"])
+        if identity not in selected_ids:
+            selected.append(item)
+            selected_ids.add(identity)
+    return sorted(selected, key=lambda item: (item["start"], -(item["end"] - item["start"])))
 
 def validate_annotation_rules():
     japanese = make_hits("これ誰の傘ですか？", "ja")
@@ -361,7 +384,12 @@ def validate_annotation_rules():
     assert not any(hit["term"] in {"です", "か"} and hit["type"] == "vocabulary" for hit in japanese), "Polite ending/particle must not be vocabulary highlights"
     assert any(hit["term"].casefold() == "whose umbrella" and hit["type"] == "grammar" for hit in english), "English example must identify whose + noun"
     assert any(hit["term"].casefold() == "this" and hit["type"] == "vocabulary" for hit in english), "English example must highlight meaningful vocabulary"
+    false_positive = make_hits("Thisness is rare.", "en")
+    assert not any(hit["type"] == "vocabulary" and hit["term"].casefold() == "this" for hit in false_positive), "English vocabulary must not match inside a longer word"
     for language, sentence, hits in (("ja", "これ誰の傘ですか？", japanese), ("en", "Whose umbrella is this?", english)):
+        assert len(hits) <= 8, language + " must respect the highlight limit"
+        assert sum(hit["type"] == "vocabulary" for hit in hits) <= 4, language + " should not overfill vocabulary highlights"
+        assert sum(hit["type"] == "grammar" for hit in hits) <= 4, language + " should not overfill grammar highlights"
         for hit in hits:
             assert sentence[hit["start"]:hit["end"]] == hit["term"], language + " highlight offset mismatch"
         ordered = sorted(hits, key=lambda hit: hit["start"])
