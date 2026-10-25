@@ -144,8 +144,9 @@ test('speech UI schedules its diagnostic tone only after iOS AudioContext is run
   assert.match(app, /Schedule the tone only AFTER the context is running/)
   assert.match(app, /oscillator\.frequency\.setValueAtTime\(880, now\)/)
   assert.match(app, /oscillator\.start\(now \+ 0\.03\)/)
-  assert.match(app, /@click="testAudioOutput">测试设备声音/)
-  assert.match(app, /此结果仍不能证明语音合成正常/)
+  assert.match(app, /@click="testAudioOutput">试听设备声音/)
+  assert.match(app, /已播放试听音，请确认是否听到/)
+  assert.doesNotMatch(app, /AudioContext=running|此结果仍不能证明语音合成正常/)
 })
 
 test('production UI does not expose preview demo mode or seeded sample sentences', () => {
