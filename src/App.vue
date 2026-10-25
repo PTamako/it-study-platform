@@ -1575,23 +1575,23 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
         <div class="breadcrumb"><span>我的空间</span><ChevronRight :size="14" /><strong>{{ activeModule === 'home' ? '学习首页' : currentInfo.title }}</strong></div>
         <div class="top-actions">
           <button class="auth-logout" type="button" @click="logout" aria-label="退出登录">退出登录</button>
-          <button class="icon-button mobile-menu-button" @click="showMobileMenu = !showMobileMenu" :aria-label="showMobileMenu ? '关闭菜单' : '打开菜单'"><X v-if="showMobileMenu" :size="19" /><Menu v-else :size="19" /></button>
+          <button class="icon-button mobile-menu-button" @click="showMobileMenu = !showMobileMenu" :aria-label="showMobileMenu ? '关闭菜单' : '打开菜单'" :aria-expanded="showMobileMenu" aria-controls="mobile-nav-list"><X v-if="showMobileMenu" :size="19" /><Menu v-else :size="19" /></button>
         </div>
       </header>
 
-      <div v-if="showMobileMenu" class="mobile-nav">
-        <button @click="navigate('home')">学习首页</button>
-        <button v-for="item in modules" :key="item.id" @click="navigate(item.id)">{{ item.title }}</button>
-      </div>
+      <nav v-if="showMobileMenu" id="mobile-nav-list" class="mobile-nav" aria-label="主导航">
+        <button type="button" :class="{ active: activeModule === 'home' }" :aria-current="activeModule === 'home' ? 'page' : undefined" @click="navigate('home')">学习首页</button>
+        <button v-for="item in modules" :key="item.id" type="button" :class="{ active: activeModule === item.id }" :aria-current="activeModule === item.id ? 'page' : undefined" @click="navigate(item.id)">{{ item.title }}</button>
+      </nav>
 
       <div class="content-wrap">
         <section class="welcome-row">
           <div>
-            <div class="eyebrow"><span class="eyebrow-dot"></span> YOUR PERSONAL LEARNING SPACE</div>
+            
             <h1>{{ currentInfo.title }}</h1>
             <p class="welcome-subtitle">{{ currentInfo.subtitle }}</p>
           </div>
-          <div class="date-pill"><span class="date-dot"></span> 今天也为自己留一点时间</div>
+          
         </section>
 
         <template v-if="activeModule === 'home'">
