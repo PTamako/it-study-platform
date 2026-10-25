@@ -130,8 +130,8 @@ test('every dictionary result and saved word exposes both English and Japanese p
   assert.ok(dictionaryResults.includes('@click="speakDictionaryJapanese(entry)"'))
   assert.equal(dictionaryResults.includes('v-if="entry.englishTerm || entry.language === \'en\'"'), false)
   assert.equal(dictionaryResults.includes('v-else-if="entry.reading || entry.language === \'ja\'"'), false)
-  assert.match(dictionaryResults, /aria-label="播放英语辅助读音：/)
-  assert.match(dictionaryResults, /aria-label="播放日语辅助读音：/)
+  assert.match(dictionaryResults, /aria-label="'播放英语发音：/)
+  assert.match(dictionaryResults, /aria-label="'播放日语辅助读音：/)
 })
 
 test('production speech UI contains no device-audio diagnostic controls', () => {
@@ -156,11 +156,11 @@ test('saved dictionary changes update local state only after the cloud confirms 
   assert.match(handler, /savedWordRequests\.delete\(term\)/)
 })
 
-test('dictionary terms without a saved entry snapshot are explicitly local-only', () => {
+test('dictionary terms without a saved entry snapshot show a concise actionable message', () => {
   const start = app.indexOf('async function toggleSaved(term: string)')
   const end = app.indexOf('async function lookupDictionary()', start)
   const handler = app.slice(start, end)
-  assert.match(handler, /if \(!entry\) \{[\s\S]*?仅保存在本设备[\s\S]*?return/)
+  assert.match(handler, /if \(!entry\) \{[\s\S]*?请先查询到完整词条，再收藏以同步到生词本。[\s\S]*?return/)
 })
 
 test('saved dictionary removal does not discard local state before the cloud confirms deletion', () => {
