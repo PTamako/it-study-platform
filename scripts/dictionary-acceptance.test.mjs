@@ -134,19 +134,8 @@ test('every dictionary result and saved word exposes both English and Japanese p
   assert.match(dictionaryResults, /缺少假名时会提示/)
 })
 
-test('speech UI schedules its diagnostic tone only after iOS AudioContext is running', () => {
-  assert.match(app, /function testAudioOutput\(\)/)
-  assert.match(app, /window\.AudioContext/)
-  assert.match(app, /webkitAudioContext\?: typeof AudioContext/)
-  assert.match(app, /new AudioContextConstructor\(\)/)
-  assert.match(app, /const resumePromise = context\.resume\(\)/)
-  assert.match(app, /if \(context\.state !== 'running'\)/)
-  assert.match(app, /Schedule the tone only AFTER the context is running/)
-  assert.match(app, /oscillator\.frequency\.setValueAtTime\(880, now\)/)
-  assert.match(app, /oscillator\.start\(now \+ 0\.03\)/)
-  assert.match(app, /@click="testAudioOutput">试听设备声音/)
-  assert.match(app, /已播放试听音，请确认是否听到/)
-  assert.doesNotMatch(app, /AudioContext=running|此结果仍不能证明语音合成正常/)
+test('production speech UI contains no device-audio diagnostic controls', () => {
+  assert.doesNotMatch(app, /testAudioOutput|试听设备声音|AudioContext=running|此结果仍不能证明语音合成正常/)
 })
 
 test('production UI does not expose preview demo mode or seeded sample sentences', () => {
