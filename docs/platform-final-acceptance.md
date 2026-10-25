@@ -130,3 +130,16 @@
 - [x] 限时模拟考试题目补齐「日语语音读题」、设备声音测试、暂停/继续、停止控制，与普通考试练习和实战训练保持一致。
 - [ ] 需要在 iPhone Safari 实测普通考试练习、限时模拟考试和实战训练：播放、暂停、继续、停止、设备声音测试，以及切换模块后旧语音停止。自动化通过不能替代实际听音验证。
 
+
+
+## 2026-10-25 PR #49 合并后生产验证
+
+- [x] PR #49 `fix: unify speech controls in practical and exam modules` 已合并至主分支；合并提交 `66078ffb3f39b5bc0098b64d797ea9541007949d`。
+- [x] 合并后 Validate 工作流通过：run [40118878264](https://github.com/PTamako/it-study-platform/actions/runs/40118878264)。
+- [x] 合并后 Cloudflare Workers 部署工作流通过：run [40118878293](https://github.com/PTamako/it-study-platform/actions/runs/40118878293)。
+- [x] 部署工作流中的自动化回归测试、类型检查、前端构建、D1 migration 顺序验证、生产健康检查、未登录个人 API 拒绝检查及日英语料结构检查全部成功。
+- [ ] iPhone Safari 仍需真实听音验证：普通考试练习、限时模拟考试、实战训练的播放/暂停/继续/停止、设备声音测试和模块切换停止旧语音。
+- [ ] iPhone Safari 窄屏 320–390 CSS px 下，退出登录与菜单按钮不重叠且分别可点，仍需用户确认。
+- [ ] 桌面 Chrome/Safari 与语音异常边界仍未完成真实设备验收。
+
+> 结论：PR #49 的代码验证和生产自动化部署已通过；由于真实设备语音与窄屏交互尚未完成，本项目不能标记为“全平台完全验收通过”。
