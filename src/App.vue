@@ -795,92 +795,6 @@ type LanguageCard = {
   example_source_url?: string; source_url?: string; source_type: string; content_type?: string;
   highlight_json?: string; vocabulary_expansion_json?: string; grammar_expansion_json?: string
 }
-const previewDemoMode = new URLSearchParams(window.location.search).get('demo') === '1'
-const previewLanguageFixtures: LanguageCard[] = [
-  {
-    id: 'demo-ja-daily-001', language: 'ja', category: '日常句子',
-    term: 'もう一度説明していただけますか。',
-    reading: 'もういちど せつめいしていただけますか。',
-    meaning_zh: '可以请您再解释一次吗？',
-    explanation: '礼貌地请求对方重复说明，适合日常沟通与不确定时使用。',
-    example: 'すみません、もう一度説明していただけますか。',
-    example_meaning_zh: '不好意思，可以请您再解释一次吗？',
-    source_type: 'preview-demo', content_type: 'sentence',
-    highlight_json: JSON.stringify([
-      { start: 0, end: 4, type: 'vocabulary', term: 'もう一度', meaning: '再一次', explanation: '用于请求重复动作。' },
-      { start: 6, end: 15, type: 'grammar', term: '〜ていただけますか', meaning: '可以请您……吗', explanation: '使用「て形＋いただけますか」委婉请求对方做某事。' },
-    ]),
-    vocabulary_expansion_json: JSON.stringify([
-      { term: 'もう一度', meaning: '再一次', explanation: '用于请对方重复说明、确认或操作。' },
-    ]),
-    grammar_expansion_json: JSON.stringify([
-      { term: '〜ていただけますか', meaning: '可以请您……吗', explanation: '比「〜てください」更委婉，适合对不熟悉的人或职场沟通。' },
-    ]),
-  },
-  {
-    id: 'demo-ja-work-001', language: 'ja', category: '职场语言',
-    term: '確認してから、改めてご連絡します。',
-    reading: 'かくにんしてから、あらためてごれんらくします。',
-    meaning_zh: '确认之后，我会再联系您。',
-    explanation: '适合暂时不能立即答复，需要核实信息后再回复的职场场景。',
-    example: '内容を確認してから、改めてご連絡します。',
-    example_meaning_zh: '确认内容后，我会再联系您。',
-    source_type: 'preview-demo', content_type: 'sentence',
-    highlight_json: JSON.stringify([
-      { start: 0, end: 2, type: 'vocabulary', term: '確認', meaning: '确认后', explanation: '「確認する」是职场常见的核实、确认。' },
-      { start: 10, end: 16, type: 'vocabulary', term: 'ご連絡します', meaning: '联系您', explanation: '「連絡する」加「ご」构成礼貌表达。' },
-      { start: 2, end: 6, type: 'grammar', term: '〜てから', meaning: '做完……之后', explanation: '表示先完成前项动作，再进行后项动作。' },
-    ]),
-    vocabulary_expansion_json: JSON.stringify([
-      { term: '確認する', meaning: '确认、核实', explanation: '常见表达：内容を確認します。' },
-      { term: 'ご連絡します', meaning: '联系您', explanation: '适用于工作邮件、电话及进度沟通。' },
-    ]),
-    grammar_expansion_json: JSON.stringify([
-      { term: '〜てから', meaning: '……之后', explanation: '连接动作的先后顺序，例如「調べてから回答します」。' },
-    ]),
-  },
-  {
-    id: 'demo-en-daily-001', language: 'en', category: '日常句子',
-    term: 'Could you say that one more time?',
-    meaning_zh: '你可以再说一遍吗？',
-    explanation: '自然、礼貌地请求对方重复刚才的话。',
-    example: 'Sorry, could you say that one more time?',
-    example_meaning_zh: '不好意思，你可以再说一遍吗？',
-    source_type: 'preview-demo', content_type: 'sentence',
-    highlight_json: JSON.stringify([
-      { start: 0, end: 13, type: 'grammar', term: 'Could you say', meaning: '你可以……吗', explanation: 'Could you + 动词原形构成自然、礼貌的请求句型。' },
-      { start: 19, end: 32, type: 'vocabulary', term: 'one more time', meaning: '再一次', explanation: '自然表达“再来一次、再说一遍”。' },
-    ]),
-    vocabulary_expansion_json: JSON.stringify([
-      { term: 'Could you…?', meaning: '可以请你……吗？', explanation: '比直接命令更礼貌，适用于日常和工作场景。' },
-      { term: 'one more time', meaning: '再一次', explanation: '可用于请求重复动作或内容。' },
-    ]),
-    grammar_expansion_json: JSON.stringify([
-      { term: 'Could + 主语 + 动词原形', meaning: '礼貌请求句型', explanation: 'could 在此表示委婉请求，后接动词原形。' },
-    ]),
-  },
-  {
-    id: 'demo-en-work-001', language: 'en', category: '职场语言',
-    term: 'I will check the details and get back to you.',
-    meaning_zh: '我会确认具体情况后再回复你。',
-    explanation: '适合需要先确认信息、之后再答复同事或客户的场景。',
-    example: 'Let me check the details and get back to you this afternoon.',
-    example_meaning_zh: '我先确认具体情况，今天下午再回复你。',
-    source_type: 'preview-demo', content_type: 'sentence',
-    highlight_json: JSON.stringify([
-      { start: 7, end: 12, type: 'vocabulary', term: 'check', meaning: '确认、核实', explanation: '工作场景中常用于核实信息。' },
-      { start: 29, end: 44, type: 'vocabulary', term: 'get back to you', meaning: '再回复你', explanation: '自然的职场表达，表示之后联系或回复。' },
-      { start: 0, end: 6, type: 'grammar', term: 'I will', meaning: '我将会', explanation: 'will + 动词原形表示未来动作或承诺。' },
-    ]),
-    vocabulary_expansion_json: JSON.stringify([
-      { term: 'check the details', meaning: '确认具体情况', explanation: '可用于工作任务、订单、计划与资料核对。' },
-      { term: 'get back to you', meaning: '之后回复你', explanation: '比正式的「respond」更口语、自然。' },
-    ]),
-    grammar_expansion_json: JSON.stringify([
-      { term: 'will + 动词原形', meaning: '将会做某事', explanation: '常用于承诺、计划或即时决定。' },
-    ]),
-  },
-]
 const languageCards = ref<LanguageCard[]>([])
 const languageCategories = computed(() => [
   { title: '全部', desc: '全部句子', icon: BookOpen },
@@ -1084,12 +998,7 @@ async function loadLanguageCards() {
   languageCardsLoading.value = true
   languageCardsError.value = ''
   languageCards.value = []
-  if (previewDemoMode) {
-    languageCards.value = previewLanguageFixtures.filter(card => card.language === studyLanguage.value)
-    languageCardsLoading.value = false
-    return
-  }
-  try {
+try {
     const response = await fetch('/api/language-cards?lang=' + encodeURIComponent(studyLanguage.value))
     const data = await response.json() as { items?: LanguageCard[]; error?: string }
     if (!response.ok) throw new Error(data.error || '语言学习内容加载失败')
@@ -1687,26 +1596,22 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
 </script>
 
 <template>
-  <div v-if="previewDemoMode" class="preview-demo-banner" role="status">
-    预览演示模式：使用内置示例句子，不读取或写入云端学习数据。退出演示请移除网址中的 <code>?demo=1</code>。
-  </div>
-  <section v-if="!authReady" class="auth-screen" aria-live="polite">
+<section v-if="!authReady" class="auth-screen" aria-live="polite">
     <div class="auth-card"><div class="auth-mark"><BookOpen :size="28" /></div><h1>知学</h1><p>正在确认登录状态…</p></div>
   </section>
   <section v-else-if="!authenticated" class="auth-screen">
     <form class="auth-card" @submit.prevent="login">
       <div class="auth-mark"><ShieldCheck :size="28" /></div>
-      <p class="auth-eyebrow">PERSONAL STUDY SPACE</p>
-      <h1>欢迎回来</h1>
-      <p class="auth-description">这是你的私人学习空间。登录后才能访问个人统计、答题记录和学习进度。</p>
+          <h1>欢迎回来</h1>
+      
       <label class="auth-label" for="study-password">登录密码</label>
       <input id="study-password" v-model="authPassword" class="auth-input" type="password" autocomplete="current-password" required minlength="1" maxlength="256" placeholder="输入你设置的登录密码" :disabled="authLoading || !authConfigured" />
-      <p v-if="!authConfigured" class="auth-error" role="alert">登录服务尚未配置。请先按免费登录配置文档，在 Cloudflare Worker Secrets 中设置密码和会话密钥。</p>
+      <p v-if="!authConfigured" class="auth-error" role="alert">登录暂不可用，请联系管理员。</p>
       <p v-else-if="authError" class="auth-error" role="alert">{{ authError }}</p>
       <button class="auth-submit" type="submit" :disabled="authLoading || !authConfigured || !authPassword">
         {{ authLoading ? '正在登录…' : '登录学习平台' }}
       </button>
-      <p class="auth-footnote">使用现有 Cloudflare Workers + D1，不需要开通 Zero Trust 或填写付款信息。</p>
+      
     </form>
   </section>
   <div v-else class="app-shell">
@@ -1727,7 +1632,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
           <span class="focus-symbol"><Flame :size="17" /></span>
           <div><strong>每天进步一点点</strong><p>稳定练习，比一次学很多更重要。</p></div>
         </div>
-        <div class="profile-row"><div class="avatar">知</div><div class="profile-text"><strong>我的学习空间</strong><small>个人模式 · 本地体验版</small></div><Menu :size="17" class="muted" /></div>
+        <div class="profile-row"><div class="avatar">知</div><div class="profile-text"><strong>我的学习空间</strong><small>个人学习</small></div><Menu :size="17" class="muted" /></div>
       </div>
     </aside>
 
@@ -1900,7 +1805,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 </template>
               </div>
               <div v-else-if="currentQuestion" class="panel question-card">
-                <div class="question-topline"><span>{{ selectedTrack?.title || '考试练习' }} · 第 {{ quizIndex + 1 }} / {{ quizQuestions.length }} 题 · {{ currentQuestion.exam_section ? '科目' + currentQuestion.exam_section : '题型待复核' }}<template v-if="currentQuestion.exam_section && currentQuestion.exam_section_method !== 'explicit'">（规则推定）</template></span><span class="source-pill">{{ currentQuestion?.source_type === 'generated' ? '预测题库 · 原创' : currentQuestion?.source_type === 'official' ? '历年真题' : '其他题目' }}</span></div>
+                <div class="question-topline"><span>{{ selectedTrack?.title || '考试练习' }} · 第 {{ quizIndex + 1 }} / {{ quizQuestions.length }} 题 · {{ currentQuestion.exam_section ? '科目' + currentQuestion.exam_section : '题型待复核' }}<template v-if="currentQuestion.exam_section && currentQuestion.exam_section_method !== 'explicit'"></template></span><span class="source-pill">{{ currentQuestion?.source_type === 'generated' ? '预测题库 · 原创' : currentQuestion?.source_type === 'official' ? '历年真题' : '其他题目' }}</span></div>
                 <div class="question-progress"><span :style="{ width: ((quizIndex + 1) / quizQuestions.length * 100) + '%' }"></span></div>
                 <div class="question-topic">{{ currentQuestion.topic }}</div>
                 <div class="question-mastery-row">
