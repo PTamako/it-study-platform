@@ -1374,6 +1374,10 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
     return
   }
 
+  // 在用户点击的同步路径上尽早请求媒体播放音频会话，帮助移动 Safari 使用媒体音量路由。
+  // 浏览器不允许网页直接修改系统音量；不支持 Audio Session API 的设备会自动使用系统默认行为。
+  setSpeechAudioSessionType('playback')
+
   // Call speak() synchronously in the click handler. Delaying with setTimeout may lose
   // browser user activation and cause silent playback failures on Safari/iOS.
   const requestId = ++speechRequestId
@@ -1402,6 +1406,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   // Safari/iOS can populate voices asynchronously. Never speak with an unknown OS
   // default voice: wait for voiceschanged, then retry with the requested language.
   if (availableVoices.length === 0) {
+    setSpeechAudioSessionType('auto')
     speechStatus.value = '语音暂不可用，请稍后重试。'
     synthesis.addEventListener('voiceschanged', () => {
       if (synthesis.getVoices().length > 0 && requestId === speechRequestId) {
@@ -1429,6 +1434,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   // If the browser has loaded voices but none for this language, fail visibly rather than
   // silently speaking Japanese text with an English voice (or vice versa).
   if (availableVoices.length > 0 && voices.length === 0) {
+    setSpeechAudioSessionType('auto')
     speechStatus.value = lang === 'ja-JP'
       ? '未检测到日语语音。请在系统语音设置中安装日语语音后重试。'
       : '未检测到英语语音。请在系统语音设置中安装英语语音后重试。'
@@ -1463,7 +1469,6 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   }
 
   // Audio Session API is not available in every Safari version; use it only when present.
-  setSpeechAudioSessionType('playback')
   speechStatus.value = '正在请求播放：' + spokenText
   try {
     synthesis.speak(utterance)
