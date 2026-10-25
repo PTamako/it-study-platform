@@ -1881,7 +1881,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <button class="primary-button" @click="finishMockExam(false)">交卷并查看结果</button>
                 </div>
                 <article v-for="(question, index) in mockQuestions" :key="question.id" class="panel question-card mock-question-card">
-                  <div class="question-topline"><span>第 {{ index + 1 }} / {{ mockQuestions.length }} 题 · 科目{{ question.exam_section }}<template v-if="question.exam_section_method !== 'explicit'">（规则推定）</template> · {{ question.topic }}</span><span class="source-pill">{{ question.source_type === 'generated' ? '预测题库 · 原创' : question.source_type === 'official' ? '历年真题' : '其他题目' }}</span></div>
+                  <div class="question-topline"><span>第 {{ index + 1 }} / {{ mockQuestions.length }} 题 · 科目{{ question.exam_section }} · {{ question.topic }}</span><span class="source-pill">{{ question.source_type === 'generated' ? '预测题库 · 原创' : question.source_type === 'official' ? '历年真题' : '其他题目' }}</span></div>
                   <a v-if="question.source_type === 'official' && question.source_reference" class="language-source" :href="question.source_reference" target="_blank" rel="noreferrer">IPA 官方原卷 ↗</a>
                   <div class="question-prompt-row">
                     <h3 class="question-prompt">{{ question.prompt }}</h3>
