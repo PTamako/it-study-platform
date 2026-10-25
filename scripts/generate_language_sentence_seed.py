@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "migrations/0081_language_sentence_cards.sql"
 OUT_REFRESH = ROOT / "migrations/0082_refresh_language_sentence_annotations.sql"
 OUT_REFRESH_LATEST = ROOT / "migrations/0084_refresh_contextual_bilingual_annotations.sql"
-OUT_REBUILD = ROOT / "migrations/0086_rebuild_contextual_bilingual_sentence_cards.sql"
+OUT_REBUILD = ROOT / "migrations/0087_rebuild_contextual_bilingual_sentence_cards.sql"
 CACHE = Path("/tmp/language-sentence-sources")
 CACHE.mkdir(exist_ok=True)
 SENTENCES_URL = "https://downloads.tatoeba.org/exports/sentences.tar.bz2"
@@ -666,8 +666,9 @@ def main():
         )
     OUT_REFRESH.write_text("\n".join(refresh)+"\n",encoding="utf-8")
     OUT_REFRESH_LATEST.write_text("\n".join(refresh)+"\n",encoding="utf-8")
-    # Rebuild the sentence corpus from the freshly generated dataset, rather than
-    # merely updating annotations in rows seeded by an older algorithm. Preserve
+    # Use a new migration number whenever the generated corpus changes: D1 records applied
+    # migration names and will never rerun an edited 0086. Rebuild from fresh annotations,
+    # rather than merely updating rows seeded by an older algorithm. Preserve
     # per-card mastery before ON DELETE CASCADE removes the old sentence rows.
     rebuild = [
         "-- Rebuild the complete bilingual sentence corpus using the current annotation rules.",
