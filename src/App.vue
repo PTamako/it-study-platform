@@ -1888,7 +1888,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               <div class="question-topline"><span>{{ currentScenario.category }} · {{ currentScenario.difficulty === 'intermediate' ? '中等' : '标准' }}</span><span class="source-pill">{{ currentScenario.source_type === 'official' ? '官方来源' : '平台原创情境' }}</span></div>
               <div class="question-prompt-row">
                 <h3 class="question-prompt">{{ currentScenario.title }}</h3>
-                <button type="button" class="secondary-button question-speak-button" @click="speakScenario(currentScenario)"><Volume2 :size="16" /> 日语语音读题</button>
+                <button type="button" class="secondary-button question-speak-button" @click="speakScenario(currentScenario)" aria-label="日语语音朗读实战情境" title="日语语音朗读实战情境"><Volume2 :size="14" /> 听情境</button>
               </div>
               <div v-if="speechStatus && speechStatusTarget === 'practical:' + currentScenario.id" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
               <p class="scenario-situation">{{ currentScenario.situation }}</p>
