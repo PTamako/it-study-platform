@@ -1749,7 +1749,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <a v-if="currentQuestion.source_type === 'official' && currentQuestion.source_reference" class="language-source" :href="currentQuestion.source_reference" target="_blank" rel="noreferrer">IPA 官方原卷 ↗</a>
                 <div class="question-prompt-row">
                   <h3 class="question-prompt">{{ currentQuestion.prompt }}</h3>
-                  <button type="button" class="secondary-button question-speak-button" @click="speakQuestion(currentQuestion)" aria-label="日语语音读题" title="日语语音读题"><Volume2 :size="14" /> 听题</button>
+                  <button type="button" class="question-speak-button" @click="speakQuestion(currentQuestion)" aria-label="日语朗读题目" title="日语朗读题目"><Volume2 :size="14" /> 听题</button>
                 </div>
                 <div v-if="speechStatus && speechStatusTarget === 'exam:' + currentQuestion.id" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 <div class="question-options">
@@ -1818,7 +1818,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <a v-if="question.source_type === 'official' && question.source_reference" class="language-source" :href="question.source_reference" target="_blank" rel="noreferrer">IPA 官方原卷 ↗</a>
                   <div class="question-prompt-row">
                     <h3 class="question-prompt">{{ question.prompt }}</h3>
-                    <button type="button" class="secondary-button question-speak-button" @click="speakQuestion(question)" aria-label="日语语音读题" title="日语语音读题"><Volume2 :size="14" /> 听题</button>
+                    <button type="button" class="question-speak-button" @click="speakQuestion(question)" aria-label="日语朗读题目" title="日语朗读题目"><Volume2 :size="14" /> 听题</button>
                   </div>
                   <div v-if="speechStatus && speechStatusTarget === 'exam:' + question.id" class="dictionary-speech-controls" role="status" aria-live="polite">
                     <p class="dictionary-status">{{ speechStatus }}</p>
