@@ -6,7 +6,7 @@ const migration = await readFile(new URL('../migrations/0081_language_sentence_c
 const refreshMigration = await readFile(new URL('../migrations/0084_refresh_contextual_bilingual_annotations.sql', import.meta.url), 'utf8')
 const rebuildMigration = await readFile(new URL('../migrations/0086_rebuild_contextual_bilingual_sentence_cards.sql', import.meta.url), 'utf8')
 const refreshStatements = refreshMigration.split('\n').filter(line => /^UPDATE language_cards SET highlight_json = /.test(line))
-const rows = migration.split('\n').filter(line => /^\s*\('(ja|en)-sentence-/.test(line))
+const rows = rebuildMigration.split('\n').filter(line => /^\s*\('(ja|en)-sentence-/.test(line))
 const ja = rows.filter(line => /^\s*\('ja-sentence-/.test(line))
 const en = rows.filter(line => /^\s*\('en-sentence-/.test(line))
 
