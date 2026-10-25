@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   BookOpen, Languages, Search, GraduationCap,
-  ChevronRight, Sparkles, Clock3, Flame, Bookmark, Volume2, ArrowRight,
+  ChevronRight, ChevronDown, Sparkles, Clock3, Flame, Bookmark, Volume2, ArrowRight,
   ShieldCheck, BookMarked, Menu, X, CheckCircle2, Target, TrendingUp, ListChecks, PlusCircle,
 } from 'lucide-vue-next'
 
@@ -1983,7 +1983,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <span>连续记住 {{ languageReviews.find(item => item.card_id === languagePracticeCard?.id)?.correct_streak || 0 }} 次</span>
                 </div>
                 <div class="language-practice-actions">
-                  <button class="secondary-button" @click="languagePracticeRevealed = !languagePracticeRevealed">{{ languagePracticeRevealed ? '隐藏原句' : '显示原句与解析' }}</button>
+                  <button type="button" class="language-reveal-button" :aria-expanded="languagePracticeRevealed" @click="languagePracticeRevealed = !languagePracticeRevealed"><span>{{ languagePracticeRevealed ? '收起原句与解析' : '查看原句与解析' }}</span><ChevronDown :size="16" :class="{ rotated: languagePracticeRevealed }" aria-hidden="true" /></button>
                   <button class="primary-button" @click="nextLanguagePractice">跳过 <ArrowRight :size="15" /></button>
                   <button class="language-review-again" :disabled="languageReviewBusy === languagePracticeCard.id" @click="submitLanguageReview('again')">还不熟 · 稍后再练</button>
                   <button class="language-review-remembered" :disabled="languageReviewBusy === languagePracticeCard.id" @click="submitLanguageReview('remembered')">记住了 · 安排复习</button>
