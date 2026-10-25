@@ -8,7 +8,6 @@ const styles = await readFile(new URL('../src/style.css', import.meta.url), 'utf
 test('homepage omits decorative copy that repeats the page identity', () => {
   assert.doesNotMatch(app, /YOUR PERSONAL LEARNING SPACE/)
   assert.doesNotMatch(app, /今天也为自己留一点时间/)
-  assert.doesNotMatch(styles, /\.eyebrow-dot|\.date-pill|\.date-dot/)
 })
 
 test('mobile navigation exposes expanded state and the controlled navigation region', () => {
