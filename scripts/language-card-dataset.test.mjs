@@ -6,7 +6,7 @@ const migration = await readFile(new URL('../migrations/0081_language_sentence_c
 const refreshMigration = await readFile(new URL('../migrations/0084_refresh_contextual_bilingual_annotations.sql', import.meta.url), 'utf8')
 const rebuildMigration = await readFile(new URL('../migrations/0086_rebuild_contextual_bilingual_sentence_cards.sql', import.meta.url), 'utf8')
 const refreshStatements = refreshMigration.split('\n').filter(line => /^UPDATE language_cards SET highlight_json = /.test(line))
-const rows = migration.split('\n').filter(line => /^\s*\('(ja|en)-sentence-/.test(line))
+const rows = rebuildMigration.split('\n').filter(line => /^\s*\('(ja|en)-sentence-/.test(line))
 const ja = rows.filter(line => /^\s*\('ja-sentence-/.test(line))
 const en = rows.filter(line => /^\s*\('en-sentence-/.test(line))
 
@@ -97,6 +97,16 @@ test('every sentence card has usable translations, grounded highlights, and voca
     const vocabulary = JSON.parse(vocabularyJson)
     const grammar = JSON.parse(grammarJson)
     assert.ok(Array.isArray(highlights), id + ': highlights must be an array')
+    assert.ok(highlights.length <= 8, id + ': highlight count must stay readable (max 8)')
+    assert.ok(highlights.filter(hit => hit.type === 'vocabulary').length <= 4, id + ': vocabulary highlights must not exceed 4')
+    assert.ok(highlights.filter(hit => hit.type === 'grammar').length <= 4, id + ': grammar highlights must not exceed 4')
+    if (language === 'en') {
+      for (const hit of highlights.filter(item => item.type === 'vocabulary')) {
+        const before = sentence[hit.start - 1] || ''
+        const after = sentence[hit.end] || ''
+        assert.ok(!/[A-Za-z]/.test(before) && !/[A-Za-z]/.test(after), id + ': English vocabulary highlight must not match inside a larger word: ' + hit.term)
+      }
+    }
     assert.ok(highlights.some(hit => hit.type === 'vocabulary'), id + ': must have a vocabulary highlight')
     assert.ok(highlights.some(hit => hit.type === 'grammar'), id + ': must have a grammar/structure highlight')
     assert.ok(vocabulary.length > 0, id + ': vocabulary expansion must not be empty')

@@ -365,14 +365,9 @@ def make_hits(sentence, lang):
     for kind in ("vocabulary", "grammar"):
         kind_hits = [item for item in non_overlapping if item["type"] == kind]
         selected.extend(kind_hits[:4])
-    selected_ids = {(item["start"], item["end"], item["type"], item["term"]) for item in selected}
-    for item in non_overlapping:
-        if len(selected) >= 8:
-            break
-        identity = (item["start"], item["end"], item["type"], item["term"])
-        if identity not in selected_ids:
-            selected.append(item)
-            selected_ids.add(identity)
+    # Do not refill unused slots from a type that has already reached its cap.
+    # A card may have fewer than eight highlights when one annotation type has
+    # fewer matches; readability and the per-type limits take precedence.
     return sorted(selected, key=lambda item: (item["start"], -(item["end"] - item["start"])))
 
 def validate_annotation_rules():
