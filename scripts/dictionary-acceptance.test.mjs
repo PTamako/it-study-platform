@@ -6,8 +6,8 @@ const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
 const worker = await readFile(new URL('../worker/index.ts', import.meta.url), 'utf8')
 
 test('English dictionary results always expose a separate Japanese-aid player', () => {
-  assert.match(app, /title="播放英语原音；缺少对应词时会提示"/)
-  assert.match(app, /title="播放日语辅助读音；缺少假名时会提示"/)
+  assert.match(app, /title="播放英语发音"/)
+  assert.match(app, /title="播放日语辅助读音"/)
   assert.match(app, /title: '英日发音与 IT 术语'/)
   assert.match(app, /function speakDictionaryEnglish\(entry: DictionaryEntry\)/)
   assert.match(app, /function speakDictionaryJapanese\(entry: DictionaryEntry\)/)
@@ -90,15 +90,15 @@ test('speech requests media playback audio session when the browser supports it'
 })
 
 test('speech never uses the operating system default voice before language voices load', () => {
-  assert.match(app, /if \(availableVoices\.length === 0\) \{[\s\S]*?系统语音列表尚未加载，暂未播放/)
+  assert.match(app, /if \(availableVoices\.length === 0\) \{[\s\S]*?语音暂不可用，请稍后重试/)
   assert.match(app, /synthesis\.addEventListener\('voiceschanged'/)
-  assert.match(app, /系统语音已就绪，请再次点击播放/)
+  assert.match(app, /语音已就绪，请再次点击播放/)
   assert.match(app, /availableVoices\.length > 0 && voices\.length === 0/)
   assert.match(app, /exactLanguageVoices\.find\(candidate => candidate\.localService/)
-  assert.match(app, /播放请求已结束/)
-  assert.match(app, /着信音与通知音量及静音状态/)
-  assert.match(app, /此状态不代表已确认听到声音/)
-  assert.match(app, /语音：浏览器自动选择/)
+  assert.match(app, /播放完成。/)
+  assert.doesNotMatch(app, /着信音与通知音量及静音状态/)
+  assert.doesNotMatch(app, /此状态不代表已确认听到声音/)
+  assert.doesNotMatch(app, /语音：浏览器自动选择/)
 })
 
 test('speech stops when leaving a module or switching exam/practical content', () => {
@@ -130,8 +130,8 @@ test('every dictionary result and saved word exposes both English and Japanese p
   assert.ok(dictionaryResults.includes('@click="speakDictionaryJapanese(entry)"'))
   assert.equal(dictionaryResults.includes('v-if="entry.englishTerm || entry.language === \'en\'"'), false)
   assert.equal(dictionaryResults.includes('v-else-if="entry.reading || entry.language === \'ja\'"'), false)
-  assert.match(dictionaryResults, /缺少对应词时会提示/)
-  assert.match(dictionaryResults, /缺少假名时会提示/)
+  assert.match(dictionaryResults, /aria-label="播放英语辅助读音：/)
+  assert.match(dictionaryResults, /aria-label="播放日语辅助读音：/)
 })
 
 test('production speech UI contains no device-audio diagnostic controls', () => {
