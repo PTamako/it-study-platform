@@ -507,3 +507,211 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+
+/* Final responsive polish: clearer action hierarchy and touch-friendly controls. */
+:root {
+  --control-height: 44px;
+  --control-radius: 11px;
+}
+button:disabled,
+button[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: .58;
+  transform: none !important;
+  box-shadow: none;
+}
+.primary-button {
+  min-height: var(--control-height);
+  padding: 11px 17px;
+  gap: 9px;
+  border-radius: var(--control-radius);
+  font-size: 13px;
+  line-height: 1.35;
+}
+.play-button {
+  min-height: var(--control-height);
+  padding: 10px 13px;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.text-link {
+  min-height: 38px;
+  padding: 8px 4px;
+  font-size: 12px;
+}
+.round-action {
+  width: 40px;
+  min-width: 40px;
+  min-height: 40px;
+}
+.icon-button {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+}
+.auth-logout {
+  min-height: 40px;
+  padding: 0 14px;
+  font-size: 12px;
+}
+.mobile-nav button {
+  min-height: 46px;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+.module-card>p {
+  font-size: 11px;
+  line-height: 1.65;
+}
+.module-card-foot {
+  font-size: 10px;
+}
+.search-box {
+  min-width: 0;
+}
+.search-box input {
+  min-width: 0;
+  font-size: 14px;
+}
+.dictionary-search-button {
+  min-height: 42px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 12px;
+}
+.language-choice,
+.language-category-filter,
+.language-mastery-filter,
+.question-actions,
+.question-category-filters,
+.dictionary-quick-start,
+.dict-actions {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.dictionary-card {
+  min-width: 0;
+}
+.dict-main {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dict-actions button {
+  min-height: 40px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .primary-button:not(:disabled):hover,
+  .dictionary-search-button:not(:disabled):hover {
+    background-color: var(--primary-dark);
+    box-shadow: 0 6px 16px rgba(71, 85, 202, .22);
+  }
+  .play-button:not(:disabled):hover,
+  .round-action:not(:disabled):hover {
+    border-color: #d4d9ff;
+    background: #f0f1ff;
+  }
+}
+@media (max-width: 760px) {
+  .content-wrap {
+    padding-top: 22px;
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+  }
+  .welcome-row {
+    gap: 12px;
+  }
+  .welcome-row h1 {
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+  .section-heading {
+    align-items: flex-start;
+  }
+  .section-heading h2 {
+    line-height: 1.4;
+  }
+  .module-card h3 {
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .module-card>p {
+    font-size: 10px;
+    min-height: 0;
+  }
+  .module-card-foot {
+    font-size: 9px;
+  }
+  .dictionary-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .dict-actions {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 8px;
+  }
+  .dict-actions button {
+    flex: 0 0 auto;
+  }
+  .dictionary-search {
+    padding: 12px;
+  }
+  .dictionary-search .search-box {
+    gap: 8px;
+    padding: 0 10px;
+  }
+  .dictionary-search-button {
+    min-height: 42px;
+  }
+  .language-choice {
+    align-items: stretch;
+  }
+  .language-choice button {
+    min-width: 0;
+  }
+  .mobile-nav {
+    padding-bottom: max(15px, env(safe-area-inset-bottom));
+  }
+}
+@media (max-width: 390px) {
+  .content-wrap {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .topbar {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+  .top-actions {
+    gap: 6px;
+  }
+  .auth-logout {
+    min-height: 38px;
+    padding: 0 10px;
+    font-size: 11px;
+  }
+  .module-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .module-card {
+    padding: 15px;
+  }
+  .module-card-top {
+    margin-bottom: 10px;
+  }
+  .module-card>p {
+    font-size: 11px;
+  }
+  .dictionary-card {
+    padding: 13px;
+  }
+  .dict-actions {
+    gap: 6px;
+  }
+  .dict-actions button {
+    max-width: 100%;
+  }
+}
