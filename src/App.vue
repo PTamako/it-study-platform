@@ -1360,6 +1360,66 @@ function setSpeechAudioSessionType(type: 'playback' | 'auto') {
   try { audioSession.type = type } catch { /* Unsupported/locked audio-session implementation. */ }
 }
 
+/**
+ * iOS Safari can route Web Speech through the ambient audio path, which is muted
+ * by the hardware silent switch on some versions. Start a very short silent
+ * HTMLMediaElement clip from the same user gesture to prime the media-playback
+ * path before invoking SpeechSynthesis. This is best-effort; Safari still owns
+ * the final audio-session behavior.
+ */
+function primeMediaAudioSession() {
+  let objectUrl = ''
+  let audio: HTMLAudioElement | null = null
+  const cleanup = () => {
+    if (!audio) return
+    audio.pause()
+    audio.removeAttribute('src')
+    audio.remove()
+    if (objectUrl) URL.revokeObjectURL(objectUrl)
+    audio = null
+  }
+
+  try {
+    const sampleRate = 8000
+    const dataBytes = Math.floor(sampleRate * 0.18) * 2
+    const buffer = new ArrayBuffer(44 + dataBytes)
+    const view = new DataView(buffer)
+    const writeText = (offset: number, value: string) => {
+      for (let index = 0; index < value.length; index += 1) view.setUint8(offset + index, value.charCodeAt(index))
+    }
+    writeText(0, 'RIFF')
+    view.setUint32(4, 36 + dataBytes, true)
+    writeText(8, 'WAVE')
+    writeText(12, 'fmt ')
+    view.setUint32(16, 16, true)
+    view.setUint16(20, 1, true)
+    view.setUint16(22, 1, true)
+    view.setUint32(24, sampleRate, true)
+    view.setUint32(28, sampleRate * 2, true)
+    view.setUint16(32, 2, true)
+    view.setUint16(34, 16, true)
+    writeText(36, 'data')
+    view.setUint32(40, dataBytes, true)
+    objectUrl = URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }))
+    audio = document.createElement('audio')
+    audio.preload = 'auto'
+    audio.volume = 0.01
+    audio.setAttribute('aria-hidden', 'true')
+    audio.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none'
+    audio.src = objectUrl
+    audio.addEventListener('ended', cleanup, { once: true })
+    audio.addEventListener('error', cleanup, { once: true })
+    document.body.appendChild(audio)
+    const playResult = audio.play()
+    if (playResult && typeof playResult.catch === 'function') {
+      void playResult.catch(cleanup)
+    }
+  } catch {
+    cleanup()
+    // The primary SpeechSynthesis path must still run if media priming is blocked.
+  }
+}
+
 function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', statusTarget = '') {
   speechStatusTarget.value = statusTarget
   const spokenText = text.trim()
@@ -1377,6 +1437,8 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   // 在用户点击的同步路径上尽早请求媒体播放音频会话，帮助移动 Safari 使用媒体音量路由。
   // 浏览器不允许网页直接修改系统音量；不支持 Audio Session API 的设备会自动使用系统默认行为。
   setSpeechAudioSessionType('playback')
+  // Keep this synchronous with the user's tap so iOS Safari can treat the clip as media playback.
+  primeMediaAudioSession()
 
   // Call speak() synchronously in the click handler. Delaying with setTimeout may lose
   // browser user activation and cause silent playback failures on Safari/iOS.
