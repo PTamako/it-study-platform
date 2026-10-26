@@ -90,7 +90,7 @@ test('speech requests media playback audio session when the browser supports it'
 })
 
 test('speech plays on the first tap while language voices are still loading', () => {
-  assert.match(app, /window\.speechSynthesis\.getVoices\(\)/)
+  assert.match(app, /synthesis\?\.getVoices\(\)/)
   assert.match(app, /synthesis\.addEventListener\('voiceschanged'/)
   assert.match(app, /utterance\.lang = lang/)
   assert.match(app, /If Safari still has no voice list on the first tap[\s\S]*?keep the utterance's explicit/)
