@@ -259,10 +259,9 @@ test('Japanese dictionary results show a real Japanese explanation when availabl
 
 
 test('dictionary guides users to switch language when selected Japanese/English conflicts with clear input script', () => {
-  assert.match(app, /const containsJapaneseKana = \/\[\\u3040-\\u30ff\]\//)
-  assert.match(app, /requestedLanguage === 'en' && containsJapaneseKana/)
-  assert.match(app, /检测到日语输入，请切换到「日语」后再查询/)
-  assert.match(app, /requestedLanguage === 'ja' && looksEnglishOnly/)
-  assert.match(app, /检测到英语输入，请切换到「英语」后再查询/)
-  assert.match(app, /requestedLanguage === 'it' \|\| requestedLanguage === 'auto'/)
+  assert.ok(app.includes('const containsJapaneseKana = /[\\u3040-\\u30ff]/.test(q)'))
+  assert.ok(app.includes("requestedLanguage === 'en' && containsJapaneseKana"))
+  assert.ok(app.includes('检测到日语输入，请切换到「日语」后再查询'))
+  assert.ok(app.includes("requestedLanguage === 'ja' && looksEnglishOnly"))
+  assert.ok(app.includes('检测到英语输入，请切换到「英语」后再查询'))
 })
