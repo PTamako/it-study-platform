@@ -1157,7 +1157,20 @@ async function hydrateCloudProgress() {
     // Keep local data usable if the cloud is unavailable or an import partially fails.
   }
 }
-onMounted(async () => { await checkAuth(); if (authenticated.value) { void syncExamHistory(); void hydrateCloudProgress() } })
+onMounted(async () => {
+  // Preload the browser's speech voices before the user taps a pronunciation button.
+  // iOS Safari may initially return an empty voice list; waiting until the first tap
+  // makes that tap appear to do nothing and forces the user to tap a second time.
+  try {
+    const synthesis = window.speechSynthesis
+    synthesis?.getVoices()
+    synthesis?.addEventListener('voiceschanged', () => { synthesis.getVoices() }, { once: true })
+  } catch {
+    // Speech playback will report its own browser/device error when requested.
+  }
+  await checkAuth()
+  if (authenticated.value) { void syncExamHistory(); void hydrateCloudProgress() }
+})
 
 type DictionaryEntry = {
   term: string
@@ -1483,23 +1496,9 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
   const normalizedLang = normalize(lang)
   const prefix = normalizedLang.slice(0, 2)
   const availableVoices = synthesis.getVoices()
-  // Safari/iOS can populate voices asynchronously. Never speak with an unknown OS
-  // default voice: wait for voiceschanged, then retry with the requested language.
-  if (availableVoices.length === 0) {
-    setSpeechAudioSessionType('auto')
-    speechStatus.value = '语音暂不可用，请稍后重试。'
-    synthesis.addEventListener('voiceschanged', () => {
-      if (synthesis.getVoices().length > 0 && requestId === speechRequestId) {
-        // Do not call speak() from this asynchronous event: iOS Safari may reject
-        // speech started outside the original tap's user activation. Ask for one
-        // explicit tap after voices are ready instead of silently failing.
-        speechStatus.value = '语音已就绪，请再次点击播放。'
-      } else if (requestId === speechRequestId) {
-        speechStatus.value = '语音暂不可用，请检查设备语音设置后重试。'
-      }
-    }, { once: true })
-    return
-  }
+  // If Safari still has no voice list on the first tap, keep the utterance's explicit
+  // language and let the browser resolve its voice. Returning here used to discard
+  // the first tap and require a second tap after voiceschanged fired.
   const voices = availableVoices.filter(voice => normalize(voice.lang).startsWith(prefix))
   // Prefer an on-device voice first. On iOS, a remote/enhanced voice can sometimes
   // fire onstart/onend while producing no audible output (for example, if its asset

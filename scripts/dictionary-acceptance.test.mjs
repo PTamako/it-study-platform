@@ -89,10 +89,12 @@ test('speech requests media playback audio session when the browser supports it'
   assert.match(app, /audioSession\?: BrowserAudioSession/)
 })
 
-test('speech never uses the operating system default voice before language voices load', () => {
-  assert.match(app, /if \(availableVoices\.length === 0\) \{[\s\S]*?语音暂不可用，请稍后重试/)
-  assert.match(app, /synthesis\.addEventListener\('voiceschanged'/)
-  assert.match(app, /语音已就绪，请再次点击播放/)
+test('speech plays on the first tap while language voices are still loading', () => {
+  assert.match(app, /synthesis\?\.getVoices\(\)/)
+  assert.match(app, /synthesis\?\.addEventListener\('voiceschanged'/)
+  assert.match(app, /utterance\.lang = lang/)
+  assert.match(app, /If Safari still has no voice list on the first tap[\s\S]*?keep the utterance's explicit/)
+  assert.doesNotMatch(app, /if \(availableVoices\.length === 0\) \{[\s\S]*?return/)
   assert.match(app, /availableVoices\.length > 0 && voices\.length === 0/)
   assert.match(app, /exactLanguageVoices\.find\(candidate => candidate\.localService/)
   assert.match(app, /播放完成。/)
