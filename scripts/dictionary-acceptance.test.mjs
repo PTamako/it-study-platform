@@ -241,3 +241,18 @@ test('daily task writes are serialized per task and use a snapshot of each toggl
   assert.match(app, /completed\s*\}\),/)
   assert.match(app, /dailyTaskSaveRequestIds\.get\(taskId\) === requestId/)
 })
+
+
+test('Japanese lookup does not show a failed fallback beside a successful Jisho definition', () => {
+  assert.match(worker, /const jishoItems = jishoEntries\(jishoRows, ''\)/)
+  assert.match(worker, /Prefer real dictionary entries over a second generic card/)
+  assert.match(worker, /暂未获得英语释义（在线词典未返回结果）/)
+  assert.doesNotMatch(worker, /translationJa: query/)
+})
+
+test('Japanese dictionary results show a real Japanese explanation when available', () => {
+  assert.match(worker, /commonJapaneseExplanations/)
+  assert.match(worker, /'ふさがる': '穴や通路がふさがって通れなくなること/)
+  assert.match(worker, /if \(!japaneseAid && firstDefinition\)/)
+  assert.match(worker, /translationJa: index === 0 \? japaneseAid : ''/)
+})
