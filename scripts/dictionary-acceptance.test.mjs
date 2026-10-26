@@ -256,3 +256,12 @@ test('Japanese dictionary results show a real Japanese explanation when availabl
   assert.match(worker, /if \(!japaneseAid && firstDefinition\)/)
   assert.match(worker, /translationJa: index === 0 \? japaneseAid : ''/)
 })
+
+
+test('dictionary guides users to switch language when selected Japanese/English conflicts with clear input script', () => {
+  assert.ok(app.includes('const containsJapaneseKana = /[\\u3040-\\u30ff]/.test(q)'))
+  assert.ok(app.includes("requestedLanguage === 'en' && containsJapaneseKana"))
+  assert.ok(app.includes('检测到日语输入，请切换到「日语」后再查询'))
+  assert.ok(app.includes("requestedLanguage === 'ja' && looksEnglishOnly"))
+  assert.ok(app.includes('检测到英语输入，请切换到「英语」后再查询'))
+})

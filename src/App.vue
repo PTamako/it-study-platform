@@ -1271,6 +1271,24 @@ async function lookupDictionary() {
     dictionaryLoading.value = false
     return
   }
+  // Respect the user's selected dictionary: when the input clearly belongs to the other language,
+  // guide them to switch instead of silently querying a different dictionary.
+  const containsJapaneseKana = /[\u3040-\u30ff]/.test(q)
+  const looksEnglishOnly = /^[A-Za-z][A-Za-z0-9\s._'’/-]*$/.test(q)
+  if (requestedLanguage === 'en' && containsJapaneseKana) {
+    dictionaryError.value = '检测到日语输入，请切换到「日语」后再查询。'
+    onlineEntries.value = []
+    lastSearchedTerm.value = ''
+    dictionaryLoading.value = false
+    return
+  }
+  if (requestedLanguage === 'ja' && looksEnglishOnly) {
+    dictionaryError.value = '检测到英语输入，请切换到「英语」后再查询。'
+    onlineEntries.value = []
+    lastSearchedTerm.value = ''
+    dictionaryLoading.value = false
+    return
+  }
   dictionaryLoading.value = true
   dictionaryError.value = ''
   onlineEntries.value = []
