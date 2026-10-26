@@ -514,6 +514,12 @@ async function searchTechnicalVocabulary(db: D1Database, rawQuery: string): Prom
   })
 }
 
+// Curated Japanese explanations for common Japanese headwords. These explain the meaning instead of repeating the search term.
+const commonJapaneseExplanations: Record<string, string> = {
+  'ふさがる': '穴や通路がふさがって通れなくなること。傷が治って開いた部分が閉じることや、予定・席などが埋まっていることにも使います。',
+  '塞がる': '穴や通路がふさがって通れなくなること。傷が治って開いた部分が閉じることや、予定・席などが埋まっていることにも使います。',
+}
+
 async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' | 'it' = 'auto', db?: D1Database): Promise<DictionaryApiEntry[]> {
   let technicalItems: DictionaryApiEntry[] = []
   if (db) {    try {
@@ -574,16 +580,30 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
   if (language === 'en') items.push(...englishDictionaryEntries(englishRows, '', ja))
 
   if (language === 'ja') {
-    items.push({
-      term: query,
-      en: en || '英语释义暂时不可用',
-      zh: '',
-      translationJa: query,
-      tag: '日英词典',
-      language: 'ja',
-      source: '在线词典/翻译',
-      englishTerm: en || undefined,
-    })
+    const jishoItems = jishoEntries(jishoRows, '')
+    if (jishoItems.length > 0) {
+      // Prefer real dictionary entries over a second generic card that may say the lookup failed.
+      // Add a Japanese explanation only when we have one, rather than echoing the queried word.
+      const firstDefinition = jishoItems.find(entry => entry.en && !entry.en.includes('暂未获得英语释义'))?.en || ''
+      let japaneseAid = commonJapaneseExplanations[query.trim()] || ''
+      if (!japaneseAid && firstDefinition) {
+        japaneseAid = await translateText(firstDefinition, 'en-US', 'ja-JP')
+      }
+      items.push(...jishoItems.map((entry, index) => ({
+        ...entry,
+        translationJa: index === 0 ? japaneseAid : '',
+      })))
+    } else {
+      items.push({
+        term: query,
+        en: en || '暂未获得英语释义（在线词典未返回结果）',
+        zh: '',
+        translationJa: commonJapaneseExplanations[query.trim()] || '',
+        tag: '日英词典',
+        language: 'ja',
+        source: '在线词典/翻译',
+      })
+    }
   } else if (language === 'en') {
     items.push({
       term: query,
@@ -607,8 +627,6 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
       source: '在线词典/翻译',
     })
   }
-
-  if (language === 'ja') items.push(...jishoEntries(jishoRows, zh))
 
   if (!items.length) {
     if (language === 'ja') {
