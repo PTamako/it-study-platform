@@ -1,6 +1,6 @@
 import re, sqlite3, unittest
 from pathlib import Path
-source = Path(__file__).resolve().parents[1].joinpath('worker.ts').read_text()
+source = Path(__file__).resolve().parents[1].joinpath('worker', 'index.ts').read_text()
 query = re.search(r'`(INSERT INTO language_card_progress \(card_id, mastered, updated_at\).*?ON CONFLICT\(card_id\) DO NOTHING)`', source, re.S).group(1)
 class MasteryTests(unittest.TestCase):
  def setUp(self):
