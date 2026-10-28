@@ -92,3 +92,32 @@ test('parallel incorrect logins cannot bypass the five attempt limit', async () 
   assert.equal(responses.filter(r => r.status === 401).length, 5)
   assert.equal(responses.filter(r => r.status === 429).length, 7)
 })
+
+test('login rejects oversized bodies even without a trustworthy content length', async () => {
+  const ts = await import('typescript')
+  const { webcrypto } = await import('node:crypto')
+  if (!globalThis.crypto) globalThis.crypto = webcrypto
+  const js = ts.transpile(auth, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext })
+  const { handleAuthRequest } = await import('data:text/javascript;base64,' + Buffer.from(js).toString('base64'))
+  let calls = 0
+  const env = { DB: { prepare() { calls++; throw new Error('unexpected database access') } }, AUTH_PASSWORD: 'correct-password-1234', AUTH_SESSION_SECRET: 'x'.repeat(32) }
+  const request = new Request('https://example.test/api/auth/login', {
+    method: 'POST', headers: { origin: 'https://example.test', 'content-type': 'application/json', 'content-length': '1' },
+    body: JSON.stringify({ password: 'x'.repeat(5000) })
+  })
+  assert.equal((await handleAuthRequest(request, env)).status, 413)
+  assert.equal(calls, 0)
+})
+test('daily task default and dashboard use Japan time', () => {
+  assert.match(worker, /study_date = date\('now', '\+9 hours'\)/)
+  assert.match(worker, /Date\.now\(\) \+ 9 \* 60 \* 60 \* 1000/)
+  assert.equal(new Date(Date.parse('2026-10-28T16:00:00Z') + 9 * 60 * 60 * 1000).toISOString().slice(0, 10), '2026-10-29')
+})
+
+test('logout stays signed in on failed server response', () => {
+  const handler = app.slice(app.indexOf('async function logout()'), app.indexOf("const activeModule", app.indexOf('async function logout()')))
+  assert.match(handler, /if \(!response\.ok\) throw/)
+  assert.ok(handler.indexOf('if (!response.ok)') < handler.indexOf('authenticated.value = false'))
+  assert.match(handler, /catch \{[\s\S]*authError\.value/)
+  assert.match(app, /v-if="authError" class="auth-error" role="alert"/)
+})
