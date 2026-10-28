@@ -1083,12 +1083,24 @@ watch(completedLanguageCards, value => localStorage.setItem('zhixue:completed-la
 watch(languageReviews, value => localStorage.setItem('zhixue:language-reviews', JSON.stringify(value)), { deep: true })
 async function hydrateCloudProgress() {
   languageProgressHydrating.value = true
-  await Promise.all([loadCloudDashboard(), loadExamTracks(), loadLanguageCards()])
+  try {
+    await Promise.all([loadCloudDashboard(), loadExamTracks(), loadLanguageCards()])
+  } catch {
+    // Continue progress hydration even if an independent preload fails.
+  }
 
   // Old browser snapshots have no timestamps. Import missing rows atomically so
   // an existing cloud unmaster action always wins over a stale local snapshot.
   try {
-    completedLanguageCards.value = await hydrateMastery(completedLanguageCards.value, fetch)
+    const storedIds = readStored<unknown>('zhixue:mastery-imported-v1', [])
+    const importedIds = new Set(Array.isArray(storedIds) ? storedIds.filter((id): id is string => typeof id === 'string') : [])
+    completedLanguageCards.value = await hydrateMastery(completedLanguageCards.value, fetch, {
+      has: id => importedIds.has(id),
+      add: ids => {
+        ids.forEach(id => importedIds.add(id))
+        try { localStorage.setItem('zhixue:mastery-imported-v1', JSON.stringify([...importedIds])) } catch { /* retry safely next time */ }
+      },
+    })
   } catch {
     languageCardsError.value = '部分旧版语言进度尚未同步；本设备中的进度已保留。'
   } finally {
