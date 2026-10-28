@@ -106,9 +106,28 @@ async function clientBucket(request: Request, secret: string, nowSeconds: number
 async function login(request: Request, env: AuthEnv, url: URL): Promise<Response> {
   if (!sameOrigin(request, url)) return json({ error: '请求来源验证失败。请刷新页面后重试。' }, 403)
   if (!configured(env)) return json({ error: '登录尚未配置。请在 Cloudflare Worker Secrets 中设置 AUTH_PASSWORD（至少 16 位）和 AUTH_SESSION_SECRET（至少 32 位随机字符）。' }, 503)
+  // Enforce an actual byte limit, including for chunked requests or misleading headers.
   let body: { password?: unknown }
   try {
-    body = await request.json() as { password?: unknown }
+    const reader = request.body?.getReader()
+    if (!reader) return json({ error: '请求格式不正确。' }, 400)
+    const chunks: Uint8Array[] = []
+    let size = 0
+    while (true) {
+      const { value, done } = await reader.read()
+      if (done) break
+      size += value.byteLength
+      if (size > 4096) {
+        void reader.cancel().catch(() => {})
+        return json({ error: '请求内容过大。' }, 413)
+      }
+      chunks.push(value)
+    }
+    const bytes = new Uint8Array(size)
+    let offset = 0
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
+    body = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes)) as { password?: unknown }
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: '请求格式不正确。' }, 400)
   } catch {
     return json({ error: '请求格式不正确。' }, 400)
   }

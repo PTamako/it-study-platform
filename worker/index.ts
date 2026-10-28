@@ -853,7 +853,7 @@ export default {
           env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(AVG(score), 0) AS average_score FROM scenario_attempts').first() as Promise<Record<string, unknown>>,
           env.DB.prepare(`SELECT (SELECT COUNT(*) FROM language_cards WHERE content_type = 'sentence') AS total, COALESCE((SELECT SUM(p.mastered) FROM language_card_progress p JOIN language_cards c ON c.id = p.card_id WHERE c.content_type = 'sentence'), 0) AS mastered`).first() as Promise<Record<string, unknown>>,
           env.DB.prepare('SELECT COUNT(*) AS total FROM saved_vocabulary_entries').first() as Promise<Record<string, unknown>>,
-          env.DB.prepare("SELECT COUNT(*) AS total, COALESCE(SUM(completed), 0) AS completed FROM daily_task_completions WHERE study_date = date('now')").first() as Promise<Record<string, unknown>>,
+          env.DB.prepare("SELECT COUNT(*) AS total, COALESCE(SUM(completed), 0) AS completed FROM daily_task_completions WHERE study_date = date('now', '+9 hours')").first() as Promise<Record<string, unknown>>,
         ])
         const total = Number(attempts?.total || 0)
         const correct = Number(attempts?.correct || 0)
@@ -980,7 +980,7 @@ export default {
 
     // 读取指定日期的每日任务完成状态。
     if (url.pathname === '/api/daily-tasks' && request.method === 'GET') {
-      const studyDate = url.searchParams.get('date') || new Date().toISOString().slice(0, 10)
+      const studyDate = url.searchParams.get('date') || new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
       if (!/^\d{4}-\d{2}-\d{2}$/.test(studyDate)) return json({ items: [], error: 'date 格式应为 YYYY-MM-DD。' }, 400)
       try {
         const { results } = await env.DB.prepare(
