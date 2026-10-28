@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { mergeExamHistory, restoreMasteredCard } from './progress-sync'
+import { hydrateMastery, mergeExamHistory, restoreMasteredCard } from './progress-sync'
 import {
   BookOpen, Languages, Search, GraduationCap,
   ChevronRight, ChevronDown, Sparkles, Clock3, Flame, Bookmark, Volume2, ArrowRight,
@@ -1044,9 +1044,10 @@ async function submitLanguageReview(result: 'again' | 'remembered') {
     languageReviewBusy.value = ''
   }
 }
+const languageProgressHydrating = ref(true)
 const languageCardSaving = ref(new Set<string>())
 async function toggleLanguageCard(id: string) {
-  if (languageCardSaving.value.has(id)) return
+  if (languageProgressHydrating.value || languageCardSaving.value.has(id)) return
   languageCardSaving.value = new Set([...languageCardSaving.value, id])
   const previous = completedLanguageCards.value
   const wasMastered = previous.includes(id)
@@ -1059,7 +1060,7 @@ async function toggleLanguageCard(id: string) {
   try {
     const response = await fetch('/api/language-progress', {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ card_id: id, mastered }),
+      body: JSON.stringify({ card_id: id, mastered, explicit: true }),
     })
     const data = await response.json().catch(() => ({})) as { error?: string }
     if (!response.ok) throw new Error(data.error || '掌握进度未能保存到云端。')
@@ -1081,20 +1082,18 @@ watch(studyLanguage, value => {
 watch(completedLanguageCards, value => localStorage.setItem('zhixue:completed-language-cards', JSON.stringify(value)), { deep: true })
 watch(languageReviews, value => localStorage.setItem('zhixue:language-reviews', JSON.stringify(value)), { deep: true })
 async function hydrateCloudProgress() {
+  languageProgressHydrating.value = true
   await Promise.all([loadCloudDashboard(), loadExamTracks(), loadLanguageCards()])
 
-  // Import this browser's legacy data BEFORE hydrating from D1. This prevents an empty cloud
-  // response from erasing progress that existed only in localStorage.
-  let progressImportOk = false
+  // Old browser snapshots have no timestamps. Import missing rows atomically so
+  // an existing cloud unmaster action always wins over a stale local snapshot.
   try {
-    const localCardIds = new Set(languageCards.value.map(card => card.id))
-    const localMastered = completedLanguageCards.value.filter(id => localCardIds.has(id))
-    const results = await Promise.all(localMastered.map(card_id => fetch('/api/language-progress', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ card_id, mastered: true }),
-    })))
-    progressImportOk = results.every(response => response.ok)
-  } catch { progressImportOk = false }
+    completedLanguageCards.value = await hydrateMastery(completedLanguageCards.value, fetch)
+  } catch {
+    languageCardsError.value = '部分旧版语言进度尚未同步；本设备中的进度已保留。'
+  } finally {
+    languageProgressHydrating.value = false
+  }
 
   // Migrate today's task state before reading cloud state; upserts are safe to retry.
   let taskImportOk = false
@@ -1128,8 +1127,8 @@ async function hydrateCloudProgress() {
   }
 
   try {
-    const [progressResponse, savedResponse, taskResponse, reviewResponse] = await Promise.all([
-      fetch('/api/language-progress'), fetch('/api/vocabulary/saved'), fetch('/api/dashboard'), fetch('/api/language-review'),
+    const [savedResponse, taskResponse, reviewResponse] = await Promise.all([
+      fetch('/api/vocabulary/saved'), fetch('/api/dashboard'), fetch('/api/language-review'),
     ])
     if (reviewResponse.ok) {
       const reviews = await reviewResponse.json() as { items?: LanguageReview[] }
@@ -1137,13 +1136,6 @@ async function hydrateCloudProgress() {
       const cloudReviews = reviews.items || []
       languageReviews.value = [...cloudReviews, ...languageReviews.value.filter(local =>
         !cloudReviews.some(cloud => cloud.card_id === local.card_id))]
-    }
-    if (progressResponse.ok && progressImportOk) {
-      const progress = await progressResponse.json() as { items?: Array<{ card_id: string; mastered: number }> }
-      const cloudIds = (progress.items || []).filter(item => item.mastered).map(item => item.card_id)
-      completedLanguageCards.value = [...new Set([...cloudIds, ...completedLanguageCards.value])]
-    } else if (!progressImportOk) {
-      languageCardsError.value = '部分旧版语言进度尚未同步；本设备中的进度已保留。'
     }
     if (savedResponse.ok) {
       const saved = await savedResponse.json() as { items?: Array<{ term: string; language: string; entry: DictionaryEntry }> }
@@ -2084,7 +2076,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <button class="primary-button" @click="nextLanguagePractice">跳过 <ArrowRight :size="15" /></button>
                   <button class="language-review-again" :disabled="languageReviewBusy === languagePracticeCard.id" @click="submitLanguageReview('again')">还不熟 · 稍后再练</button>
                   <button class="language-review-remembered" :disabled="languageReviewBusy === languagePracticeCard.id" @click="submitLanguageReview('remembered')">记住了 · 安排复习</button>
-                  <button class="language-done-button" :disabled="languageCardSaving.has(languagePracticeCard.id)" @click="toggleLanguageCard(languagePracticeCard.id)">{{ completedLanguageCards.includes(languagePracticeCard.id) ? '取消掌握' : '标记掌握' }}</button>
+                  <button class="language-done-button" :disabled="languageProgressHydrating || languageCardSaving.has(languagePracticeCard.id)" @click="toggleLanguageCard(languagePracticeCard.id)">{{ completedLanguageCards.includes(languagePracticeCard.id) ? '取消掌握' : '标记掌握' }}</button>
                 </div>
               </div>
               <p v-else class="language-practice-prompt">当前筛选条件下没有卡片，切换分类或掌握状态后就能开始。</p>
@@ -2104,7 +2096,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             <p v-else-if="languageCardsError" class="dictionary-status dictionary-error">{{ languageCardsError }} 请稍后刷新再试。</p>
             <div v-else class="language-card-list">
               <article v-for="card in paginatedLanguageCards" :key="card.id" class="language-study-card" :class="{ completed: completedLanguageCards.includes(card.id) }">
-                <div class="language-card-top"><span class="dict-tag">{{ card.category }}</span><span class="language-source">{{ completedLanguageCards.includes(card.id) ? '已掌握' : isLanguageCardUnlearned(card) ? '未学习' : '学习中' }}</span><button class="language-done-button" :disabled="languageCardSaving.has(card.id)" @click="toggleLanguageCard(card.id)">{{ completedLanguageCards.includes(card.id) ? '取消掌握' : '标记已掌握' }}</button></div>
+                <div class="language-card-top"><span class="dict-tag">{{ card.category }}</span><span class="language-source">{{ completedLanguageCards.includes(card.id) ? '已掌握' : isLanguageCardUnlearned(card) ? '未学习' : '学习中' }}</span><button class="language-done-button" :disabled="languageProgressHydrating || languageCardSaving.has(card.id)" @click="toggleLanguageCard(card.id)">{{ completedLanguageCards.includes(card.id) ? '取消掌握' : '标记已掌握' }}</button></div>
                 <div class="sentence-highlight-legend" role="note" aria-label="句子高亮图例"><span class="sentence-legend-vocabulary"><i aria-hidden="true"></i>单词 / 短语</span><span class="sentence-legend-grammar"><i aria-hidden="true"></i>语法结构</span></div>
                 <h3 class="language-sentence"><span v-for="(part, index) in sentenceParts(card)" :key="index" :class="part.type ? 'sentence-highlight-' + part.type : ''" :title="part.detail">{{ part.text }}</span></h3>
                 <p class="sentence-highlight-hint">黄色标出需要理解的词汇，蓝色标出句中的语法结构；下方会按颜色分别解释每一项。</p>

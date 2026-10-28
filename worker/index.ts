@@ -883,15 +883,47 @@ export default {
       let body: Record<string, unknown>
       try { body = await request.json() as Record<string, unknown> }
       catch { return json({ error: '请求体必须是 JSON。' }, 400) }
+      // Legacy browser snapshots have no timestamps. Import only rows that do not yet
+      // exist; never overwrite a later explicit change from another device.
+      if ('legacy_card_ids' in body) {
+        const ids = body.legacy_card_ids
+        if (!Array.isArray(ids) || ids.length > 100 || ids.some(id => typeof id !== 'string' || !id.trim() || id.length > 100)) {
+          return json({ error: '旧版进度每次最多导入 100 个有效卡片 ID。' }, 400)
+        }
+        try {
+          const uniqueIds = [...new Set(ids as string[])]
+          if (uniqueIds.length) {
+            await env.DB.batch(uniqueIds.map(id => env.DB.prepare(
+              `INSERT INTO language_card_progress (card_id, mastered, updated_at)
+               SELECT id, 1, CURRENT_TIMESTAMP FROM language_cards WHERE id = ? AND content_type = 'sentence'
+               ON CONFLICT(card_id) DO NOTHING`,
+            ).bind(id)))
+          }
+          return json({ ok: true })
+        } catch {
+          return json({ error: '旧版课程进度导入失败，请稍后重试。' }, 503)
+        }
+      }
       const cardId = String(body.card_id || '').trim()
       const mastered = body.mastered === true || body.mastered === 1
       if (!cardId) return json({ error: '缺少 card_id。' }, 400)
       try {
         const card = await env.DB.prepare("SELECT id FROM language_cards WHERE id = ? AND content_type = 'sentence'").bind(cardId).first()
         if (!card) return json({ error: '课程卡片不存在。' }, 404)
-        await env.DB.prepare(
-          'INSERT INTO language_card_progress (card_id, mastered, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(card_id) DO UPDATE SET mastered = excluded.mastered, updated_at = CURRENT_TIMESTAMP',
-        ).bind(cardId, mastered ? 1 : 0).run()
+        // Old clients send identical requests for a user toggle and an automatic
+        // re-import. Never allow their stale true snapshot to overwrite false.
+        // Refreshing loads a client that marks deliberate toggles explicitly.
+        if (mastered && body.explicit !== true) {
+          await env.DB.prepare(
+            'INSERT INTO language_card_progress (card_id, mastered, updated_at) VALUES (?, 1, CURRENT_TIMESTAMP) ON CONFLICT(card_id) DO NOTHING',
+          ).bind(cardId).run()
+          const current = await env.DB.prepare('SELECT mastered FROM language_card_progress WHERE card_id = ?').bind(cardId).first() as { mastered?: number } | null
+          if (Number(current?.mastered) !== 1) return json({ error: '该卡片已在其他设备取消掌握，请刷新页面后重试。' }, 409)
+        } else {
+          await env.DB.prepare(
+            'INSERT INTO language_card_progress (card_id, mastered, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP) ON CONFLICT(card_id) DO UPDATE SET mastered = excluded.mastered, updated_at = CURRENT_TIMESTAMP',
+          ).bind(cardId, mastered ? 1 : 0).run()
+        }
         return json({ ok: true, card_id: cardId, mastered })
       } catch {
         return json({ error: '课程进度保存失败，请确认已应用最新 D1 迁移。' }, 503)
