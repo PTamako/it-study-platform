@@ -2,6 +2,9 @@ name = "it-study-platform"
 main = "worker/index.ts"
 compatibility_date = "2026-10-22"
 
+# Build-only previews: no production database or secrets are bound.
+previews = {}
+
 # 唯一主 Worker：前端静态资源与 API 共用该服务，避免 CLI 再创建 it-study-platform-api。
 [assets]
 directory = "./dist"
