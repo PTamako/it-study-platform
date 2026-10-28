@@ -8,15 +8,34 @@ export function restoreMasteredCard(current: string[], id: string, wasMastered: 
   return wasMastered ? (current.includes(id) ? current : [...current, id]) : current.filter(item => item !== id)
 }
 
-// Import is insert-only on the server; a failure leaves the caller's local state untouched.
-export async function hydrateMastery(local: string[], request: typeof fetch): Promise<string[]> {
+// Acknowledged IDs are persisted between runs so long imports can resume after
+// throttling, a network error or a closed page. Unknown IDs stay eligible for retry.
+export async function hydrateMastery(
+  local: string[],
+  request: typeof fetch,
+  checkpoint: { has(id: string): boolean; add(ids: string[]): void },
+  wait: (ms: number) => Promise<void> = ms => new Promise(resolve => setTimeout(resolve, ms)),
+): Promise<string[]> {
   const ids = [...new Set(local)]
-  for (let i = 0; i < ids.length; i += 100) {
-    const response = await request('/api/language-progress', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ legacy_card_ids: ids.slice(i, i + 100) }),
-    })
+  const pending = ids.filter(id => !checkpoint.has(id))
+  for (let i = 0; i < pending.length; i += 100) {
+    const batch = pending.slice(i, i + 100)
+    let retries = 0
+    let response: Response
+    while (true) {
+      response = await request('/api/language-progress', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ legacy_card_ids: batch }),
+      })
+      if (response.status !== 429 || retries >= 2) break
+      retries++
+      await wait(65_000)
+    }
     if (!response.ok) throw new Error('Unable to import local progress')
+    const result = await response.json() as { recognized_card_ids?: unknown }
+    if (!Array.isArray(result.recognized_card_ids)) throw new Error('Invalid import response')
+    const requested = new Set(batch)
+    checkpoint.add(result.recognized_card_ids.filter((id): id is string => typeof id === 'string' && requested.has(id)))
   }
   const response = await request('/api/language-progress')
   if (!response.ok) throw new Error('Unable to load cloud progress')
