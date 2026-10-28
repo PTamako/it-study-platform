@@ -1199,28 +1199,30 @@ export default {
         try { expected = JSON.parse(String(question.answer_json)) } catch { expected = null }
         const correct = JSON.stringify(expected) === JSON.stringify(answer)
         const attemptId = crypto.randomUUID()
-        await env.DB.prepare(
-          'INSERT INTO study_attempts (id, question_id, user_answer_json, is_correct, duration_seconds) VALUES (?, ?, ?, ?, ?)',
-        ).bind(attemptId, questionId, JSON.stringify(answer), correct ? 1 : 0, duration).run()
-        const previous = await env.DB.prepare(
-          'SELECT review_count, correct_streak FROM question_review_state WHERE question_id = ?',
-        ).bind(questionId).first() as { review_count?: number; correct_streak?: number } | null
-        const reviewCount = Number(previous?.review_count || 0) + 1
-        const streak = correct ? Number(previous?.correct_streak || 0) + 1 : 0
-        const mastered = correct && streak >= 3
-        const intervalMs = !correct ? 10 * 60 * 1000 : mastered ? 30 * 86400000 : streak === 1 ? 86400000 : streak === 2 ? 3 * 86400000 : 7 * 86400000
-        const nextReview = new Date(Date.now() + intervalMs).toISOString().replace('T', ' ').slice(0, 19)
-        await env.DB.prepare(
-          `INSERT INTO question_review_state (question_id, track_id, review_count, correct_streak, last_result, next_review_at, mastered, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-           ON CONFLICT(question_id) DO UPDATE SET
-             review_count = excluded.review_count,
-             correct_streak = excluded.correct_streak,
-             last_result = excluded.last_result,
-             next_review_at = excluded.next_review_at,
-             mastered = excluded.mastered,
-             updated_at = CURRENT_TIMESTAMP`,
-        ).bind(questionId, String(question.track_id), reviewCount, streak, correct ? 'remembered' : 'again', nextReview, mastered ? 1 : 0).run()
+        // Commit the attempt and review state together. Derive the next state
+        // inside the upsert so simultaneous submissions do not lose increments.
+        const result = correct ? 'remembered' : 'again'
+        await env.DB.batch([
+          env.DB.prepare(
+            'INSERT INTO study_attempts (id, question_id, user_answer_json, is_correct, duration_seconds) VALUES (?, ?, ?, ?, ?)',
+          ).bind(attemptId, questionId, JSON.stringify(answer), correct ? 1 : 0, duration),
+          env.DB.prepare(
+            `INSERT INTO question_review_state (question_id, track_id, review_count, correct_streak, last_result, next_review_at, mastered, updated_at)
+             VALUES (?, ?, 1, ?, ?, datetime(CURRENT_TIMESTAMP, ?), 0, CURRENT_TIMESTAMP)
+             ON CONFLICT(question_id) DO UPDATE SET
+               track_id = excluded.track_id,
+               review_count = question_review_state.review_count + 1,
+               correct_streak = CASE WHEN excluded.last_result = 'remembered' THEN question_review_state.correct_streak + 1 ELSE 0 END,
+               last_result = excluded.last_result,
+               next_review_at = datetime(CURRENT_TIMESTAMP, CASE
+                 WHEN excluded.last_result = 'again' THEN '+10 minutes'
+                 WHEN question_review_state.correct_streak + 1 >= 3 THEN '+30 days'
+                 WHEN question_review_state.correct_streak + 1 = 2 THEN '+3 days'
+                 ELSE '+1 day' END),
+               mastered = CASE WHEN excluded.last_result = 'remembered' AND question_review_state.correct_streak + 1 >= 3 THEN 1 ELSE 0 END,
+               updated_at = CURRENT_TIMESTAMP`,
+          ).bind(questionId, String(question.track_id), correct ? 1 : 0, result, correct ? '+1 day' : '+10 minutes'),
+        ])
         const progress = await env.DB.prepare(
           'SELECT question_id, review_count, correct_streak, last_result, next_review_at, mastered FROM question_review_state WHERE question_id = ?',
         ).bind(questionId).first()
