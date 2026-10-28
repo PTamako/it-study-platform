@@ -899,7 +899,10 @@ export default {
                ON CONFLICT(card_id) DO NOTHING`,
             ).bind(id)))
           }
-          return json({ ok: true })
+          const recognized = uniqueIds.length
+            ? await env.DB.prepare(`SELECT id FROM language_cards WHERE content_type = 'sentence' AND id IN (${uniqueIds.map(() => '?').join(',')})`).bind(...uniqueIds).all()
+            : { results: [] }
+          return json({ ok: true, recognized_card_ids: recognized.results.map((row: Record<string, unknown>) => row.id) })
         } catch {
           return json({ error: '旧版课程进度导入失败，请稍后重试。' }, 503)
         }
