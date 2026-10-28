@@ -768,3 +768,36 @@ button[aria-disabled="true"] {
     justify-content: center;
   }
 }
+
+/* Shared reading and interaction styles across the learning modules. */
+.welcome-subtitle,.section-heading p,.panel-heading p,.module-card>p,
+.category-card p,.exam-info small,.dict-main p,.focus-card p {
+  color:#626b83;
+  line-height:1.65;
+}
+.welcome-subtitle,.section-heading p,.panel-heading p,.module-card>p,
+.category-card p,.exam-info small,.dict-main p {font-size:12px}
+.module-card-foot,.exam-progress,.profile-text small {color:#626b83;font-size:11px}
+.module-card h3,.category-card h3,.exam-info strong {line-height:1.45}
+.module-card,.category-card,.exam-card,.language-study-card,.scenario-card {
+  border-color:var(--line);box-shadow:var(--shadow-card)
+}
+.auth-mark {background:var(--primary-soft);color:var(--primary-dark)}
+.auth-submit {background:var(--primary);transition:background-color .18s ease,box-shadow .18s ease}
+.auth-input:focus {border-color:#8995ee;box-shadow:0 0 0 3px rgba(89,104,223,.14)}
+.auth-submit:focus-visible {outline:3px solid #a9b1ff;outline-offset:3px}
+@media (hover:hover) and (pointer:fine) {
+  .auth-submit:not(:disabled):hover {background:var(--primary-dark);box-shadow:0 6px 16px rgba(71,85,202,.22)}
+}
+@media (max-width:760px) {
+  .welcome-subtitle,.section-heading p,.panel-heading p,.module-card>p,
+  .category-card p,.exam-info small,.dict-main p {font-size:12px}
+  .module-card h3,.category-card h3,.exam-info strong {font-size:14px}
+  .module-card-foot,.exam-progress {font-size:11px}
+  .icon-button,.auth-logout {min-width:44px;min-height:44px}
+  .search-box input,.dictionary-search input,.auth-input,textarea,select {font-size:16px}
+}
+@media (max-width:390px) {
+  .category-grid {grid-template-columns:minmax(0,1fr)}
+  .category-card {min-height:0;padding:15px}
+}
