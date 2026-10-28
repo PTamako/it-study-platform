@@ -66,3 +66,29 @@ test('destructive exam history deletion requires typed second confirmation', () 
   assert.ok(deleteRequest > typedConfirm, 'DELETE request must occur only after both confirmations')
   assert.match(handler, /confirmation !== '清除'/)
 })
+
+test('parallel incorrect logins cannot bypass the five attempt limit', async () => {
+  const ts = await import('typescript')
+  const { webcrypto } = await import('node:crypto')
+  if (!globalThis.crypto) globalThis.crypto = webcrypto
+  const js = ts.transpile(auth, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext })
+  const { handleAuthRequest } = await import('data:text/javascript;base64,' + Buffer.from(js).toString('base64'))
+  let count = 0
+  const db = { prepare(sql) { return {
+    bind() { return this },
+    async run() { return {} },
+    async first() {
+      assert.match(sql, /INSERT INTO auth_login_rate_limits/)
+      count = Math.min(6, count + 1)
+      return { failures: count }
+    }
+  } } }
+  const env = { DB: db, AUTH_PASSWORD: 'correct-password-1234', AUTH_SESSION_SECRET: 'x'.repeat(32) }
+  const makeRequest = () => new Request('https://example.test/api/auth/login', {
+    method: 'POST', headers: { origin: 'https://example.test', 'content-type': 'application/json', 'cf-connecting-ip': '192.0.2.1' },
+    body: JSON.stringify({ password: 'wrong-password' })
+  })
+  const responses = await Promise.all(Array.from({ length: 12 }, () => handleAuthRequest(makeRequest(), env)))
+  assert.equal(responses.filter(r => r.status === 401).length, 5)
+  assert.equal(responses.filter(r => r.status === 429).length, 7)
+})

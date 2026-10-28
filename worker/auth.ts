@@ -122,8 +122,16 @@ async function login(request: Request, env: AuthEnv, url: URL): Promise<Response
     // Opportunistically remove expired buckets so the tiny D1 limiter tables stay bounded.
     await env.DB.prepare('DELETE FROM auth_login_rate_limits WHERE expires_at <= ?').bind(now).run()
     await env.DB.prepare('DELETE FROM auth_write_rate_limits WHERE expires_at <= ?').bind(now).run()
-    const row = await env.DB.prepare('SELECT failures FROM auth_login_rate_limits WHERE bucket_key = ? AND expires_at > ?').bind(bucket.key, now).first<{ failures: number }>()
-    if (Number(row?.failures || 0) >= LOGIN_MAX_FAILURES) {
+    // Reserve an attempt atomically before checking the password. Parallel requests
+    // cannot all pass a separate read before any of them increments the counter.
+    const row = await env.DB.prepare(`INSERT INTO auth_login_rate_limits (bucket_key, failures, expires_at)
+      VALUES (?, 1, ?)
+      ON CONFLICT(bucket_key) DO UPDATE SET
+        failures = CASE WHEN failures >= 6 THEN 6 ELSE failures + 1 END,
+        expires_at = excluded.expires_at
+      RETURNING failures`).bind(bucket.key, bucket.expires).first<{ failures: number }>()
+    if (!row) throw new Error('Login limiter returned no count')
+    if (Number(row.failures) > LOGIN_MAX_FAILURES) {
       return json({ error: '尝试次数过多，请 15 分钟后再试。' }, 429, { 'retry-after': String(Math.max(1, bucket.expires - now)) })
     }
   } catch {
@@ -133,14 +141,6 @@ async function login(request: Request, env: AuthEnv, url: URL): Promise<Response
   const supplied = await crypto.subtle.digest('SHA-256', encoder.encode(body.password))
   const expected = await crypto.subtle.digest('SHA-256', encoder.encode(env.AUTH_PASSWORD))
   if (!constantTimeEqual(new Uint8Array(supplied), new Uint8Array(expected))) {
-    try {
-      await env.DB.prepare(`INSERT INTO auth_login_rate_limits (bucket_key, failures, expires_at)
-        VALUES (?, 1, ?)
-        ON CONFLICT(bucket_key) DO UPDATE SET failures = failures + 1, expires_at = excluded.expires_at`)
-        .bind(bucket.key, bucket.expires).run()
-    } catch {
-      return json({ error: '登录安全检查暂不可用，请稍后重试。' }, 503)
-    }
     return json({ error: '密码不正确。' }, 401)
   }
 
