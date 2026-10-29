@@ -1209,6 +1209,7 @@ const displayedEntries = computed(() => {
 })
 
 const vocabularyHydrating = ref(true)
+const vocabularySyncReady = ref(false)
 const vocabularyPending = ref(new Map<string, 'deleted' | 'unknown'>())
 const vocabularyStatus = ref('')
 let vocabularyLoadId = 0
@@ -1219,6 +1220,7 @@ watch(authenticated, value => {
 async function hydrateVocabulary() {
   const loadId = ++vocabularyLoadId
   vocabularyHydrating.value = true
+  vocabularySyncReady.value = false
   vocabularyStatus.value = ''
   try {
     const rows = await fetchVocabularySnapshot(fetch)
@@ -1239,6 +1241,7 @@ async function hydrateVocabulary() {
     for (const row of liveRows) if (!entries.some(entry => entry.term === row.term)) entries.push(row.entry as DictionaryEntry)
     savedDictionaryEntries.value = entries
     vocabularyPending.value = pending
+    vocabularySyncReady.value = true
     if (pending.size) vocabularyStatus.value = '部分旧收藏仅保留在本机；请确认后选择同步或移除。'
   } catch {
     if (loadId === vocabularyLoadId) {
@@ -1251,7 +1254,7 @@ async function hydrateVocabulary() {
 }
 
 async function restoreVocabulary(term: string) {
-  if (vocabularyHydrating.value || savedWordRequests.has(term)) return
+  if (vocabularyHydrating.value || !vocabularySyncReady.value || savedWordRequests.has(term)) return
   const entry = savedDictionaryEntries.value.find(item => item.term === term) || recentDictionaryEntries.value.find(item => item.term === term)
   if (!entry) { vocabularyStatus.value = '请先查询该词条，再同步。'; return }
   savedWordRequests.add(term)
@@ -1270,11 +1273,19 @@ async function restoreVocabulary(term: string) {
 const savedWordRequests = new Set<string>()
 async function toggleSaved(term: string) {
   // Serialize changes for the same term and update the UI only after the cloud write succeeds.
-  if (vocabularyHydrating.value || savedWordRequests.has(term)) return
+  if (vocabularyHydrating.value || !vocabularySyncReady.value || savedWordRequests.has(term)) return
   savedWordRequests.add(term)
   const sessionId = vocabularyLoadId
   try {
     if (savedWords.value.includes(term)) {
+      if (vocabularyPending.value.has(term)) {
+        // This is a local copy with uncertain cloud history; do not delete a
+        // concurrent remote save based on an earlier paginated snapshot.
+        const pending = new Map(vocabularyPending.value); pending.delete(term); vocabularyPending.value = pending
+        savedWords.value = savedWords.value.filter(word => word !== term)
+        savedDictionaryEntries.value = savedDictionaryEntries.value.filter(entry => entry.term !== term)
+        return
+      }
       const response = await fetch('/api/vocabulary/saved', {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ term, action: 'remove' }),
@@ -2220,7 +2231,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <p v-if="entry.technical" class="dictionary-tech-note">来自 IT 专业词汇库</p>
                   <div v-if="speechStatus && speechStatusTarget === entry.term" class="dictionary-speech-controls"><p class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 </div>
-                <div class="dict-actions"><button class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + (entry.englishTerm || entry.term)" title="播放英语发音"><Volume2 :size="14" /><span>EN</span></button><button class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语辅助读音：' + (entry.englishTerm || entry.term)" title="播放日语辅助读音"><Languages :size="14" /><span>日</span></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" :disabled="vocabularyHydrating" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
+                <div class="dict-actions"><button class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + (entry.englishTerm || entry.term)" title="播放英语发音"><Volume2 :size="14" /><span>EN</span></button><button class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语辅助读音：' + (entry.englishTerm || entry.term)" title="播放日语辅助读音"><Languages :size="14" /><span>日</span></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" :disabled="vocabularyHydrating || !vocabularySyncReady" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
               </article>
               <div v-if="lastSearchedTerm.trim().toLowerCase() === searchText.trim().toLowerCase() && displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>没有找到匹配词条</strong><p>可试试别名、英语缩写或日语术语；查 IT 专业词请选「IT」，该模式只查本地词库，不请求在线翻译。</p></div>
             </div>
@@ -2236,8 +2247,8 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <button class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语辅助读音：' + entry.term" title="日语辅助读音"><Languages :size="16" /><span>日</span></button>
                 <p v-if="speechStatus && speechStatusTarget === entry.term" class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p>
                 <span v-if="vocabularyPending.has(entry.term)">{{ vocabularyPending.get(entry.term) === 'deleted' ? '其他设备已取消，本机保留' : '仅本机保留' }}</span>
-                <button v-if="vocabularyPending.has(entry.term)" class="saved-remove-button" :disabled="vocabularyHydrating" @click="restoreVocabulary(entry.term)">同步收藏</button>
-                <button class="saved-remove-button" :disabled="vocabularyHydrating" @click="toggleSaved(entry.term)">取消收藏</button>
+                <button v-if="vocabularyPending.has(entry.term)" class="saved-remove-button" :disabled="vocabularyHydrating || !vocabularySyncReady" @click="restoreVocabulary(entry.term)">同步收藏</button>
+                <button class="saved-remove-button" :disabled="vocabularyHydrating || !vocabularySyncReady" @click="toggleSaved(entry.term)">{{ vocabularyPending.has(entry.term) ? '移除本机副本' : '取消收藏' }}</button>
               </article>
             </div>
             <div v-else class="empty-state"><BookMarked :size="25" /><strong>还没有收藏词条</strong><p>查询后点击结果卡片旁的书签按钮，即可保存并在这里复习。</p></div>
