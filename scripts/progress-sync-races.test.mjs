@@ -71,3 +71,9 @@ test('10,000 cards survive rate limiting and resume without repeating completed 
   assert.equal(requests, 101)
   assert.equal(waits, 1)
 })
+
+test('superseded sync stops before retry or modifying state', async () => {
+  let current = true, calls = 0
+  await assert.rejects(hydrateMastery(['a'], async () => { calls++; return { ok: false, status: 429 } }, checkpoint(), async () => { current = false }, () => current), /superseded/)
+  assert.equal(calls, 1)
+})

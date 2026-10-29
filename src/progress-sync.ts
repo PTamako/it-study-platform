@@ -15,7 +15,9 @@ export async function hydrateMastery(
   request: typeof fetch,
   checkpoint: { has(id: string): boolean; add(ids: string[]): void },
   wait: (ms: number) => Promise<void> = ms => new Promise(resolve => setTimeout(resolve, ms)),
+  isCurrent: () => boolean = () => true,
 ): Promise<string[]> {
+  const requireCurrent = () => { if (!isCurrent()) throw new Error('Synchronization superseded') }
   const ids = [...new Set(local)]
   const pending = ids.filter(id => !checkpoint.has(id))
   for (let i = 0; i < pending.length; i += 100) {
@@ -23,6 +25,7 @@ export async function hydrateMastery(
     let retries = 0
     let response: Response
     while (true) {
+      requireCurrent()
       response = await request('/api/language-progress', {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ legacy_card_ids: batch }),
@@ -31,15 +34,18 @@ export async function hydrateMastery(
       retries++
       await wait(65_000)
     }
+    requireCurrent()
     if (!response.ok) throw new Error('Unable to import local progress')
     const result = await response.json() as { recognized_card_ids?: unknown }
     if (!Array.isArray(result.recognized_card_ids)) throw new Error('Invalid import response')
     const requested = new Set(batch)
     checkpoint.add(result.recognized_card_ids.filter((id): id is string => typeof id === 'string' && requested.has(id)))
   }
+  requireCurrent()
   const response = await request('/api/language-progress')
   if (!response.ok) throw new Error('Unable to load cloud progress')
   const progress = await response.json() as { items?: Array<{ card_id: string; mastered: number }> }
+  requireCurrent()
   if (!Array.isArray(progress.items)) throw new Error('Invalid cloud progress')
   const cloudIds = new Set(progress.items.map(item => item.card_id))
   return [
