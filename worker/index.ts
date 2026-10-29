@@ -852,7 +852,7 @@ export default {
           env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(is_correct), 0) AS correct FROM study_attempts').first() as Promise<Record<string, unknown>>,
           env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(AVG(score), 0) AS average_score FROM scenario_attempts').first() as Promise<Record<string, unknown>>,
           env.DB.prepare(`SELECT (SELECT COUNT(*) FROM language_cards WHERE content_type = 'sentence') AS total, COALESCE((SELECT SUM(p.mastered) FROM language_card_progress p JOIN language_cards c ON c.id = p.card_id WHERE c.content_type = 'sentence'), 0) AS mastered`).first() as Promise<Record<string, unknown>>,
-          env.DB.prepare('SELECT COUNT(*) AS total FROM saved_vocabulary_entries').first() as Promise<Record<string, unknown>>,
+          env.DB.prepare(`SELECT COUNT(*) AS total FROM saved_vocabulary_entries WHERE CASE WHEN json_valid(entry_json) THEN COALESCE(json_extract(entry_json, '$._zhixue_deleted_v1'), 0) ELSE 0 END != 1`).first() as Promise<Record<string, unknown>>,
           env.DB.prepare("SELECT COUNT(*) AS total, COALESCE(SUM(completed), 0) AS completed FROM daily_task_completions WHERE study_date = date('now', '+9 hours')").first() as Promise<Record<string, unknown>>,
         ])
         const total = Number(attempts?.total || 0)
@@ -946,11 +946,22 @@ export default {
     if (url.pathname === '/api/vocabulary/saved') {
       if (request.method === 'GET') {
         try {
-          const { results } = await env.DB.prepare('SELECT term, language, entry_json, saved_at FROM saved_vocabulary_entries ORDER BY saved_at DESC LIMIT 200').all()
-          return json({ items: results.map((row: Record<string, unknown>) => ({
-            term: row.term, language: row.language, saved_at: row.saved_at,
-            entry: JSON.parse(String(row.entry_json || '{}')),
-          })) })
+          const sync = url.searchParams.get('sync') === '1'
+          const after = url.searchParams.get('after') || ''
+          if (after.length > 100) return json({ error: '无效的分页参数。' }, 400)
+          const liveCondition = "CASE WHEN json_valid(entry_json) THEN COALESCE(json_extract(entry_json, '$._zhixue_deleted_v1'), 0) ELSE 0 END != 1"
+          if (!sync) {
+            const { results } = await env.DB.prepare(`SELECT term, language, entry_json, saved_at FROM saved_vocabulary_entries WHERE ${liveCondition} ORDER BY saved_at DESC LIMIT 200`).all()
+            return json({ items: results.map((row: Record<string, unknown>) => ({ term: row.term, language: row.language, saved_at: row.saved_at, entry: JSON.parse(String(row.entry_json || '{}')) })) })
+          }
+          // Keyset pagination reads live rows and tombstones without truncating at 200.
+          const { results } = await env.DB.prepare('SELECT term, language, entry_json, saved_at FROM saved_vocabulary_entries WHERE term > ? ORDER BY term LIMIT 201').bind(after).all()
+          const page = results.slice(0, 200) as Record<string, unknown>[]
+          return json({ items: page.map(row => {
+            const entry = JSON.parse(String(row.entry_json || '{}')) as Record<string, unknown>
+            const deleted = entry._zhixue_deleted_v1 === true
+            return { term: row.term, language: row.language, saved_at: row.saved_at, deleted, entry: deleted ? undefined : entry }
+          }), next: results.length > 200 ? page[page.length - 1]?.term : null })
         } catch {
           return json({ items: [], error: '生词本表尚未初始化。' }, 503)
         }
@@ -963,12 +974,16 @@ export default {
       if (!term || term.length > 100) return json({ error: 'term 必填且不能超过 100 个字符。' }, 400)
       if (action === 'remove') {
         try {
-          await env.DB.prepare('DELETE FROM saved_vocabulary_entries WHERE term = ?').bind(term).run()
+          await env.DB.prepare(`INSERT INTO saved_vocabulary_entries (term, language, entry_json, saved_at)
+            VALUES (?, 'auto', '{"_zhixue_deleted_v1":true}', CURRENT_TIMESTAMP)
+            ON CONFLICT(term) DO UPDATE SET entry_json = '{"_zhixue_deleted_v1":true}', saved_at = CURRENT_TIMESTAMP`).bind(term).run()
           return json({ ok: true, term, saved: false })
         } catch { return json({ error: '删除生词失败。' }, 503) }
       }
+      if (body.explicit !== true) return json({ error: '请刷新页面后再收藏生词。' }, 409)
       const entry = body.entry
       if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return json({ error: '保存词条时必须提供 entry 对象。' }, 400)
+      if ((entry as Record<string, unknown>)._zhixue_deleted_v1 === true) return json({ error: '无效词条。' }, 400)
       const language = ['auto', 'ja', 'en', 'zh'].includes(String(body.language)) ? String(body.language) : 'auto'
       try {
         await env.DB.prepare(
