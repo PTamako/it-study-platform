@@ -77,3 +77,10 @@ test('superseded sync stops before retry or modifying state', async () => {
   await assert.rejects(hydrateMastery(['a'], async () => { calls++; return { ok: false, status: 429 } }, checkpoint(), async () => { current = false }, () => current), /superseded/)
   assert.equal(calls, 1)
 })
+
+test('a response from an expired session cannot advance the import checkpoint', async () => {
+  let current = true
+  const progress = checkpoint()
+  await assert.rejects(hydrateMastery(['a'], async () => ({ ok: true, status: 200, json: async () => { current = false; return { recognized_card_ids: ['a'] } } }), progress, undefined, () => current), /superseded/)
+  assert.deepEqual([...progress.done], [])
+})

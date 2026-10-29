@@ -37,6 +37,7 @@ export async function hydrateMastery(
     requireCurrent()
     if (!response.ok) throw new Error('Unable to import local progress')
     const result = await response.json() as { recognized_card_ids?: unknown }
+    requireCurrent()
     if (!Array.isArray(result.recognized_card_ids)) throw new Error('Invalid import response')
     const requested = new Set(batch)
     checkpoint.add(result.recognized_card_ids.filter((id): id is string => typeof id === 'string' && requested.has(id)))
