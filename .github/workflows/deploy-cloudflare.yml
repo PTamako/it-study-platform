@@ -101,6 +101,8 @@ jobs:
             '/api/dashboard',
             '/api/exam-history',
             '/api/attempts',
+            '/api/mock-exam/submit',
+            '/api/fe-question-bank/install',
             '/api/scenario-attempts',
             '/api/language-progress',
             '/api/language-review',
@@ -112,6 +114,8 @@ jobs:
           ]
           const protectedWrites = [
             ['POST', '/api/attempts'],
+            ['POST', '/api/mock-exam/submit'],
+            ['POST', '/api/fe-question-bank/install'],
             ['POST', '/api/scenario-attempts'],
             ['POST', '/api/language-progress'],
             ['POST', '/api/language-review'],
