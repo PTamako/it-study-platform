@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """Generate 10,000 attributed sentence cards from Tatoeba's public exports."""
-import csv, hashlib, io, json, re, tarfile, urllib.request
+import csv, hashlib, io, json, os, re, tarfile, tempfile, urllib.request
 from functools import lru_cache
 from pathlib import Path
 
@@ -16,14 +16,33 @@ SENTENCES_URL = "https://downloads.tatoeba.org/exports/sentences.tar.bz2"
 LINKS_URL = "https://downloads.tatoeba.org/exports/links.tar.bz2"
 
 def download(url, path):
+    # Interrupted downloads must not leave a nonempty partial file in the trusted cache.
+    # Publish only after the HTTP response completes and its reported length matches.
     if path.exists() and path.stat().st_size:
         return path
+    path.parent.mkdir(parents=True, exist_ok=True)
     req = urllib.request.Request(url, headers={"User-Agent": "it-study-platform-language-seed/1.0"})
-    with urllib.request.urlopen(req, timeout=300) as response, path.open("wb") as out:
-        while True:
-            chunk = response.read(1024 * 1024)
-            if not chunk: break
-            out.write(chunk)
+    temp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="wb", dir=str(path.parent), prefix=path.name + ".", suffix=".part", delete=False) as out:
+            temp_path = Path(out.name)
+            with urllib.request.urlopen(req, timeout=300) as response:
+                expected_length = response.headers.get("Content-Length")
+                received = 0
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+                    received += len(chunk)
+                if expected_length is not None and received != int(expected_length):
+                    raise IOError("Incomplete Tatoeba download: expected {} bytes, got {}".format(expected_length, received))
+                if not received:
+                    raise IOError("Empty Tatoeba download")
+        os.replace(str(temp_path), str(path))
+    finally:
+        if temp_path is not None and temp_path.exists():
+            temp_path.unlink()
     return path
 
 def norm(value):
@@ -32,17 +51,31 @@ def norm(value):
 def sql(value):
     return "'" + str(value or "").replace("\x00", "").replace("'", "''") + "'"
 
-def rows_in_tar(path, suffix):
-    archive = tarfile.open(path, "r:bz2")
-    member = next((item for item in archive.getmembers() if item.name.endswith(suffix)), None)
-    if member is None:
-        archive.close()
-        raise RuntimeError("Tatoeba export is missing " + suffix)
-    raw = archive.extractfile(member)
-    if raw is None:
-        archive.close()
-        raise RuntimeError("Could not read Tatoeba export " + suffix)
-    return archive, csv.reader(io.TextIOWrapper(raw, encoding="utf-8", newline=""), delimiter="\t")
+def rows_in_tar(path, suffix, source_url):
+    # Old caches might have been populated by a download interrupted mid-stream.
+    # tarfile.getmembers() decompresses the archive and exposes broken bzip2 EOF.
+    # Re-download only this public archive once; never touch D1 or user progress.
+    for attempt in range(2):
+        archive = None
+        try:
+            archive = tarfile.open(path, "r:bz2")
+            member = next((item for item in archive.getmembers() if item.name.endswith(suffix)), None)
+            if member is None:
+                raise tarfile.ReadError("Tatoeba export is missing " + suffix)
+            raw = archive.extractfile(member)
+            if raw is None:
+                raise tarfile.ReadError("Could not read Tatoeba export " + suffix)
+            return archive, csv.reader(io.TextIOWrapper(raw, encoding="utf-8", newline=""), delimiter="\t")
+        except (EOFError, OSError, tarfile.TarError) as error:
+            if archive is not None:
+                archive.close()
+            if attempt:
+                raise RuntimeError("Tatoeba export is still incomplete after a fresh download: " + str(path)) from error
+            print("Invalid or incomplete Tatoeba cache; downloading a fresh copy:", path, flush=True)
+            if path.exists():
+                path.unlink()
+            download(source_url, path)
+    raise RuntimeError("Could not open Tatoeba export: " + str(path))
 
 JP_WORK = re.compile(r"会社|仕事|職場|会議|打ち合わせ|報告|資料|確認|連絡|お客様|メール|電話|納期|依頼|申請|提出|対応|営業|面接|プロジェクト|システム|契約|請求|休暇|残業|出勤|退勤|上司|同僚|担当|共有|相談|予定|予約|変更|説明|承認|見積|部署|勤務")
 EN_WORK = re.compile(r"\b(company|work|office|meeting|report|document|confirm|contact|client|customer|email|phone|deadline|request|application|submit|support|sales|interview|project|system|contract|invoice|leave|overtime|manager|colleague|team|share|discuss|schedule|appointment|change|explain|approve|estimate|department|presentation|coworker)\b", re.I)
@@ -583,7 +616,7 @@ def main():
     sentence_archive=download(SENTENCES_URL,CACHE/"sentences.tar.bz2")
     links_archive=download(LINKS_URL,CACHE/"links.tar.bz2")
     sentences,chinese={},{}
-    archive,rows=rows_in_tar(sentence_archive,"sentences.csv")
+    archive,rows=rows_in_tar(sentence_archive,"sentences.csv",SENTENCES_URL)
     try:
         for row in rows:
             if len(row)<3: continue
@@ -594,7 +627,7 @@ def main():
     finally: archive.close()
     print("Loaded Tatoeba Japanese/English and Chinese sentences:",len(sentences),len(chinese))
     translations={}
-    archive,rows=rows_in_tar(links_archive,"links.csv")
+    archive,rows=rows_in_tar(links_archive,"links.csv",LINKS_URL)
     try:
         for row in rows:
             if len(row)<2: continue
