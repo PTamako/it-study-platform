@@ -666,24 +666,19 @@ def main():
         )
     OUT_REFRESH.write_text("\n".join(refresh)+"\n",encoding="utf-8")
     OUT_REFRESH_LATEST.write_text("\n".join(refresh)+"\n",encoding="utf-8")
-    # Use a new migration number whenever the generated corpus changes: D1 records applied
-    # migration names and will never rerun an edited 0086. Rebuild from fresh annotations,
-    # rather than merely updating rows seeded by an older algorithm. Preserve
-    # per-card mastery before ON DELETE CASCADE removes the old sentence rows.
+    # Existing IDs must be updated in place. A delete/re-insert destroys
+    # language_card_reviews through ON DELETE CASCADE even when mastery is restored.
+    # Keep unrelated or removed-source IDs rather than silently erasing study history.
+    # The deployment validator must flag unexpected corpus counts for manual review.
     rebuild = [
-        "-- Rebuild the complete bilingual sentence corpus using the current annotation rules.",
-        "-- Preserve existing mastery for stable IDs; unrelated cards and saved vocabulary are untouched.",
-        "CREATE TABLE IF NOT EXISTS language_card_progress_rebuild_backup (card_id TEXT PRIMARY KEY, mastered INTEGER NOT NULL, updated_at TEXT NOT NULL);",
-        "INSERT OR REPLACE INTO language_card_progress_rebuild_backup (card_id, mastered, updated_at) SELECT p.card_id, p.mastered, p.updated_at FROM language_card_progress p JOIN language_cards c ON c.id = p.card_id WHERE c.content_type = 'sentence';",
-        "DELETE FROM language_cards WHERE content_type = 'sentence';",
+        "-- Update licensed sentence content without deleting cards or personal history.",
+        "-- Existing mastery and spaced-repetition records are retained for every ID.",
     ]
+    upsert_columns = ", ".join(col + " = excluded." + col for col in columns if col != "id")
+    upsert_prefix = "INSERT INTO language_cards (" + ", ".join(columns) + ") VALUES"
     for start in range(0, len(values), 5):
         batch = values[start:start+5]
-        rebuild.append(insert_prefix + "\n" + ",\n".join(batch) + ";")
-    rebuild.extend([
-        "INSERT OR REPLACE INTO language_card_progress (card_id, mastered, updated_at) SELECT b.card_id, b.mastered, b.updated_at FROM language_card_progress_rebuild_backup b JOIN language_cards c ON c.id = b.card_id WHERE c.content_type = 'sentence';",
-        "DROP TABLE language_card_progress_rebuild_backup;",
-    ])
+        rebuild.append(upsert_prefix + "\n" + ",\n".join(batch) + " ON CONFLICT(id) DO UPDATE SET " + upsert_columns + ";")
     OUT_REBUILD.write_text("\n".join(rebuild) + "\n", encoding="utf-8")
 
     # Whole-corpus quality summary: every accepted card must have concrete, non-overlapping

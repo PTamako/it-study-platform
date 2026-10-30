@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { hydrateMastery, mergeExamHistory, restoreMasteredCard } from './progress-sync'
 import { tokyoDate, mergeDailyTaskStates } from './daily-tasks'
+import { utcReviewMillis } from './review-time'
 import { fetchVocabularySnapshot } from './vocabulary-sync'
 import {
   BookOpen, Languages, Search, GraduationCap,
@@ -964,6 +965,8 @@ const languageReviews = ref<LanguageReview[]>(readStored('zhixue:language-review
 const languageReviewBusy = ref('')
 const selectedLanguageMastery = ref<'all' | 'unlearned' | 'unmastered' | 'mastered'>('all')
 const languageReviewByCardId = computed(() => new Map(languageReviews.value.map(review => [review.card_id, review])))
+const masteredLanguageIds = computed(() => new Set(completedLanguageCards.value))
+const reviewClockNow = ref(Date.now())
 const isLanguageCardUnlearned = (card: LanguageCard) => {
   const review = languageReviewByCardId.value.get(card.id)
   return !completedLanguageCards.value.includes(card.id) && (!review || review.review_count === 0)
@@ -971,7 +974,7 @@ const isLanguageCardUnlearned = (card: LanguageCard) => {
 const unlearnedLanguageCount = computed(() => languageCards.value.filter(isLanguageCardUnlearned).length)
 const visibleLanguageCards = computed(() => languageCards.value.filter(card => {
   const matchesCategory = selectedLanguageCategory.value === '全部' || card.category === selectedLanguageCategory.value
-  const isMastered = completedLanguageCards.value.includes(card.id)
+  const isMastered = masteredLanguageIds.value.has(card.id)
   const isUnlearned = isLanguageCardUnlearned(card)
   const matchesMastery = selectedLanguageMastery.value === 'all'
     || (selectedLanguageMastery.value === 'unlearned' && isUnlearned)
@@ -979,10 +982,10 @@ const visibleLanguageCards = computed(() => languageCards.value.filter(card => {
     || (selectedLanguageMastery.value === 'unmastered' && !isMastered && !isUnlearned)
   return matchesCategory && matchesMastery
 }).sort((a, b) => {
-  const aReview = languageReviews.value.find(item => item.card_id === a.id)
-  const bReview = languageReviews.value.find(item => item.card_id === b.id)
-  const aDue = !aReview || new Date(aReview.next_review_at).getTime() <= Date.now()
-  const bDue = !bReview || new Date(bReview.next_review_at).getTime() <= Date.now()
+  const aReview = languageReviewByCardId.value.get(a.id)
+  const bReview = languageReviewByCardId.value.get(b.id)
+  const aDue = !aReview || utcReviewMillis(aReview.next_review_at) <= reviewClockNow.value
+  const bDue = !bReview || utcReviewMillis(bReview.next_review_at) <= reviewClockNow.value
   return Number(bDue) - Number(aDue)
 }))
 const languagePage = ref(1)
@@ -994,7 +997,7 @@ const paginatedLanguageCards = computed(() => visibleLanguageCards.value.slice(
 ))
 const dueLanguageReviewCount = computed(() => visibleLanguageCards.value.filter(card => {
   const review = languageReviewByCardId.value.get(card.id)
-  return Boolean(review && review.review_count > 0 && new Date(review.next_review_at).getTime() <= Date.now())
+  return Boolean(review && review.review_count > 0 && utcReviewMillis(review.next_review_at) <= reviewClockNow.value)
 }).length)
 const languagePracticeIndex = ref(0)
 const languagePracticeRevealed = ref(false)
@@ -1147,7 +1150,7 @@ watch([studyLanguage, selectedLanguageCategory, selectedLanguageMastery], () => 
 })
 const languageProgress = computed(() => {
   const ids = languageCards.value.map(card => card.id)
-  const done = ids.filter(id => completedLanguageCards.value.includes(id)).length
+  const done = ids.filter(id => masteredLanguageIds.value.has(id)).length
   return { done, total: ids.length, percent: ids.length ? Math.round(done / ids.length * 100) : 0 }
 })
 async function loadLanguageCards() {
@@ -1283,7 +1286,7 @@ async function hydrateCloudProgress() {
 }
 onMounted(async () => {
   rolloverDailyTasks()
-  dailyRolloverTimer = setInterval(rolloverDailyTasks, 30000)
+  dailyRolloverTimer = setInterval(() => { rolloverDailyTasks(); reviewClockNow.value = Date.now() }, 30000)
   document.addEventListener('visibilitychange', onDailyVisibilityChange)
   // Preload the browser's speech voices before the user taps a pronunciation button.
   // iOS Safari may initially return an empty voice list; waiting until the first tap
