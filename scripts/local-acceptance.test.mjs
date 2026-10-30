@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 
 test('local validation is non-destructive and validates all generated migrations', async () => {
   const script = await readFile(new URL('./check-local.sh', import.meta.url), 'utf8')
-  for (const step of ['npm ci', 'generate_language_sentence_seed.py', 'npm run typecheck',
+  for (const step of ['npm ci', 'generate_language_sentence_seed.py', 'generate_fe_practice_bank.mjs', 'npm run typecheck',
     'npm test', 'npm run build', 'd1 migrations apply it-study-platform-db --local']) {
     assert.ok(script.includes(step), step)
   }
