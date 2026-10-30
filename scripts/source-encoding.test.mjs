@@ -12,7 +12,15 @@ test('bilingual Python source is valid UTF-8 and has explicit encoding declarati
 test('local preflight checks encoding before invoking data generator', async () => {
   const script = await readFile(new URL('./check-local.sh', import.meta.url), 'utf8')
   const preflight = script.indexOf('source.read_text(encoding="utf-8")')
-  const generator = script.indexOf('python3 scripts/generate_language_sentence_seed.py')
+  const generator = script.indexOf('scripts/generate_language_sentence_seed.py')
   assert.ok(preflight >= 0 && generator > preflight)
-  assert.match(script, /python3 -m py_compile/)
+  assert.match(script, /-m py_compile/)
+})
+
+test('local script prefers Python 3.12 and supports existing macOS Python 3.8', async () => {
+  const script = await readFile(new URL('./check-local.sh', import.meta.url), 'utf8')
+  assert.ok(script.indexOf('python3.12') < script.indexOf('python3.11'))
+  assert.ok(script.indexOf('python3.11') < script.indexOf('python3.10'))
+  assert.match(script, /sys.version_info < \(3, 8\)/)
+  assert.match(script, /PYTHON_BIN/)
 })
