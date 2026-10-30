@@ -7,7 +7,9 @@ import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const dir = await mkdtemp(join(tmpdir(), 'vocab-auth-'))
-const worker = (await readFile(new URL('../worker/index.ts', import.meta.url), 'utf8')).replace("from './auth'", "from './auth.mts'")
+const worker = (await readFile(new URL('../worker/index.ts', import.meta.url), 'utf8'))
+  .replace("from './auth'", "from './auth.mts'")
+  .replace("import { feSeeds, seedUrl } from './fe-question-bank'", "const feSeeds = []; const seedUrl = () => ''")
 await writeFile(join(dir, 'index.mts'), worker)
 await writeFile(join(dir, 'auth.mts'), await readFile(new URL('../worker/auth.ts', import.meta.url), 'utf8'))
 const app = (await import(pathToFileURL(join(dir, 'index.mts')))).default
