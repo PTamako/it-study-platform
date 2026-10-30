@@ -9,6 +9,7 @@ import { pathToFileURL } from 'node:url'
 const dir = await mkdtemp(join(tmpdir(), 'vocabulary-worker-'))
 const source = (await readFile(new URL('../worker/index.ts', import.meta.url), 'utf8'))
   .replace("import { checkWriteRateLimit, handleAuthRequest, requireAuth } from './auth'", 'const checkWriteRateLimit = async () => null; const handleAuthRequest = async () => null; const requireAuth = async () => null')
+  .replace("import { feSeeds, seedUrl } from './fe-question-bank'", "const feSeeds = []; const seedUrl = () => ''")
 const workerFile = join(dir, 'worker.mts'); await writeFile(workerFile, source)
 const worker = (await import(pathToFileURL(workerFile))).default
 process.on('exit', () => { void rm(dir, { recursive: true, force: true }) })
