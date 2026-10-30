@@ -1,7 +1,9 @@
 import { checkWriteRateLimit, handleAuthRequest, requireAuth } from './auth'
+import { feSeeds, seedUrl } from './fe-question-bank'
 
 // Personal state is never readable or writable without an authenticated session.
 const protectedPersonalPaths = new Set([
+  '/api/fe-question-bank/install',
   '/api/dashboard',
   '/api/exam-history',
   '/api/attempts',
@@ -694,10 +696,68 @@ export default {
         if (rateLimitFailure) return rateLimitFailure
       }
     }
-    const isWriteEndpoint = ['/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history', '/api/translate-explanation'].includes(url.pathname)
+    const isWriteEndpoint = ['/api/fe-question-bank/install', '/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history', '/api/translate-explanation'].includes(url.pathname)
     const isExamHistoryDelete = request.method === 'DELETE' && url.pathname === '/api/exam-history'
     if (request.method !== 'GET' && !(request.method === 'POST' && isWriteEndpoint) && !isExamHistoryDelete) {
       return json({ error: '不支持此请求方法' }, 405)
+    }
+
+    // The seed is bundled and reviewed; the caller cannot supply SQL or question content.
+    // Only the authenticated same-origin POST path can insert rows. Conflicts never overwrite data.
+    if (url.pathname === '/api/fe-question-bank/install' && request.method === 'POST') {
+      try {
+        const seedId = (item: typeof feSeeds[number]) => item.origin === 'original'
+          ? `fe-original-${(item.section || 'A').toLowerCase()}-${String(item.number).padStart(2, '0')}`
+          : `fe-ipa-adapt-${item.year}-${(item.section || 'A').toLowerCase()}-${String(item.number).padStart(2, '0')}`
+        const seedPrompt = (item: typeof feSeeds[number]) => item.origin === 'original'
+          ? `【FE自主練習 科目${item.section || 'A'} 問${item.number}】${item.prompt}`
+          : `【${item.year}年度 科目${item.section || 'A'} 問${item.number}・改編】${item.prompt}`
+        const seedType = (item: typeof feSeeds[number]) => item.origin === 'original' ? 'generated' : 'licensed'
+        const seedReference = (item: typeof feSeeds[number]) => item.origin === 'original' ? '知学オリジナル練習問題（IPA公式過去問ではありません）' : seedUrl(item.year)
+        const ids = feSeeds.map(seedId)
+        // D1 limits SQL bound parameters. Check all existing rows before inserting
+        // anything, then apply bounded atomic batches that can safely be retried.
+        const selectExisting = async () => {
+          const rows: Record<string, unknown>[] = []
+          for (let offset = 0; offset < ids.length; offset += 40) {
+            const part = ids.slice(offset, offset + 40)
+            const marks = part.map(() => '?').join(',')
+            const result = await env.DB.prepare(`SELECT id, track_id, topic, prompt, options_json, answer_json, explanation, source_type, source_reference, exam_section, exam_section_method FROM questions WHERE id IN (${marks})`).bind(...part).all()
+            rows.push(...result.results as Record<string, unknown>[])
+          }
+          return new Map(rows.map(row => [String(row.id), row]))
+        }
+        const byId = await selectExisting()
+        const matches = (row: Record<string, unknown>, item: typeof feSeeds[number]) =>
+          row.track_id === 'exam-fe' && row.topic === item.topic &&
+          row.prompt === seedPrompt(item) &&
+          row.options_json === JSON.stringify(item.options.map((text, n) => ({id: String.fromCharCode(97 + n), text}))) &&
+          row.answer_json === JSON.stringify(String.fromCharCode(97 + item.answer)) && row.explanation === item.explanation &&
+          row.source_type === seedType(item) && row.source_reference === seedReference(item) && row.exam_section === (item.section || 'A') && row.exam_section_method === 'explicit'
+        for (let i = 0; i < feSeeds.length; i++) {
+          const item = feSeeds[i]; const row = byId.get(ids[i])
+          if (row && !matches(row, item)) {
+            return json({ error: '题库 ID 与现有题目冲突，未覆盖任何数据。' }, 409)
+          }
+        }
+        for (let offset = 0; offset < feSeeds.length; offset += 40) {
+          const part = feSeeds.slice(offset, offset + 40)
+          await env.DB.batch(part.map((item, i) => env.DB.prepare(
+            `INSERT INTO questions (id, track_id, topic, difficulty, question_type, prompt, options_json, answer_json, explanation, source_type, source_reference, language, exam_section, exam_section_method)
+             VALUES (?, 'exam-fe', ?, 'standard', 'single_choice', ?, ?, ?, ?, ?, ?, 'ja', ?, 'explicit') ON CONFLICT(id) DO NOTHING`,
+          ).bind(ids[offset + i], item.topic, seedPrompt(item),
+            JSON.stringify(item.options.map((text, n) => ({id: String.fromCharCode(97 + n), text}))),
+            JSON.stringify(String.fromCharCode(97 + item.answer)), item.explanation, seedType(item), seedReference(item), item.section || 'A')))
+        }
+        const actual = await selectExisting()
+        if (feSeeds.some((item, i) => {
+          const row = actual.get(ids[i])
+          return !row || !matches(row, item)
+        })) return json({ error: '题库导入存在冲突，请稍后重试。' }, 409)
+        return json({ ok: true, count: ids.length, adapted: true })
+      } catch {
+        return json({ error: 'FE 题库暂时无法准备，请稍后重试。' }, 503)
+      }
     }
 
     // 健康检查同时检查 D1 是否能正常查询。
@@ -717,7 +777,8 @@ export default {
           `SELECT st.id, st.kind, st.title, st.subtitle,
                   (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id) AS question_count,
                   (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id AND q.source_type = 'official') AS official_question_count,
-                  (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id AND q.source_type = 'generated') AS prediction_question_count
+                  (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id AND q.source_type = 'generated') AS prediction_question_count,
+                  (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id AND q.source_type = 'licensed') AS adapted_question_count
            FROM study_tracks st
            WHERE st.enabled = 1
            ORDER BY st.kind, st.title`,
@@ -1086,7 +1147,7 @@ export default {
       const requestedMode = (url.searchParams.get('mode') || 'wrong').trim()
       const mode = ['wrong', 'due', 'practice', 'mastered', 'unlearned'].includes(requestedMode) ? requestedMode : 'wrong'
       const requestedSource = (url.searchParams.get('source') || '').trim()
-      const source = ['official', 'generated'].includes(requestedSource) ? requestedSource : ''
+      const source = ['official', 'generated', 'licensed'].includes(requestedSource) ? requestedSource : ''
       try {
         const { results } = await env.DB.prepare(
           `SELECT q.id, q.track_id, q.topic, q.difficulty, q.question_type, q.prompt,
@@ -1342,7 +1403,7 @@ export default {
     if (url.pathname === '/api/question-categories' && request.method === 'GET') {
       const trackId = (url.searchParams.get('track') || 'exam-sg').trim().slice(0, 80)
       const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
-      const source = ['all', 'official', 'generated'].includes(requestedSource) ? requestedSource : 'all'
+      const source = ['all', 'official', 'generated', 'licensed'].includes(requestedSource) ? requestedSource : 'all'
       try {
         const { results } = await env.DB.prepare(
           `SELECT topic, COUNT(*) AS question_count
@@ -1361,7 +1422,7 @@ export default {
     if (url.pathname === '/api/question-classification-stats' && request.method === 'GET') {
       const trackId = (url.searchParams.get('track') || 'exam-sg').trim().slice(0, 80)
       const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
-      const source = ['all', 'official', 'generated'].includes(requestedSource) ? requestedSource : 'all'
+      const source = ['all', 'official', 'generated', 'licensed'].includes(requestedSource) ? requestedSource : 'all'
       try {
         const { results } = await env.DB.prepare(
           `SELECT COALESCE(exam_section, 'unclassified') AS exam_section,
@@ -1391,8 +1452,11 @@ export default {
     // SG 模拟考试只按数据库持久化的 A/B 分类组卷，不在请求时临时猜题型。
     if (url.pathname === '/api/mock-exam-questions' && request.method === 'GET') {
       const trackId = (url.searchParams.get('track') || 'exam-sg').trim().slice(0, 80)
+      const feSection = (url.searchParams.get('section') || '').trim().toUpperCase()
+      if (trackId !== 'exam-sg' && trackId !== 'exam-fe') return json({ error: '此考试的模拟组卷暂未开放。' }, 400)
+      if (trackId === 'exam-fe' && !['A', 'B'].includes(feSection)) return json({ error: '请选择 FE 科目 A 或科目 B。' }, 400)
       const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
-      const source = ['all', 'official', 'generated'].includes(requestedSource) ? requestedSource : 'all'
+      const source = ['all', 'official', 'generated', 'licensed'].includes(requestedSource) ? requestedSource : 'all'
       try {
         const { results } = await env.DB.prepare(
           `SELECT id, track_id, topic, difficulty, question_type, prompt,
@@ -1405,12 +1469,6 @@ export default {
         const sectionA = rows.filter(row => row.exam_section === 'A')
         const sectionB = rows.filter(row => row.exam_section === 'B')
         const unclassified = rows.filter(row => row.exam_section !== 'A' && row.exam_section !== 'B').length
-        if (sectionA.length < 48 || sectionB.length < 12) {
-          return json({
-            error: `A/B 分类题量不足：科目 A ${sectionA.length} 题、科目 B ${sectionB.length} 题、待复核 ${unclassified} 题；组卷需要至少 48 道 A 类和 12 道 B 类题。请先核对分类统计并补齐标签。`,
-            section_counts: { A: sectionA.length, B: sectionB.length, unclassified },
-          }, 409)
-        }
         const decode = (row: Record<string, unknown>) => ({
           ...row,
           options: JSON.parse(String(row.options_json || '[]')),
@@ -1425,6 +1483,25 @@ export default {
             ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
           }
           return shuffled
+        }
+        if (trackId === 'exam-fe') {
+          // 科目 B 的领域标签必须由题库明确提供，避免将 A 类知识题当作伪代码题。
+          const algorithm = sectionB.filter(row => row.exam_section_method === 'explicit' && row.topic === 'FE算法与程序设计')
+          const security = sectionB.filter(row => row.exam_section_method === 'explicit' && row.topic === 'FE信息安全')
+          const a = sectionA.filter(row => row.exam_section_method === 'explicit')
+          const pool = feSection === 'A' ? a : [...algorithm, ...security]
+          const available = feSection === 'A' ? a.length >= 60 : algorithm.length >= 16 && security.length >= 4
+          if (!available) return json({ error: feSection === 'A'
+            ? `FE 科目 A 需要 60 道已明确分类的题目，当前 ${a.length} 道。`
+            : `FE 科目 B 需要算法与程序设计 16 题、信息安全 4 题，当前分别为 ${algorithm.length} 与 ${security.length} 题。`, section_counts: { A: a.length, B: pool.length } }, 409)
+          const items = (feSection === 'A' ? shuffle(a).slice(0, 60) : [...shuffle(algorithm).slice(0, 16), ...shuffle(security).slice(0, 4)]).map(decode)
+          return json({ items: shuffle(items), section: feSection, total: items.length, duration_minutes: feSection === 'A' ? 90 : 100, distribution: feSection === 'B' ? { algorithm: 16, security: 4, approximate: true } : undefined })
+        }
+        if (sectionA.length < 48 || sectionB.length < 12) {
+          return json({
+            error: `A/B 分类题量不足：科目 A ${sectionA.length} 题、科目 B ${sectionB.length} 题、待复核 ${unclassified} 题；组卷需要至少 48 道 A 类和 12 道 B 类题。请先核对分类统计并补齐标签。`,
+            section_counts: { A: sectionA.length, B: sectionB.length, unclassified },
+          }, 409)
         }
         const items = [
           ...shuffle(sectionA).slice(0, 48).map(decode),
@@ -1449,7 +1526,7 @@ export default {
       const topic = (url.searchParams.get('topic') || '').trim().slice(0, 100)
       const mode = url.searchParams.get('mode') || 'random'
       const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
-      const source = ['all', 'official', 'generated'].includes(requestedSource) ? requestedSource : 'all'
+      const source = ['all', 'official', 'generated', 'licensed'].includes(requestedSource) ? requestedSource : 'all'
       try {
         const totalRow = await env.DB.prepare(
           `SELECT COUNT(*) AS total FROM questions
