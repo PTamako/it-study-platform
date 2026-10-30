@@ -13,3 +13,6 @@ coverage/
 ._*
 __pycache__/
 *.py[cod]
+
+# Generated during local validation / GitHub Actions, not a hand-edited source
+migrations/0092_fe_practice_bank.sql
