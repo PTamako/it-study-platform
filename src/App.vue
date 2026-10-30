@@ -419,9 +419,10 @@ const examTracks = ref<ExamTrack[]>([])
 const selectedTrackId = ref('exam-sg')
 const tracksLoading = ref(false)
 const tracksError = ref('')
-const questionSourceFilter = ref<'official' | 'generated' | 'licensed'>('generated')
+const questionSourceFilter = ref<'all' | 'official' | 'generated' | 'licensed'>('generated')
 const activeReviewMode = ref<'all' | 'unlearned' | 'mastered' | 'due' | 'wrong'>('all')
 const questionSourceFilters = [
+  { id: 'all', label: '全部题目' },
   { id: 'official', label: '历年真题' },
   { id: 'generated', label: '预测题库' },
   { id: 'licensed', label: '真题改编' },
@@ -755,7 +756,7 @@ function selectExam(track: ExamTrack) {
   quizError.value = ''
 }
 
-async function selectQuestionSource(source: 'official' | 'generated' | 'licensed') {
+async function selectQuestionSource(source: 'all' | 'official' | 'generated' | 'licensed') {
   if (selectedTrackId.value === 'exam-fe' && feBankLoading.value) return
   stopSpeech()
   practiceAnswerRequestId += 1
@@ -837,7 +838,7 @@ async function startPractice() {
     if (!response.ok) throw new Error(data.error || '题库加载失败')
     if (!data.items?.length) {
       const messages = {
-        all: questionSourceFilter.value === 'official' ? '当前没有可作答的历年真题。' : questionSourceFilter.value === 'licensed' ? '当前没有可作答的真题改编。' : '当前没有可用的预测题，请稍后重试。',
+        all: questionSourceFilter.value === 'official' ? '当前筛选下暂无官方历年真题。' : questionSourceFilter.value === 'licensed' ? '当前没有可作答的真题改编。' : questionSourceFilter.value === 'generated' ? '当前没有可用的预测题，请稍后重试。' : '当前筛选下暂无题目。',
         unlearned: '当前题库中没有尚未作答的题目。',
         wrong: '当前筛选下没有错题。答错题目后会自动进入错题集。',
         due: '当前没有到期的复习题。答错题会先安排短间隔复习。',
@@ -2064,7 +2065,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             <section class="practice-section">
               <div class="section-heading practice-heading"><div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2></div></div>
               <div class="question-source-filters" role="group" aria-label="题目来源筛选">
-                <button v-for="filter in questionSourceFilters.filter(item => item.id !== 'licensed' || selectedTrackId === 'exam-fe')" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" :disabled="selectedTrackId === 'exam-fe' && feBankLoading" @click="selectQuestionSource(filter.id)">{{ filter.label }}（{{ filter.id === 'official' ? (selectedTrack?.official_question_count || 0) : filter.id === 'licensed' ? (selectedTrack?.adapted_question_count || 0) : (selectedTrack?.prediction_question_count || 0) }}）</button>
+                <button v-for="filter in questionSourceFilters.filter(item => (item.id !== 'licensed' && item.id !== 'all') || selectedTrackId === 'exam-fe')" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" :disabled="selectedTrackId === 'exam-fe' && feBankLoading" @click="selectQuestionSource(filter.id)">{{ filter.label }}（{{ filter.id === 'all' ? (selectedTrack?.question_count || 0) : filter.id === 'official' ? (selectedTrack?.official_question_count || 0) : filter.id === 'licensed' ? (selectedTrack?.adapted_question_count || 0) : (selectedTrack?.prediction_question_count || 0) }}）</button>
               </div>
               <div class="question-category-section">
                 <div class="question-category-heading"><strong>学习状态</strong><span>按当前题库筛选</span></div>
