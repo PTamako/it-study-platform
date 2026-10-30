@@ -1009,9 +1009,12 @@ const selectedLanguageMastery = ref<'all' | 'unlearned' | 'unmastered' | 'master
 const languageReviewByCardId = computed(() => new Map(languageReviews.value.map(review => [review.card_id, review])))
 const masteredLanguageIds = computed(() => new Set(completedLanguageCards.value))
 const reviewClockNow = ref(Date.now())
+const reviewDueByCardId = computed(() => new Map(
+  [...languageReviewByCardId.value].map(([id, review]) => [id, utcReviewMillis(review.next_review_at) <= reviewClockNow.value]),
+))
 const isLanguageCardUnlearned = (card: LanguageCard) => {
   const review = languageReviewByCardId.value.get(card.id)
-  return !completedLanguageCards.value.includes(card.id) && (!review || review.review_count === 0)
+  return !masteredLanguageIds.value.has(card.id) && (!review || review.review_count === 0)
 }
 const unlearnedLanguageCount = computed(() => languageCards.value.filter(isLanguageCardUnlearned).length)
 const visibleLanguageCards = computed(() => languageCards.value.filter(card => {
@@ -1026,8 +1029,8 @@ const visibleLanguageCards = computed(() => languageCards.value.filter(card => {
 }).sort((a, b) => {
   const aReview = languageReviewByCardId.value.get(a.id)
   const bReview = languageReviewByCardId.value.get(b.id)
-  const aDue = !aReview || utcReviewMillis(aReview.next_review_at) <= reviewClockNow.value
-  const bDue = !bReview || utcReviewMillis(bReview.next_review_at) <= reviewClockNow.value
+  const aDue = !aReview || reviewDueByCardId.value.get(a.id) === true
+  const bDue = !bReview || reviewDueByCardId.value.get(b.id) === true
   return Number(bDue) - Number(aDue)
 }))
 const languagePage = ref(1)
@@ -1039,7 +1042,7 @@ const paginatedLanguageCards = computed(() => visibleLanguageCards.value.slice(
 ))
 const dueLanguageReviewCount = computed(() => visibleLanguageCards.value.filter(card => {
   const review = languageReviewByCardId.value.get(card.id)
-  return Boolean(review && review.review_count > 0 && utcReviewMillis(review.next_review_at) <= reviewClockNow.value)
+  return Boolean(review && review.review_count > 0 && reviewDueByCardId.value.get(card.id))
 }).length)
 const languagePracticeIndex = ref(0)
 const languagePracticeRevealed = ref(false)
@@ -1195,19 +1198,33 @@ const languageProgress = computed(() => {
   const done = ids.filter(id => masteredLanguageIds.value.has(id)).length
   return { done, total: ids.length, percent: ids.length ? Math.round(done / ids.length * 100) : 0 }
 })
+let languageCardsLoadGeneration = 0
+let languageCardsAbort: AbortController | undefined
 async function loadLanguageCards() {
+  const generation = ++languageCardsLoadGeneration
+  const language = studyLanguage.value
+  languageCardsAbort?.abort()
+  const controller = new AbortController()
+  languageCardsAbort = controller
   languageCardsLoading.value = true
   languageCardsError.value = ''
   languageCards.value = []
-try {
-    const response = await fetch('/api/language-cards?lang=' + encodeURIComponent(studyLanguage.value))
+  try {
+    const response = await fetch('/api/language-cards?lang=' + encodeURIComponent(language), {
+      signal: controller.signal,
+    })
     const data = await response.json() as { items?: LanguageCard[]; error?: string }
+    if (generation !== languageCardsLoadGeneration || language !== studyLanguage.value) return
     if (!response.ok) throw new Error(data.error || '语言学习内容加载失败')
     languageCards.value = data.items || []
   } catch (error) {
+    if (generation !== languageCardsLoadGeneration || controller.signal.aborted) return
     languageCardsError.value = error instanceof Error ? error.message : '语言学习内容加载失败，请稍后再试。'
   } finally {
-    languageCardsLoading.value = false
+    if (generation === languageCardsLoadGeneration) {
+      languageCardsLoading.value = false
+      languageCardsAbort = undefined
+    }
   }
 }
 async function submitLanguageReview(result: 'again' | 'remembered') {
