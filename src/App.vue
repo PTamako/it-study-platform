@@ -1006,11 +1006,11 @@ type LanguageReview = { card_id: string; review_count: number; correct_streak: n
 const languageReviews = ref<LanguageReview[]>(readStored('zhixue:language-reviews', []))
 const languageReviewBusy = ref('')
 const selectedLanguageMastery = ref<'all' | 'unlearned' | 'unmastered' | 'mastered'>('all')
-const languageReviewByCardId = computed(() => new Map(languageReviews.value.map(review => [review.card_id, review])))
+const languageReviewByCardId = computed(() => new Map<string, LanguageReview>(languageReviews.value.map(review => [review.card_id, review] as const)))
 const masteredLanguageIds = computed(() => new Set(completedLanguageCards.value))
 const reviewClockNow = ref(Date.now())
-const reviewDueByCardId = computed(() => new Map(
-  [...languageReviewByCardId.value].map(([id, review]) => [id, utcReviewMillis(review.next_review_at) <= reviewClockNow.value]),
+const reviewDueByCardId = computed(() => new Map<string, boolean>(
+  [...languageReviewByCardId.value].map(([id, review]) => [id, utcReviewMillis(review.next_review_at) <= reviewClockNow.value] as const),
 ))
 const isLanguageCardUnlearned = (card: LanguageCard) => {
   const review = languageReviewByCardId.value.get(card.id)
