@@ -711,6 +711,7 @@ export default {
         const raw = await request.text()
         if (raw.length > 30000) return json({ error: '交卷数据过大。' }, 413)
         input = JSON.parse(raw) as Record<string, unknown>
+        if (!input || typeof input !== 'object' || Array.isArray(input)) return json({ error: '交卷内容必须为对象。' }, 400)
       } catch { return json({ error: '交卷内容必须为 JSON。' }, 400) }
       const submissionId = String(input.submission_id || '')
       const track = String(input.track || '')
@@ -719,7 +720,7 @@ export default {
       const duration = Number(input.duration_seconds)
       const rawAnswers = input.answers
       const required = track === 'exam-fe' && section === 'B' ? 20 : 60
-      if (!/^[a-f0-9-]{36}$/i.test(submissionId)
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(submissionId)
         || !['exam-sg', 'exam-fe'].includes(track)
         || (track === 'exam-fe' ? !['A', 'B'].includes(section) : section !== 'SG')
         || !/^\d{4}-\d{2}-\d{2}$/.test(date)
@@ -1007,7 +1008,9 @@ export default {
            FROM language_cards WHERE content_type = 'sentence' AND language = ? AND (? = '' OR category = ?)
            ORDER BY CASE category WHEN '日常句子' THEN 0 WHEN '职场语言' THEN 1 ELSE 2 END, id`,
         ).bind(language, category, category).all()
-        return json({ items: results })
+        const response = json({ items: results })
+        response.headers.set('cache-control', 'public, max-age=300')
+        return response
       } catch {
         return json({ items: [], error: '语言课程尚未初始化，请先执行最新的 D1 迁移。' }, 503)
       }
