@@ -742,7 +742,9 @@ function selectExam(track: ExamTrack) {
   questionBankTotal.value = 0
   questionBankHasMore.value = false
   selectedTrackId.value = track.id
-  if (track.id === 'exam-fe') { questionSourceFilter.value = 'licensed'; void prepareFeBank() }
+  // Include verified IPA originals and clearly labeled adapted/original practice by default.
+  // Official-only contains just IPA's published subset, which is not a full mock exam.
+  if (track.id === 'exam-fe') { questionSourceFilter.value = 'all'; void prepareFeBank() }
   else if (questionSourceFilter.value === 'licensed') questionSourceFilter.value = 'generated'
   quizQuestions.value = []
   quizIndex.value = 0
