@@ -43,6 +43,9 @@ jobs:
       - name: Generate attributed Japanese and English sentence migration
         run: python scripts/generate_language_sentence_seed.py
 
+      - name: Generate FE practice question migration
+        run: node scripts/generate_fe_practice_bank.mjs
+
       - name: Run automated regression tests
         run: npm test
 
