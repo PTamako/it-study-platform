@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """Generate 10,000 attributed sentence cards from Tatoeba's public exports."""
 import csv, hashlib, io, json, re, tarfile, urllib.request
 from functools import lru_cache
