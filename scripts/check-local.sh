@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run locally on macOS/Linux with Node 22 and Python 3.12+.
+# Run locally on macOS/Linux with Node 22 and Python >=3.10 (CI uses 3.12).
 # This deliberately never connects to production D1 or deploys a Worker.
 set -Eeuo pipefail
 
