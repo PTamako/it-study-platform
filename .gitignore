@@ -8,3 +8,8 @@ dist/
 .DS_Store
 *.log
 coverage/
+
+# Ignore macOS AppleDouble metadata without deleting local files
+._*
+__pycache__/
+*.py[cod]
