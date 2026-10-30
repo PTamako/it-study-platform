@@ -789,7 +789,7 @@ function selectExam(track: ExamTrack) {
     feTopicOptions.value = []
     void prepareFeBank()
   }
-  else if (questionSourceFilter.value === 'licensed') questionSourceFilter.value = 'generated'
+  else if (questionSourceFilter.value === 'licensed' || questionSourceFilter.value === 'all') questionSourceFilter.value = 'generated'
   quizQuestions.value = []
   quizIndex.value = 0
   selectedOption.value = ''
