@@ -414,6 +414,12 @@ const questionBankTotal = ref(0)
 const questionBatchOffset = ref(0)
 const questionBatchSize = 10
 const questionBankHasMore = ref(false)
+const fePracticeYear = ref('')
+const fePracticeSection = ref<'all' | 'A' | 'B'>('all')
+const fePracticeTopic = ref('')
+const feTopicOptions = ref<{ topic: string; question_count: number }[]>([])
+let feTopicLoadId = 0
+const feYearOptions = [2026, 2025, 2024, 2023] as const
 type ExamTrack = { id: string; kind: string; title: string; subtitle: string; question_count: number; official_question_count?: number; prediction_question_count?: number; adapted_question_count?: number }
 const examTracks = ref<ExamTrack[]>([])
 const selectedTrackId = ref('exam-sg')
@@ -721,6 +727,35 @@ async function loadExamTracks() {
 }
 const feBankLoading = ref(false)
 const feBankError = ref('')
+async function loadFePracticeTopics() {
+  const requestId = ++feTopicLoadId
+  if (selectedTrackId.value !== 'exam-fe') return
+  try {
+    const params = new URLSearchParams({
+      track: 'exam-fe',
+      source: questionSourceFilter.value,
+      year: fePracticeYear.value,
+      section: fePracticeSection.value === 'all' ? '' : fePracticeSection.value,
+    })
+    const response = await fetch('/api/question-categories?' + params)
+    if (!response.ok) return
+    const data = await response.json() as { items?: { topic: string; question_count: number }[] }
+    if (requestId !== feTopicLoadId) return
+    feTopicOptions.value = data.items || []
+    if (fePracticeTopic.value && !feTopicOptions.value.some(item => item.topic === fePracticeTopic.value)) {
+      fePracticeTopic.value = ''
+    }
+  } catch {
+    if (requestId === feTopicLoadId) feTopicOptions.value = []
+  }
+}
+function applyFePracticeFilter(changed: 'year' | 'section' | 'topic') {
+  if (changed !== 'topic') {
+    fePracticeTopic.value = ''
+    void loadFePracticeTopics()
+  }
+  selectReviewMode('all')
+}
 async function prepareFeBank() {
   if (feBankLoading.value) return
   feBankLoading.value = true
@@ -730,6 +765,7 @@ async function prepareFeBank() {
     const data = await response.json() as { error?: string }
     if (!response.ok) throw new Error(data.error || 'FE 题库加载失败。')
     await loadExamTracks()
+    await loadFePracticeTopics()
   } catch (error) {
     feBankError.value = error instanceof Error ? error.message : 'FE 题库加载失败，请重试。'
   } finally { feBankLoading.value = false }
@@ -745,7 +781,14 @@ function selectExam(track: ExamTrack) {
   selectedTrackId.value = track.id
   // Include verified IPA originals and clearly labeled adapted/original practice by default.
   // Official-only contains just IPA's published subset, which is not a full mock exam.
-  if (track.id === 'exam-fe') { questionSourceFilter.value = 'all'; void prepareFeBank() }
+  if (track.id === 'exam-fe') {
+    questionSourceFilter.value = 'all'
+    fePracticeYear.value = ''
+    fePracticeSection.value = 'all'
+    fePracticeTopic.value = ''
+    feTopicOptions.value = []
+    void prepareFeBank()
+  }
   else if (questionSourceFilter.value === 'licensed') questionSourceFilter.value = 'generated'
   quizQuestions.value = []
   quizIndex.value = 0
@@ -763,6 +806,10 @@ async function selectQuestionSource(source: 'all' | 'official' | 'generated' | '
   practiceLoadRequestId += 1
   questionProgressRequestId += 1
   questionSourceFilter.value = source
+  if (selectedTrackId.value === 'exam-fe') {
+    fePracticeTopic.value = ''
+    await loadFePracticeTopics()
+  }
   questionBatchOffset.value = 0
   activeReviewMode.value = 'all'
   questionBankTotal.value = 0
@@ -821,13 +868,37 @@ async function startPractice() {
     let response: Response
     let data: { items?: PracticeQuestion[]; error?: string; total?: number; has_more?: boolean }
     if (activeReviewMode.value === 'all') {
-      response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value) + '&mode=ordered&limit=' + questionBatchSize + '&offset=' + questionBatchOffset.value)
+      const params = new URLSearchParams({
+        track: selectedTrack.value.id,
+        source: questionSourceFilter.value,
+        mode: 'ordered',
+        limit: String(questionBatchSize),
+        offset: String(questionBatchOffset.value),
+      })
+      if (trackId === 'exam-fe') {
+        if (fePracticeYear.value) params.set('year', fePracticeYear.value)
+        if (fePracticeSection.value !== 'all') params.set('section', fePracticeSection.value)
+        if (fePracticeTopic.value) params.set('topic', fePracticeTopic.value)
+      }
+      response = await fetch('/api/questions?' + params.toString())
       data = await response.json() as typeof data
     } else {
       const mode = activeReviewMode.value
       const reviewBatchLimit = mode === 'unlearned' ? questionBatchSize : 50
       // 未学习题会在答题后离开此筛选集，因此每组始终从剩余未学习题的开头取，避免 offset 导致跳题。
-      response = await fetch('/api/wrong-questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=' + reviewBatchLimit + '&offset=0&mode=' + mode + '&source=' + encodeURIComponent(questionSourceFilter.value))
+      const params = new URLSearchParams({
+        track: selectedTrack.value.id,
+        limit: String(reviewBatchLimit),
+        offset: '0',
+        mode,
+        source: questionSourceFilter.value,
+      })
+      if (trackId === 'exam-fe') {
+        if (fePracticeYear.value) params.set('year', fePracticeYear.value)
+        if (fePracticeSection.value !== 'all') params.set('section', fePracticeSection.value)
+        if (fePracticeTopic.value) params.set('topic', fePracticeTopic.value)
+      }
+      response = await fetch('/api/wrong-questions?' + params.toString())
       data = await response.json() as typeof data
       if (mode !== 'unlearned') {
         data.total = data.items?.length || 0
@@ -2066,6 +2137,30 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               <div class="section-heading practice-heading"><div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2></div></div>
               <div class="question-source-filters" role="group" aria-label="题目来源筛选">
                 <button v-for="filter in questionSourceFilters.filter(item => (item.id !== 'licensed' && item.id !== 'all') || selectedTrackId === 'exam-fe')" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" :disabled="selectedTrackId === 'exam-fe' && feBankLoading" @click="selectQuestionSource(filter.id)">{{ filter.label }}（{{ filter.id === 'all' ? (selectedTrack?.question_count || 0) : filter.id === 'official' ? (selectedTrack?.official_question_count || 0) : filter.id === 'licensed' ? (selectedTrack?.adapted_question_count || 0) : (selectedTrack?.prediction_question_count || 0) }}）</button>
+              </div>
+              <div v-if="selectedTrackId === 'exam-fe'" class="question-category-section">
+                <div class="question-category-heading"><strong>年度・科目・分野</strong><span>题源和学习状态可组合筛选</span></div>
+                <div class="fe-filter-controls">
+                  <label>年度
+                    <select v-model="fePracticeYear" aria-label="FE 年度" @change="applyFePracticeFilter('year')">
+                      <option value="">すべて</option>
+                      <option v-for="year in feYearOptions" :key="year" :value="String(year)">{{ year }}年度</option>
+                    </select>
+                  </label>
+                  <label>科目
+                    <select v-model="fePracticeSection" aria-label="FE 科目" @change="applyFePracticeFilter('section')">
+                      <option value="all">すべて</option>
+                      <option value="A">科目A</option>
+                      <option value="B">科目B</option>
+                    </select>
+                  </label>
+                  <label>分野
+                    <select v-model="fePracticeTopic" aria-label="FE 分野" @change="applyFePracticeFilter('topic')">
+                      <option value="">すべて</option>
+                      <option v-for="item in feTopicOptions" :key="item.topic" :value="item.topic">{{ item.topic }}（{{ item.question_count }}）</option>
+                    </select>
+                  </label>
+                </div>
               </div>
               <div class="question-category-section">
                 <div class="question-category-heading"><strong>学习状态</strong><span>按当前题库筛选</span></div>
