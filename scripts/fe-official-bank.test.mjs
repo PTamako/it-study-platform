@@ -8,6 +8,7 @@ const read = path => readFileSync(new URL(path, import.meta.url), 'utf8')
 const catalog = read('../migrations/0090_fe_ipa_public_sources_2023_2026.sql')
 const official = read('../migrations/0091_fe_official_verified_2025_2026.sql')
 const practice = read('../migrations/0092_fe_practice_bank.sql')
+const extraOfficial = read('../migrations/0093_fe_official_verified_2023_2024.sql')
 function setup() {
   const db = new DatabaseSync(':memory:')
   db.exec(`CREATE TABLE study_tracks (id TEXT PRIMARY KEY);
@@ -31,6 +32,7 @@ function setup() {
   db.exec(catalog)
   db.exec(official)
   db.exec(practice)
+  db.exec(extraOfficial)
   return db
 }
 
@@ -50,20 +52,24 @@ test('FE bootstraps usable 60 A / 16 algorithm + 4 security B bank without a use
   const db = setup()
   const count = where => db.prepare('SELECT COUNT(*) AS n FROM questions WHERE ' + where).get().n
   assert.equal(feSeeds.length, 80)
-  assert.equal(count("track_id = 'exam-fe'"), 102)
-  assert.equal(count("source_type = 'official'"), 22)
+  assert.equal(count("track_id = 'exam-fe'"), 120)
+  assert.equal(count("source_type = 'official'"), 40)
   assert.equal(count("source_type = 'licensed'"), 74)
   assert.equal(count("source_type = 'generated'"), 6)
-  assert.equal(count("exam_section = 'A' AND exam_section_method = 'explicit'"), 81)
-  assert.equal(count("exam_section = 'B' AND topic = 'FE算法与程序设计' AND exam_section_method = 'explicit'"), 17)
+  assert.equal(count("exam_section = 'A' AND exam_section_method = 'explicit'"), 97)
+  assert.equal(count("exam_section = 'B' AND topic = 'FE算法与程序设计' AND exam_section_method = 'explicit'"), 19)
   assert.equal(count("exam_section = 'B' AND topic = 'FE信息安全' AND exam_section_method = 'explicit'"), 4)
   assert.equal(count("prompt LIKE '%・改編%' AND source_type='official'"), 0)
   assert.equal(count("prompt LIKE '%自主練習%' AND source_type='official'"), 0)
 })
 
-test('IPA original 2025 A and 2026 A/B answer keys and options match reviewed PDFs', () => {
+test('IPA original 2023-2026 A/B answer keys and options match reviewed PDFs', () => {
   const db = setup()
   const expected = new Map([
+    ['2023:A:1','c'],['2023:A:3','d'],['2023:A:4','d'],['2023:A:5','b'],
+    ['2023:A:7','b'],['2023:A:8','d'],['2023:A:12','c'],['2023:A:19','d'],['2023:B:1','a'],
+    ['2024:A:2','d'],['2024:A:4','d'],['2024:A:6','a'],['2024:A:7','c'],
+    ['2024:A:8','c'],['2024:A:10','d'],['2024:A:11','c'],['2024:A:12','d'],['2024:B:1','b'],
     ['2025:A:1','d'],['2025:A:2','b'],['2025:A:5','a'],['2025:A:8','d'],
     ['2025:A:10','a'],['2025:A:11','c'],['2025:A:12','d'],['2025:A:13','d'],
     ['2026:A:2','c'],['2026:A:3','b'],['2026:A:4','b'],['2026:A:5','b'],
@@ -78,7 +84,8 @@ test('IPA original 2025 A and 2026 A/B answer keys and options match reviewed PD
     assert.ok(m, 'stable official source identity: ' + row.id)
     const key = [m[1],m[2].toUpperCase(),Number(m[3])].join(':')
     assert.equal(JSON.parse(row.answer_json), expected.get(key), key)
-    assert.equal(JSON.parse(row.options_json).length, 4, key)
+    const optionCount = JSON.parse(row.options_json).length
+    assert.equal(m[2] === 'a' ? optionCount === 4 : optionCount >= 4 && optionCount <= 8, true, key)
     assert.ok(row.prompt.includes('IPA公開問題'))
     assert.match(row.source_reference, /^https:\/\/www\.ipa\.go\.jp\/.+_qs\.pdf$/)
     assert.equal(row.exam_section_method, 'explicit')
@@ -93,11 +100,12 @@ test('repeat FE migrations are idempotent, preserve attempts, source classes and
   db.exec(catalog)
   db.exec(official)
   db.exec(practice)
-  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM questions").get().n, 102)
+  db.exec(extraOfficial)
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM questions").get().n, 120)
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM study_attempts").get().n, 1)
   assert.equal(db.prepare("SELECT mastered FROM question_review_state WHERE question_id='fe-ipa-official-2026-a-02'").get().mastered, 1)
   assert.equal(db.prepare("SELECT prompt FROM questions WHERE id='fe-ipa-official-2026-a-02'").get().prompt, originalPrompt)
-  for (const script of [catalog, official, practice]) {
+  for (const script of [catalog, official, practice, extraOfficial]) {
     assert.doesNotMatch(script, /\b(?:DELETE\s+FROM|DROP\s+TABLE|REPLACE\s+INTO)\b/i)
   }
 })
