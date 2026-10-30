@@ -959,6 +959,7 @@ function nextPracticeQuestion() {
   practiceAnswerRequestId += 1
   if (!isLastQuestion.value) {
     quizIndex.value += 1
+    quizStartedAt.value = Date.now()
     selectedOption.value = ''
     quizSubmitted.value = false
     return
