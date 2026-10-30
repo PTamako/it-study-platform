@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { hydrateMastery, mergeExamHistory, restoreMasteredCard } from './progress-sync'
 import { tokyoDate, mergeDailyTaskStates } from './daily-tasks'
+import { utcReviewMillis } from './review-time'
 import { fetchVocabularySnapshot } from './vocabulary-sync'
 import {
   BookOpen, Languages, Search, GraduationCap,
@@ -50,6 +51,7 @@ async function login() {
     void hydrateCloudProgress()
     void refreshDailyTasks(todayKey.value)
     void reconcilePriorDailyTasks()
+    void syncPendingMockSubmission()
   } catch (error) {
     authError.value = error instanceof Error ? error.message : '登录失败，请稍后重试。'
   } finally {
@@ -453,6 +455,7 @@ function formatMockTime(seconds: number) {
   return String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0')
 }
 async function startMockExam() {
+  if (mockPendingSubmission.value) { mockError.value = '上一次答卷尚未完成同步，请先点击重新同步。'; return }
   if (selectedTrackId.value === 'exam-fe' && feBankLoading.value) return
   const isFe = selectedTrack.value?.id === 'exam-fe'
   const required = isFe && feMockSection.value === 'B' ? 20 : 60
@@ -488,26 +491,65 @@ async function startMockExam() {
     mockLoading.value = false
   }
 }
+type PendingMockSubmission = {
+  submission_id: string
+  track: string
+  section: string
+  study_date: string
+  duration_seconds: number
+  answers: Array<{ question_id: string; answer: string }>
+}
+const mockPendingSubmission = ref<PendingMockSubmission | null>(readStored('zhixue:mock-pending-v1', null))
+const mockSyncing = ref(false)
+
+async function syncPendingMockSubmission() {
+  const pending = mockPendingSubmission.value
+  if (!pending || mockSyncing.value || !authenticated.value) return
+  mockSyncing.value = true
+  try {
+    const response = await fetch('/api/mock-exam/submit', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(pending),
+    })
+    const data = await response.json() as {
+      error?: string; submission_id?: string; correct_count?: number; total?: number; exam_name?: string; study_date?: string
+    }
+    if (!response.ok || data.submission_id !== pending.submission_id || !Number.isInteger(data.correct_count) || data.total !== pending.answers.length) {
+      throw new Error(data.error || '交卷结果暂未成功同步。')
+    }
+    const record: ExamRecord = { id: pending.submission_id, date: pending.study_date,
+      correct: data.correct_count!, total: data.total!, exam: data.exam_name || pending.track }
+    if (!examRecords.value.some(item => item.id === record.id)) examRecords.value.push(record)
+    mockPendingSubmission.value = null
+    try { localStorage.removeItem('zhixue:mock-pending-v1') } catch { /* cloud receipt prevents duplicates */ }
+    mockError.value = ''
+    void loadCloudDashboard()
+  } catch (error) {
+    mockError.value = (error instanceof Error ? error.message : '网络异常。') + ' 答卷已保留在本设备，可点击「重新同步」。'
+  } finally {
+    mockSyncing.value = false
+  }
+}
 async function finishMockExam(autoSubmit = false) {
   if (!mockStarted.value || mockSubmitted.value) return
   mockSubmitted.value = true
   mockStarted.value = false
   if (mockTimer) { clearInterval(mockTimer); mockTimer = undefined }
-  const total = mockQuestions.value.length
-  const correct = mockCorrectCount.value
-  void saveExamRecord({ date: tokyoDate(), correct, total, exam: (selectedTrack.value?.title || selectedTrackId.value) + (selectedTrackId.value === 'exam-fe' ? ' 科目 ' + feMockSection.value : '') + ' 模拟考试（' + correct + '/' + total + '题）' })
-  const unanswered = total - mockAnsweredCount.value
-  if (autoSubmit) mockError.value = '时间到，系统已自动交卷。未作答题目按答错计。'
-  else mockError.value = unanswered ? '已交卷。未作答的 ' + unanswered + ' 题按答错计。' : ''
-  const attempts = mockQuestions.value
-  const results = await Promise.allSettled(attempts.map(question => fetch('/api/attempts', {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ question_id: question.id, answer: mockAnswers.value[question.id] || '', duration_seconds: Math.max(0, Math.floor((Date.now() - mockStartedAt.value) / 1000)) }),
-  })))
-  if (results.some(result => result.status === 'rejected' || (result.status === 'fulfilled' && !result.value.ok))) {
-    mockError.value = (mockError.value ? mockError.value + ' ' : '') + '部分答题记录未能同步到云端。'
+  const unanswered = mockQuestions.value.length - mockAnsweredCount.value
+  mockError.value = autoSubmit ? '考试时间已到，未作答按错题计。'
+    : unanswered ? '有 ' + unanswered + ' 道未作答题，按错题计。' : ''
+  const submission: PendingMockSubmission = {
+    submission_id: crypto.randomUUID(),
+    track: selectedTrackId.value,
+    section: selectedTrackId.value === 'exam-fe' ? feMockSection.value : 'SG',
+    study_date: tokyoDate(),
+    duration_seconds: Math.max(0, Math.floor((Date.now() - mockStartedAt.value) / 1000)),
+    answers: mockQuestions.value.map(item => ({ question_id: item.id, answer: mockAnswers.value[item.id] || '' })),
   }
-  void loadCloudDashboard()
+  mockPendingSubmission.value = submission
+  try { localStorage.setItem('zhixue:mock-pending-v1', JSON.stringify(submission)) }
+  catch { mockError.value += ' 浏览器本地保存失败；请勿关闭此页面直到同步完成。' }
+  await syncPendingMockSubmission()
 }
 onUnmounted(() => { if (mockTimer) clearInterval(mockTimer); if (dailyRolloverTimer) clearInterval(dailyRolloverTimer); document.removeEventListener('visibilitychange', onDailyVisibilityChange) })
 
@@ -917,6 +959,7 @@ function nextPracticeQuestion() {
   practiceAnswerRequestId += 1
   if (!isLastQuestion.value) {
     quizIndex.value += 1
+    quizStartedAt.value = Date.now()
     selectedOption.value = ''
     quizSubmitted.value = false
     return
@@ -963,15 +1006,20 @@ type LanguageReview = { card_id: string; review_count: number; correct_streak: n
 const languageReviews = ref<LanguageReview[]>(readStored('zhixue:language-reviews', []))
 const languageReviewBusy = ref('')
 const selectedLanguageMastery = ref<'all' | 'unlearned' | 'unmastered' | 'mastered'>('all')
-const languageReviewByCardId = computed(() => new Map(languageReviews.value.map(review => [review.card_id, review])))
+const languageReviewByCardId = computed(() => new Map<string, LanguageReview>(languageReviews.value.map(review => [review.card_id, review] as const)))
+const masteredLanguageIds = computed(() => new Set(completedLanguageCards.value))
+const reviewClockNow = ref(Date.now())
+const reviewDueByCardId = computed(() => new Map<string, boolean>(
+  [...languageReviewByCardId.value].map(([id, review]) => [id, utcReviewMillis(review.next_review_at) <= reviewClockNow.value] as const),
+))
 const isLanguageCardUnlearned = (card: LanguageCard) => {
   const review = languageReviewByCardId.value.get(card.id)
-  return !completedLanguageCards.value.includes(card.id) && (!review || review.review_count === 0)
+  return !masteredLanguageIds.value.has(card.id) && (!review || review.review_count === 0)
 }
 const unlearnedLanguageCount = computed(() => languageCards.value.filter(isLanguageCardUnlearned).length)
 const visibleLanguageCards = computed(() => languageCards.value.filter(card => {
   const matchesCategory = selectedLanguageCategory.value === '全部' || card.category === selectedLanguageCategory.value
-  const isMastered = completedLanguageCards.value.includes(card.id)
+  const isMastered = masteredLanguageIds.value.has(card.id)
   const isUnlearned = isLanguageCardUnlearned(card)
   const matchesMastery = selectedLanguageMastery.value === 'all'
     || (selectedLanguageMastery.value === 'unlearned' && isUnlearned)
@@ -979,10 +1027,10 @@ const visibleLanguageCards = computed(() => languageCards.value.filter(card => {
     || (selectedLanguageMastery.value === 'unmastered' && !isMastered && !isUnlearned)
   return matchesCategory && matchesMastery
 }).sort((a, b) => {
-  const aReview = languageReviews.value.find(item => item.card_id === a.id)
-  const bReview = languageReviews.value.find(item => item.card_id === b.id)
-  const aDue = !aReview || new Date(aReview.next_review_at).getTime() <= Date.now()
-  const bDue = !bReview || new Date(bReview.next_review_at).getTime() <= Date.now()
+  const aReview = languageReviewByCardId.value.get(a.id)
+  const bReview = languageReviewByCardId.value.get(b.id)
+  const aDue = !aReview || reviewDueByCardId.value.get(a.id) === true
+  const bDue = !bReview || reviewDueByCardId.value.get(b.id) === true
   return Number(bDue) - Number(aDue)
 }))
 const languagePage = ref(1)
@@ -994,7 +1042,7 @@ const paginatedLanguageCards = computed(() => visibleLanguageCards.value.slice(
 ))
 const dueLanguageReviewCount = computed(() => visibleLanguageCards.value.filter(card => {
   const review = languageReviewByCardId.value.get(card.id)
-  return Boolean(review && review.review_count > 0 && new Date(review.next_review_at).getTime() <= Date.now())
+  return Boolean(review && review.review_count > 0 && reviewDueByCardId.value.get(card.id))
 }).length)
 const languagePracticeIndex = ref(0)
 const languagePracticeRevealed = ref(false)
@@ -1147,22 +1195,36 @@ watch([studyLanguage, selectedLanguageCategory, selectedLanguageMastery], () => 
 })
 const languageProgress = computed(() => {
   const ids = languageCards.value.map(card => card.id)
-  const done = ids.filter(id => completedLanguageCards.value.includes(id)).length
+  const done = ids.filter(id => masteredLanguageIds.value.has(id)).length
   return { done, total: ids.length, percent: ids.length ? Math.round(done / ids.length * 100) : 0 }
 })
+let languageCardsLoadGeneration = 0
+let languageCardsAbort: AbortController | undefined
 async function loadLanguageCards() {
+  const generation = ++languageCardsLoadGeneration
+  const language = studyLanguage.value
+  languageCardsAbort?.abort()
+  const controller = new AbortController()
+  languageCardsAbort = controller
   languageCardsLoading.value = true
   languageCardsError.value = ''
   languageCards.value = []
-try {
-    const response = await fetch('/api/language-cards?lang=' + encodeURIComponent(studyLanguage.value))
+  try {
+    const response = await fetch('/api/language-cards?lang=' + encodeURIComponent(language), {
+      signal: controller.signal,
+    })
     const data = await response.json() as { items?: LanguageCard[]; error?: string }
+    if (generation !== languageCardsLoadGeneration || language !== studyLanguage.value) return
     if (!response.ok) throw new Error(data.error || '语言学习内容加载失败')
     languageCards.value = data.items || []
   } catch (error) {
+    if (generation !== languageCardsLoadGeneration || controller.signal.aborted) return
     languageCardsError.value = error instanceof Error ? error.message : '语言学习内容加载失败，请稍后再试。'
   } finally {
-    languageCardsLoading.value = false
+    if (generation === languageCardsLoadGeneration) {
+      languageCardsLoading.value = false
+      languageCardsAbort = undefined
+    }
   }
 }
 async function submitLanguageReview(result: 'again' | 'remembered') {
@@ -1283,7 +1345,7 @@ async function hydrateCloudProgress() {
 }
 onMounted(async () => {
   rolloverDailyTasks()
-  dailyRolloverTimer = setInterval(rolloverDailyTasks, 30000)
+  dailyRolloverTimer = setInterval(() => { rolloverDailyTasks(); reviewClockNow.value = Date.now() }, 30000)
   document.addEventListener('visibilitychange', onDailyVisibilityChange)
   // Preload the browser's speech voices before the user taps a pronunciation button.
   // iOS Safari may initially return an empty voice list; waiting until the first tap
@@ -1296,7 +1358,7 @@ onMounted(async () => {
     // Speech playback will report its own browser/device error when requested.
   }
   await checkAuth()
-  if (authenticated.value) { void syncExamHistory(); void hydrateCloudProgress(); void refreshDailyTasks(todayKey.value); void reconcilePriorDailyTasks() }
+  if (authenticated.value) { void syncExamHistory(); void hydrateCloudProgress(); void refreshDailyTasks(todayKey.value); void reconcilePriorDailyTasks(); void syncPendingMockSubmission() }
 })
 
 type DictionaryEntry = {
@@ -2084,6 +2146,10 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               <div class="section-heading"><div><h2>限时模拟考试</h2><p v-if="selectedTrackId === 'exam-fe'">科目 A 与 B 分开计时；科目 B 的领域比例为模拟近似值。</p><p v-else>共 60 题，限时 120 分钟。</p></div><span v-if="selectedTrackId !== 'exam-fe'" class="source-pill">A 48 题 · B 12 题</span></div>
               <div v-if="selectedTrackId === 'exam-fe' && !mockStarted && !mockSubmitted" class="question-source-filters" role="group" aria-label="选择 FE 模拟科目">
                 <button v-for="section in (['A', 'B'] as const)" :key="section" type="button" class="source-filter-button" :class="{ active: feMockSection === section }" :aria-pressed="feMockSection === section" :disabled="mockLoading" @click="feMockSection = section; mockError = ''">科目 {{ section }} · {{ section === 'A' ? '60 题 / 90 分钟' : '20 题 / 100 分钟' }}</button>
+              </div>
+              <div v-if="mockPendingSubmission" class="dictionary-status" role="status">
+                <span>未同步的模拟考试答卷已保留在本设备（{{ mockPendingSubmission.study_date }}）。</span>
+                <button type="button" class="text-link" :disabled="mockSyncing" @click="syncPendingMockSubmission">{{ mockSyncing ? '同步中…' : '重新同步答卷' }}</button>
               </div>
               <div v-if="!mockStarted && !mockSubmitted" class="panel practice-start-card">
                 <div class="practice-start-icon"><Clock3 :size="25" /></div><h3>模拟真实考试节奏</h3>

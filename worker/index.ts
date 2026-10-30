@@ -4,6 +4,7 @@ import { feSeeds, seedUrl } from './fe-question-bank'
 // Personal state is never readable or writable without an authenticated session.
 const protectedPersonalPaths = new Set([
   '/api/fe-question-bank/install',
+  '/api/mock-exam/submit',
   '/api/dashboard',
   '/api/exam-history',
   '/api/attempts',
@@ -696,10 +697,129 @@ export default {
         if (rateLimitFailure) return rateLimitFailure
       }
     }
-    const isWriteEndpoint = ['/api/fe-question-bank/install', '/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history', '/api/translate-explanation'].includes(url.pathname)
+    const isWriteEndpoint = ['/api/mock-exam/submit', '/api/fe-question-bank/install', '/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history', '/api/translate-explanation'].includes(url.pathname)
     const isExamHistoryDelete = request.method === 'DELETE' && url.pathname === '/api/exam-history'
     if (request.method !== 'GET' && !(request.method === 'POST' && isWriteEndpoint) && !isExamHistoryDelete) {
       return json({ error: '不支持此请求方法' }, 405)
+    }
+
+    // One authenticated request per exam. D1 batch is atomic; submission ID is
+    // unique so retries after a network timeout do not duplicate answers or mastery.
+    if (url.pathname === '/api/mock-exam/submit' && request.method === 'POST') {
+      let input: Record<string, unknown>
+      try {
+        const raw = await request.text()
+        if (raw.length > 30000) return json({ error: '交卷数据过大。' }, 413)
+        input = JSON.parse(raw) as Record<string, unknown>
+        if (!input || typeof input !== 'object' || Array.isArray(input)) return json({ error: '交卷内容必须为对象。' }, 400)
+      } catch { return json({ error: '交卷内容必须为 JSON。' }, 400) }
+      const submissionId = String(input.submission_id || '')
+      const track = String(input.track || '')
+      const section = String(input.section || '')
+      const date = String(input.study_date || '')
+      const duration = Number(input.duration_seconds)
+      const rawAnswers = input.answers
+      const required = track === 'exam-fe' && section === 'B' ? 20 : 60
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(submissionId)
+        || !['exam-sg', 'exam-fe'].includes(track)
+        || (track === 'exam-fe' ? !['A', 'B'].includes(section) : section !== 'SG')
+        || !/^\d{4}-\d{2}-\d{2}$/.test(date)
+        || !Number.isFinite(Date.parse(date + 'T00:00:00Z'))
+        || new Date(date + 'T00:00:00Z').toISOString().slice(0, 10) !== date
+        || !Number.isInteger(duration) || duration < 0 || duration > 86400
+        || !Array.isArray(rawAnswers) || rawAnswers.length !== required
+        || rawAnswers.some(row => !row || typeof row !== 'object' || typeof row.question_id !== 'string'
+          || !row.question_id.trim() || row.question_id.length > 120
+          || typeof row.answer !== 'string' || row.answer.length > 10)) {
+        return json({ error: '模拟考试提交内容不完整或无效。' }, 400)
+      }
+      const answers = rawAnswers as Array<{ question_id: string; answer: string }>
+      const questionIds = answers.map(item => item.question_id)
+      if (new Set(questionIds).size !== required) return json({ error: '提交的题目不能重复。' }, 400)
+      const payload = JSON.stringify({ track, section, date, duration, answers })
+      const findSaved = async () => env.DB.prepare('SELECT payload_json, result_json FROM mock_exam_submissions WHERE id = ?').bind(submissionId).first<{ payload_json: string; result_json: string }>()
+      try {
+        const saved = await findSaved()
+        if (saved) return saved.payload_json === payload
+          ? json(JSON.parse(saved.result_json))
+          : json({ error: '交卷编号已用于另一份答案，请不要覆盖原成绩。' }, 409)
+        const marks = questionIds.map(() => '?').join(',')
+        const result = await env.DB.prepare(`SELECT id, track_id, topic, exam_section, answer_json FROM questions WHERE id IN (${marks})`).bind(...questionIds).all()
+        const rows = result.results as Array<{ id: string; track_id: string; topic: string; exam_section: string; answer_json: string }>
+        if (rows.length !== required || rows.some(row => row.track_id !== track)) {
+          return json({ error: '题库已发生变化，无法安全交卷。' }, 409)
+        }
+        const a = rows.filter(row => row.exam_section === 'A').length
+        const b = rows.filter(row => row.exam_section === 'B').length
+        const validDistribution = track === 'exam-sg' ? a === 48 && b === 12
+          : section === 'A' ? a === 60 && b === 0
+          : a === 0 && b === 20
+            && rows.filter(row => row.topic === 'FE算法与程序设计').length === 16
+            && rows.filter(row => row.topic === 'FE信息安全').length === 4
+        if (!validDistribution) return json({ error: '题型分类不符合模拟考试要求。' }, 409)
+        const byId = new Map(rows.map(row => [row.id, row]))
+        const grades = answers.map(answer => {
+          const row = byId.get(answer.question_id)!
+          const expected = JSON.parse(row.answer_json) as unknown
+          return { id: row.id, correct: JSON.stringify(expected) === JSON.stringify(answer.answer) }
+        })
+        const correctCount = grades.filter(grade => grade.correct).length
+        const examName = track === 'exam-fe' ? 'FE 科目' + section + ' 模擬試験' : 'SG 模擬試験'
+        const summary = { ok: true, submission_id: submissionId, track, section, correct_count: correctCount, total: required, exam_name: examName, study_date: date }
+        // D1 Free caps queries per Worker invocation. JSON1 expands 60 grades
+        // inside just two SQL statements, instead of 120 separate updates.
+        // Together with receipt + exam history, the whole mock is 4 atomic writes.
+        const gradedPayload = JSON.stringify(answers.map((question, i) => ({
+          id: question.question_id, answer: question.answer, correct: grades[i].correct ? 1 : 0,
+        })))
+        const stmts: D1PreparedStatement[] = [
+          env.DB.prepare('INSERT INTO mock_exam_submissions (id, track_id, exam_section, payload_json, result_json) VALUES (?, ?, ?, ?, ?)')
+            .bind(submissionId, track, section, payload, JSON.stringify(summary)),
+          env.DB.prepare(
+            `INSERT INTO study_attempts (id, question_id, user_answer_json, is_correct, duration_seconds)
+             SELECT ? || ':' || json_extract(value, '$.id'),
+                    json_extract(value, '$.id'), json_quote(json_extract(value, '$.answer')),
+                    CAST(json_extract(value, '$.correct') AS INTEGER), ?
+             FROM json_each(?)`,
+          ).bind(submissionId, duration, gradedPayload),
+          env.DB.prepare(
+            `INSERT INTO question_review_state
+               (question_id, track_id, review_count, correct_streak, last_result, next_review_at, mastered, updated_at)
+             SELECT json_extract(value, '$.id'), ?, 1,
+                    CAST(json_extract(value, '$.correct') AS INTEGER),
+                    CASE WHEN json_extract(value, '$.correct') = 1 THEN 'remembered' ELSE 'again' END,
+                    datetime(CURRENT_TIMESTAMP, CASE WHEN json_extract(value, '$.correct') = 1 THEN '+1 day' ELSE '+10 minutes' END),
+                    0, CURRENT_TIMESTAMP
+             FROM json_each(?)
+             WHERE 1 = 1
+             ON CONFLICT(question_id) DO UPDATE SET
+               track_id = excluded.track_id,
+               review_count = question_review_state.review_count + 1,
+               correct_streak = CASE WHEN excluded.last_result = 'remembered' THEN question_review_state.correct_streak + 1 ELSE 0 END,
+               last_result = excluded.last_result,
+               next_review_at = datetime(CURRENT_TIMESTAMP, CASE
+                 WHEN excluded.last_result = 'again' THEN '+10 minutes'
+                 WHEN question_review_state.correct_streak + 1 >= 3 THEN '+30 days'
+                 WHEN question_review_state.correct_streak + 1 = 2 THEN '+3 days' ELSE '+1 day' END),
+               mastered = CASE WHEN excluded.last_result = 'remembered' AND question_review_state.correct_streak + 1 >= 3 THEN 1 ELSE 0 END,
+               updated_at = CURRENT_TIMESTAMP`,
+          ).bind(track, gradedPayload),
+          env.DB.prepare('INSERT INTO exam_history (id, study_date, exam_name, question_count, correct_count) VALUES (?, ?, ?, ?, ?)')
+            .bind(submissionId, date, examName, required, correctCount),
+        ]
+        await env.DB.batch(stmts)
+        return json(summary, 201)
+      } catch {
+        // Concurrent duplicate submissions: the unique receipt fails the second
+        // transaction; return the first result instead of creating another attempt.
+        try {
+          const saved = await findSaved()
+          if (saved) return saved.payload_json === payload
+            ? json(JSON.parse(saved.result_json))
+            : json({ error: '交卷编号冲突，原成绩已被保留。' }, 409)
+        } catch { /* A missing migration or D1 outage must fail closed. */ }
+        return json({ error: '交卷暂未保存；请使用原交卷编号重试。' }, 503)
+      }
     }
 
     // The seed is bundled and reviewed; the caller cannot supply SQL or question content.
@@ -900,7 +1020,9 @@ export default {
            FROM language_cards WHERE content_type = 'sentence' AND language = ? AND (? = '' OR category = ?)
            ORDER BY CASE category WHEN '日常句子' THEN 0 WHEN '职场语言' THEN 1 ELSE 2 END, id`,
         ).bind(language, category, category).all()
-        return json({ items: results })
+        const response = json({ items: results })
+        response.headers.set('cache-control', 'public, max-age=300')
+        return response
       } catch {
         return json({ items: [], error: '语言课程尚未初始化，请先执行最新的 D1 迁移。' }, 503)
       }

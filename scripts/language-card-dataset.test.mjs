@@ -143,15 +143,12 @@ test('contextual bilingual annotation rules avoid isolated Japanese particles an
 })
 
 
-test('new migration rebuilds all 10,000 sentence cards and preserves mastery for stable IDs', () => {
+test('regenerated bilingual migration upserts cards without cascading away review or mastery records', () => {
   const rebuiltRows = [...rebuildMigration.matchAll(/\('(ja|en)-sentence-/g)]
   assert.equal(rebuiltRows.length, 10000, 'rebuild migration must contain exactly 10,000 regenerated sentence rows')
   assert.equal(rebuiltRows.filter(match => match[1] === 'ja').length, 5000)
   assert.equal(rebuiltRows.filter(match => match[1] === 'en').length, 5000)
-  const deleteAt = rebuildMigration.indexOf("DELETE FROM language_cards WHERE content_type = 'sentence'")
-  const insertAt = rebuildMigration.indexOf('INSERT OR IGNORE INTO language_cards')
-  assert.ok(deleteAt >= 0 && insertAt > deleteAt, 'old sentence rows must be deleted before regenerated rows are inserted')
-  assert.match(rebuildMigration, /CREATE TABLE IF NOT EXISTS language_card_progress_rebuild_backup/)
-  assert.match(rebuildMigration, /INSERT OR REPLACE INTO language_card_progress \(card_id, mastered, updated_at\)/)
-  assert.match(rebuildMigration, /DROP TABLE language_card_progress_rebuild_backup/)
+  assert.doesNotMatch(rebuildMigration, /DELETE FROM language_cards|DROP TABLE language_cards|REPLACE INTO language_cards/)
+  assert.match(rebuildMigration, /ON CONFLICT\(id\) DO UPDATE SET/)
+  assert.doesNotMatch(rebuildMigration, /language_card_progress_rebuild_backup/)
 })

@@ -151,7 +151,7 @@ test('saved dictionary changes update local state only after the cloud confirms 
   const handler = app.slice(start, end)
   assert.ok(start >= 0 && end > start, 'saved-word handler should be found')
   assert.match(app, /const savedWordRequests = new Set<string>()/)
-  assert.match(handler, /if \(savedWordRequests\.has\(term\)\) return/)
+  assert.match(handler, /savedWordRequests\.has\(term\)\) return/)
   assert.match(handler, /const response = await fetch\('\/api\/vocabulary\/saved'/)
   assert.match(handler, /if \(!response\.ok\) throw new Error/)
   assert.match(handler, /本地收藏状态未更改/)
@@ -170,10 +170,17 @@ test('saved dictionary removal does not discard local state before the cloud con
   const end = app.indexOf('async function lookupDictionary()', start)
   const handler = app.slice(start, end)
   const removeStart = handler.indexOf('action: \'remove\'')
-  const removeEnd = handler.indexOf('return', removeStart)
-  const removeHandler = handler.slice(0, removeEnd)
-  assert.ok(removeStart >= 0 && removeEnd > removeStart, 'remove handler should be found')
-  assert.ok(removeHandler.indexOf('if (!response.ok) throw new Error') < removeHandler.indexOf('savedWords.value = savedWords.value.filter'))
+  // A session guard returns before the confirmed deletion. Ending at the
+  // first "return" would truncate the branch before its UI update.
+  const removeEnd = handler.indexOf('void loadCloudDashboard()', removeStart)
+  const networkStart = handler.lastIndexOf("const response = await fetch('/api/vocabulary/saved'", removeStart)
+  assert.ok(removeStart >= 0 && networkStart >= 0 && removeEnd > removeStart, 'cloud removal branch should be found')
+  const networkBranch = handler.slice(networkStart, removeEnd)
+  // Local-only pending vocabulary may be removed immediately, but an already
+  // confirmed cloud entry must survive until the server confirms deletion.
+  const confirmation = networkBranch.indexOf('if (!response.ok) throw new Error')
+  const localRemoval = networkBranch.indexOf('savedWords.value = savedWords.value.filter')
+  assert.ok(confirmation >= 0 && localRemoval > confirmation)
 })
 
 
@@ -237,11 +244,11 @@ test('practice answer submission snapshots the selected question and answer', ()
 
 test('daily task writes are serialized per task and use a snapshot of each toggle', () => {
   assert.match(app, /const dailyTaskSaveQueues = new Map<string, Promise<void>>\(\)/)
-  assert.match(app, /const completed = task\.done/)
-  assert.match(app, /const previous = dailyTaskSaveQueues\.get\(taskId\) \|\| Promise\.resolve\(\)/)
+  assert.match(app, /const completed = replay\?\.completed \?\? task\.done/)
+  assert.match(app, /const previous = dailyTaskSaveQueues\.get\(queueKey\) \|\| Promise\.resolve\(\)/)
   assert.match(app, /previous\.catch\(\(\) => undefined\)\.then\(async \(\) =>/)
   assert.match(app, /completed\s*\}\),/)
-  assert.match(app, /dailyTaskSaveRequestIds\.get\(taskId\) === requestId/)
+  assert.match(app, /dailyTaskSaveRequestIds\.get\(queueKey\) === requestId/)
 })
 
 

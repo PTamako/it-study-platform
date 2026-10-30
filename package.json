@@ -8,6 +8,8 @@
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc -b",
+    "check:local": "bash scripts/check-local.sh",
+    "pretest": "node scripts/pretest.mjs",
     "test": "node --test scripts/*.test.mjs"
   },
   "dependencies": {
@@ -22,5 +24,8 @@
     "vite": "^6.0.7",
     "vue-tsc": "^2.2.0",
     "wrangler": "^4.154.0"
+  },
+  "engines": {
+    "node": ">=22 <23"
   }
 }
