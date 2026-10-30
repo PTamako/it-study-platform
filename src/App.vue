@@ -51,6 +51,7 @@ async function login() {
     void hydrateCloudProgress()
     void refreshDailyTasks(todayKey.value)
     void reconcilePriorDailyTasks()
+    void syncPendingMockSubmission()
   } catch (error) {
     authError.value = error instanceof Error ? error.message : '登录失败，请稍后重试。'
   } finally {
@@ -454,6 +455,7 @@ function formatMockTime(seconds: number) {
   return String(Math.floor(seconds / 60)).padStart(2, '0') + ':' + String(seconds % 60).padStart(2, '0')
 }
 async function startMockExam() {
+  if (mockPendingSubmission.value) { mockError.value = '上一次答卷尚未完成同步，请先点击重新同步。'; return }
   if (selectedTrackId.value === 'exam-fe' && feBankLoading.value) return
   const isFe = selectedTrack.value?.id === 'exam-fe'
   const required = isFe && feMockSection.value === 'B' ? 20 : 60
@@ -489,26 +491,65 @@ async function startMockExam() {
     mockLoading.value = false
   }
 }
+type PendingMockSubmission = {
+  submission_id: string
+  track: string
+  section: string
+  study_date: string
+  duration_seconds: number
+  answers: Array<{ question_id: string; answer: string }>
+}
+const mockPendingSubmission = ref<PendingMockSubmission | null>(readStored('zhixue:mock-pending-v1', null))
+const mockSyncing = ref(false)
+
+async function syncPendingMockSubmission() {
+  const pending = mockPendingSubmission.value
+  if (!pending || mockSyncing.value || !authenticated.value) return
+  mockSyncing.value = true
+  try {
+    const response = await fetch('/api/mock-exam/submit', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(pending),
+    })
+    const data = await response.json() as {
+      error?: string; submission_id?: string; correct_count?: number; total?: number; exam_name?: string; study_date?: string
+    }
+    if (!response.ok || data.submission_id !== pending.submission_id || !Number.isInteger(data.correct_count) || data.total !== pending.answers.length) {
+      throw new Error(data.error || '交卷结果暂未成功同步。')
+    }
+    const record: ExamRecord = { id: pending.submission_id, date: pending.study_date,
+      correct: data.correct_count!, total: data.total!, exam: data.exam_name || pending.track }
+    if (!examRecords.value.some(item => item.id === record.id)) examRecords.value.push(record)
+    mockPendingSubmission.value = null
+    try { localStorage.removeItem('zhixue:mock-pending-v1') } catch { /* cloud receipt prevents duplicates */ }
+    mockError.value = ''
+    void loadCloudDashboard()
+  } catch (error) {
+    mockError.value = (error instanceof Error ? error.message : '网络异常。') + ' 答卷已保留在本设备，可点击「重新同步」。'
+  } finally {
+    mockSyncing.value = false
+  }
+}
 async function finishMockExam(autoSubmit = false) {
   if (!mockStarted.value || mockSubmitted.value) return
   mockSubmitted.value = true
   mockStarted.value = false
   if (mockTimer) { clearInterval(mockTimer); mockTimer = undefined }
-  const total = mockQuestions.value.length
-  const correct = mockCorrectCount.value
-  void saveExamRecord({ date: tokyoDate(), correct, total, exam: (selectedTrack.value?.title || selectedTrackId.value) + (selectedTrackId.value === 'exam-fe' ? ' 科目 ' + feMockSection.value : '') + ' 模拟考试（' + correct + '/' + total + '题）' })
-  const unanswered = total - mockAnsweredCount.value
-  if (autoSubmit) mockError.value = '时间到，系统已自动交卷。未作答题目按答错计。'
-  else mockError.value = unanswered ? '已交卷。未作答的 ' + unanswered + ' 题按答错计。' : ''
-  const attempts = mockQuestions.value
-  const results = await Promise.allSettled(attempts.map(question => fetch('/api/attempts', {
-    method: 'POST', headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ question_id: question.id, answer: mockAnswers.value[question.id] || '', duration_seconds: Math.max(0, Math.floor((Date.now() - mockStartedAt.value) / 1000)) }),
-  })))
-  if (results.some(result => result.status === 'rejected' || (result.status === 'fulfilled' && !result.value.ok))) {
-    mockError.value = (mockError.value ? mockError.value + ' ' : '') + '部分答题记录未能同步到云端。'
+  const unanswered = mockQuestions.value.length - mockAnsweredCount.value
+  mockError.value = autoSubmit ? '考试时间已到，未作答按错题计。'
+    : unanswered ? '有 ' + unanswered + ' 道未作答题，按错题计。' : ''
+  const submission: PendingMockSubmission = {
+    submission_id: crypto.randomUUID(),
+    track: selectedTrackId.value,
+    section: selectedTrackId.value === 'exam-fe' ? feMockSection.value : 'SG',
+    study_date: tokyoDate(),
+    duration_seconds: Math.max(0, Math.floor((Date.now() - mockStartedAt.value) / 1000)),
+    answers: mockQuestions.value.map(item => ({ question_id: item.id, answer: mockAnswers.value[item.id] || '' })),
   }
-  void loadCloudDashboard()
+  mockPendingSubmission.value = submission
+  try { localStorage.setItem('zhixue:mock-pending-v1', JSON.stringify(submission)) }
+  catch { mockError.value += ' 浏览器本地保存失败；请勿关闭此页面直到同步完成。' }
+  await syncPendingMockSubmission()
 }
 onUnmounted(() => { if (mockTimer) clearInterval(mockTimer); if (dailyRolloverTimer) clearInterval(dailyRolloverTimer); document.removeEventListener('visibilitychange', onDailyVisibilityChange) })
 
@@ -1299,7 +1340,7 @@ onMounted(async () => {
     // Speech playback will report its own browser/device error when requested.
   }
   await checkAuth()
-  if (authenticated.value) { void syncExamHistory(); void hydrateCloudProgress(); void refreshDailyTasks(todayKey.value); void reconcilePriorDailyTasks() }
+  if (authenticated.value) { void syncExamHistory(); void hydrateCloudProgress(); void refreshDailyTasks(todayKey.value); void reconcilePriorDailyTasks(); void syncPendingMockSubmission() }
 })
 
 type DictionaryEntry = {
@@ -2087,6 +2128,10 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               <div class="section-heading"><div><h2>限时模拟考试</h2><p v-if="selectedTrackId === 'exam-fe'">科目 A 与 B 分开计时；科目 B 的领域比例为模拟近似值。</p><p v-else>共 60 题，限时 120 分钟。</p></div><span v-if="selectedTrackId !== 'exam-fe'" class="source-pill">A 48 题 · B 12 题</span></div>
               <div v-if="selectedTrackId === 'exam-fe' && !mockStarted && !mockSubmitted" class="question-source-filters" role="group" aria-label="选择 FE 模拟科目">
                 <button v-for="section in (['A', 'B'] as const)" :key="section" type="button" class="source-filter-button" :class="{ active: feMockSection === section }" :aria-pressed="feMockSection === section" :disabled="mockLoading" @click="feMockSection = section; mockError = ''">科目 {{ section }} · {{ section === 'A' ? '60 题 / 90 分钟' : '20 题 / 100 分钟' }}</button>
+              </div>
+              <div v-if="mockPendingSubmission" class="dictionary-status" role="status">
+                <span>未同步的模拟考试答卷已保留在本设备（{{ mockPendingSubmission.study_date }}）。</span>
+                <button type="button" class="text-link" :disabled="mockSyncing" @click="syncPendingMockSubmission">{{ mockSyncing ? '同步中…' : '重新同步答卷' }}</button>
               </div>
               <div v-if="!mockStarted && !mockSubmitted" class="panel practice-start-card">
                 <div class="practice-start-icon"><Clock3 :size="25" /></div><h3>模拟真实考试节奏</h3>
