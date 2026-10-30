@@ -47,14 +47,34 @@ with tempfile.TemporaryDirectory(prefix="tatoeba-cache-test-") as temp:
             return b"partial" if self.reads == 1 else b""
 
     target = root / "incomplete.tar.bz2"
-    with patch.object(gen.urllib.request, "urlopen", return_value=IncompleteResponse()):
+    with patch.object(gen.time, "sleep", return_value=None), patch.object(
+        gen.urllib.request, "urlopen", side_effect=lambda *args, **kwargs: IncompleteResponse()
+    ) as request:
         try:
             gen.download("https://example.test/incomplete.tar.bz2", target)
         except OSError as error:
             assert "Incomplete Tatoeba download" in str(error), error
         else:
             raise AssertionError("Incomplete download incorrectly succeeded")
+        assert request.call_count == 3
     assert not target.exists()
+    assert not list(root.glob("*.part"))
+
+    # Intermittent TLS resets should be retried and eventually publish complete data.
+    real_urlopen = gen.urllib.request.urlopen
+    calls = [0]
+    def flaky_urlopen(request, timeout=None):
+        calls[0] += 1
+        if calls[0] == 1:
+            raise gen.urllib.error.URLError("connection reset")
+        return real_urlopen(request, timeout=timeout)
+    recovered = root / "recovered.tar.bz2"
+    with patch.object(gen.time, "sleep", return_value=None), patch.object(
+        gen.urllib.request, "urlopen", side_effect=flaky_urlopen
+    ):
+        gen.download(original.as_uri(), recovered)
+    assert calls[0] == 2
+    assert recovered.read_bytes() == original_bytes
     assert not list(root.glob("*.part"))
 `
   const result = spawnSync('python3', ['-c', source], { encoding: 'utf8', timeout: 60000 })
