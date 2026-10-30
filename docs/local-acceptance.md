@@ -7,10 +7,10 @@ git fetch origin
 git switch fix/audit-data-safety-and-review-time
 git pull --ff-only
 nvm use 22
-bash scripts/check-local.sh
+npm run check:local
 ```
 
-此脚本依次执行 `npm ci`、语料生成、TypeScript 检查、Node 测试、生产构建和**本地 D1** 完整迁移验证；不会执行 `--remote`、部署 Worker，也不会重置真实学习数据。
+推荐直接使用 `npm run check:local`，不要单独把 `npm test` 当成完整验收。`npm test` 只运行测试，不会生成语料或执行构建；如用 Node 26 或缺少迁移文件，测试预检会明确提示先切换 Node 22、运行完整验收。\n\n此脚本依次执行 `npm ci`、语料生成、TypeScript 检查、Node 测试、生产构建和**本地 D1** 完整迁移验证；不会执行 `--remote`、部署 Worker，也不会重置真实学习数据。
 
 手动加做 Worker 打包检查（可选）：
 
