@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { hydrateMastery, mergeExamHistory, restoreMasteredCard } from './progress-sync'
+import { tokyoDate, mergeDailyTaskStates } from './daily-tasks'
 import { fetchVocabularySnapshot } from './vocabulary-sync'
 import {
   BookOpen, Languages, Search, GraduationCap,
@@ -25,6 +26,7 @@ async function checkAuth() {
     authenticated.value = response.ok && result.authenticated === true
   } catch {
     authenticated.value = false
+    dailyHydrationRun++
     authError.value = '暂时无法连接登录服务，请检查网络后重试。'
   } finally {
     authReady.value = true
@@ -46,6 +48,8 @@ async function login() {
     authPassword.value = ''
     void syncExamHistory()
     void hydrateCloudProgress()
+    void refreshDailyTasks(todayKey.value)
+    void reconcilePriorDailyTasks()
   } catch (error) {
     authError.value = error instanceof Error ? error.message : '登录失败，请稍后重试。'
   } finally {
@@ -62,6 +66,7 @@ async function logout() {
     if (!response.ok) throw new Error('退出登录失败，请检查网络后重试。')
     authenticated.value = false
     masterySyncGeneration++
+    dailyHydrationRun++
     languageProgressReady.value = false
     authPassword.value = ''
   } catch {
@@ -83,7 +88,7 @@ const savedWords = ref<string[]>(readStored('zhixue:saved-words', []))
 
 type StudyTask = { id: string; title: string; detail: string; minutes: number; done: boolean }
 type ExamRecord = { id?: string; date: string; correct: number; total: number; exam: string }
-const todayKey = new Date().toLocaleDateString('sv-SE')
+const todayKey = ref(tokyoDate())
 const defaultTasks: StudyTask[] = [
   { id: 'sg-review', title: '复习 SG 日语关键词', detail: '法律 / 技术 / 管理术语', minutes: 15, done: false },
   { id: 'sg-questions', title: '完成一组考试练习', detail: '建议 5 道题，逐题看解析', minutes: 15, done: false },
@@ -97,7 +102,7 @@ function readStored<T>(key: string, fallback: T): T {
     return fallback
   }
 }
-const tasks = ref<StudyTask[]>(readStored('zhixue:tasks:' + todayKey, defaultTasks))
+const tasks = ref<StudyTask[]>(readStored('zhixue:tasks:' + todayKey.value, defaultTasks.map(task => ({ ...task }))))
 type CloudDashboard = {
   generated_from: string
   exam: { attempted_questions: number; correct_answers: number; accuracy_percent: number | null }
@@ -121,38 +126,154 @@ async function loadCloudDashboard() {
 }
 const dailyTaskSaveQueues = new Map<string, Promise<void>>()
 const dailyTaskSaveRequestIds = new Map<string, number>()
-async function saveDailyTask(task: StudyTask) {
+type PendingDailyTask = { id: string; date: string; taskId: string; base: boolean; completed: boolean }
+const storedDailyPending = readStored<unknown>('zhixue:daily-pending-v1', [])
+const pendingDailyTasks = reactive(new Map<string, PendingDailyTask>())
+const dailyCloudStates = reactive(new Map<string, boolean>())
+if (Array.isArray(storedDailyPending)) {
+  for (const item of storedDailyPending) {
+    if (item && typeof item.id === 'string' && typeof item.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(item.date) && typeof item.taskId === 'string' && typeof item.base === 'boolean' && typeof item.completed === 'boolean') {
+      pendingDailyTasks.set(item.date + ':' + item.taskId, item)
+    }
+  }
+}
+function applyPendingDailyTasks(date: string) {
+  tasks.value = tasks.value.map(task => {
+    const pending = pendingDailyTasks.get(date + ':' + task.id)
+    return pending ? { ...task, done: pending.completed } : task
+  })
+}
+applyPendingDailyTasks(todayKey.value)
+function persistDailyPending() {
+  try { localStorage.setItem('zhixue:daily-pending-v1', JSON.stringify([...pendingDailyTasks.values()])) }
+  catch { cloudDashboardError.value = '本设备存储不可用，待同步任务可能无法保留。' }
+}
+async function saveDailyTask(task: StudyTask, previousDone: boolean, replay?: PendingDailyTask) {
   const taskId = task.id
-  const completed = task.done
-  const requestId = (dailyTaskSaveRequestIds.get(taskId) || 0) + 1
-  dailyTaskSaveRequestIds.set(taskId, requestId)
+  const date = replay?.date || todayKey.value
+  const queueKey = date + ':' + taskId
+  const completed = replay?.completed ?? task.done
+  const prior = pendingDailyTasks.get(queueKey)
+  const intent = replay || { id: String(Date.now()) + '-' + Math.random(), date, taskId, base: prior?.base ?? previousDone, completed }
+  pendingDailyTasks.set(queueKey, intent)
+  persistDailyPending()
+  const requestId = (dailyTaskSaveRequestIds.get(queueKey) || 0) + 1
+  dailyTaskSaveRequestIds.set(queueKey, requestId)
 
   // Serialize writes for each task so a slow earlier toggle cannot overwrite the latest choice.
-  const previous = dailyTaskSaveQueues.get(taskId) || Promise.resolve()
+  const previous = dailyTaskSaveQueues.get(queueKey) || Promise.resolve()
   const pending = previous.catch(() => undefined).then(async () => {
     try {
       const response = await fetch('/api/daily-tasks', {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ task_id: taskId, study_date: todayKey, completed }),
+        body: JSON.stringify({ task_id: taskId, study_date: date, completed }),
       })
       if (!response.ok) {
         const data = await response.json().catch(() => ({})) as { error?: string }
         throw new Error(data.error || '每日任务云端保存失败')
       }
-      if (dailyTaskSaveRequestIds.get(taskId) === requestId) {
+      const remaining = pendingDailyTasks.get(queueKey)
+      if (remaining?.id === intent.id) pendingDailyTasks.delete(queueKey)
+      else if (remaining) pendingDailyTasks.set(queueKey, { ...remaining, base: completed })
+      persistDailyPending()
+      if (todayKey.value === date && dailyTaskSaveRequestIds.get(queueKey) === requestId) {
         cloudDashboardError.value = ''
         void loadCloudDashboard()
       }
     } catch (error) {
-      if (dailyTaskSaveRequestIds.get(taskId) === requestId) {
+      if (todayKey.value === date && dailyTaskSaveRequestIds.get(queueKey) === requestId) {
         cloudDashboardError.value = error instanceof Error ? error.message : '网络异常：每日任务暂未同步到云端。'
       }
     }
   })
-  dailyTaskSaveQueues.set(taskId, pending)
+  dailyTaskSaveQueues.set(queueKey, pending)
   await pending
-  if (dailyTaskSaveQueues.get(taskId) === pending) dailyTaskSaveQueues.delete(taskId)
+  if (dailyTaskSaveQueues.get(queueKey) === pending) dailyTaskSaveQueues.delete(queueKey)
 }
+let dailyHydrationRun = 0
+function rolloverDailyTasks() {
+  const next = tokyoDate()
+  if (next === todayKey.value) return
+  // The synchronous watcher has already persisted the prior day's latest value.
+  todayKey.value = next
+  tasks.value = readStored('zhixue:tasks:' + next, defaultTasks.map(task => ({ ...task })))
+  applyPendingDailyTasks(next)
+  if (authenticated.value) { void refreshDailyTasks(next); void reconcilePriorDailyTasks() }
+}
+async function reconcilePriorDailyTasks() {
+  const generation = dailyHydrationRun
+  const pending = [...pendingDailyTasks.values()].filter(item => item.date !== todayKey.value)
+  for (const item of pending) {
+    if (!authenticated.value || generation !== dailyHydrationRun) return
+    const key = item.date + ':' + item.taskId
+    if (dailyTaskSaveQueues.has(key) || pendingDailyTasks.get(key)?.id !== item.id) continue
+    try {
+      const response = await fetch('/api/daily-tasks?date=' + encodeURIComponent(item.date))
+      if (!response.ok) continue
+      const data = await response.json() as { items?: Array<{ task_id: string; completed: number }> }
+      if (!authenticated.value || generation !== dailyHydrationRun) return
+      if (!Array.isArray(data.items) || pendingDailyTasks.get(key)?.id !== item.id) continue
+      const cloud = Boolean(data.items.find(row => row.task_id === item.taskId)?.completed)
+      dailyCloudStates.set(key, cloud)
+      if (cloud === item.completed) { pendingDailyTasks.delete(key); persistDailyPending() }
+      else cloudDashboardError.value = '此前的每日任务尚未同步，请在学习计划中处理。'
+    } catch { /* Retain the pending action until a later retry. */ }
+  }
+}
+function toggleDailyTask(id: string, checked: boolean) {
+  const previousDate = todayKey.value
+  rolloverDailyTasks()
+  const task = tasks.value.find(item => item.id === id)
+  if (!task) return
+  const previousDone = task.done
+  task.done = previousDate === todayKey.value ? checked : !task.done
+  void saveDailyTask(task, previousDone)
+}
+async function refreshDailyTasks(date: string) {
+  const run = ++dailyHydrationRun
+  const initial = tasks.value.map(task => ({ ...task }))
+  const revisions = new Map(initial.map(task => [task.id, dailyTaskSaveRequestIds.get(date + ':' + task.id) || 0]))
+  const pendingIds = new Set(initial.filter(task => dailyTaskSaveQueues.has(date + ':' + task.id)).map(task => task.id))
+  try {
+    // Atomic import cannot undo a newer change from another device.
+    const results = await Promise.all(initial.filter(task => task.done && !pendingDailyTasks.has(date + ':' + task.id)).map(task => fetch('/api/daily-tasks', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ task_id: task.id, study_date: date, completed: true, import_only: true }),
+    })))
+    if (run !== dailyHydrationRun || !authenticated.value || todayKey.value !== date) return
+    if (results.some(response => !response.ok)) throw new Error('部分每日任务尚未同步，本设备数据已保留。')
+    const response = await fetch('/api/daily-tasks?date=' + encodeURIComponent(date))
+    if (!response.ok) throw new Error('每日任务暂时无法读取，本设备数据已保留。')
+    const data = await response.json() as { items?: Array<{ task_id: string; completed: number }> }
+    if (!Array.isArray(data.items)) throw new Error('每日任务返回格式异常，本设备数据已保留。')
+    if (run !== dailyHydrationRun || !authenticated.value || todayKey.value !== date) return
+    const cloudStates = new Map(data.items.map(item => [item.task_id, Boolean(item.completed)]))
+    for (const pending of [...pendingDailyTasks.values()]) {
+      if (pending.date !== date || pendingIds.has(pending.taskId)) continue
+      const key = date + ':' + pending.taskId
+      if (pendingDailyTasks.get(key)?.id !== pending.id) continue
+      const cloud = cloudStates.get(pending.taskId) ?? false
+      dailyCloudStates.set(key, cloud)
+      if (cloud === pending.completed) {
+        pendingDailyTasks.delete(key)
+        persistDailyPending()
+      } else {
+        cloudDashboardError.value = '每日任务尚未同步，请在学习计划中处理。'
+      }
+    }
+    tasks.value = mergeDailyTaskStates(tasks.value, data.items, id =>
+      !pendingIds.has(id) && !pendingDailyTasks.has(date + ':' + id) && (dailyTaskSaveRequestIds.get(date + ':' + id) || 0) === revisions.get(id))
+  } catch (error) {
+    if (run === dailyHydrationRun && authenticated.value && todayKey.value === date) cloudDashboardError.value = error instanceof Error ? error.message : '每日任务同步失败。'
+  }
+}
+function retryPendingDailyTask(intent: PendingDailyTask) {
+  const key = intent.date + ':' + intent.taskId
+  if (!authenticated.value || dailyTaskSaveQueues.has(key) || pendingDailyTasks.get(key)?.id !== intent.id) return
+  void saveDailyTask({ id: intent.taskId, done: intent.completed } as StudyTask, intent.base, intent)
+}
+let dailyRolloverTimer: ReturnType<typeof setInterval> | undefined
+function onDailyVisibilityChange() { if (document.visibilityState === 'visible') rolloverDailyTasks() }
 const examRecords = ref<ExamRecord[]>(readStored('zhixue:exam-records', []))
 const examHistorySyncing = ref(false)
 const dailyGoalMinutes = ref(40)
@@ -165,17 +286,17 @@ const latestRecord = computed(() => examRecords.value.length ? examRecords.value
 const curveRecords = computed(() => {
   const days: { date: string; label: string; accuracy: number | null; count: number }[] = []
   for (let i = 6; i >= 0; i--) {
-    const d = new Date()
-    d.setDate(d.getDate() - i)
-    const key = d.toLocaleDateString('sv-SE')
+    const d = new Date(todayKey.value + 'T00:00:00Z')
+    d.setUTCDate(d.getUTCDate() - i)
+    const key = d.toISOString().slice(0, 10)
     const records = examRecords.value.filter(record => record.date === key)
     const total = records.reduce((sum, record) => sum + record.total, 0)
     const correct = records.reduce((sum, record) => sum + record.correct, 0)
-    days.push({ date: key, label: (d.getMonth() + 1) + '/' + d.getDate(), accuracy: total ? Math.round(correct / total * 100) : null, count: total })
+    days.push({ date: key, label: (d.getUTCMonth() + 1) + '/' + d.getUTCDate(), accuracy: total ? Math.round(correct / total * 100) : null, count: total })
   }
   return days
 })
-watch(tasks, value => localStorage.setItem('zhixue:tasks:' + todayKey, JSON.stringify(value)), { deep: true })
+watch(tasks, value => { try { localStorage.setItem('zhixue:tasks:' + todayKey.value, JSON.stringify(value)) } catch { cloudDashboardError.value = '本设备存储不可用，每日任务可能无法离线保留。' } }, { deep: true, flush: 'sync' })
 watch(examRecords, value => localStorage.setItem('zhixue:exam-records', JSON.stringify(value)), { deep: true })
 
 // 将旧版本保存在浏览器的手动成绩记录迁移到 D1。先上传，再读取云端；每条记录带稳定 ID，失败时保留本地副本。
@@ -245,7 +366,7 @@ function addExamRecord() {
   if (correctRaw === null) return
   const correct = Number(correctRaw)
   if (!Number.isInteger(correct) || correct < 0 || correct > total) { window.alert('答对题数应为 0 到总题数之间的整数。'); return }
-  void saveExamRecord({ date: todayKey, correct, total, exam: exam.trim().toUpperCase() })
+  void saveExamRecord({ date: tokyoDate(), correct, total, exam: exam.trim().toUpperCase() })
 }
 async function removeExamRecords() {
   if (!window.confirm('确定清除全部历史考试成绩吗？云端和本设备记录都会删除，且无法恢复。')) return
@@ -370,7 +491,7 @@ async function finishMockExam(autoSubmit = false) {
   if (mockTimer) { clearInterval(mockTimer); mockTimer = undefined }
   const total = mockQuestions.value.length
   const correct = mockCorrectCount.value
-  void saveExamRecord({ date: todayKey, correct, total, exam: (selectedTrack.value?.title || selectedTrackId.value) + ' 模拟考试（' + (correct * 2) + '/120分）' })
+  void saveExamRecord({ date: tokyoDate(), correct, total, exam: (selectedTrack.value?.title || selectedTrackId.value) + ' 模拟考试（' + (correct * 2) + '/120分）' })
   const unanswered = total - mockAnsweredCount.value
   if (autoSubmit) mockError.value = '时间到，系统已自动交卷。未作答题目按答错计。'
   else mockError.value = unanswered ? '已交卷。未作答的 ' + unanswered + ' 题按答错计。' : ''
@@ -384,7 +505,7 @@ async function finishMockExam(autoSubmit = false) {
   }
   void loadCloudDashboard()
 }
-onUnmounted(() => { if (mockTimer) clearInterval(mockTimer) })
+onUnmounted(() => { if (mockTimer) clearInterval(mockTimer); if (dailyRolloverTimer) clearInterval(dailyRolloverTimer); document.removeEventListener('visibilitychange', onDailyVisibilityChange) })
 
 type ScenarioOption = { id: string; text: string }
 type PracticalScenario = {
@@ -776,7 +897,7 @@ function nextPracticeQuestion() {
     quizSubmitted.value = false
     return
   }
-  void saveExamRecord({ date: todayKey, correct: quizCorrect.value, total: quizQuestions.value.length, exam: selectedTrack.value?.title || selectedTrackId.value })
+  void saveExamRecord({ date: tokyoDate(), correct: quizCorrect.value, total: quizQuestions.value.length, exam: selectedTrack.value?.title || selectedTrackId.value })
   quizFinished.value = true
 }
 
@@ -1124,50 +1245,22 @@ async function hydrateCloudProgress() {
   }
   if (!isCurrent()) return
 
-  // Migrate today's task state before reading cloud state; upserts are safe to retry.
-  let taskImportOk = false
   try {
-    const existingResponse = await fetch('/api/daily-tasks?date=' + encodeURIComponent(todayKey))
-    if (!existingResponse.ok) throw new Error('Unable to inspect cloud task state')
-    const existingData = await existingResponse.json() as { items?: Array<{ task_id: string; completed: number }> }
-    const existingIds = new Set((existingData.items || []).map(item => item.task_id))
-    // Only import task IDs absent from D1; never overwrite a newer cloud completion with stale local state.
-    const legacyTasks = tasks.value.filter(task => !existingIds.has(task.id))
-    const results = await Promise.all(legacyTasks.map(task => fetch('/api/daily-tasks', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ task_id: task.id, study_date: todayKey, completed: task.done }),
-    })))
-    taskImportOk = results.every(response => response.ok)
-  } catch { taskImportOk = false }
-
-
-  try {
-    const [taskResponse, reviewResponse] = await Promise.all([
-      fetch('/api/dashboard'), fetch('/api/language-review'),
-    ])
+    const reviewResponse = await fetch('/api/language-review')
     if (reviewResponse.ok) {
       const reviews = await reviewResponse.json() as { items?: LanguageReview[] }
-      // Merge instead of replacing: old local review history has not been fully imported yet.
       const cloudReviews = reviews.items || []
       languageReviews.value = [...cloudReviews, ...languageReviews.value.filter(local =>
         !cloudReviews.some(cloud => cloud.card_id === local.card_id))]
     }
-    if (taskResponse.ok && taskImportOk) {
-      const listResponse = await fetch('/api/daily-tasks?date=' + encodeURIComponent(todayKey))
-      if (listResponse.ok) {
-        const list = await listResponse.json() as { items?: Array<{ task_id: string; completed: number }> }
-        const states = new Map((list.items || []).map(item => [item.task_id, Boolean(item.completed)]))
-        tasks.value = tasks.value.map(task => ({ ...task, done: states.get(task.id) ?? task.done }))
-      }
-    }
-    if (!taskImportOk) {
-      cloudDashboardError.value = '部分旧版学习数据尚未同步；本设备中的原始数据已保留。'
-    }
   } catch {
-    // Keep local data usable if the cloud is unavailable or an import partially fails.
+    // Keep local reviews usable if the cloud is unavailable.
   }
 }
 onMounted(async () => {
+  rolloverDailyTasks()
+  dailyRolloverTimer = setInterval(rolloverDailyTasks, 30000)
+  document.addEventListener('visibilitychange', onDailyVisibilityChange)
   // Preload the browser's speech voices before the user taps a pronunciation button.
   // iOS Safari may initially return an empty voice list; waiting until the first tap
   // makes that tap appear to do nothing and forces the user to tap a second time.
@@ -1179,7 +1272,7 @@ onMounted(async () => {
     // Speech playback will report its own browser/device error when requested.
   }
   await checkAuth()
-  if (authenticated.value) { void syncExamHistory(); void hydrateCloudProgress() }
+  if (authenticated.value) { void syncExamHistory(); void hydrateCloudProgress(); void refreshDailyTasks(todayKey.value); void reconcilePriorDailyTasks() }
 })
 
 type DictionaryEntry = {
@@ -1811,8 +1904,16 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
               </div>
               <div class="panel task-panel">
                 <div class="panel-heading"><div><h3><ListChecks :size="16" /> 今日学习计划</h3><p>{{ tasks.filter(task => task.done).length }} / {{ tasks.length }} 项已完成</p></div></div>
+                <div v-if="pendingDailyTasks.size" class="dictionary-status" role="status">
+                  <p>有任务尚未同步。覆盖会将本机状态写入云端，可能覆盖其他设备的更改。</p>
+                  <p v-for="item in Array.from(pendingDailyTasks.values())" :key="item.id">
+                    {{ item.date }} · {{ defaultTasks.find(task => task.id === item.taskId)?.title || item.taskId }}<br>
+                    本机待同步：{{ item.completed ? '已完成' : '未完成' }} · 上次读取的云端：{{ dailyCloudStates.has(item.date + ':' + item.taskId) ? (dailyCloudStates.get(item.date + ':' + item.taskId) ? '已完成' : '未完成') : '尚未读取' }}
+                    <button type="button" class="text-link" @click="retryPendingDailyTask(item)">以本机状态覆盖云端</button>
+                  </p>
+                </div>
                 <label v-for="task in tasks" :key="task.id" class="study-task" :class="{ completed: task.done }">
-                  <input v-model="task.done" type="checkbox" @change="saveDailyTask(task)" />
+                  <input :checked="task.done" type="checkbox" @change="toggleDailyTask(task.id, ($event.target as HTMLInputElement).checked)" />
                   <span class="task-copy"><strong>{{ task.title }}</strong><small>{{ task.detail }}</small></span>
                   <span class="task-minutes">{{ task.minutes }} 分钟</span>
                 </label>

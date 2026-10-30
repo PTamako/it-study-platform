@@ -1051,7 +1051,9 @@ export default {
       const completed = body.completed === true || body.completed === 1
       try {
         await env.DB.prepare(
-          'INSERT INTO daily_task_completions (task_id, study_date, completed, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(task_id, study_date) DO UPDATE SET completed = excluded.completed, updated_at = CURRENT_TIMESTAMP',
+          body.import_only === true
+            ? 'INSERT INTO daily_task_completions (task_id, study_date, completed, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(task_id, study_date) DO NOTHING'
+            : 'INSERT INTO daily_task_completions (task_id, study_date, completed, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(task_id, study_date) DO UPDATE SET completed = excluded.completed, updated_at = CURRENT_TIMESTAMP',
         ).bind(taskId, studyDate, completed ? 1 : 0).run()
         return json({ ok: true, task_id: taskId, study_date: studyDate, completed })
       } catch { return json({ error: '每日任务保存失败，请确认已应用最新 D1 迁移。' }, 503) }
