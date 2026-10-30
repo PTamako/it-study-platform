@@ -41,7 +41,7 @@ function setup(sectionB = 12) {
       try {
         for (let i = 0; i < statements.length; i++) {
           await statements[i].run()
-          if (crash && i === 6) throw new Error('simulated outage')
+          if (crash && i === 1) throw new Error('simulated outage')
         }
         sql.exec('COMMIT')
       } catch (error) { sql.exec('ROLLBACK'); throw error }
@@ -107,4 +107,12 @@ test('FE 60 A and 16 algorithm + 4 security B are not confused with SG', async (
   assert.match(app,/mock-pending-v1/)
   assert.match(app,/syncPendingMockSubmission/)
   assert.doesNotMatch(app,/Promise.allSettled\(attempts.map/)
+})
+
+test('a complete mock uses four atomic D1 statements rather than exceeding Free query limits', async () => {
+  const code = await readFile(new URL('../worker/index.ts', import.meta.url),'utf8')
+  const block = code.slice(code.indexOf('const gradedPayload = JSON.stringify('), code.indexOf('await env.DB.batch(stmts)'))
+  assert.match(block, /FROM json_each\(\?\)/)
+  assert.doesNotMatch(block, /for \(let i = 0; i < answers.length/)
+  assert.equal((block.match(/env\.DB\.prepare\(/g) || []).length, 4)
 })

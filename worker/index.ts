@@ -766,35 +766,47 @@ export default {
         const correctCount = grades.filter(grade => grade.correct).length
         const examName = track === 'exam-fe' ? 'FE 科目' + section + ' 模擬試験' : 'SG 模擬試験'
         const summary = { ok: true, submission_id: submissionId, track, section, correct_count: correctCount, total: required, exam_name: examName, study_date: date }
+        // D1 Free caps queries per Worker invocation. JSON1 expands 60 grades
+        // inside just two SQL statements, instead of 120 separate updates.
+        // Together with receipt + exam history, the whole mock is 4 atomic writes.
+        const gradedPayload = JSON.stringify(answers.map((question, i) => ({
+          id: question.question_id, answer: question.answer, correct: grades[i].correct ? 1 : 0,
+        })))
         const stmts: D1PreparedStatement[] = [
           env.DB.prepare('INSERT INTO mock_exam_submissions (id, track_id, exam_section, payload_json, result_json) VALUES (?, ?, ?, ?, ?)')
             .bind(submissionId, track, section, payload, JSON.stringify(summary)),
+          env.DB.prepare(
+            `INSERT INTO study_attempts (id, question_id, user_answer_json, is_correct, duration_seconds)
+             SELECT ? || ':' || json_extract(value, '$.id'),
+                    json_extract(value, '$.id'), json_quote(json_extract(value, '$.answer')),
+                    CAST(json_extract(value, '$.correct') AS INTEGER), ?
+             FROM json_each(?)`,
+          ).bind(submissionId, duration, gradedPayload),
+          env.DB.prepare(
+            `INSERT INTO question_review_state
+               (question_id, track_id, review_count, correct_streak, last_result, next_review_at, mastered, updated_at)
+             SELECT json_extract(value, '$.id'), ?, 1,
+                    CAST(json_extract(value, '$.correct') AS INTEGER),
+                    CASE WHEN json_extract(value, '$.correct') = 1 THEN 'remembered' ELSE 'again' END,
+                    datetime(CURRENT_TIMESTAMP, CASE WHEN json_extract(value, '$.correct') = 1 THEN '+1 day' ELSE '+10 minutes' END),
+                    0, CURRENT_TIMESTAMP
+             FROM json_each(?)
+             WHERE 1 = 1
+             ON CONFLICT(question_id) DO UPDATE SET
+               track_id = excluded.track_id,
+               review_count = question_review_state.review_count + 1,
+               correct_streak = CASE WHEN excluded.last_result = 'remembered' THEN question_review_state.correct_streak + 1 ELSE 0 END,
+               last_result = excluded.last_result,
+               next_review_at = datetime(CURRENT_TIMESTAMP, CASE
+                 WHEN excluded.last_result = 'again' THEN '+10 minutes'
+                 WHEN question_review_state.correct_streak + 1 >= 3 THEN '+30 days'
+                 WHEN question_review_state.correct_streak + 1 = 2 THEN '+3 days' ELSE '+1 day' END),
+               mastered = CASE WHEN excluded.last_result = 'remembered' AND question_review_state.correct_streak + 1 >= 3 THEN 1 ELSE 0 END,
+               updated_at = CURRENT_TIMESTAMP`,
+          ).bind(track, gradedPayload),
+          env.DB.prepare('INSERT INTO exam_history (id, study_date, exam_name, question_count, correct_count) VALUES (?, ?, ?, ?, ?)')
+            .bind(submissionId, date, examName, required, correctCount),
         ]
-        for (let i = 0; i < answers.length; i++) {
-          const question = answers[i]; const correct = grades[i].correct
-          const resultName = correct ? 'remembered' : 'again'
-          stmts.push(env.DB.prepare(
-            'INSERT INTO study_attempts (id, question_id, user_answer_json, is_correct, duration_seconds) VALUES (?, ?, ?, ?, ?)',
-          ).bind(submissionId + ':' + question.question_id, question.question_id, JSON.stringify(question.answer), correct ? 1 : 0, duration))
-          stmts.push(env.DB.prepare(
-            `INSERT INTO question_review_state (question_id, track_id, review_count, correct_streak, last_result, next_review_at, mastered, updated_at)
-               VALUES (?, ?, 1, ?, ?, datetime(CURRENT_TIMESTAMP, ?), 0, CURRENT_TIMESTAMP)
-               ON CONFLICT(question_id) DO UPDATE SET
-                 track_id = excluded.track_id,
-                 review_count = question_review_state.review_count + 1,
-                 correct_streak = CASE WHEN excluded.last_result = 'remembered' THEN question_review_state.correct_streak + 1 ELSE 0 END,
-                 last_result = excluded.last_result,
-                 next_review_at = datetime(CURRENT_TIMESTAMP, CASE
-                   WHEN excluded.last_result = 'again' THEN '+10 minutes'
-                   WHEN question_review_state.correct_streak + 1 >= 3 THEN '+30 days'
-                   WHEN question_review_state.correct_streak + 1 = 2 THEN '+3 days' ELSE '+1 day' END),
-                 mastered = CASE WHEN excluded.last_result = 'remembered' AND question_review_state.correct_streak + 1 >= 3 THEN 1 ELSE 0 END,
-                 updated_at = CURRENT_TIMESTAMP`,
-          ).bind(question.question_id, track, correct ? 1 : 0, resultName, correct ? '+1 day' : '+10 minutes'))
-        }
-        stmts.push(env.DB.prepare(
-          'INSERT INTO exam_history (id, study_date, exam_name, question_count, correct_count) VALUES (?, ?, ?, ?, ?)',
-        ).bind(submissionId, date, examName, required, correctCount))
         await env.DB.batch(stmts)
         return json(summary, 201)
       } catch {
