@@ -11,3 +11,13 @@ test('official SG identifiers are updated in place without destroying personal a
 test('each exercise item restarts its own elapsed time', () => {
   assert.match(app, /quizIndex\.value \+= 1\s+quizStartedAt\.value = Date\.now\(\)/)
 })
+
+test('official IPA 2019 autumn answer key matches all six restored SG questions', () => {
+  // https://www.ipa.go.jp/shiken/mondai-kaiotu/gmcbt8000000dict-att/2019r01a_sg_am_ans.pdf
+  const expected = {25:'a',26:'d',27:'b',28:'d',29:'d',30:'a'}
+  for (const [n, answer] of Object.entries(expected)) {
+    const entry = sql.split("('sg-official-2019f-am-" + n + "'")[1]
+    assert.ok(entry, 'missing question ' + n)
+    assert.equal(entry.match(/,'"(a|b|c|d)"',/)?.[1], answer, 'IPA answer differs for ' + n)
+  }
+})
