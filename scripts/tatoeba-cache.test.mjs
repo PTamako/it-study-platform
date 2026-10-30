@@ -20,7 +20,7 @@ with tempfile.TemporaryDirectory(prefix="tatoeba-cache-test-") as temp:
     root = Path(temp)
     original = root / "original-links.tar.bz2"
     with tarfile.open(str(original), "w:bz2") as archive:
-        body = b"1\\t2\\n3\\t4\\n"
+        body = b"1\t2\n3\t4\n"
         member = tarfile.TarInfo("links.csv")
         member.size = len(body)
         archive.addfile(member, io.BytesIO(body))
