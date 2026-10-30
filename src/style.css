@@ -804,3 +804,13 @@ button[aria-disabled="true"] {
 
 /* Preserve code indentation and wrap long pseudocode on small screens. */
 .question-prompt,.mock-review-item strong { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* FE question bank: compact year / section / topic selectors across desktop and mobile. */
+.fe-filter-controls { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(0,1.6fr); gap:10px; margin-top:9px; }
+.fe-filter-controls label { display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--muted, #657085); min-width:0; }
+.fe-filter-controls select { min-width:0; width:100%; max-width:100%; min-height:42px; border:1px solid var(--border, #dce2eb); border-radius:10px; padding:7px 10px; font-size:14px; color:inherit; background:var(--surface, #fff); }
+@media (max-width:520px) {
+  .fe-filter-controls { grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; }
+  .fe-filter-controls label:last-child { grid-column:1 / -1; }
+  .fe-filter-controls select { font-size:16px; min-height:44px; }
+}
