@@ -43,6 +43,7 @@ test('FE source catalog references all public 2023-2026 A/B IPA question sets', 
   for (const row of sources) {
     assert.match(row.source_url, /^https:\/\/www\.ipa\.go\.jp\//)
     assert.match(row.notes, /_ans\.pdf/)
+    assert.equal(row.content_mode, 'link_only', 'incomplete yearly corpus must not be advertised as fully imported')
     assert.ok(['科目A', '科目B'].includes(row.subject_label))
     assert.match(row.source_url, /_qs\.pdf$/)
   }
