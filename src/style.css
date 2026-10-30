@@ -801,3 +801,6 @@ button[aria-disabled="true"] {
   .category-grid {grid-template-columns:minmax(0,1fr)}
   .category-card {min-height:0;padding:15px}
 }
+
+/* Preserve code indentation and wrap long pseudocode on small screens. */
+.question-prompt,.mock-review-item strong { white-space: pre-wrap; overflow-wrap: anywhere; }
