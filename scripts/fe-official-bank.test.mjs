@@ -12,6 +12,7 @@ const extraOfficial = read('../migrations/0093_fe_official_verified_2023_2024.sq
 const latestOfficial = read('../migrations/0094_fe_official_2026_additional_six.sql')
 const subjectB = read('../migrations/0095_fe_official_2026_subject_b_2_6.sql')
 const additional2025 = read('../migrations/0096_fe_official_2025_subject_a_additional_eleven.sql')
+const legacySources = read('../migrations/0097_fe_legacy_2018_2019_sources.sql')
 function setup() {
   const db = new DatabaseSync(':memory:')
   db.exec(`CREATE TABLE study_tracks (id TEXT PRIMARY KEY);
@@ -39,12 +40,13 @@ function setup() {
   db.exec(latestOfficial)
   db.exec(subjectB)
   db.exec(additional2025)
+  db.exec(legacySources)
   return db
 }
 
 test('FE source catalog references all public 2023-2026 A/B IPA question sets', () => {
   const db = setup()
-  const sources = db.prepare("SELECT * FROM question_sources WHERE exam_code='FE' ORDER BY year_label, subject_label").all()
+  const sources = db.prepare("SELECT * FROM question_sources WHERE exam_code='FE' AND subject_label IN ('科目A','科目B') ORDER BY year_label, subject_label").all()
   assert.equal(sources.length, 8)
   for (const row of sources) {
     assert.match(row.source_url, /^https:\/\/www\.ipa\.go\.jp\//)
@@ -53,6 +55,14 @@ test('FE source catalog references all public 2023-2026 A/B IPA question sets', 
     assert.ok(['科目A', '科目B'].includes(row.subject_label))
     assert.match(row.source_url, /_qs\.pdf$/)
   }
+})
+
+test('2018-2019 former FE morning sessions are a link-only source catalog, not fake imported items', () => {
+  const db = setup()
+  const rows = db.prepare("SELECT * FROM question_sources WHERE exam_code='FE' AND subject_label LIKE '旧制度・%'").all()
+  assert.equal(rows.length, 4)
+  assert.ok(rows.every(x => x.content_mode === 'link_only' && /^https:\/\/www\.ipa\.go\.jp\//.test(x.source_url)))
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM questions WHERE id LIKE 'fe-ipa-legacy-%'").get().n, 0)
 })
 
 test('FE bootstraps usable 60 A / 16 algorithm + 4 security B bank without a user install request', () => {
@@ -117,11 +127,12 @@ test('repeat FE migrations are idempotent, preserve attempts, source classes and
   db.exec(latestOfficial)
   db.exec(subjectB)
   db.exec(additional2025)
+  db.exec(legacySources)
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM questions").get().n, 142)
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM study_attempts").get().n, 1)
   assert.equal(db.prepare("SELECT mastered FROM question_review_state WHERE question_id='fe-ipa-official-2026-a-02'").get().mastered, 1)
   assert.equal(db.prepare("SELECT prompt FROM questions WHERE id='fe-ipa-official-2026-a-02'").get().prompt, originalPrompt)
-  for (const script of [catalog, official, practice, extraOfficial, latestOfficial, subjectB, additional2025]) {
+  for (const script of [catalog, official, practice, extraOfficial, latestOfficial, subjectB, additional2025, legacySources]) {
     assert.doesNotMatch(script, /\b(?:DELETE\s+FROM|DROP\s+TABLE|REPLACE\s+INTO)\b/i)
   }
 })
