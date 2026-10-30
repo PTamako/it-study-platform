@@ -9,6 +9,7 @@ const catalog = read('../migrations/0090_fe_ipa_public_sources_2023_2026.sql')
 const official = read('../migrations/0091_fe_official_verified_2025_2026.sql')
 const practice = read('../migrations/0092_fe_practice_bank.sql')
 const extraOfficial = read('../migrations/0093_fe_official_verified_2023_2024.sql')
+const latestOfficial = read('../migrations/0094_fe_official_2026_additional_six.sql')
 function setup() {
   const db = new DatabaseSync(':memory:')
   db.exec(`CREATE TABLE study_tracks (id TEXT PRIMARY KEY);
@@ -33,6 +34,7 @@ function setup() {
   db.exec(official)
   db.exec(practice)
   db.exec(extraOfficial)
+  db.exec(latestOfficial)
   return db
 }
 
@@ -53,11 +55,11 @@ test('FE bootstraps usable 60 A / 16 algorithm + 4 security B bank without a use
   const db = setup()
   const count = where => db.prepare('SELECT COUNT(*) AS n FROM questions WHERE ' + where).get().n
   assert.equal(feSeeds.length, 80)
-  assert.equal(count("track_id = 'exam-fe'"), 120)
-  assert.equal(count("source_type = 'official'"), 40)
+  assert.equal(count("track_id = 'exam-fe'"), 126)
+  assert.equal(count("source_type = 'official'"), 46)
   assert.equal(count("source_type = 'licensed'"), 74)
   assert.equal(count("source_type = 'generated'"), 6)
-  assert.equal(count("exam_section = 'A' AND exam_section_method = 'explicit'"), 97)
+  assert.equal(count("exam_section = 'A' AND exam_section_method = 'explicit'"), 103)
   assert.equal(count("exam_section = 'B' AND topic = 'FE算法与程序设计' AND exam_section_method = 'explicit'"), 19)
   assert.equal(count("exam_section = 'B' AND topic = 'FE信息安全' AND exam_section_method = 'explicit'"), 4)
   assert.equal(count("prompt LIKE '%・改編%' AND source_type='official'"), 0)
@@ -73,6 +75,8 @@ test('IPA original 2023-2026 A/B answer keys and options match reviewed PDFs', (
     ['2024:A:8','c'],['2024:A:10','d'],['2024:A:11','c'],['2024:A:12','d'],['2024:B:1','b'],
     ['2025:A:1','d'],['2025:A:2','b'],['2025:A:5','a'],['2025:A:8','d'],
     ['2025:A:10','a'],['2025:A:11','c'],['2025:A:12','d'],['2025:A:13','d'],
+    ['2026:A:1','b'],['2026:A:7','d'],['2026:A:15','c'],
+    ['2026:A:17','b'],['2026:A:18','a'],['2026:A:20','b'],
     ['2026:A:2','c'],['2026:A:3','b'],['2026:A:4','b'],['2026:A:5','b'],
     ['2026:A:8','a'],['2026:A:9','c'],['2026:A:10','c'],['2026:A:11','a'],
     ['2026:A:12','c'],['2026:A:13','a'],['2026:A:14','d'],
@@ -102,11 +106,12 @@ test('repeat FE migrations are idempotent, preserve attempts, source classes and
   db.exec(official)
   db.exec(practice)
   db.exec(extraOfficial)
-  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM questions").get().n, 120)
+  db.exec(latestOfficial)
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM questions").get().n, 126)
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM study_attempts").get().n, 1)
   assert.equal(db.prepare("SELECT mastered FROM question_review_state WHERE question_id='fe-ipa-official-2026-a-02'").get().mastered, 1)
   assert.equal(db.prepare("SELECT prompt FROM questions WHERE id='fe-ipa-official-2026-a-02'").get().prompt, originalPrompt)
-  for (const script of [catalog, official, practice, extraOfficial]) {
+  for (const script of [catalog, official, practice, extraOfficial, latestOfficial]) {
     assert.doesNotMatch(script, /\b(?:DELETE\s+FROM|DROP\s+TABLE|REPLACE\s+INTO)\b/i)
   }
 })
