@@ -160,8 +160,13 @@ jobs:
           if (manifest.version !== 1) throw new Error('Unsupported static lesson manifest')
           async function verifyLanguage(language) {
             const assetPath = manifest[language]
-            if (typeof assetPath !== 'string' ||
-              !new RegExp('^/language-cards/' + language + '\\.[a-f0-9]{16}\\.json
+            const expectedPrefix = '/language-cards/' + language + '.'
+            if (typeof assetPath !== 'string' || !assetPath.startsWith(expectedPrefix) || !assetPath.endsWith('.json')) {
+              throw new Error(language + ': Invalid static asset path')
+            }
+            const response = await fetch(base + assetPath)
+            if (!response.ok) throw new Error(language + ': static asset unavailable HTTP ' + response.status)
+            const payload = await response.json()
             if (!Array.isArray(payload.items)) throw new Error(`${language}: API did not return an items array`)
             const items = payload.items
             if (items.length !== 5000) throw new Error(`${language}: expected 5000 cards, got ${items.length}`)
