@@ -16,3 +16,6 @@ __pycache__/
 
 # Generated during local validation / GitHub Actions, not a hand-edited source
 migrations/0092_fe_practice_bank.sql
+
+# Generated public Tatoeba sentence data (fingerprinted, emitted by generator)
+public/language-cards/
