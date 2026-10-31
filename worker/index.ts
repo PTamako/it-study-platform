@@ -1197,7 +1197,7 @@ export default {
         const [attempts, scenarios, language, saved, tasks] = await Promise.all([
           env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(is_correct), 0) AS correct FROM study_attempts').first() as Promise<Record<string, unknown>>,
           env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(AVG(score), 0) AS average_score FROM scenario_attempts').first() as Promise<Record<string, unknown>>,
-          env.DB.prepare(`SELECT (SELECT COUNT(*) FROM language_cards WHERE content_type = 'sentence') AS total, COALESCE((SELECT SUM(p.mastered) FROM language_card_progress p JOIN language_cards c ON c.id = p.card_id WHERE c.content_type = 'sentence'), 0) AS mastered`).first() as Promise<Record<string, unknown>>,
+          env.DB.prepare(`SELECT 10000 AS total, COALESCE((SELECT SUM(p.mastered) FROM language_card_progress p WHERE p.card_id LIKE 'ja-sentence-%' OR p.card_id LIKE 'en-sentence-%'), 0) AS mastered`).first() as Promise<Record<string, unknown>>,
           env.DB.prepare(`SELECT COUNT(*) AS total FROM saved_vocabulary_entries WHERE CASE WHEN json_valid(entry_json) THEN COALESCE(json_extract(entry_json, '$._zhixue_deleted_v1'), 0) ELSE 0 END != 1`).first() as Promise<Record<string, unknown>>,
           env.DB.prepare("SELECT COUNT(*) AS total, COALESCE(SUM(completed), 0) AS completed FROM daily_task_completions WHERE study_date = date('now', '+9 hours')").first() as Promise<Record<string, unknown>>,
         ])
