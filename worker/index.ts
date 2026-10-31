@@ -610,37 +610,37 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
         englishTerm: en || undefined,
         translationJa: index === 0 ? japaneseAid : '',
       })))
-    } else {
+    } else if (en || zh || commonJapaneseExplanations[query.trim()]) {
       items.push({
         term: query,
-        en: en || '暂未获得英语释义（在线词典未返回结果）',
+        en,
         englishTerm: en || undefined,
         zh,
         translationJa: commonJapaneseExplanations[query.trim()] || '',
-        tag: '日英词典',
+        tag: '日中英互译',
         language: 'ja',
         source: '在线词典/翻译',
       })
     }
   } else if (language === 'en') {
-    items.push({
+    if (!englishRows.length && (ja || zh)) items.push({
       term: query,
       englishTerm: query,
       reading: englishKatakanaReadings[query.toLowerCase()] || '',
       en: '',
       zh,
       translationJa: ja || '',
-      tag: '英日词典 · 翻译',
+      tag: '英日中互译',
       language: 'en',
       source: '在线词典/翻译',
     })
-  } else {
+  } else if (en || ja) {
     items.push({
       term: query,
-      en: en || '',
+      en,
       englishTerm: en || undefined,
       zh: query,
-      translationJa: ja || '',
+      translationJa: ja,
       tag: '中日英互译',
       language: 'zh',
       source: '在线词典/翻译',
