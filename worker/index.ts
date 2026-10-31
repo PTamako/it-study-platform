@@ -22,6 +22,7 @@ const protectedPersonalPaths = new Set([
 
 export interface Env {
   DB: D1Database
+  ASSETS?: Fetcher
   AI?: Ai
   APP_ENV?: string
   AUTH_PASSWORD?: string
@@ -1153,7 +1154,9 @@ export default {
       }
     }
 
-    // Language learning cards are stored in D1 with source and license metadata.
+    // Tatoeba sentence cards and their offline grammar annotations are public,
+    // immutable build assets. The legacy API also serves static data so installed
+    // older PWA versions never perform 5,000-row D1 reads on every lesson reload.
     if (url.pathname === '/api/language-cards') {
       const language = url.searchParams.get('lang') || 'ja'
       const category = url.searchParams.get('category') || ''
@@ -1166,18 +1169,25 @@ export default {
         return json({ items: [], error: '无效的语言课程分页参数。' }, 400)
       }
       try {
-        const sql = `SELECT id, language, category, term, reading, meaning_zh, explanation, example, example_meaning_zh, example_source_url, source_url, source_type, content_type, highlight_json, vocabulary_expansion_json, grammar_expansion_json
-           FROM language_cards WHERE content_type = 'sentence' AND language = ? AND (? = '' OR category = ?)
-           ORDER BY CASE category WHEN '日常句子' THEN 0 WHEN '职场语言' THEN 1 ELSE 2 END, id`
-        const stmt = env.DB.prepare(sql + (paged ? ' LIMIT ? OFFSET ?' : ''))
-        const { results } = paged
-          ? await stmt.bind(language, category, category, limit, offset).all()
-          : await stmt.bind(language, category, category).all()
-        const response = json({ items: results })
+        if (!env.ASSETS) throw new Error('Missing static asset binding')
+        const manifestResponse = await env.ASSETS.fetch(new URL('/language-cards/manifest.json', url))
+        if (!manifestResponse.ok) throw new Error('Missing static corpus index')
+        const manifest = await manifestResponse.json() as Record<string, unknown>
+        const path = manifest[language]
+        if (typeof path !== 'string' || !path.startsWith('/language-cards/' + language + '.') || !path.endsWith('.json')) {
+          throw new Error('Invalid static corpus index')
+        }
+        const assetResponse = await env.ASSETS.fetch(new URL(path, url))
+        if (!assetResponse.ok) throw new Error('Missing static corpus')
+        const data = await assetResponse.json() as { items?: Array<Record<string, unknown>> }
+        if (!Array.isArray(data.items) || data.items.length !== 5000) throw new Error('Incomplete static corpus')
+        const filtered = category ? data.items.filter(item => item.category === category) : data.items
+        const items = paged ? filtered.slice(offset, offset + limit) : filtered
+        const response = json({ items })
         response.headers.set('cache-control', 'public, max-age=300')
         return response
       } catch {
-        return json({ items: [], error: '语言课程尚未初始化，请先执行最新的 D1 迁移。' }, 503)
+        return json({ items: [], error: '静态语言课程暂时不可用，请刷新应用。' }, 503)
       }
     }
 
@@ -1187,7 +1197,7 @@ export default {
         const [attempts, scenarios, language, saved, tasks] = await Promise.all([
           env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(is_correct), 0) AS correct FROM study_attempts').first() as Promise<Record<string, unknown>>,
           env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(AVG(score), 0) AS average_score FROM scenario_attempts').first() as Promise<Record<string, unknown>>,
-          env.DB.prepare(`SELECT (SELECT COUNT(*) FROM language_cards WHERE content_type = 'sentence') AS total, COALESCE((SELECT SUM(p.mastered) FROM language_card_progress p JOIN language_cards c ON c.id = p.card_id WHERE c.content_type = 'sentence'), 0) AS mastered`).first() as Promise<Record<string, unknown>>,
+          env.DB.prepare(`SELECT 10000 AS total, COALESCE((SELECT SUM(p.mastered) FROM language_card_progress p WHERE p.card_id LIKE 'ja-sentence-%' OR p.card_id LIKE 'en-sentence-%'), 0) AS mastered`).first() as Promise<Record<string, unknown>>,
           env.DB.prepare(`SELECT COUNT(*) AS total FROM saved_vocabulary_entries WHERE CASE WHEN json_valid(entry_json) THEN COALESCE(json_extract(entry_json, '$._zhixue_deleted_v1'), 0) ELSE 0 END != 1`).first() as Promise<Record<string, unknown>>,
           env.DB.prepare("SELECT COUNT(*) AS total, COALESCE(SUM(completed), 0) AS completed FROM daily_task_completions WHERE study_date = date('now', '+9 hours')").first() as Promise<Record<string, unknown>>,
         ])
@@ -1293,7 +1303,9 @@ export default {
         const card = await env.DB.prepare("SELECT id FROM language_cards WHERE id = ? AND content_type = 'sentence'").bind(cardId).first()
         if (!card) return json({ error: '句子课程卡片不存在。' }, 404)
         const modifier = result === 'again' ? '+10 minutes' : '+1 day'
-        await env.DB.prepare(
+        // RETURNING supplies the single changed row. The client must not
+        // fetch every saved review again after each spaced-repetition answer.
+        const { results } = await env.DB.prepare(
           `INSERT INTO language_card_reviews
              (card_id, review_count, correct_streak, next_review_at, last_reviewed_at, last_result, updated_at)
            VALUES (?, 1, ?, datetime(CURRENT_TIMESTAMP, ?), CURRENT_TIMESTAMP, ?, CURRENT_TIMESTAMP)
@@ -1305,9 +1317,11 @@ export default {
                ELSE CASE MIN(language_card_reviews.correct_streak + 1, 4)
                  WHEN 1 THEN '+1 day' WHEN 2 THEN '+3 days' WHEN 3 THEN '+7 days' ELSE '+14 days' END
              END),
-             last_reviewed_at = CURRENT_TIMESTAMP, last_result = excluded.last_result, updated_at = CURRENT_TIMESTAMP`,
-        ).bind(cardId, result === 'remembered' ? 1 : 0, modifier, result).run()
-        return json({ ok: true, card_id: cardId, result })
+             last_reviewed_at = CURRENT_TIMESTAMP, last_result = excluded.last_result, updated_at = CURRENT_TIMESTAMP
+           RETURNING card_id, review_count, correct_streak, next_review_at, last_reviewed_at, last_result,
+                    CASE WHEN next_review_at <= CURRENT_TIMESTAMP THEN 1 ELSE 0 END AS is_due`,
+        ).bind(cardId, result === 'remembered' ? 1 : 0, modifier, result).all()
+        return json({ ok: true, card_id: cardId, result, review: results[0] })
       } catch {
         return json({ error: '复习记录保存失败，请确认已应用最新的 D1 迁移。' }, 503)
       }
