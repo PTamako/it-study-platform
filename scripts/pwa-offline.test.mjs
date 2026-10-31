@@ -6,7 +6,7 @@ const serviceWorker = readFileSync(new URL('../public/sw.js', import.meta.url), 
 const entry = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8')
 
 test('PWA caches an app shell for offline navigation', () => {
-  assert.match(serviceWorker, /const APP_SHELL = \['\/', '\/manifest\.webmanifest', '\/icon\.svg'\]/)
+  assert.match(serviceWorker, /const APP_SHELL = \[[^\n]*'\/manifest\.webmanifest'[^\n]*'\/icon-192\.png'[^\n]*'\/icon-512\.webp'/)
   assert.match(serviceWorker, /request\.mode === 'navigate'/)
   assert.match(serviceWorker, /caches\.match\('\/'\)/)
 })
