@@ -1703,6 +1703,11 @@ export default {
       const offset = Math.min(10000, Math.max(0, Number(url.searchParams.get('offset') || 0)))
       const topic = (url.searchParams.get('topic') || '').trim().slice(0, 100)
       const mode = url.searchParams.get('mode') || 'random'
+      // Every page of one random practice session needs the same ordering.
+      // A caller can pass a seed; without one the ordering is stable rather
+      // than re-shuffled at every OFFSET (which previously duplicated/skipped IDs).
+      const rawSeed = Number(url.searchParams.get('seed') || 0)
+      const seed = Number.isSafeInteger(rawSeed) && rawSeed >= 0 && rawSeed <= 1000000 ? rawSeed : 0
       const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
       const source = ['all', 'official', 'generated', 'licensed'].includes(requestedSource) ? requestedSource : 'all'
       const year = (trackId === 'exam-fe' || trackId === 'exam-sg') && /^20[0-2][0-9]$/.test(url.searchParams.get('year') || '') ? url.searchParams.get('year')! : ''
@@ -1730,9 +1735,15 @@ export default {
              AND (? = '' OR id LIKE ?)
              AND (? = '' OR exam_section = ?)
            ORDER BY CASE WHEN ? = 'ordered' THEN id END,
-                    CASE WHEN ? <> 'ordered' THEN random() END
+                    CASE WHEN ? <> 'ordered' THEN (
+                      (unicode(substr(id, 1, 1)) * 131
+                       + unicode(substr(id, 3, 1)) * 137
+                       + unicode(substr(id, length(id), 1)) * 379
+                       + unicode(substr(id, length(id) - 1, 1)) * 173
+                       + length(id) * 991 + ? * 10007) % 104729
+                    ) END, id
            LIMIT ? OFFSET ?`,
-        ).bind(trackId, topic, topic, source, source, year, yearPattern, section, section, mode, mode, limit, offset).all()
+        ).bind(trackId, topic, topic, source, source, year, yearPattern, section, section, mode, mode, seed, limit, offset).all()
         const total = Number(totalRow?.total || 0)
         return json({
           items: results.map((row: Record<string, unknown>) => ({
