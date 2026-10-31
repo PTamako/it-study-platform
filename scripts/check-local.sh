@@ -58,6 +58,7 @@ printf '\n[2/7] Install exact dependencies\n'
 npm ci
 printf '\n[3/7] Generate reproducible local migration/test fixtures\n'
 "$python_bin" scripts/generate_language_sentence_seed.py
+node scripts/generate_fe_practice_bank.mjs
 printf '\n[4/7] Typecheck\n'
 npm run typecheck
 printf '\n[5/7] Unit/integration regression tests\n'

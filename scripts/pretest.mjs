@@ -9,6 +9,7 @@ for (const relative of [
   '../migrations/0081_language_sentence_cards.sql',
   '../migrations/0084_refresh_contextual_bilingual_annotations.sql',
   '../migrations/0087_rebuild_contextual_bilingual_sentence_cards.sql',
+  '../migrations/0092_fe_practice_bank.sql',
 ]) {
   if (!existsSync(new URL(relative, import.meta.url))) {
     issues.push(`Missing generated fixture: ${relative.slice(3)}`)

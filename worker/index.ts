@@ -1270,6 +1270,10 @@ export default {
       const mode = ['wrong', 'due', 'practice', 'mastered', 'unlearned'].includes(requestedMode) ? requestedMode : 'wrong'
       const requestedSource = (url.searchParams.get('source') || '').trim()
       const source = ['official', 'generated', 'licensed'].includes(requestedSource) ? requestedSource : ''
+      const year = trackId === 'exam-fe' && /^20[0-2][0-9]$/.test(url.searchParams.get('year') || '') ? url.searchParams.get('year')! : ''
+      const yearPattern = year ? '%-' + year + '-%' : ''
+      const section = trackId === 'exam-fe' && ['A', 'B'].includes(url.searchParams.get('section') || '') ? url.searchParams.get('section')! : ''
+      const selectedTopic = trackId === 'exam-fe' ? (url.searchParams.get('topic') || '').trim().slice(0,100) : ''
       try {
         const { results } = await env.DB.prepare(
           `SELECT q.id, q.track_id, q.topic, q.difficulty, q.question_type, q.prompt,
@@ -1284,7 +1288,11 @@ export default {
                   (SELECT MAX(wa.answered_at) FROM study_attempts wa WHERE wa.question_id = q.id AND wa.is_correct = 0) AS last_wrong_at,
                   COUNT(*) OVER() AS filtered_total
            FROM questions q
-           LEFT JOIN question_review_state s ON s.question_id = q.id           WHERE q.track_id = ? AND (? = '' OR q.source_type = ?) AND (
+           LEFT JOIN question_review_state s ON s.question_id = q.id           WHERE q.track_id = ? AND (? = '' OR q.source_type = ?)
+             AND (? = '' OR q.id LIKE ?)
+             AND (? = '' OR q.exam_section = ?)
+             AND (? = '' OR q.topic = ?)
+             AND (
              (? = 'wrong' AND COALESCE(s.mastered, 0) = 0 AND EXISTS (
                SELECT 1 FROM study_attempts wa WHERE wa.question_id = q.id AND wa.is_correct = 0
              ))
@@ -1300,7 +1308,7 @@ export default {
            ORDER BY CASE WHEN COALESCE(s.last_result, 'again') = 'again' THEN 0 ELSE 1 END,
                     wrong_count DESC, next_review_at ASC, q.id
            LIMIT ? OFFSET ?`,
-        ).bind(trackId, source, source, mode, mode, mode, mode, mode, limit, offset).all()
+        ).bind(trackId, source, source, year, yearPattern, section, section, selectedTopic, selectedTopic, mode, mode, mode, mode, mode, limit, offset).all()
         const rows = results as Record<string, unknown>[]
         const matchedTotal = Number(rows[0]?.filtered_total || 0)
         return json({
@@ -1526,14 +1534,20 @@ export default {
       const trackId = (url.searchParams.get('track') || 'exam-sg').trim().slice(0, 80)
       const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
       const source = ['all', 'official', 'generated', 'licensed'].includes(requestedSource) ? requestedSource : 'all'
+      const year = trackId === 'exam-fe' && /^20[0-2][0-9]$/.test(url.searchParams.get('year') || '') ? url.searchParams.get('year')! : ''
+      const yearPattern = year ? '%-' + year + '-%' : ''
+      const section = trackId === 'exam-fe' && ['A', 'B'].includes(url.searchParams.get('section') || '') ? url.searchParams.get('section')! : ''
+
       try {
         const { results } = await env.DB.prepare(
           `SELECT topic, COUNT(*) AS question_count
            FROM questions
            WHERE track_id = ? AND (? = 'all' OR source_type = ?)
+             AND (? = '' OR id LIKE ?)
+             AND (? = '' OR exam_section = ?)
            GROUP BY topic
            ORDER BY topic`,
-        ).bind(trackId, source, source).all()
+        ).bind(trackId, source, source, year, yearPattern, section, section).all()
         return json({ items: results })
       } catch {
         return json({ items: [], error: '题库分类暂不可用，请确认数据库迁移已应用。' }, 503)
@@ -1649,12 +1663,18 @@ export default {
       const mode = url.searchParams.get('mode') || 'random'
       const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
       const source = ['all', 'official', 'generated', 'licensed'].includes(requestedSource) ? requestedSource : 'all'
+      const year = trackId === 'exam-fe' && /^20[0-2][0-9]$/.test(url.searchParams.get('year') || '') ? url.searchParams.get('year')! : ''
+      const yearPattern = year ? '%-' + year + '-%' : ''
+      const section = trackId === 'exam-fe' && ['A', 'B'].includes(url.searchParams.get('section') || '') ? url.searchParams.get('section')! : ''
+
       try {
         const totalRow = await env.DB.prepare(
           `SELECT COUNT(*) AS total FROM questions
            WHERE track_id = ? AND (? = '' OR topic = ?)
-             AND (? = 'all' OR source_type = ?)`,
-        ).bind(trackId, topic, topic, source, source).first() as { total?: number } | null
+             AND (? = 'all' OR source_type = ?)
+             AND (? = '' OR id LIKE ?)
+             AND (? = '' OR exam_section = ?)`,
+        ).bind(trackId, topic, topic, source, source, year, yearPattern, section, section).first() as { total?: number } | null
         const { results } = await env.DB.prepare(
           `SELECT id, track_id, topic, difficulty, question_type, prompt,
                   options_json, answer_json, explanation, source_type, source_reference, language,
@@ -1662,10 +1682,12 @@ export default {
            FROM questions
            WHERE track_id = ? AND (? = '' OR topic = ?)
              AND (? = 'all' OR source_type = ?)
+             AND (? = '' OR id LIKE ?)
+             AND (? = '' OR exam_section = ?)
            ORDER BY CASE WHEN ? = 'ordered' THEN id END,
                     CASE WHEN ? <> 'ordered' THEN random() END
            LIMIT ? OFFSET ?`,
-        ).bind(trackId, topic, topic, source, source, mode, mode, limit, offset).all()
+        ).bind(trackId, topic, topic, source, source, year, yearPattern, section, section, mode, mode, limit, offset).all()
         const total = Number(totalRow?.total || 0)
         return json({
           items: results.map((row: Record<string, unknown>) => ({

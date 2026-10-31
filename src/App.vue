@@ -398,6 +398,14 @@ type PracticeQuestion = {
   id: string; track_id: string; topic: string; difficulty: string; prompt: string;
   options: PracticeOption[]; answer: string; explanation: string; source_type: string; source_reference?: string; language: string; exam_section?: 'A' | 'B' | null; exam_section_method?: 'explicit' | 'case_pattern' | 'default_a' | 'unclassified' | null
 }
+// IPA FE questions use Japanese answer labels ア～コ; internal answer IDs remain a～j.
+function practiceOptionLabel(question: PracticeQuestion, optionId: string): string {
+  if (question.track_id === 'exam-fe' && question.source_type === 'official') {
+    const index = 'abcdefghij'.indexOf(optionId.toLowerCase())
+    if (index >= 0) return 'アイウエオカキクケコ'[index]
+  }
+  return optionId.toUpperCase()
+}
 type QuestionExplanationTranslation = { source_text: string; translation_zh: string }
 const questionExplanationTranslations = ref<Record<string, QuestionExplanationTranslation>>(readStored('zhixue:question-explanation-zh', {}))
 const questionExplanationTranslating = ref<Record<string, boolean>>({})
@@ -414,14 +422,21 @@ const questionBankTotal = ref(0)
 const questionBatchOffset = ref(0)
 const questionBatchSize = 10
 const questionBankHasMore = ref(false)
+const fePracticeYear = ref('')
+const fePracticeSection = ref<'all' | 'A' | 'B'>('all')
+const fePracticeTopic = ref('')
+const feTopicOptions = ref<{ topic: string; question_count: number }[]>([])
+let feTopicLoadId = 0
+const feYearOptions = [2026, 2025, 2024, 2023] as const
 type ExamTrack = { id: string; kind: string; title: string; subtitle: string; question_count: number; official_question_count?: number; prediction_question_count?: number; adapted_question_count?: number }
 const examTracks = ref<ExamTrack[]>([])
 const selectedTrackId = ref('exam-sg')
 const tracksLoading = ref(false)
 const tracksError = ref('')
-const questionSourceFilter = ref<'official' | 'generated' | 'licensed'>('generated')
+const questionSourceFilter = ref<'all' | 'official' | 'generated' | 'licensed'>('generated')
 const activeReviewMode = ref<'all' | 'unlearned' | 'mastered' | 'due' | 'wrong'>('all')
 const questionSourceFilters = [
+  { id: 'all', label: '全部题目' },
   { id: 'official', label: '历年真题' },
   { id: 'generated', label: '预测题库' },
   { id: 'licensed', label: '真题改编' },
@@ -720,6 +735,35 @@ async function loadExamTracks() {
 }
 const feBankLoading = ref(false)
 const feBankError = ref('')
+async function loadFePracticeTopics() {
+  const requestId = ++feTopicLoadId
+  if (selectedTrackId.value !== 'exam-fe') return
+  try {
+    const params = new URLSearchParams({
+      track: 'exam-fe',
+      source: questionSourceFilter.value,
+      year: fePracticeYear.value,
+      section: fePracticeSection.value === 'all' ? '' : fePracticeSection.value,
+    })
+    const response = await fetch('/api/question-categories?' + params)
+    if (!response.ok) return
+    const data = await response.json() as { items?: { topic: string; question_count: number }[] }
+    if (requestId !== feTopicLoadId) return
+    feTopicOptions.value = data.items || []
+    if (fePracticeTopic.value && !feTopicOptions.value.some(item => item.topic === fePracticeTopic.value)) {
+      fePracticeTopic.value = ''
+    }
+  } catch {
+    if (requestId === feTopicLoadId) feTopicOptions.value = []
+  }
+}
+function applyFePracticeFilter(changed: 'year' | 'section' | 'topic') {
+  if (changed !== 'topic') {
+    fePracticeTopic.value = ''
+    void loadFePracticeTopics()
+  }
+  selectReviewMode('all')
+}
 async function prepareFeBank() {
   if (feBankLoading.value) return
   feBankLoading.value = true
@@ -729,6 +773,7 @@ async function prepareFeBank() {
     const data = await response.json() as { error?: string }
     if (!response.ok) throw new Error(data.error || 'FE 题库加载失败。')
     await loadExamTracks()
+    await loadFePracticeTopics()
   } catch (error) {
     feBankError.value = error instanceof Error ? error.message : 'FE 题库加载失败，请重试。'
   } finally { feBankLoading.value = false }
@@ -742,8 +787,17 @@ function selectExam(track: ExamTrack) {
   questionBankTotal.value = 0
   questionBankHasMore.value = false
   selectedTrackId.value = track.id
-  if (track.id === 'exam-fe') { questionSourceFilter.value = 'licensed'; void prepareFeBank() }
-  else if (questionSourceFilter.value === 'licensed') questionSourceFilter.value = 'generated'
+  // Include verified IPA originals and clearly labeled adapted/original practice by default.
+  // Official-only contains just IPA's published subset, which is not a full mock exam.
+  if (track.id === 'exam-fe') {
+    questionSourceFilter.value = 'all'
+    fePracticeYear.value = ''
+    fePracticeSection.value = 'all'
+    fePracticeTopic.value = ''
+    feTopicOptions.value = []
+    void prepareFeBank()
+  }
+  else if (questionSourceFilter.value === 'licensed' || questionSourceFilter.value === 'all') questionSourceFilter.value = 'generated'
   quizQuestions.value = []
   quizIndex.value = 0
   selectedOption.value = ''
@@ -753,13 +807,17 @@ function selectExam(track: ExamTrack) {
   quizError.value = ''
 }
 
-async function selectQuestionSource(source: 'official' | 'generated' | 'licensed') {
+async function selectQuestionSource(source: 'all' | 'official' | 'generated' | 'licensed') {
   if (selectedTrackId.value === 'exam-fe' && feBankLoading.value) return
   stopSpeech()
   practiceAnswerRequestId += 1
   practiceLoadRequestId += 1
   questionProgressRequestId += 1
   questionSourceFilter.value = source
+  if (selectedTrackId.value === 'exam-fe') {
+    fePracticeTopic.value = ''
+    await loadFePracticeTopics()
+  }
   questionBatchOffset.value = 0
   activeReviewMode.value = 'all'
   questionBankTotal.value = 0
@@ -818,13 +876,37 @@ async function startPractice() {
     let response: Response
     let data: { items?: PracticeQuestion[]; error?: string; total?: number; has_more?: boolean }
     if (activeReviewMode.value === 'all') {
-      response = await fetch('/api/questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&source=' + encodeURIComponent(questionSourceFilter.value) + '&mode=ordered&limit=' + questionBatchSize + '&offset=' + questionBatchOffset.value)
+      const params = new URLSearchParams({
+        track: selectedTrack.value.id,
+        source: questionSourceFilter.value,
+        mode: 'ordered',
+        limit: String(questionBatchSize),
+        offset: String(questionBatchOffset.value),
+      })
+      if (trackId === 'exam-fe') {
+        if (fePracticeYear.value) params.set('year', fePracticeYear.value)
+        if (fePracticeSection.value !== 'all') params.set('section', fePracticeSection.value)
+        if (fePracticeTopic.value) params.set('topic', fePracticeTopic.value)
+      }
+      response = await fetch('/api/questions?' + params.toString())
       data = await response.json() as typeof data
     } else {
       const mode = activeReviewMode.value
       const reviewBatchLimit = mode === 'unlearned' ? questionBatchSize : 50
       // 未学习题会在答题后离开此筛选集，因此每组始终从剩余未学习题的开头取，避免 offset 导致跳题。
-      response = await fetch('/api/wrong-questions?track=' + encodeURIComponent(selectedTrack.value.id) + '&limit=' + reviewBatchLimit + '&offset=0&mode=' + mode + '&source=' + encodeURIComponent(questionSourceFilter.value))
+      const params = new URLSearchParams({
+        track: selectedTrack.value.id,
+        limit: String(reviewBatchLimit),
+        offset: '0',
+        mode,
+        source: questionSourceFilter.value,
+      })
+      if (trackId === 'exam-fe') {
+        if (fePracticeYear.value) params.set('year', fePracticeYear.value)
+        if (fePracticeSection.value !== 'all') params.set('section', fePracticeSection.value)
+        if (fePracticeTopic.value) params.set('topic', fePracticeTopic.value)
+      }
+      response = await fetch('/api/wrong-questions?' + params.toString())
       data = await response.json() as typeof data
       if (mode !== 'unlearned') {
         data.total = data.items?.length || 0
@@ -835,7 +917,7 @@ async function startPractice() {
     if (!response.ok) throw new Error(data.error || '题库加载失败')
     if (!data.items?.length) {
       const messages = {
-        all: questionSourceFilter.value === 'official' ? '当前没有可作答的历年真题。' : questionSourceFilter.value === 'licensed' ? '当前没有可作答的真题改编。' : '当前没有可用的预测题，请稍后重试。',
+        all: questionSourceFilter.value === 'official' ? '当前筛选下暂无官方历年真题。' : questionSourceFilter.value === 'licensed' ? '当前没有可作答的真题改编。' : questionSourceFilter.value === 'generated' ? '当前没有可用的预测题，请稍后重试。' : '当前筛选下暂无题目。',
         unlearned: '当前题库中没有尚未作答的题目。',
         wrong: '当前筛选下没有错题。答错题目后会自动进入错题集。',
         due: '当前没有到期的复习题。答错题会先安排短间隔复习。',
@@ -1637,7 +1719,7 @@ let speechRequestId = 0
 function speakQuestion(question: PracticeQuestion | null) {
   if (!question) return
   // Exam content is Japanese; target its own control/status area and never use a Chinese voice.
-  const options = question.options.map(option => `${option.id.toUpperCase()}。 ${option.text}`).join('。')
+  const options = question.options.map(option => `${practiceOptionLabel(question, option.id)}。 ${option.text}`).join('。')
   speakJapaneseQuestion(`${question.prompt}。選択肢：${options}`, `exam:${question.id}`)
 }
 function speakJapaneseQuestion(text: string, statusTarget = '') {
@@ -2062,7 +2144,31 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             <section class="practice-section">
               <div class="section-heading practice-heading"><div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2></div></div>
               <div class="question-source-filters" role="group" aria-label="题目来源筛选">
-                <button v-for="filter in questionSourceFilters.filter(item => item.id !== 'licensed' || selectedTrackId === 'exam-fe')" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" :disabled="selectedTrackId === 'exam-fe' && feBankLoading" @click="selectQuestionSource(filter.id)">{{ filter.label }}（{{ filter.id === 'official' ? (selectedTrack?.official_question_count || 0) : filter.id === 'licensed' ? (selectedTrack?.adapted_question_count || 0) : (selectedTrack?.prediction_question_count || 0) }}）</button>
+                <button v-for="filter in questionSourceFilters.filter(item => (item.id !== 'licensed' && item.id !== 'all') || selectedTrackId === 'exam-fe')" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" :disabled="selectedTrackId === 'exam-fe' && feBankLoading" @click="selectQuestionSource(filter.id)">{{ filter.label }}（{{ filter.id === 'all' ? (selectedTrack?.question_count || 0) : filter.id === 'official' ? (selectedTrack?.official_question_count || 0) : filter.id === 'licensed' ? (selectedTrack?.adapted_question_count || 0) : (selectedTrack?.prediction_question_count || 0) }}）</button>
+              </div>
+              <div v-if="selectedTrackId === 'exam-fe'" class="question-category-section">
+                <div class="question-category-heading"><strong>年度・科目・分野</strong><span>题源和学习状态可组合筛选</span></div>
+                <div class="fe-filter-controls">
+                  <label>年度
+                    <select v-model="fePracticeYear" aria-label="FE 年度" @change="applyFePracticeFilter('year')">
+                      <option value="">すべて</option>
+                      <option v-for="year in feYearOptions" :key="year" :value="String(year)">{{ year }}年度</option>
+                    </select>
+                  </label>
+                  <label>科目
+                    <select v-model="fePracticeSection" aria-label="FE 科目" @change="applyFePracticeFilter('section')">
+                      <option value="all">すべて</option>
+                      <option value="A">科目A</option>
+                      <option value="B">科目B</option>
+                    </select>
+                  </label>
+                  <label>分野
+                    <select v-model="fePracticeTopic" aria-label="FE 分野" @change="applyFePracticeFilter('topic')">
+                      <option value="">すべて</option>
+                      <option v-for="item in feTopicOptions" :key="item.topic" :value="item.topic">{{ item.topic }}（{{ item.question_count }}）</option>
+                    </select>
+                  </label>
+                </div>
               </div>
               <div class="question-category-section">
                 <div class="question-category-heading"><strong>学习状态</strong><span>按当前题库筛选</span></div>
@@ -2105,7 +2211,8 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <span>连续答对 {{ questionProgressById[currentQuestion.id]?.correct_streak || 0 }} 次</span>
                   <span>复习 {{ questionProgressById[currentQuestion.id]?.review_count || 0 }} 次</span>
                 </div>
-                <a v-if="(currentQuestion.source_type === 'official' || currentQuestion.source_type === 'licensed') && currentQuestion.source_reference" class="language-source" :href="currentQuestion.source_reference" target="_blank" rel="noreferrer">IPA 官方原卷 ↗</a>
+                <a v-if="(currentQuestion.source_type === 'official' || currentQuestion.source_type === 'licensed') && currentQuestion.source_reference" class="language-source" :href="currentQuestion.source_reference" target="_blank" rel="noreferrer">IPA公式問題を見る ↗</a>
+                <p v-if="currentQuestion.id === 'fe-ipa-official-2026-a-06'" class="dictionary-status">波形図の選択肢は各区間の0・1で表記しています。元の図も上のIPA公式問題で確認できます。</p>
                 <div class="question-prompt-row">
                   <h3 class="question-prompt">{{ currentQuestion.prompt }}</h3>
                   <button type="button" class="question-speak-button" @click="speakQuestion(currentQuestion)" aria-label="日语朗读题目" title="日语朗读题目"><Volume2 :size="14" /> 听题</button>
@@ -2113,11 +2220,11 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <div v-if="speechStatus && speechStatusTarget === 'exam:' + currentQuestion.id" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 <div class="question-options">
                   <button v-for="option in currentQuestion.options" :key="option.id" class="question-option" :class="{ selected: selectedOption === option.id, correct: quizSubmitted && option.id === currentQuestion.answer, incorrect: quizSubmitted && selectedOption === option.id && option.id !== currentQuestion.answer }" :disabled="quizSubmitted" @click="selectedOption = option.id">
-                    <span>{{ option.id.toUpperCase() }}</span><strong>{{ option.text }}</strong><CheckCircle2 v-if="quizSubmitted && option.id === currentQuestion.answer" :size="17" />
+                    <span>{{ practiceOptionLabel(currentQuestion, option.id) }}</span><strong>{{ option.text }}</strong><CheckCircle2 v-if="quizSubmitted && option.id === currentQuestion.answer" :size="17" />
                   </button>
                 </div>
                 <div v-if="quizSubmitted" class="answer-explanation" :class="{ right: selectedOption === currentQuestion.answer }">
-                  <strong>{{ selectedOption === currentQuestion.answer ? '回答正确！' : '这题答错了' }} 正确答案：{{ currentQuestion.answer.toUpperCase() }}</strong>
+                  <strong>{{ selectedOption === currentQuestion.answer ? '回答正确！' : '这题答错了' }} 正确答案：{{ practiceOptionLabel(currentQuestion, currentQuestion.answer) }}</strong>
                   <template v-if="getExplanationLanguage(currentQuestion) !== 'zh-CN'">
                     <p class="explanation-original-label">原文解析</p>
                     <p>{{ currentQuestion.explanation }}</p>
@@ -2181,7 +2288,8 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 </div>
                 <article v-for="(question, index) in mockQuestions" :key="question.id" class="panel question-card mock-question-card">
                   <div class="question-topline"><span>第 {{ index + 1 }} / {{ mockQuestions.length }} 题 · 科目{{ question.exam_section }} · {{ question.topic }}</span><span class="source-pill">{{ question.source_type === 'generated' ? '预测题库 · 原创' : question.source_type === 'official' ? '历年真题' : question.source_type === 'licensed' ? '真题改编' : '其他题目' }}</span></div>
-                  <a v-if="(question.source_type === 'official' || question.source_type === 'licensed') && question.source_reference" class="language-source" :href="question.source_reference" target="_blank" rel="noreferrer">IPA 官方原卷 ↗</a>
+                  <a v-if="(question.source_type === 'official' || question.source_type === 'licensed') && question.source_reference" class="language-source" :href="question.source_reference" target="_blank" rel="noreferrer">IPA公式問題を見る ↗</a>
+                  <p v-if="question.id === 'fe-ipa-official-2026-a-06'" class="dictionary-status">波形図の選択肢を0・1の系列で表示しています。必要に応じて上の公式原図をご確認ください。</p>
                   <div class="question-prompt-row">
                     <h3 class="question-prompt">{{ question.prompt }}</h3>
                     <button type="button" class="question-speak-button" @click="speakQuestion(question)" aria-label="日语朗读题目" title="日语朗读题目"><Volume2 :size="14" /> 听题</button>
@@ -2194,7 +2302,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   </div>
                   <div class="question-options">
                     <button v-for="option in question.options" :key="option.id" class="question-option" :class="{ selected: mockAnswers[question.id] === option.id }" @click="mockAnswers[question.id] = option.id">
-                      <span>{{ option.id.toUpperCase() }}</span><strong>{{ option.text }}</strong>
+                      <span>{{ practiceOptionLabel(question, option.id) }}</span><strong>{{ option.text }}</strong>
                     </button>
                   </div>
                 </article>

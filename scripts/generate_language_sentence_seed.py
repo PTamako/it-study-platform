@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """Generate 10,000 attributed sentence cards from Tatoeba's public exports."""
-import csv, hashlib, io, json, os, re, tarfile, tempfile, urllib.request
+import csv, hashlib, io, json, os, re, tarfile, tempfile, time, urllib.error, urllib.request
 from functools import lru_cache
 from pathlib import Path
 
@@ -16,34 +16,41 @@ SENTENCES_URL = "https://downloads.tatoeba.org/exports/sentences.tar.bz2"
 LINKS_URL = "https://downloads.tatoeba.org/exports/links.tar.bz2"
 
 def download(url, path):
-    # Interrupted downloads must not leave a nonempty partial file in the trusted cache.
-    # Publish only after the HTTP response completes and its reported length matches.
+    # Retry transient public-export connection resets, while keeping partial bytes
+    # outside the trusted cache. Never reuse a failed download as a valid archive.
     if path.exists() and path.stat().st_size:
         return path
     path.parent.mkdir(parents=True, exist_ok=True)
     req = urllib.request.Request(url, headers={"User-Agent": "it-study-platform-language-seed/1.0"})
-    temp_path = None
-    try:
-        with tempfile.NamedTemporaryFile(mode="wb", dir=str(path.parent), prefix=path.name + ".", suffix=".part", delete=False) as out:
-            temp_path = Path(out.name)
-            with urllib.request.urlopen(req, timeout=300) as response:
-                expected_length = response.headers.get("Content-Length")
-                received = 0
-                while True:
-                    chunk = response.read(1024 * 1024)
-                    if not chunk:
-                        break
-                    out.write(chunk)
-                    received += len(chunk)
-                if expected_length is not None and received != int(expected_length):
-                    raise IOError("Incomplete Tatoeba download: expected {} bytes, got {}".format(expected_length, received))
-                if not received:
-                    raise IOError("Empty Tatoeba download")
-        os.replace(str(temp_path), str(path))
-    finally:
-        if temp_path is not None and temp_path.exists():
-            temp_path.unlink()
-    return path
+    for attempt in range(3):
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="wb", dir=str(path.parent), prefix=path.name + ".", suffix=".part", delete=False) as out:
+                temp_path = Path(out.name)
+                with urllib.request.urlopen(req, timeout=300) as response:
+                    expected_length = response.headers.get("Content-Length")
+                    received = 0
+                    while True:
+                        chunk = response.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        out.write(chunk)
+                        received += len(chunk)
+                    if expected_length is not None and received != int(expected_length):
+                        raise IOError("Incomplete Tatoeba download: expected {} bytes, got {}".format(expected_length, received))
+                    if not received:
+                        raise IOError("Empty Tatoeba download")
+            os.replace(str(temp_path), str(path))
+            return path
+        except (OSError, EOFError, urllib.error.URLError) as error:
+            if attempt == 2:
+                raise
+            print("Temporary Tatoeba download failure (attempt {}/3): {}. Retrying.".format(attempt + 1, error), flush=True)
+            time.sleep(2 ** attempt)
+        finally:
+            if temp_path is not None and temp_path.exists():
+                temp_path.unlink()
+    raise RuntimeError("Failed Tatoeba download: " + url)
 
 def norm(value):
     return re.sub(r"\s+", " ", str(value or "")).strip()
