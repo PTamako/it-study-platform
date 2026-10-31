@@ -98,6 +98,15 @@ const commonChineseTranslations: Record<string, { ja: string; en: string }> = {
   '下一步': { ja: '次へ', en: 'Next' },
   '展开菜单': { ja: 'メニューを展開', en: 'Expand menu' },
   '展开详情': { ja: '詳細を展開', en: 'Expand details' },
+  '学习': { ja: '学習', en: 'Study' },
+  '翻译': { ja: '翻訳', en: 'Translation' },
+  '计算机': { ja: 'コンピューター', en: 'Computer' },
+  '信息安全': { ja: '情報セキュリティ', en: 'Information security' },
+  '认证': { ja: '認証', en: 'Authentication' },
+  '授权': { ja: '認可', en: 'Authorization' },
+  '开发': { ja: '開発', en: 'Development' },
+  '网络': { ja: 'ネットワーク', en: 'Network' },
+  '数据库': { ja: 'データベース', en: 'Database' },
 }
 
 // Small offline fallback for common Japanese and English lookups. Online providers remain
@@ -647,39 +656,6 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
     })
   }
 
-  if (!items.length) {
-    if (language === 'ja') {
-      items.push({
-        term: query,
-        en: en || '英语翻译暂时不可用',
-        zh: zh || '中文翻译暂时不可用',
-        tag: '日中英互译',
-        language: 'ja',
-        source: '在线翻译',
-      })
-    } else if (language === 'en') {
-      items.push({
-        term: query,
-        en: '暂未找到详细英语词典释义',
-        zh: zh || '中文翻译暂时不可用',
-        translationJa: ja || '日语翻译暂时不可用',
-        tag: '英日中互译',
-        language: 'en',
-        source: '在线翻译',
-      })
-    } else {
-      // Show the submitted Chinese term and the status of each translation even if both providers fail.
-      items.push({
-        term: query,
-        en: en || '英语翻译暂时不可用',
-        zh: query,
-        translationJa: ja || '日语翻译暂时不可用',
-        tag: '中日英互译',
-        language: 'zh',
-        source: '在线翻译',
-      })
-    }
-  }
 
   const seen = new Set<string>()
   return items.filter((item) => {
