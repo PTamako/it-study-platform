@@ -163,7 +163,7 @@ test('new precision migration updates annotations in place without deleting user
 
 test('full corpus has no cross-particle grammar meaning leakage', () => {
   const particleNotes = { 'から': '起点', 'まで': '终点', 'より': '比较', 'だけ': '限定', 'しか': '限定' }
-  for (const line of rows.filter(line => /^\\s*\\('ja-sentence-/.test(line))) {
+  for (const line of rows.filter(line => /^\s*\('ja-sentence-/.test(line))) {
     const fields = parseSqlTuple(line)
     const sentence = fields[3]
     for (const hit of JSON.parse(fields[13])) {
@@ -175,8 +175,8 @@ test('full corpus has no cross-particle grammar meaning leakage', () => {
 })
 
 test('full English corpus does not label verb phrases as article noun phrases', () => {
-  const verbs = /\\b(?:is|are|was|were|has|have|had|will|does|did|starts|started|works|worked|goes|went|needs|needed)\\b/i
-  for (const line of rows.filter(line => /^\\s*\\('en-sentence-/.test(line))) {
+  const verbs = /\b(?:is|are|was|were|has|have|had|will|does|did|starts|started|works|worked|goes|went|needs|needed)\b/i
+  for (const line of rows.filter(line => /^\s*\('en-sentence-/.test(line))) {
     const fields = parseSqlTuple(line)
     for (const hit of JSON.parse(fields[13])) {
       if (hit.type !== 'grammar' || !/^(?:a|an|the) /i.test(hit.term)) continue
