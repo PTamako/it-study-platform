@@ -667,6 +667,13 @@ async function finishMockExam(autoSubmit = false) {
   }
   await syncPendingMockSubmission()
 }
+function closeMockReview() {
+  mockSubmitted.value = false
+  mockQuestions.value = []
+  mockAnswers.value = {}
+  mockError.value = ''
+  try { localStorage.removeItem(MOCK_REVIEW_KEY) } catch { /* optional local snapshot */ }
+}
 onUnmounted(() => { if (mockTimer) clearInterval(mockTimer); if (dailyRolloverTimer) clearInterval(dailyRolloverTimer); document.removeEventListener('visibilitychange', onDailyVisibilityChange) })
 
 type ScenarioOption = { id: string; text: string }
@@ -2632,7 +2639,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                     <p class="answer-explanation">{{ question.explanation }}</p>
                   </article>
                 </div>
-                <button class="primary-button" @click="mockSubmitted = false; mockQuestions = []; mockAnswers = {}; mockError = ''; localStorage.removeItem(MOCK_REVIEW_KEY)">结束复盘 <ArrowRight :size="16" /></button>
+                <button class="primary-button" @click="closeMockReview">结束复盘 <ArrowRight :size="16" /></button>
                 </template>
               </div>
               <div v-else class="mock-exam-active">
