@@ -2877,11 +2877,40 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <p v-if="entry.zh" class="dictionary-translation-ja">{{ entry.language === 'zh' ? '中文原文' : '中文翻译／释义' }}：{{ entry.zh }}</p>
                   <p v-if="entry.example" class="dict-example">例句：{{ entry.example }}</p>
                   <p v-if="entry.technical" class="dictionary-tech-note">来自 IT 专业词汇库</p>
+                  <div class="dictionary-ai-section">
+                    <div v-if="!dictionaryAiAnswers[dictionaryAiKey(entry)]" class="dictionary-ai-action-row">
+                      <button type="button" class="secondary-button dictionary-ai-button"
+                        :disabled="dictionaryAiBusy"
+                        @click="supplementDictionaryWithAi(entry)">
+                        {{ dictionaryAiBusy && dictionaryAiActiveKey === dictionaryAiKey(entry) ? 'AI 解释中…'
+                          : (!entry.zh || (!entry.en && !entry.englishTerm) || !entry.translationJa) ? 'AI 补充翻译与用法' : 'AI 解释语境与多义词' }}
+                      </button>
+                      <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次新调用' : '今日 AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small>
+                    </div>
+                    <div v-if="dictionaryAiAnswers[dictionaryAiKey(entry)]" class="dictionary-ai-result">
+                      <strong>AI 辅助解析</strong>
+                      <p>{{ dictionaryAiAnswers[dictionaryAiKey(entry)] }}</p>
+                      <small>AI 内容可能出错，以原词典和实际语境为准。</small>
+                    </div>
+                    <p v-if="dictionaryAiErrors[dictionaryAiKey(entry)]" class="dictionary-status dictionary-error" role="alert">{{ dictionaryAiErrors[dictionaryAiKey(entry)] }}</p>
+                  </div>
                   <div v-if="speechStatus && speechStatusTarget === entry.term" class="dictionary-speech-controls"><p class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 </div>
                 <div class="dict-actions"><button class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + (entry.englishTerm || entry.term)" title="播放英语发音"><Volume2 :size="14" /><span>EN</span></button><button class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语辅助读音：' + (entry.englishTerm || entry.term)" title="播放日语辅助读音"><Languages :size="14" /><span>日</span></button><button class="round-action pronunciation-button" @click="speakDictionaryChinese(entry)" :aria-label="'播放中文发音：' + entry.term" title="播放中文发音"><Volume2 :size="14" /><span>中</span></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" :disabled="vocabularyHydrating || !vocabularySyncReady" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
               </article>
               <div v-if="lastSearchedTerm.trim().toLowerCase() === searchText.trim().toLowerCase() && displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>没有找到匹配词条</strong><p>可尝试中文、日文、英文词语或 IT 缩写。纯汉字的语言可能有歧义，请手动选择「中文」或「日语」。IT 模式只查询本地词库。</p></div>
+              <div v-if="searchText.trim() && !dictionaryLoading && (dictionaryError || (lastSearchedTerm && displayedEntries.length === 0))" class="dictionary-ai-section dictionary-ai-fallback">
+                <button v-if="!dictionaryAiAnswers[dictionaryAiKey(null)]" type="button" class="secondary-button dictionary-ai-button"
+                  :disabled="dictionaryAiBusy" @click="supplementDictionaryWithAi(null)">
+                  {{ dictionaryAiBusy && dictionaryAiActiveKey === dictionaryAiKey(null) ? 'AI 解释中…' : '尝试 AI 辅助解释当前词句' }}
+                </button>
+                <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次新调用' : '今日 AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small>
+                <div v-if="dictionaryAiAnswers[dictionaryAiKey(null)]" class="dictionary-ai-result">
+                  <strong>AI 辅助解析</strong><p>{{ dictionaryAiAnswers[dictionaryAiKey(null)] }}</p>
+                  <small>AI 内容可能出错，不代表已找到权威词典释义。</small>
+                </div>
+                <p v-if="dictionaryAiErrors[dictionaryAiKey(null)]" class="dictionary-status dictionary-error" role="alert">{{ dictionaryAiErrors[dictionaryAiKey(null)] }}</p>
+              </div>
             </div>
           </section>
           </template>
