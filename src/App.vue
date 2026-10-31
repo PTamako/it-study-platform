@@ -630,12 +630,20 @@ onUnmounted(() => { if (mockTimer) clearInterval(mockTimer); if (dailyRolloverTi
 type ScenarioOption = { id: string; text: string }
 type PracticalScenario = {
   id: string; track_id: string; title: string; category: string; difficulty: string;
-  situation: string; task: string; options: ScenarioOption[]; explanation?: string; source_type: string
+  situation: string; task: string; options: ScenarioOption[]; explanation?: string; source_type: string; exam_section?: 'A' | 'B' | null
 }
 type ScenarioExplanationTranslation = { source_text: string; translation_zh: string }
 const scenarios = ref<PracticalScenario[]>([])
 const scenariosLoading = ref(false)
 const scenariosError = ref('')
+const practicalSection = ref<'all' | 'A' | 'B'>('all')
+const practicalCategory = ref('')
+const practicalCategoryOptions = computed(() => [...new Set(scenarios.value
+  .filter(item => practicalSection.value === 'all' || item.exam_section === practicalSection.value)
+  .map(item => item.category))].sort((a, b) => a.localeCompare(b, 'ja')))
+const visibleScenarios = computed(() => scenarios.value.filter(item =>
+  (selectedTrackId.value !== 'exam-fe' || practicalSection.value === 'all' || item.exam_section === practicalSection.value)
+  && (!practicalCategory.value || item.category === practicalCategory.value)))
 const selectedScenarioId = ref('')
 const selectedScenarioOption = ref('')
 const scenarioSubmitting = ref(false)
@@ -648,7 +656,28 @@ const scenarioExplanationTranslationErrors = ref<Record<string, string>>({})
 watch(scenarioExplanationTranslations, value => {
   localStorage.setItem('zhixue:scenario-explanations-zh', JSON.stringify(value))
 }, { deep: true })
-const currentScenario = computed(() => scenarios.value.find(item => item.id === selectedScenarioId.value) || scenarios.value[0] || null)
+const currentScenario = computed(() => visibleScenarios.value.find(item => item.id === selectedScenarioId.value) || visibleScenarios.value[0] || null)
+const practicalPosition = computed(() => currentScenario.value
+  ? visibleScenarios.value.findIndex(item => item.id === currentScenario.value?.id) + 1 : 0)
+function resetScenarioSelection() {
+  stopSpeech()
+  scenarioSubmissionId += 1
+  selectedScenarioId.value = ''
+  selectedScenarioOption.value = ''
+  scenarioResult.value = null
+  scenariosError.value = ''
+}
+function selectPracticalSection(section: 'all' | 'A' | 'B') {
+  if (practicalSection.value === section) return
+  practicalSection.value = section
+  practicalCategory.value = ''
+  resetScenarioSelection()
+}
+function selectPracticalCategory(category: string) {
+  if (practicalCategory.value === category) return
+  practicalCategory.value = category
+  resetScenarioSelection()
+}
 function getScenarioExplanationLanguage(text: string): 'ja-JP' | 'en-US' | 'zh-CN' {
   if (/[\u3040-\u30ff]/.test(text)) return 'ja-JP'
   if (/[a-z]{4,}/i.test(text) && !/[\u3400-\u9fff]/.test(text)) return 'en-US'
@@ -727,9 +756,9 @@ function nextScenario() {
   // Invalidate any in-flight submission without unlocking it: a previous
   // request may still be writing and must retain the same idempotency key.
   scenarioSubmissionId += 1
-  if (!scenarios.value.length) return
-  const index = scenarios.value.findIndex(item => item.id === currentScenario.value?.id)
-  const next = scenarios.value[(index + 1) % scenarios.value.length]
+  if (!visibleScenarios.value.length) return
+  const index = visibleScenarios.value.findIndex(item => item.id === currentScenario.value?.id)
+  const next = visibleScenarios.value[(index + 1) % visibleScenarios.value.length]
   selectedScenarioId.value = next.id
   selectedScenarioOption.value = ''
   scenarioResult.value = null
@@ -810,6 +839,11 @@ async function submitScenario() {
 }
 watch([selectedTrackId, examTracks, activeModule], () => {
   if (activeModule.value === 'practical') void loadScenarios()
+})
+watch(selectedTrackId, () => {
+  practicalSection.value = 'all'
+  practicalCategory.value = ''
+  resetScenarioSelection()
 })
 async function loadExamTracks() {
   tracksLoading.value = true
@@ -2494,22 +2528,41 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
             <div class="panel practice-start-card">
               <div class="section-heading"><div><h3>选择训练方向</h3></div></div>
               <div class="exam-list">
-                <button v-for="exam in examTracks" :key="exam.id" class="exam-card" :class="{ 'exam-card-selected': selectedTrackId === exam.id }" :disabled="mockStarted || mockLoading" @click="selectExam(exam)">
-                  <span class="exam-code purple">{{ exam.id.split('-').pop()?.toUpperCase() }}</span>
+                <button v-for="exam in examTracks.filter(item => item.id === 'exam-sg' || item.id === 'exam-fe')" :key="exam.id" class="exam-card" :class="{ 'exam-card-selected': selectedTrackId === exam.id }" :disabled="mockStarted || mockLoading" @click="selectExam(exam)">
+                  <span class="exam-code" :class="exam.id === 'exam-fe' ? 'blue' : 'purple'">{{ exam.id.split('-').pop()?.toUpperCase() }}</span>
                   <span class="exam-info"><strong>{{ exam.title }}</strong><small>{{ exam.subtitle }}</small></span>
                   <ChevronRight :size="18" class="muted" />
                 </button>
+              </div>
+            </div>
+            <div v-if="selectedTrackId === 'exam-fe'" class="question-category-section">
+              <div class="question-category-heading"><strong>FE 実戦トレーニング</strong><span>原创情境，不作为 IPA 官方真题</span></div>
+              <div class="question-review-filters question-category-filters" role="group" aria-label="FE 实战训练科目">
+                <button v-for="part in [{ id: 'all', label: '全部' }, { id: 'A', label: '科目A' }, { id: 'B', label: '科目B' }]"
+                  :key="part.id" type="button" class="question-category-button" :class="{ active: practicalSection === part.id }"
+                  :aria-pressed="practicalSection === part.id" @click="selectPracticalSection(part.id as 'all' | 'A' | 'B')">{{ part.label }}（{{ part.id === 'all' ? scenarios.length : scenarios.filter(item => item.exam_section === part.id).length }}）</button>
+              </div>
+            </div>
+            <div v-if="scenarios.length > 0" class="question-category-section">
+              <div class="question-category-heading"><strong>分野</strong><span>{{ visibleScenarios.length }} / {{ scenarios.length }} 情境</span></div>
+              <div class="fe-filter-controls">
+                <label>分野
+                  <select :value="practicalCategory" aria-label="实战训练分野" @change="selectPracticalCategory(($event.target as HTMLSelectElement).value)">
+                    <option value="">すべて</option>
+                    <option v-for="category in practicalCategoryOptions" :key="category" :value="category">{{ category }}</option>
+                  </select>
+                </label>
               </div>
             </div>
             <p v-if="scenariosLoading" class="dictionary-status">正在加载实战情境…</p>
             <p v-else-if="scenariosError" class="dictionary-status dictionary-error">{{ scenariosError }}</p>
             <div v-else-if="!currentScenario" class="empty-state">
               <ShieldCheck :size="25" /><strong>实战情境暂时为空</strong>
-              <p>暂时没有可用的实战情境，请稍后刷新再试。</p>
+              <p>{{ scenarios.length ? '当前筛选没有匹配情境，请切换科目或分野。' : '暂时没有可用的实战情境，请稍后刷新再试。' }}</p>
               <button class="secondary-button" @click="loadScenarios">重新加载</button>
             </div>
             <article v-else class="panel question-card practical-scenario-card">
-              <div class="question-topline"><span>{{ currentScenario.category }} · {{ currentScenario.difficulty === 'intermediate' ? '中等' : '标准' }}</span><span class="source-pill">{{ currentScenario.source_type === 'official' ? '官方来源' : '平台原创情境' }}</span></div>
+              <div class="question-topline"><span>{{ selectedTrackId.toUpperCase().replace('EXAM-', '') }}{{ currentScenario.exam_section ? ' · 科目' + currentScenario.exam_section : '' }} · {{ currentScenario.category }} · {{ practicalPosition }} / {{ visibleScenarios.length }} · {{ currentScenario.difficulty === 'intermediate' ? '中等' : '标准' }}</span><span class="source-pill">{{ currentScenario.source_type === 'official' ? '官方来源' : '平台原创情境' }}</span></div>
               <div class="question-prompt-row">
                 <h3 class="question-prompt">{{ currentScenario.title }}</h3>
                 <button type="button" class="secondary-button question-speak-button" @click="speakScenario(currentScenario)" aria-label="日语语音朗读实战情境" title="日语语音朗读实战情境"><Volume2 :size="14" /> 听情境</button>
