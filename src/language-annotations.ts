@@ -92,7 +92,8 @@ function validBoundary(card: AnnotatedSentence, start: number, end: number, kind
 function normalize(card: AnnotatedSentence, value: unknown, boundaries: Set<number>): LanguageHighlight | null {
   if (!value || typeof value !== 'object') return null
   const hit = value as Partial<LanguageHighlight>
-  if (!Number.isInteger(hit.start) || !Number.isInteger(hit.end)) return null
+  if (typeof hit.start !== 'number' || typeof hit.end !== 'number' ||
+      !Number.isInteger(hit.start) || !Number.isInteger(hit.end)) return null
   const start = hit.start as number
   const end = hit.end as number
   if (start < 0 || end <= start || end > card.term.length ||
