@@ -16,6 +16,8 @@ const protectedPersonalPaths = new Set([
   '/api/question-progress',
   '/api/wrong-questions',
   '/api/translate-explanation',
+  '/api/dictionary/ai',
+  '/api/dictionary/ai/status',
 ])
 
 export interface Env {
@@ -666,6 +668,24 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
   }).slice(0, 12)
 }
 
+
+// Atomic D1 reservations cap actual model calls, including concurrent requests.
+const DICTIONARY_AI_DAILY_LIMIT = 20
+const DICTIONARY_AI_CACHE_SECONDS = 30 * 24 * 60 * 60
+const DICTIONARY_AI_MODEL = '@cf/meta/llama-3.1-8b-instruct-fp8'
+function dictionaryAiJapanDay(): string {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+}
+async function dictionaryAiUsage(db: D1Database, studyDate: string): Promise<number> {
+  const row = await db.prepare('SELECT used FROM dictionary_ai_daily_usage WHERE study_date = ?')
+    .bind(studyDate).first<{ used: number }>()
+  return Math.min(DICTIONARY_AI_DAILY_LIMIT, Math.max(0, Number(row?.used || 0)))
+}
+async function dictionaryAiHash(value: string): Promise<string> {
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value)))
+  return [...digest].map(byte => byte.toString(16).padStart(2, '0')).join('')
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
@@ -689,7 +709,7 @@ export default {
         if (rateLimitFailure) return rateLimitFailure
       }
     }
-    const isWriteEndpoint = ['/api/mock-exam/submit', '/api/fe-question-bank/install', '/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history', '/api/translate-explanation'].includes(url.pathname)
+    const isWriteEndpoint = ['/api/mock-exam/submit', '/api/fe-question-bank/install', '/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history', '/api/translate-explanation', '/api/dictionary/ai'].includes(url.pathname)
     const isExamHistoryDelete = request.method === 'DELETE' && url.pathname === '/api/exam-history'
     if (request.method !== 'GET' && !(request.method === 'POST' && isWriteEndpoint) && !isExamHistoryDelete) {
       return json({ error: '不支持此请求方法' }, 405)
