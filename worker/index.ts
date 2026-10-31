@@ -1014,12 +1014,21 @@ export default {
       const language = url.searchParams.get('lang') || 'ja'
       const category = url.searchParams.get('category') || ''
       if (!['ja', 'en'].includes(language)) return json({ items: [], error: 'lang 只支持 ja 或 en。' }, 400)
+      const paged = url.searchParams.has('limit')
+      const limit = Number(url.searchParams.get('limit') || 0)
+      const offset = Number(url.searchParams.get('offset') || 0)
+      if (paged && (!Number.isInteger(limit) || limit < 1 || limit > 1000 ||
+        !Number.isInteger(offset) || offset < 0 || offset > 10000)) {
+        return json({ items: [], error: '无效的语言课程分页参数。' }, 400)
+      }
       try {
-        const { results } = await env.DB.prepare(
-          `SELECT id, language, category, term, reading, meaning_zh, explanation, example, example_meaning_zh, example_source_url, source_url, source_type, content_type, highlight_json, vocabulary_expansion_json, grammar_expansion_json
+        const sql = `SELECT id, language, category, term, reading, meaning_zh, explanation, example, example_meaning_zh, example_source_url, source_url, source_type, content_type, highlight_json, vocabulary_expansion_json, grammar_expansion_json
            FROM language_cards WHERE content_type = 'sentence' AND language = ? AND (? = '' OR category = ?)
-           ORDER BY CASE category WHEN '日常句子' THEN 0 WHEN '职场语言' THEN 1 ELSE 2 END, id`,
-        ).bind(language, category, category).all()
+           ORDER BY CASE category WHEN '日常句子' THEN 0 WHEN '职场语言' THEN 1 ELSE 2 END, id`
+        const stmt = env.DB.prepare(sql + (paged ? ' LIMIT ? OFFSET ?' : ''))
+        const { results } = paged
+          ? await stmt.bind(language, category, category, limit, offset).all()
+          : await stmt.bind(language, category, category).all()
         const response = json({ items: results })
         response.headers.set('cache-control', 'public, max-age=300')
         return response
