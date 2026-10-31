@@ -5,18 +5,18 @@ import { inspectFePublishedBank } from './audit_fe_published_bank.mjs'
 test('FE official-publication inventory detects precisely which 2023-2026 A/B items remain missing', () => {
   const corpus = inspectFePublishedBank()
   assert.equal(corpus.availableTotal, 104)
-  assert.equal(corpus.officialCount, 89)
-  assert.equal(corpus.missingCount, 15)
+  assert.equal(corpus.officialCount, 104)
+  assert.equal(corpus.missingCount, 0)
   const actual = corpus.years.map(y => ({
     year: y.year,
     A: y.sections.A.present.length,
     B: y.sections.B.present.length,
   }))
   assert.deepEqual(actual, [
-    {year: 2023, A: 17, B: 3},
-    {year: 2024, A: 17, B: 3},
-    {year: 2025, A: 19, B: 5},
-    {year: 2026, A: 19, B: 6},
+    {year: 2023, A: 20, B: 6},
+    {year: 2024, A: 20, B: 6},
+    {year: 2025, A: 20, B: 6},
+    {year: 2026, A: 20, B: 6},
   ])
   for (const y of corpus.years) {
     for (const sec of ['A', 'B']) {
