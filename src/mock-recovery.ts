@@ -25,10 +25,11 @@ export function parseMockSnapshot<T>(raw: unknown): MockSnapshot<T> | null {
   const ids = new Set<string>()
   for (const q of questions) {
     if (!q || typeof q !== 'object' || typeof q.id !== 'string'
-      || typeof q.prompt !== 'string' || typeof q.answer !== 'string'
-      || q.track_id !== s.track || !Array.isArray(q.options)
-      || !q.options.some((option: unknown) => option && typeof option === 'object' &&
-        (option as { id?: unknown }).id === q.answer)
+      || typeof q.prompt !== 'string'
+      || (q.answer !== undefined && typeof q.answer !== 'string')
+      || q.track_id !== s.track || !Array.isArray(q.options) || q.options.length < 2
+      || (q.answer !== undefined && !q.options.some((option: unknown) => option && typeof option === 'object' &&
+        (option as { id?: unknown }).id === q.answer))
       || ids.has(q.id)) return null
     ids.add(q.id)
   }

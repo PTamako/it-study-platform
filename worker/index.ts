@@ -789,8 +789,8 @@ export default {
           ? json(JSON.parse(saved.result_json))
           : json({ error: '交卷编号已用于另一份答案，请不要覆盖原成绩。' }, 409)
         const marks = questionIds.map(() => '?').join(',')
-        const result = await env.DB.prepare(`SELECT id, track_id, topic, exam_section, answer_json FROM questions WHERE id IN (${marks})`).bind(...questionIds).all()
-        const rows = result.results as Array<{ id: string; track_id: string; topic: string; exam_section: string; answer_json: string }>
+        const result = await env.DB.prepare(`SELECT id, track_id, topic, exam_section, answer_json, explanation FROM questions WHERE id IN (${marks})`).bind(...questionIds).all()
+        const rows = result.results as Array<{ id: string; track_id: string; topic: string; exam_section: string; answer_json: string; explanation: string }>
         if (rows.length !== required || rows.some(row => row.track_id !== track)) {
           return json({ error: '题库已发生变化，无法安全交卷。' }, 409)
         }
@@ -810,7 +810,12 @@ export default {
         })
         const correctCount = grades.filter(grade => grade.correct).length
         const examName = track === 'exam-fe' ? 'FE 科目' + section + ' 模擬試験' : 'SG 模擬試験'
-        const summary = { ok: true, submission_id: submissionId, track, section, correct_count: correctCount, total: required, exam_name: examName, study_date: date }
+        // Return answer keys only after server-side grading, never in the exam paper.
+        const review = answers.map(answer => {
+          const row = byId.get(answer.question_id)!
+          return { id: row.id, answer: JSON.parse(row.answer_json), explanation: row.explanation || '' }
+        })
+        const summary = { ok: true, submission_id: submissionId, track, section, correct_count: correctCount, total: required, exam_name: examName, study_date: date, review }
         // D1 Free caps queries per Worker invocation. JSON1 expands 60 grades
         // inside just two SQL statements, instead of 120 separate updates.
         // Together with receipt + exam history, the whole mock is 4 atomic writes.
@@ -1840,7 +1845,9 @@ export default {
         const decode = (row: Record<string, unknown>) => ({
           ...row,
           options: JSON.parse(String(row.options_json || '[]')),
-          answer: JSON.parse(String(row.answer_json || 'null')),
+          // Timed exam requests expose neither answers nor solutions before submission.
+          answer: undefined,
+          explanation: undefined,
           options_json: undefined,
           answer_json: undefined,
         })
