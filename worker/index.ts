@@ -976,8 +976,6 @@ export default {
         }
         // If an unexpected lookup error escapes the provider guards, still return
         // verified local translations for common phrases instead of failing the whole API.
-        const hasKana = /[\u3040-\u30ff]/.test(query)
-        const hasCjk = /[\u3400-\u9fff]/.test(query)
         const language = requestedLanguage === 'auto' ? detectDictionaryLanguage(query) : requestedLanguage
         const offline = language === 'ja'
           ? (() => { const value = commonJapaneseTranslations[query]; return value ? { zh: value.zh, ja: query, en: value.en } : undefined })()
@@ -994,7 +992,7 @@ export default {
             language: language as 'ja' | 'en' | 'zh',
             source: '本地词典（在线接口异常时）',
           }
-          return json({ items: [item], query, providers: ['本地词典'], note: '在线查询失败，当前显示已收录的离线词条。' })
+          return json({ items: [item], query, detected_language: language, providers: ['本地词典'], note: '在线查询失败，当前显示已收录的离线词条。' })
         }
         return json({ items: [], error: '在线翻译请求失败，离线词典也未收录该词。请检查 Worker 日志。' }, 503)
       }
