@@ -483,9 +483,17 @@ def safe_english_article_phrase(text):
     # A modifier is recognized only before the final noun. Unknown continuations
     # are intentionally omitted rather than teaching a false noun phrase.
     end = 2
-    while end < len(words) and words[end - 1].casefold() in {
-        word.casefold() for word in EN_MODIFIERS
-    }:
+    predicate_words = {
+        "is", "are", "was", "were", "am", "has", "have", "had",
+        "does", "did", "do", "will", "would", "can", "could",
+        "starts", "started", "works", "worked", "goes", "went",
+        "needs", "needed", "says", "said", "wants", "wanted",
+        "looks", "looked", "seems", "seemed", "becomes", "became",
+    }
+    modifiers = {word.casefold() for word in EN_MODIFIERS}
+    while (end < len(words)
+           and words[end - 1].casefold() in modifiers
+           and words[end].casefold() not in predicate_words):
         end += 1
     return " ".join(words[:end])
 
