@@ -127,6 +127,6 @@ test('new SG year/section/domain selectors are visible beside the existing FE se
   assert.match(app, /selectedTrackId === 'exam-sg' \? 'SG 科目' : 'FE 科目'/)
   assert.match(app, /selectedTrackId === 'exam-sg' \? 'SG 分野' : 'FE 分野'/)
   assert.match(app, /科目A（旧午前を含む）/)
-  assert.match(app, /2016〜2019年度は旧制度の午前問題/)
+  assert.doesNotMatch(app, /2016〜2019年度は旧制度の午前問題です/)
   assert.doesNotMatch(app, /selectedTrackId === 'exam-fe'".*年度・科目・分野/)
 })
