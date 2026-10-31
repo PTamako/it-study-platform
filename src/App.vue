@@ -1220,17 +1220,17 @@ const moduleInfo = {
   exam: { title: '考试备考', subtitle: '日常刷题、复习错题与限时模拟考试。' },
   practical: { title: '实战训练', subtitle: '在工作情境中判断风险、选择行动，并查看评分与解释。' },
   language: { title: '语言学习', subtitle: '选择日语或英语，按实际学习内容练习表达、理解和发音。' },
-  dictionary: { title: '英日发音与 IT 术语', subtitle: '每个词条分别提供英语原音与日语辅助读音；结合 IPA 音标和假名提示。' },
+  dictionary: { title: '中日英互译与 IT 术语', subtitle: '中日英自动识别和互译，三语发音与离线 IT 术语。' },
 } as const
 
 const currentInfo = computed(() => moduleInfo[activeModule.value])
-const searchPlaceholder = computed(() => activeModule.value === 'dictionary' ? '查词、查缩写，例如 MFA / 認証…' : '搜索考试、课程、知识点…')
+const searchPlaceholder = computed(() => activeModule.value === 'dictionary' ? '输入中文、日语、英语或 IT 缩写，例如 認証 / 认证 / MFA…' : '搜索考试、课程、知识点…')
 
 const modules = [
   { id: 'exam' as const, title: '考试备考', en: 'EXAM PREP', desc: '日常练习 · 错题复习 · 限时模拟考试', icon: GraduationCap, tone: 'lavender', count: '题量以题库数据为准' },
   { id: 'practical' as const, title: '实战训练', en: 'PRACTICAL LAB', desc: '日语安全情境 · 日语语音 · 中日双语解析', icon: ShieldCheck, tone: 'blue', count: '400 个情境 · 评分 · 复盘' },
   { id: 'language' as const, title: '语言学习', en: 'LANGUAGE', desc: '日语 / 英语 · 例句 · 发音 · 复习', icon: Languages, tone: 'peach', count: '选择语言开始学习' },
-  { id: 'dictionary' as const, title: '英日发音与 IT 术语', en: 'DICTIONARY', desc: '英语原音 · 日语辅助读音 · 本地 IT 词库', icon: BookMarked, tone: 'blue', count: '英语词汇与专业术语' },
+  { id: 'dictionary' as const, title: '中日英互译与 IT 术语', en: 'DICTIONARY', desc: '中日英互译 · 三语发音 · 离线 IT 词库', icon: BookMarked, tone: 'blue', count: '三语词汇与专业术语' },
 ]
 
 type LanguageHighlight = { start: number; end: number; type: 'vocabulary' | 'grammar'; term: string; meaning: string; explanation: string }
@@ -2064,7 +2064,9 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
     setSpeechAudioSessionType('auto')
     speechStatus.value = lang === 'ja-JP'
       ? '未检测到日语语音。请在系统语音设置中安装日语语音后重试。'
-      : '未检测到英语语音。请在系统语音设置中安装英语语音后重试。'
+      : lang === 'zh-CN'
+        ? '未检测到中文语音。请在系统语音设置中安装中文普通话语音后重试。'
+        : '未检测到英语语音。请在系统语音设置中安装英语语音后重试。'
     return
   }
   if (voice) utterance.voice = voice
@@ -2105,7 +2107,7 @@ function speak(text: string, lang: 'ja-JP' | 'en-US' | 'zh-CN' = 'ja-JP', status
     window.setTimeout(() => {
       if (requestId === speechRequestId && !hasStarted && speechStatus.value === '正在请求播放：' + spokenText) {
         setSpeechAudioSessionType('auto')
-        speechStatus.value = '浏览器尚未启动语音播放。请检查系统英语/日语语音、浏览器权限与设备静音状态后重试。'
+        speechStatus.value = '浏览器尚未启动语音播放。请检查系统对应语言的语音、浏览器权限与设备静音状态后重试。'
       }
     }, 3500)
   } catch {
@@ -2151,7 +2153,7 @@ function speakDictionaryEnglish(entry: DictionaryEntry) {
 
 function speakDictionaryJapanese(entry: DictionaryEntry) {
   speechStatusTarget.value = entry.term
-  const text = entry.reading || (entry.language === 'ja' ? entry.term : entry.translationJa || '')
+  const text = entry.language === 'ja' ? (entry.reading || entry.term) : (entry.translationJa || entry.reading || '')
   if (!text) {
     speechStatus.value = '该词暂无可靠的日语读音或译文。可试试切换语言再次查询。'
     return
