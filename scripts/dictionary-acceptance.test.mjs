@@ -27,12 +27,12 @@ test('speech voice selection never falls back to an arbitrary first voice', () =
 
 test('Japanese playback does not pretend an unknown English term has a verified kana guide', () => {
   assert.match(app, /const text = entry\.language === 'ja' \? \(entry\.reading \|\| entry\.term\) : \(entry\.translationJa \|\| entry\.reading \|\| ''\)/)
-  assert.match(app, /该词暂未收录日语假名读音/)
+  assert.match(app, /该词暂无可靠的日语读音或译文/)
 })
 
 test('IT dictionary remains local-only and does not fall back to online translation', () => {
   assert.match(worker, /if \(requestedLanguage === 'it'\) return \[\]/)
-  assert.match(worker, /lang 参数只支持 auto、ja、en、it/)
+  assert.match(worker, /lang 参数只支持 auto、ja、en、zh、it/)
 })
 
 const glossaryMigration = await readFile(new URL('../migrations/0077_expand_it_glossary_security_network_management.sql', import.meta.url), 'utf8')
@@ -67,7 +67,7 @@ test('English alias results never reuse a Japanese headword reading as English k
 })
 
 test('changing dictionary language invalidates previous results and pending requests', () => {
-  assert.match(app, /function setDictionaryLanguage\(language: 'auto' \| 'ja' \| 'en' \| 'it'\)/)
+  assert.match(app, /function setDictionaryLanguage\(language: 'auto' \| 'ja' \| 'en' \| 'zh' \| 'it'\)/)
   assert.match(app, /dictionaryRequestId \+= 1/)
   assert.match(app, /@click="setDictionaryLanguage\('it'\)"/)
 })
@@ -263,7 +263,8 @@ test('daily task writes are serialized per task and use a snapshot of each toggl
 test('Japanese lookup does not show a failed fallback beside a successful Jisho definition', () => {
   assert.match(worker, /const jishoItems = jishoEntries\(jishoRows, ''\)/)
   assert.match(worker, /Prefer real dictionary entries over a second generic card/)
-  assert.match(worker, /暂未获得英语释义（在线词典未返回结果）/)
+  assert.doesNotMatch(worker, /暂未获得英语释义（在线词典未返回结果）/)
+  assert.match(worker, /else if \(en \|\| zh \|\| commonJapaneseExplanations\[query\.trim\(\)\]\)/)
   assert.doesNotMatch(worker, /translationJa: query/)
 })
 
