@@ -809,7 +809,7 @@ def main():
     # Only matching IDs are changed; newly eligible sentences are NOT inserted.
     precision = [
         "-- In-place repair of existing Tatoeba sentence annotations.",
-        "-- Never delete cards or change language_card_progress / language_card_reviews.",
+        "-- Only update annotation columns; personal study history stays untouched.",
     ] + refresh[1:]
     OUT_PRECISION_REFRESH.write_text("\n".join(precision)+"\n", encoding="utf-8")
 
