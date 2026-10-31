@@ -12,11 +12,14 @@ const worker = (await import('data:text/javascript;base64,' + Buffer.from(ts.tra
 const migration = readFileSync(new URL('../migrations/0114_public_dictionary_rate_limits.sql', import.meta.url),'utf8')
 const sqlite = new DatabaseSync(':memory:')
 sqlite.exec(migration)
-const DB = { prepare(query) { return { bind(...args) { return {
-  first:async()=>sqlite.prepare(query).get(...args)||null,
-  run:async()=>sqlite.prepare(query).run(...args),
-  all:async()=>({results:sqlite.prepare(query).all(...args)}),
-} } } } }
+const DB = { prepare(query) {
+  const statement=args=>({
+    first:async()=>sqlite.prepare(query).get(...args)||null,
+    run:async()=>sqlite.prepare(query).run(...args),
+    all:async()=>({results:sqlite.prepare(query).all(...args)}),
+  })
+  return { ...statement([]), bind:(...args)=>statement(args) }
+} }
 const base='https://study.test'
 test('public dictionary rate limit is atomic and returns retry-after; other API routes are unaffected',async()=>{
   const env={DB,AUTH_SESSION_SECRET:'test-secret-for-dictionary-rate-limiter-12345'}
