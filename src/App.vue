@@ -2455,7 +2455,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                     </select>
                   </label>
                   <label>领域
-                    <select v-model="practiceTopic" :aria-label="selectedTrackId === 'exam-sg' ? 'SG 分野' : 'FE 分野'" @change="applyPracticeFilter('topic')">
+                    <select v-model="practiceTopic" :aria-label="selectedTrackId === 'exam-sg' ? 'SG 领域' : 'FE 领域'" @change="applyPracticeFilter('topic')">
                       <option value="">全部</option>
                       <option v-for="item in practiceTopicOptions" :key="item.topic" :value="item.topic">{{ item.topic }}（{{ item.question_count }}）</option>
                     </select>
@@ -2663,7 +2663,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
               <div class="question-category-heading"><strong>领域</strong><span>{{ visibleScenarios.length }} / {{ scenarios.length }} 情境</span></div>
               <div class="fe-filter-controls">
                 <label>领域
-                  <select :value="practicalCategory" aria-label="实战训练分野" @change="selectPracticalCategory(($event.target as HTMLSelectElement).value)">
+                  <select :value="practicalCategory" aria-label="实战训练领域" @change="selectPracticalCategory(($event.target as HTMLSelectElement).value)">
                     <option value="">全部</option>
                     <option v-for="category in practicalCategoryOptions" :key="category" :value="category">{{ category }}</option>
                   </select>
