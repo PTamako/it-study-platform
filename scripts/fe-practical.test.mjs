@@ -119,6 +119,6 @@ test('FE practical UI has independent subject and category filters and keeps SG 
   assert.match(app,/const visibleScenarios = computed/)
   assert.match(app,/visibleScenarios\.value\.findIndex/)
   assert.match(app,/aria-label="FE 实战训练科目"/)
-  assert.match(app,/aria-label="实战训练分野"/)
+  assert.match(app,/aria-label="实战训练领域"/)
   assert.match(app,/item\.id === 'exam-sg' \|\| item\.id === 'exam-fe'/)
 })

@@ -37,7 +37,7 @@ test('Japanese speech never falls back to a voice from another language', () => 
   assert.match(app, /normalize\(candidate\.lang\) === normalizedLang/)
   assert.ok(!app.includes("|| voices.find(candidate => /natural|enhanced|premium|siri|daniel|karen|ava|alex|samantha|kyoko|otoya/i.test(candidate.name))"))
 })
-test('Japanese learning banner copy is Japanese, not Chinese', () => {
-  assert.match(app, /studyLanguage === 'ja' \? '実際の場面で使える日本語を身につけよう。'/)
-  assert.match(app, /studyLanguage === 'ja' \? '日常会話や職場で使える表現を、読み方・中国語訳・実例とともに学びます。'/)
+test('Japanese learning keeps the original content while presenting concise Chinese interface copy', () => {
+  assert.match(app, /studyLanguage === 'ja' \? '练习实用日语'/)
+  assert.match(app, /日常与职场表达 · 例句 · 发音/)
 })
