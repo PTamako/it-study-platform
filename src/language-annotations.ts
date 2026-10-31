@@ -89,13 +89,30 @@ function validBoundary(card: AnnotatedSentence, start: number, end: number, kind
   return true
 }
 
+function normalizedOffsets(sentence: string, start: number, end: number, term: string): [number, number] | null {
+  // Python's Tatoeba generator counts Unicode codepoints while JS string
+  // offsets are UTF-16 code units. Convert when an astral symbol occurs first.
+  const points = Array.from(sentence)
+  // Dataset offsets are Python codepoint indexes: decode them first even if
+  // an unrelated duplicate word happens to fit the raw UTF-16 offset.
+  if (start >= 0 && end <= points.length && points.slice(start, end).join('') === term) {
+    return [points.slice(0, start).join('').length, points.slice(0, end).join('').length]
+  }
+  // Some hand-written / legacy browser annotations already use UTF-16 offsets.
+  return sentence.slice(start, end) === term ? [start, end] : null
+}
+
 function normalize(card: AnnotatedSentence, value: unknown, boundaries: Set<number>): LanguageHighlight | null {
   if (!value || typeof value !== 'object') return null
   const hit = value as Partial<LanguageHighlight>
   if (typeof hit.start !== 'number' || typeof hit.end !== 'number' ||
       !Number.isInteger(hit.start) || !Number.isInteger(hit.end)) return null
-  const start = hit.start as number
-  const end = hit.end as number
+  const rawStart = hit.start as number
+  const rawEnd = hit.end as number
+  if (typeof hit.term !== 'string' || rawStart < 0 || rawEnd <= rawStart) return null
+  const offsets = normalizedOffsets(card.term, rawStart, rawEnd, hit.term)
+  if (!offsets) return null
+  const [start, end] = offsets
   if (start < 0 || end <= start || end > card.term.length ||
       (hit.type !== 'vocabulary' && hit.type !== 'grammar') ||
       typeof hit.term !== 'string' || hit.term !== card.term.slice(start, end) ||
@@ -106,7 +123,7 @@ function normalize(card: AnnotatedSentence, value: unknown, boundaries: Set<numb
     const note = PARTICLES[hit.term]
     if (hit.term === 'が' && /^分からない/.test(card.term.slice(end))) {
       return { start, end, term: hit.term, type: hit.type,
-        meaning: '不知道的内容', explanation: '「～が分からない」表示不知道／不明白某事。本句「使い方が分からない」就是不知道使用方法。' }
+        meaning: '不知道的内容', explanation: '「～が分からない」表示不知道或不明白前面提到的事情、方法或对象。' }
     }
     if (hit.term === 'の' && typeof Intl.Segmenter === 'function') {
       const tokens = [...new Intl.Segmenter('ja', { granularity: 'word' }).segment(card.term)]

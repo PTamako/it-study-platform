@@ -10,6 +10,7 @@ OUT = ROOT / "migrations/0081_language_sentence_cards.sql"
 OUT_REFRESH = ROOT / "migrations/0082_refresh_language_sentence_annotations.sql"
 OUT_REFRESH_LATEST = ROOT / "migrations/0084_refresh_contextual_bilingual_annotations.sql"
 OUT_REBUILD = ROOT / "migrations/0087_rebuild_contextual_bilingual_sentence_cards.sql"
+OUT_PRECISION_REFRESH = ROOT / "migrations/0115_refresh_precise_bilingual_annotations.sql"
 CACHE = Path("/tmp/language-sentence-sources")
 CACHE.mkdir(exist_ok=True)
 SENTENCES_URL = "https://downloads.tatoeba.org/exports/sentences.tar.bz2"
@@ -362,7 +363,7 @@ JP_GRAMMAR = [
  (r"みたいです|みたい","好像……","口语中用于比喻或不确定判断"),
  (r"のが好きです|のが得意です|のが苦手です","动词普通形＋のが……","将动作名词化后说明喜好、擅长或不擅长"),
  (r"に行きます|に行く|に来ます|に来る","动词ます形词干＋に行く／来る","表示前往某地进行某项动作"),
- (r"たり.*たりします|たり.*たりする","たり……たりする","列举代表性动作或状态，不表示穷尽全部情况"),
+ (r"たり[^。！？!?\n]{0,70}?たり(?:します|する)","たり……たりする","列举代表性动作或状态，不表示穷尽全部情况"),
 
  (r"(?<=[ぁ-んァ-ヶ一-龯])(?:から|まで|より|だけ|しか|は|が|を|に|で|と|へ|の)","名词／短语＋助词","助词标记主题、对象、地点、方向、所属或范围；具体功能要结合句意判断"),
  (r"(?:私|僕|彼|彼女|これ|それ|あれ|誰|何)は","主题提示：N は","「は」提示谈话主题，后续说明主题相关的信息"),
@@ -456,6 +457,46 @@ def japanese_safe_word_span(sentence, start, end, term, kind="vocabulary"):
         return False
     return True
 
+EN_MODIFIERS = {
+    "very", "really", "quite", "rather", "extremely", "incredibly",
+    "rich", "large", "small", "new", "old", "good", "great", "nice",
+    "beautiful", "different", "important", "difficult", "easy",
+    "long", "short", "interesting", "expensive", "cheap", "fast",
+    "quick", "busy", "available", "first", "last", "best", "better",
+    "excellent", "bad", "modern", "simple", "correct", "clear",
+    "strong", "early", "late", "special", "popular", "common",
+    "big", "little", "young", "kind", "happy", "final", "main",
+    "international", "Japanese", "English",
+}
+
+def safe_english_article_phrase(text):
+    """Only keep an article's modifier chain through a plausible head noun.
+
+    The previous open-ended regex swallowed predicates: 'the plan is ready'
+    became a grammar highlight of 'the plan is ready'.
+    """
+    words = text.split()
+    if not words or words[0].casefold() not in {"a", "an", "the"}:
+        return text
+    if len(words) < 3:
+        return text
+    # A modifier is recognized only before the final noun. Unknown continuations
+    # are intentionally omitted rather than teaching a false noun phrase.
+    end = 2
+    predicate_words = {
+        "is", "are", "was", "were", "am", "has", "have", "had",
+        "does", "did", "do", "will", "would", "can", "could",
+        "starts", "started", "works", "worked", "goes", "went",
+        "needs", "needed", "says", "said", "wants", "wanted",
+        "looks", "looked", "seems", "seemed", "becomes", "became",
+    }
+    modifiers = {word.casefold() for word in EN_MODIFIERS}
+    while (end < len(words)
+           and words[end - 1].casefold() in modifiers
+           and words[end].casefold() not in predicate_words):
+        end += 1
+    return " ".join(words[:end])
+
 @lru_cache(maxsize=100000)
 def make_hits(sentence, lang):
     """Find meaningful, context-aware spans with language-specific boundaries and balanced coverage."""
@@ -465,14 +506,21 @@ def make_hits(sentence, lang):
 
     # Structural rules are ordered from specific constructions to broad patterns.
     # Earlier rules therefore win when spans have equal length and start position.
-    for rule_index, (pattern, meaning, explanation) in enumerate(grammar):
+    for rule_index, (pattern, rule_meaning, rule_explanation) in enumerate(grammar):
         for match in re.finditer(pattern, sentence, re.I if lang == "en" else 0):
+            # Each match needs its own note. Reusing a previously customized particle
+            # note led to unrelated particles inheriting the wrong meaning.
+            meaning, explanation = rule_meaning, rule_explanation
             term = match.group()
             if not term.strip():
                 continue
-            if lang == "ja" and not japanese_safe_word_span(sentence, match.start(), match.end(), term, "grammar"):
+            if lang == "en" and term.casefold().startswith(("a ", "an ", "the ")):
+                # Truncate to a plausible noun phrase before indexing/overlap
+                # arbitration; preserve exact original sentence offsets.
+                term = safe_english_article_phrase(term)
+            if lang == "ja" and not japanese_safe_word_span(sentence, match.start(), match.start() + len(term), term, "grammar"):
                 continue
-            if lang == "ja" and term in {"か", "の", "は", "が", "を", "に", "で", "と", "へ"}:
+            if lang == "ja" and term in {"か", "の", "は", "が", "を", "に", "で", "と", "へ", "から", "まで", "より", "だけ", "しか"}:
                 particle_notes = {
                     "か": ("句末助词「か」：疑问", "放在句末标记疑问；若前面是「です」，两者合起来构成礼貌疑问「ですか」。"),
                     "の": ("助词「の」：所属／连接", "连接所属者与物品或名词与名词；例如「誰の傘」表示“谁的伞”。"),
@@ -483,6 +531,11 @@ def make_hits(sentence, lang):
                     "で": ("助词「で」：动作场所／手段", "常标记动作发生的场所或使用的手段，具体含义取决于句中动词。"),
                     "と": ("助词「と」：共同对象／引用", "可表示“和／与”，也可引出引用内容；需结合前后文判断。"),
                     "へ": ("助词「へ」：方向", "标记动作前往的方向或目的地。"),
+                    "から": ("助词「から」：起点／原因", "可表示时间／空间的起点，也可表示原因；需结合前后词语区分。"),
+                    "まで": ("助词「まで」：终点／范围", "表示时间、空间或数量上的终点。"),
+                    "より": ("助词「より」：比较／起点", "常用来标记比较基准，也可表示起点。"),
+                    "だけ": ("助词「だけ」：限定", "限定为该范围或数量，相当于“仅、只”。"),
+                    "しか": ("助词「しか」：限定（接否定）", "后接否定形式，表示“只有、仅有”。"),
                 }
                 meaning, explanation = particle_notes[term]
                 # Explain particles from their local construction and nearby predicate,
@@ -503,7 +556,7 @@ def make_hits(sentence, lang):
                     meaning = "は：提示主题"
                     explanation = "「" + left[-4:] + "は」中的「は」提示本句的谈话主题，后面的谓语或说明围绕这个主题展开。"
             candidates.append({
-                "start": match.start(), "end": match.end(), "type": "grammar",
+                "start": match.start(), "end": match.start() + len(term), "type": "grammar",
                 "term": term, "meaning": meaning, "explanation": explanation,
                 "rule_id": ("ja" if lang == "ja" else "en") + ".grammar." + str(rule_index + 1),
                 "confidence": "rule", "rule_priority": len(grammar) - rule_index,
@@ -607,6 +660,21 @@ def validate_annotation_rules():
     assert not any(hit["term"] == "いつ" for hit in jp_regression), "いつ inside そいつ is not a time word"
     assert not any(hit["term"] == "から" for hit in jp_regression), "から inside 分からない is not a particle"
     assert any(hit["term"] == "んだ" and hit["type"] == "grammar" for hit in jp_regression), "Explanation form んだ should be recognized"
+
+    # A single sentence often contains several particles matched by the same
+    # generic rule. Their meanings must be independent, not copied from the
+    # previous particle or an earlier sentence.
+    multi_particle = make_hits("学校から駅まで歩いて、会社で資料を確認します。", "ja")
+    by_term = {hit["term"]: hit for hit in multi_particle if hit["type"] == "grammar"}
+    for particle, expected_note in (("から", "起点"), ("まで", "终点"), ("で", "场所"), ("を", "对象")):
+        if particle in by_term:
+            assert expected_note in by_term[particle]["meaning"] or expected_note in by_term[particle]["explanation"], (
+                particle + " must use its own particle explanation")
+    assert "が" not in by_term or "が" in by_term["が"]["meaning"], "Particle notes must not leak between matches"
+    en_predicate = make_hits("The meeting starts tomorrow.", "en")
+    assert not any(hit["type"] == "grammar" and "starts" in hit["term"].lower() for hit in en_predicate), "English noun phrase must not swallow predicate"
+    en_complex = make_hits("She visited a very large office today.", "en")
+    assert any(hit["type"] == "grammar" and hit["term"].casefold() == "a very large office" for hit in en_complex), "Valid adjective chain must be kept"
 
     # Production regressions: no invented vocabulary and context-specific explanations.
     english_sentence = "Japan is a rich country."
@@ -736,6 +804,15 @@ def main():
         )
     OUT_REFRESH.write_text("\n".join(refresh)+"\n",encoding="utf-8")
     OUT_REFRESH_LATEST.write_text("\n".join(refresh)+"\n",encoding="utf-8")
+    # Refresh existing sentence annotations in place on production. This does not
+    # delete/reinsert cards, so spaced-repetition and mastery records are preserved.
+    # Only matching IDs are changed; newly eligible sentences are NOT inserted.
+    precision = [
+        "-- In-place repair of existing Tatoeba sentence annotations.",
+        "-- Only update annotation columns; personal study history stays untouched.",
+    ] + refresh[1:]
+    OUT_PRECISION_REFRESH.write_text("\n".join(precision)+"\n", encoding="utf-8")
+
     # Existing IDs must be updated in place. A delete/re-insert destroys
     # language_card_reviews through ON DELETE CASCADE even when mastery is restored.
     # Keep unrelated or removed-source IDs rather than silently erasing study history.
