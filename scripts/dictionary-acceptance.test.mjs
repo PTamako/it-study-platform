@@ -8,7 +8,7 @@ const worker = await readFile(new URL('../worker/index.ts', import.meta.url), 'u
 test('English dictionary results always expose a separate Japanese-aid player', () => {
   assert.match(app, /title="播放英语发音"/)
   assert.match(app, /title="播放日语辅助读音"/)
-  assert.match(app, /title: '英日发音与 IT 术语'/)
+  assert.match(app, /title: '中日英互译与 IT 术语'/)
   assert.match(app, /function speakDictionaryEnglish\(entry: DictionaryEntry\)/)
   assert.match(app, /function speakDictionaryJapanese\(entry: DictionaryEntry\)/)
 })
@@ -26,13 +26,13 @@ test('speech voice selection never falls back to an arbitrary first voice', () =
 })
 
 test('Japanese playback does not pretend an unknown English term has a verified kana guide', () => {
-  assert.match(app, /const text = entry\.reading \|\| \(entry\.language === 'ja' \? entry\.term : ''\)/)
-  assert.match(app, /该词暂未收录日语假名读音/)
+  assert.match(app, /const text = entry\.language === 'ja' \? \(entry\.reading \|\| entry\.term\) : \(entry\.translationJa \|\| entry\.reading \|\| ''\)/)
+  assert.match(app, /该词暂无可靠的日语读音或译文/)
 })
 
 test('IT dictionary remains local-only and does not fall back to online translation', () => {
   assert.match(worker, /if \(requestedLanguage === 'it'\) return \[\]/)
-  assert.match(worker, /lang 参数只支持 auto、ja、en、it/)
+  assert.match(worker, /lang 参数只支持 auto、ja、en、zh、it/)
 })
 
 const glossaryMigration = await readFile(new URL('../migrations/0077_expand_it_glossary_security_network_management.sql', import.meta.url), 'utf8')
@@ -67,7 +67,7 @@ test('English alias results never reuse a Japanese headword reading as English k
 })
 
 test('changing dictionary language invalidates previous results and pending requests', () => {
-  assert.match(app, /function setDictionaryLanguage\(language: 'auto' \| 'ja' \| 'en' \| 'it'\)/)
+  assert.match(app, /function setDictionaryLanguage\(language: 'auto' \| 'ja' \| 'en' \| 'zh' \| 'it'\)/)
   assert.match(app, /dictionaryRequestId \+= 1/)
   assert.match(app, /@click="setDictionaryLanguage\('it'\)"/)
 })
@@ -263,7 +263,8 @@ test('daily task writes are serialized per task and use a snapshot of each toggl
 test('Japanese lookup does not show a failed fallback beside a successful Jisho definition', () => {
   assert.match(worker, /const jishoItems = jishoEntries\(jishoRows, ''\)/)
   assert.match(worker, /Prefer real dictionary entries over a second generic card/)
-  assert.match(worker, /暂未获得英语释义（在线词典未返回结果）/)
+  assert.doesNotMatch(worker, /暂未获得英语释义（在线词典未返回结果）/)
+  assert.match(worker, /else if \(en \|\| zh \|\| commonJapaneseExplanations\[query\.trim\(\)\]\)/)
   assert.doesNotMatch(worker, /translationJa: query/)
 })
 
@@ -275,10 +276,13 @@ test('Japanese dictionary results show a real Japanese explanation when availabl
 })
 
 
-test('dictionary guides users to switch language when selected Japanese/English conflicts with clear input script', () => {
+test('dictionary guides users to switch language for Japanese, English and Chinese input mismatches', () => {
   assert.ok(app.includes('const containsJapaneseKana = /[\\u3040-\\u30ff]/.test(q)'))
   assert.ok(app.includes("requestedLanguage === 'en' && containsJapaneseKana"))
   assert.ok(app.includes('检测到日语输入，请切换到「日语」后再查询'))
   assert.ok(app.includes("requestedLanguage === 'ja' && looksEnglishOnly"))
   assert.ok(app.includes('检测到英语输入，请切换到「英语」后再查询'))
+  assert.ok(app.includes('检测到汉字输入，请选择「中文」或「日语」后查询'))
+  assert.ok(app.includes("requestedLanguage === 'zh' && (containsJapaneseKana || looksEnglishOnly)"))
+  assert.ok(app.includes('检测到常见中文表达，请切换到「中文」后查询'))
 })
