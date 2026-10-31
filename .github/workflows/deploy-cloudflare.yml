@@ -148,15 +148,77 @@ jobs:
           console.log(`Verified unauthenticated denial for ${protectedReads.length} personal reads and ${protectedWrites.length} personal writes/deletes.`)
           NODE
 
-      - name: Verify production bilingual sentence corpus
+      - name: Verify published static bilingual sentence corpus without D1 reads
         env:
           BASE_URL: https://it-study-platform.yupan6706.workers.dev
         run: |
           node --input-type=module <<'NODE'
           const base = process.env.BASE_URL
+          const manifestResponse = await fetch(`${base}/language-cards/manifest.json`, { cache: 'no-cache' })
+          if (!manifestResponse.ok) throw new Error('Static lesson manifest unavailable')
+          const manifest = await manifestResponse.json()
+          if (manifest.version !== 1) throw new Error('Unsupported static lesson manifest')
           async function verifyLanguage(language) {
-            const response = await fetch(`${base}/api/language-cards?lang=${language}`)
-            if (!response.ok) throw new Error(`${language}: API returned HTTP ${response.status}`)
+            const assetPath = manifest[language]
+            if (typeof assetPath !== 'string' ||
+              !new RegExp('^/language-cards/' + language + '\\.[a-f0-9]{16}\\.json
+            if (!Array.isArray(payload.items)) throw new Error(`${language}: API did not return an items array`)
+            const items = payload.items
+            if (items.length !== 5000) throw new Error(`${language}: expected 5000 cards, got ${items.length}`)
+            const categories = new Set()
+            for (const card of items) {
+              if (card.language !== language || card.content_type !== 'sentence') {
+                throw new Error(`${language}: unexpected language/content type on ${card.id}`)
+              }
+              if (!['日常句子', '职场语言'].includes(card.category)) {
+                throw new Error(`${language}: unexpected category ${card.category} on ${card.id}`)
+              }
+              categories.add(card.category)
+              const highlights = JSON.parse(card.highlight_json || '[]')
+              const vocabulary = JSON.parse(card.vocabulary_expansion_json || '[]')
+              const grammar = JSON.parse(card.grammar_expansion_json || '[]')
+              if (!highlights.some(hit => hit.type === 'vocabulary') || !highlights.some(hit => hit.type === 'grammar')) {
+                throw new Error(`${language}: missing vocabulary or grammar highlight on ${card.id}`)
+              }
+              for (const hit of highlights) {
+                const codepoints = [...card.term]
+                if (codepoints.slice(hit.start, hit.end).join('') !== hit.term) {
+                  throw new Error(`${language}: incorrect highlight offsets on ${card.id}`)
+                }
+                if (!hit.rule_id || !hit.confidence) throw new Error(`${language}: missing annotation trace on ${card.id}`)
+                if (['句中重点表达', '句子结构观察点', '句尾活用／表达观察点'].includes(hit.meaning) ||
+                    String(hit.explanation || '').includes('未识别到明确')) {
+                  throw new Error(`${language}: generic placeholder annotation on ${card.id}`)
+                }
+              }
+              const ordered = [...highlights].sort((a, b) => a.start - b.start)
+              for (let i = 1; i < ordered.length; i++) {
+                if (ordered[i - 1].end > ordered[i].start) {
+                  throw new Error(`${language}: overlapping highlights on ${card.id}`)
+                }
+              }
+              for (const [kind, expansion] of [['vocabulary', vocabulary], ['grammar', grammar]]) {
+                const highlighted = new Set(highlights.filter(hit => hit.type === kind).map(hit => hit.term))
+                const explained = new Set(expansion.map(entry => entry.term))
+                if (!expansion.length || [...highlighted].some(term => !explained.has(term))) {
+                  throw new Error(`${language}: missing ${kind} expansion on ${card.id}`)
+                }
+              }
+            }
+            if (categories.size !== 2) throw new Error(`${language}: expected both daily and workplace categories`)
+
+            // Exact linguistic regression examples are asserted by the generator's unit tests.
+            // Production corpus selection is source-driven, so a specific sentence is not guaranteed
+            // to be among the 5,000 licensed records. Validate every returned production card above.
+            console.log(`${language}: verified ${items.length} production cards; categories=${[...categories].join(', ')}`)
+          }
+          await Promise.all([verifyLanguage('ja'), verifyLanguage('en')])
+          NODE
+).test(assetPath)) {
+              throw new Error(`${language}: Invalid static asset path`)
+            }
+            const response = await fetch(`${base}${assetPath}`)
+            if (!response.ok) throw new Error(`${language}: static asset returned HTTP ${response.status}`)
             const payload = await response.json()
             if (!Array.isArray(payload.items)) throw new Error(`${language}: API did not return an items array`)
             const items = payload.items
