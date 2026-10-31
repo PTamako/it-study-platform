@@ -1473,7 +1473,17 @@ async function toggleLanguageCard(id: string) {
     })
     const data = await response.json().catch(() => ({})) as { error?: string }
     if (!response.ok) throw new Error(data.error || '掌握进度未能保存到云端。')
-    void loadCloudDashboard()
+    // The dashboard already holds the previous aggregate. Keep it in sync
+    // locally instead of issuing five additional D1 aggregation queries.
+    if (cloudDashboard.value) {
+      cloudDashboard.value = {
+        ...cloudDashboard.value,
+        language: {
+          ...cloudDashboard.value.language,
+          mastered_cards: Math.max(0, cloudDashboard.value.language.mastered_cards + (mastered ? 1 : -1)),
+        },
+      }
+    }
   } catch (error) {
     completedLanguageCards.value = restoreMasteredCard(completedLanguageCards.value, id, wasMastered)
     languageCardsError.value = error instanceof Error
