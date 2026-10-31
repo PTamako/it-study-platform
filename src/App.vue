@@ -380,7 +380,7 @@ async function removeExamRecords() {
   const confirmation = window.prompt('二次确认：此操作无法恢复。请输入「清除」以继续。')
   if (confirmation !== '清除') return
   try {
-    const response = await fetch('/api/exam-history', { method: 'DELETE' })
+    const response = await fetch('/api/exam-history', { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ confirmation }) })
     const data = await response.json().catch(() => ({})) as { error?: string }
     if (!response.ok) throw new Error(data.error || '云端记录清除失败。')
     examRecords.value = []
@@ -1707,7 +1707,13 @@ async function hydrateVocabulary() {
     // legacy saves or historical deletions; require an explicit restore decision.
     savedWords.value = [...new Set([...localWords, ...liveRows.map(row => row.term)])]
     const entries = [...savedDictionaryEntries.value]
-    for (const row of liveRows) if (!entries.some(entry => entry.term === row.term)) entries.push(row.entry as DictionaryEntry)
+    // The successful complete cloud snapshot is authoritative for live words.
+    // Keep unknown local-only copies and tombstones pending explicit reconciliation.
+    for (const row of liveRows) {
+      const index = entries.findIndex(entry => entry.term === row.term)
+      if (index < 0) entries.push(row.entry as DictionaryEntry)
+      else entries[index] = row.entry as DictionaryEntry
+    }
     savedDictionaryEntries.value = entries
     vocabularyPending.value = pending
     vocabularySyncReady.value = true
@@ -1933,7 +1939,7 @@ async function lookupDictionary() {
   lastSearchedTerm.value = ''
   try {
     const response = await fetch('/api/dictionary?q=' + encodeURIComponent(q) + '&lang=' + encodeURIComponent(requestedLanguage), {
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(18000),
     })
     const data = await response.json() as { items?: DictionaryEntry[]; error?: string; detected_language?: 'ja' | 'en' | 'zh' | 'it' }
     // Ignore late responses from an older query or language selection.
