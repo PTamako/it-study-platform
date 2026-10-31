@@ -1014,12 +1014,21 @@ export default {
       const language = url.searchParams.get('lang') || 'ja'
       const category = url.searchParams.get('category') || ''
       if (!['ja', 'en'].includes(language)) return json({ items: [], error: 'lang 只支持 ja 或 en。' }, 400)
+      const paged = url.searchParams.has('limit')
+      const limit = Number(url.searchParams.get('limit') || 0)
+      const offset = Number(url.searchParams.get('offset') || 0)
+      if (paged && (!Number.isInteger(limit) || limit < 1 || limit > 1000 ||
+        !Number.isInteger(offset) || offset < 0 || offset > 10000)) {
+        return json({ items: [], error: '无效的语言课程分页参数。' }, 400)
+      }
       try {
-        const { results } = await env.DB.prepare(
-          `SELECT id, language, category, term, reading, meaning_zh, explanation, example, example_meaning_zh, example_source_url, source_url, source_type, content_type, highlight_json, vocabulary_expansion_json, grammar_expansion_json
+        const sql = `SELECT id, language, category, term, reading, meaning_zh, explanation, example, example_meaning_zh, example_source_url, source_url, source_type, content_type, highlight_json, vocabulary_expansion_json, grammar_expansion_json
            FROM language_cards WHERE content_type = 'sentence' AND language = ? AND (? = '' OR category = ?)
-           ORDER BY CASE category WHEN '日常句子' THEN 0 WHEN '职场语言' THEN 1 ELSE 2 END, id`,
-        ).bind(language, category, category).all()
+           ORDER BY CASE category WHEN '日常句子' THEN 0 WHEN '职场语言' THEN 1 ELSE 2 END, id`
+        const stmt = env.DB.prepare(sql + (paged ? ' LIMIT ? OFFSET ?' : ''))
+        const { results } = paged
+          ? await stmt.bind(language, category, category, limit, offset).all()
+          : await stmt.bind(language, category, category).all()
         const response = json({ items: results })
         response.headers.set('cache-control', 'public, max-age=300')
         return response
@@ -1316,10 +1325,10 @@ export default {
         const matchedTotal = Number(rows[0]?.filtered_total || 0)
         return json({
           mode,
-          total: mode === 'unlearned' ? matchedTotal : rows.length,
+          total: matchedTotal,
           offset,
           limit,
-          has_more: mode === 'unlearned' && offset + rows.length < matchedTotal,
+          has_more: offset + rows.length < matchedTotal,
           items: rows.map((row: Record<string, unknown>) => ({
             ...row,
             filtered_total: undefined,
@@ -1437,21 +1446,41 @@ export default {
       const questionId = String(body.question_id || '').trim()
       const answer = body.answer
       const duration = Math.max(0, Math.min(86400, Math.floor(Number(body.duration_seconds) || 0)))
+      const suppliedAttemptId = body.attempt_id
       if (!questionId || answer === undefined) return json({ error: '缺少 question_id 或 answer。' }, 400)
+      if (suppliedAttemptId !== undefined &&
+        (typeof suppliedAttemptId !== 'string' ||
+         !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(suppliedAttemptId))) {
+        return json({ error: '答题编号无效。' }, 400)
+      }
+      const attemptId = (suppliedAttemptId as string | undefined) || crypto.randomUUID()
+      const savedAttempt = async () => env.DB.prepare(
+        'SELECT question_id, user_answer_json, is_correct FROM study_attempts WHERE id = ?',
+      ).bind(attemptId).first<{ question_id: string; user_answer_json: string; is_correct: number }>()
       try {
         const question = await env.DB.prepare('SELECT id, track_id, answer_json FROM questions WHERE id = ?').bind(questionId).first() as Record<string, unknown> | null
         if (!question) return json({ error: '题目不存在。' }, 404)
         let expected: unknown
         try { expected = JSON.parse(String(question.answer_json)) } catch { expected = null }
         const correct = JSON.stringify(expected) === JSON.stringify(answer)
-        const attemptId = crypto.randomUUID()
+        const serializedAnswer = JSON.stringify(answer)
+        const existing = await savedAttempt()
+        if (existing) {
+          if (existing.question_id !== questionId || existing.user_answer_json !== serializedAnswer) {
+            return json({ error: '答题编号已用于不同答案。' }, 409)
+          }
+          const progress = await env.DB.prepare(
+            'SELECT question_id, review_count, correct_streak, last_result, next_review_at, mastered FROM question_review_state WHERE question_id = ?',
+          ).bind(questionId).first()
+          return json({ ok: true, attempt_id: attemptId, correct: Boolean(existing.is_correct), answer: expected, progress })
+        }
         // Commit the attempt and review state together. Derive the next state
         // inside the upsert so simultaneous submissions do not lose increments.
         const result = correct ? 'remembered' : 'again'
         await env.DB.batch([
           env.DB.prepare(
             'INSERT INTO study_attempts (id, question_id, user_answer_json, is_correct, duration_seconds) VALUES (?, ?, ?, ?, ?)',
-          ).bind(attemptId, questionId, JSON.stringify(answer), correct ? 1 : 0, duration),
+          ).bind(attemptId, questionId, serializedAnswer, correct ? 1 : 0, duration),
           env.DB.prepare(
             `INSERT INTO question_review_state (question_id, track_id, review_count, correct_streak, last_result, next_review_at, mastered, updated_at)
              VALUES (?, ?, 1, ?, ?, datetime(CURRENT_TIMESTAMP, ?), 0, CURRENT_TIMESTAMP)
@@ -1474,6 +1503,22 @@ export default {
         ).bind(questionId).first()
         return json({ ok: true, attempt_id: attemptId, correct, answer: expected, progress }, 201)
       } catch {
+        // Concurrent identical retries: the unique attempt id rejects the second
+        // batch and prevents the review streak from being incremented again.
+        try {
+          const existing = await savedAttempt()
+          if (existing) {
+            if (existing.question_id !== questionId || existing.user_answer_json !== JSON.stringify(answer)) {
+              return json({ error: '答题编号已用于不同答案。' }, 409)
+            }
+            const progress = await env.DB.prepare(
+              'SELECT question_id, review_count, correct_streak, last_result, next_review_at, mastered FROM question_review_state WHERE question_id = ?',
+            ).bind(questionId).first()
+            const savedQuestion = await env.DB.prepare('SELECT answer_json FROM questions WHERE id = ?').bind(questionId).first<{ answer_json: string }>()
+            return json({ ok: true, attempt_id: attemptId, correct: Boolean(existing.is_correct),
+              answer: savedQuestion ? JSON.parse(savedQuestion.answer_json) : null, progress })
+          }
+        } catch { /* Keep the caller's pending attempt available for retry. */ }
         return json({ error: '答题记录保存失败，请确认 D1 迁移已完成。' }, 503)
       }
     }
@@ -1487,7 +1532,17 @@ export default {
       const scenarioId = String(body.scenario_id || '').trim()
       const selectedOption = String(body.selected_option || '').trim()
       const duration = Math.max(0, Math.min(86400, Math.floor(Number(body.duration_seconds) || 0)))
+      const suppliedAttemptId = body.attempt_id
       if (!scenarioId || !selectedOption) return json({ error: '缺少 scenario_id 或 selected_option。' }, 400)
+      if (suppliedAttemptId !== undefined &&
+        (typeof suppliedAttemptId !== 'string' ||
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(suppliedAttemptId))) {
+        return json({ error: '实战答题编号无效。' }, 400)
+      }
+      const attemptId = (suppliedAttemptId as string | undefined) || crypto.randomUUID()
+      const findSaved = () => env.DB.prepare(
+        'SELECT scenario_id, selected_option, score, feedback FROM scenario_attempts WHERE id = ?',
+      ).bind(attemptId).first<{ scenario_id: string; selected_option: string; score: number; feedback: string }>()
       try {
         const scenario = await env.DB.prepare(
           'SELECT id, track_id, options_json, scoring_json, best_option, explanation FROM practical_scenarios WHERE id = ?',
@@ -1497,7 +1552,15 @@ export default {
         if (!options.some(option => option.id === selectedOption)) return json({ error: '所选选项不属于此任务。' }, 400)
         const scoring = JSON.parse(String(scenario.scoring_json || '{}')) as Record<string, number>
         const score = Math.max(0, Math.min(100, Math.floor(Number(scoring[selectedOption] ?? 0))))
-        const attemptId = crypto.randomUUID()
+        const saved = await findSaved()
+        if (saved) {
+          if (saved.scenario_id !== scenarioId || saved.selected_option !== selectedOption) {
+            return json({ error: '实战答题编号已用于不同答案。' }, 409)
+          }
+          return json({ ok: true, attempt_id: attemptId, score: saved.score, selected_option: selectedOption,
+            best_option: String(scenario.best_option), correct: selectedOption === String(scenario.best_option),
+            feedback: saved.feedback })
+        }
         await env.DB.prepare(
           'INSERT INTO scenario_attempts (id, scenario_id, track_id, selected_option, score, feedback, duration_seconds) VALUES (?, ?, ?, ?, ?, ?, ?)',
         ).bind(attemptId, scenarioId, String(scenario.track_id), selectedOption, score, String(scenario.explanation || ''), duration).run()
@@ -1511,6 +1574,20 @@ export default {
           feedback: String(scenario.explanation || ''),
         }, 201)
       } catch {
+        // A duplicate concurrent request must never insert a second scored attempt.
+        try {
+          const saved = await findSaved()
+          if (saved) {
+            if (saved.scenario_id !== scenarioId || saved.selected_option !== selectedOption) {
+              return json({ error: '实战答题编号已用于不同答案。' }, 409)
+            }
+            const scenario = await env.DB.prepare('SELECT best_option FROM practical_scenarios WHERE id = ?')
+              .bind(scenarioId).first<{ best_option: string }>()
+            return json({ ok: true, attempt_id: attemptId, score: saved.score, selected_option: selectedOption,
+              best_option: scenario?.best_option || '', correct: selectedOption === scenario?.best_option,
+              feedback: saved.feedback })
+          }
+        } catch { /* Leave the same attempt id available for retry. */ }
         return json({ error: '实战结果保存失败，请确认 D1 迁移已完成。' }, 503)
       }
     }
@@ -1667,6 +1744,11 @@ export default {
       const offset = Math.min(10000, Math.max(0, Number(url.searchParams.get('offset') || 0)))
       const topic = (url.searchParams.get('topic') || '').trim().slice(0, 100)
       const mode = url.searchParams.get('mode') || 'random'
+      // Every page of one random practice session needs the same ordering.
+      // A caller can pass a seed; without one the ordering is stable rather
+      // than re-shuffled at every OFFSET (which previously duplicated/skipped IDs).
+      const rawSeed = Number(url.searchParams.get('seed') || 0)
+      const seed = Number.isSafeInteger(rawSeed) && rawSeed >= 0 && rawSeed <= 1000000 ? rawSeed : 0
       const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
       const source = ['all', 'official', 'generated', 'licensed'].includes(requestedSource) ? requestedSource : 'all'
       const year = (trackId === 'exam-fe' || trackId === 'exam-sg') && /^20[0-2][0-9]$/.test(url.searchParams.get('year') || '') ? url.searchParams.get('year')! : ''
@@ -1694,9 +1776,15 @@ export default {
              AND (? = '' OR id LIKE ?)
              AND (? = '' OR exam_section = ?)
            ORDER BY CASE WHEN ? = 'ordered' THEN id END,
-                    CASE WHEN ? <> 'ordered' THEN random() END
+                    CASE WHEN ? <> 'ordered' THEN (
+                      (unicode(substr(id, 1, 1)) * 131
+                       + unicode(substr(id, 3, 1)) * 137
+                       + unicode(substr(id, length(id), 1)) * 379
+                       + unicode(substr(id, length(id) - 1, 1)) * 173
+                       + length(id) * 991 + ? * 10007) % 104729
+                    ) END, id
            LIMIT ? OFFSET ?`,
-        ).bind(trackId, topic, topic, source, source, year, yearPattern, section, section, mode, mode, limit, offset).all()
+        ).bind(trackId, topic, topic, source, source, year, yearPattern, section, section, mode, mode, seed, limit, offset).all()
         const total = Number(totalRow?.total || 0)
         return json({
           items: results.map((row: Record<string, unknown>) => ({

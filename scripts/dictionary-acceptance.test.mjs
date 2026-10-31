@@ -193,17 +193,21 @@ test('saved vocabulary sync failures preserve local state and report actionable 
 })
 
 
-test('practical submission snapshots the scenario and ignores stale responses after switching', () => {
+test('practical retry uses an immutable snapshot and ignores late responses after switching', () => {
   const start = app.indexOf('let scenarioSubmissionId = 0')
   const end = app.indexOf('watch([selectedTrackId', start)
   const handlers = app.slice(start, end)
   assert.ok(start >= 0 && end > start, 'practical submission handlers should be found')
-  assert.match(handlers, /const submittedScenario = currentScenario\.value/)
-  assert.match(handlers, /const submittedOption = selectedScenarioOption\.value/)
+  assert.match(handlers, /const scenario = currentScenario\.value/)
+  assert.match(handlers, /const selected = selectedScenarioOption\.value/)
+  assert.match(handlers, /attempt_id: crypto\.randomUUID\(\), scenario_id: scenario\.id, selected_option: selected/)
+  assert.match(handlers, /localStorage\.setItem\('zhixue:scenario-pending-v1', JSON\.stringify\(pending\)\)/)
+  assert.match(handlers, /const requestId = \+\+scenarioSubmissionId/)
+  assert.match(handlers, /requestId === scenarioSubmissionId && currentScenario\.value\?\.id === pending\.scenario_id/)
+  assert.match(handlers, /translateScenarioExplanation\(pending\.scenario_id, feedback\)/)
   assert.match(handlers, /scenarioSubmissionId \+= 1/)
-  assert.match(handlers, /requestId !== scenarioSubmissionId \|\| currentScenario\.value\?\.id !== submittedScenario\.id/)
-  assert.match(handlers, /translateScenarioExplanation\(submittedScenario\.id, feedback\)/)
-  assert.match(handlers, /if \(requestId === scenarioSubmissionId\) scenarioSubmitting\.value = false/)
+  assert.match(handlers, /if \(!pending \|\| scenarioSubmitting\.value \|\| !authenticated\.value\) return/)
+  assert.match(handlers, /scenarioSubmitting\.value = false/)
 })
 
 
@@ -234,11 +238,15 @@ test('question progress requests use a captured track and ignore stale responses
 })
 
 
-test('practice answer submission snapshots the selected question and answer', () => {
+test('practice answers retain a stable attempt ID through offline retry', () => {
+  assert.match(app, /const question = currentQuestion\.value/)
   assert.match(app, /const answer = selectedOption\.value/)
-  assert.match(app, /question_id: question\.id,[\s\S]*?answer,/)
-  assert.match(app, /if \(data\.progress\) questionProgressById\.value\[question\.id\] = data\.progress/)
-  assert.match(app, /if \(requestId === practiceAnswerRequestId\) \{\s*quizError\.value/)
+  assert.match(app, /attempt_id: crypto\.randomUUID\(\), question_id: question\.id, answer/)
+  assert.match(app, /localStorage\.setItem\('zhixue:practice-pending-v1', JSON\.stringify\(pending\)\)/)
+  assert.match(app, /body: JSON\.stringify\(pending\)/)
+  assert.match(app, /data\.attempt_id !== pending\.attempt_id/)
+  assert.match(app, /if \(data\.progress\) questionProgressById\.value\[pending\.question_id\] = data\.progress/)
+  assert.match(app, /pendingPracticeAttempt\.value\?\.attempt_id === pending\.attempt_id/)
   assert.match(app, /function nextPracticeQuestion\(\) \{\s*stopSpeech\(\)\s*practiceAnswerRequestId \+= 1/)
 })
 

@@ -4,6 +4,7 @@ import { hydrateMastery, mergeExamHistory, restoreMasteredCard } from './progres
 import { tokyoDate, mergeDailyTaskStates } from './daily-tasks'
 import { utcReviewMillis } from './review-time'
 import { fetchVocabularySnapshot } from './vocabulary-sync'
+import { parseMockSnapshot, type MockSnapshot } from './mock-recovery'
 import {
   BookOpen, Languages, Search, GraduationCap,
   ChevronRight, ChevronDown, Sparkles, Clock3, Flame, Bookmark, Volume2, ArrowRight,
@@ -51,7 +52,10 @@ async function login() {
     void hydrateCloudProgress()
     void refreshDailyTasks(todayKey.value)
     void reconcilePriorDailyTasks()
+    restoreActiveMockExam()
     void syncPendingMockSubmission()
+    void syncPendingPracticeAttempt()
+    void syncPendingScenarioAttempt()
   } catch (error) {
     authError.value = error instanceof Error ? error.message : '登录失败，请稍后重试。'
   } finally {
@@ -462,7 +466,55 @@ const mockDeadline = ref(0)
 const mockStartedAt = ref(0)
 const mockNow = ref(Date.now())
 const mockDurationMinutes = ref(30)
+const MOCK_ACTIVE_KEY = 'zhixue:mock-active-v1'
+const mockStorageWarning = ref('')
 let mockTimer: ReturnType<typeof setInterval> | undefined
+function persistActiveMockExam() {
+  if (!mockStarted.value) return
+  const snapshot: MockSnapshot<PracticeQuestion> = {
+    track: selectedTrackId.value === 'exam-fe' ? 'exam-fe' : 'exam-sg',
+    section: selectedTrackId.value === 'exam-fe' ? feMockSection.value : 'SG',
+    questions: mockQuestions.value,
+    answers: mockAnswers.value,
+    started_at: mockStartedAt.value,
+    deadline: mockDeadline.value,
+    duration_minutes: mockDurationMinutes.value,
+  }
+  try {
+    localStorage.setItem(MOCK_ACTIVE_KEY, JSON.stringify(snapshot))
+    mockStorageWarning.value = ''
+  } catch {
+    mockStorageWarning.value = '本机空间不足，模拟考试无法保存中途进度。请勿刷新页面。'
+  }
+}
+watch([mockStarted, mockAnswers], persistActiveMockExam, { deep: true, flush: 'sync' })
+function restoreActiveMockExam() {
+  if (!authenticated.value || mockStarted.value || mockPendingSubmission.value) return
+  const raw = readStored<unknown>(MOCK_ACTIVE_KEY, null)
+  if (!raw) return
+  const snapshot = parseMockSnapshot<PracticeQuestion>(raw)
+  if (!snapshot) {
+    mockError.value = '本机保存的模拟考试已损坏，未恢复旧答卷。'
+    return
+  }
+  selectedTrackId.value = snapshot.track
+  if (snapshot.track === 'exam-fe') feMockSection.value = snapshot.section === 'B' ? 'B' : 'A'
+  mockQuestions.value = snapshot.questions
+  mockAnswers.value = snapshot.answers
+  mockStartedAt.value = snapshot.started_at
+  mockDeadline.value = snapshot.deadline
+  mockDurationMinutes.value = snapshot.duration_minutes
+  mockNow.value = Date.now()
+  mockSubmitted.value = false
+  mockStarted.value = true
+  if (mockTimer) clearInterval(mockTimer)
+  mockTimer = setInterval(() => {
+    mockNow.value = Date.now()
+    if (mockRemainingSeconds.value <= 0) void finishMockExam(true)
+  }, 500)
+  if (mockRemainingSeconds.value <= 0) void finishMockExam(true)
+}
+
 const mockRemainingSeconds = computed(() => mockStarted.value && !mockSubmitted.value
   ? Math.max(0, Math.ceil((mockDeadline.value - mockNow.value) / 1000))
   : 0)
@@ -561,12 +613,16 @@ async function finishMockExam(autoSubmit = false) {
     track: selectedTrackId.value,
     section: selectedTrackId.value === 'exam-fe' ? feMockSection.value : 'SG',
     study_date: tokyoDate(),
-    duration_seconds: Math.max(0, Math.floor((Date.now() - mockStartedAt.value) / 1000)),
+    duration_seconds: Math.max(0, Math.min(86400, Math.floor((Date.now() - mockStartedAt.value) / 1000))),
     answers: mockQuestions.value.map(item => ({ question_id: item.id, answer: mockAnswers.value[item.id] || '' })),
   }
   mockPendingSubmission.value = submission
-  try { localStorage.setItem('zhixue:mock-pending-v1', JSON.stringify(submission)) }
-  catch { mockError.value += ' 浏览器本地保存失败；请勿关闭此页面直到同步完成。' }
+  try {
+    localStorage.setItem('zhixue:mock-pending-v1', JSON.stringify(submission))
+    localStorage.removeItem(MOCK_ACTIVE_KEY)
+  } catch {
+    mockError.value += ' 浏览器本地保存失败；请勿关闭此页面直到同步完成。'
+  }
   await syncPendingMockSubmission()
 }
 onUnmounted(() => { if (mockTimer) clearInterval(mockTimer); if (dailyRolloverTimer) clearInterval(dailyRolloverTimer); document.removeEventListener('visibilitychange', onDailyVisibilityChange) })
@@ -668,9 +724,9 @@ async function loadScenarios() {
 let scenarioSubmissionId = 0
 function nextScenario() {
   stopSpeech()
-  // Invalidate any in-flight submission so its response cannot overwrite the next scenario.
+  // Invalidate any in-flight submission without unlocking it: a previous
+  // request may still be writing and must retain the same idempotency key.
   scenarioSubmissionId += 1
-  scenarioSubmitting.value = false
   if (!scenarios.value.length) return
   const index = scenarios.value.findIndex(item => item.id === currentScenario.value?.id)
   const next = scenarios.value[(index + 1) % scenarios.value.length]
@@ -680,10 +736,16 @@ function nextScenario() {
   scenariosError.value = ''
 }
 
-async function submitScenario() {
-  const submittedScenario = currentScenario.value
-  const submittedOption = selectedScenarioOption.value
-  if (!submittedScenario || !submittedOption || scenarioSubmitting.value || scenarioResult.value) return
+type PendingScenarioAttempt = {
+  attempt_id: string
+  scenario_id: string
+  selected_option: string
+  duration_seconds: number
+}
+const pendingScenarioAttempt = ref<PendingScenarioAttempt | null>(readStored('zhixue:scenario-pending-v1', null))
+async function syncPendingScenarioAttempt() {
+  const pending = pendingScenarioAttempt.value
+  if (!pending || scenarioSubmitting.value || !authenticated.value) return
   const requestId = ++scenarioSubmissionId
   scenarioSubmitting.value = true
   scenariosError.value = ''
@@ -691,32 +753,60 @@ async function submitScenario() {
     const response = await fetch('/api/scenario-attempts', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        scenario_id: submittedScenario.id,
-        selected_option: submittedOption,
-        duration_seconds: 0,
-      }),
+      body: JSON.stringify(pending),
     })
-    const data = await response.json() as { score?: number; best_option?: string; correct?: boolean; feedback?: string; error?: string }
-    if (!response.ok) throw new Error(data.error || '实战结果保存失败')
-    // A newer scenario may be selected while the server is scoring this attempt.
-    // Keep the saved attempt, but do not paint its result onto a different scenario.
-    if (requestId !== scenarioSubmissionId || currentScenario.value?.id !== submittedScenario.id) return
-    const feedback = String(data.feedback || '')
-    scenarioResult.value = {
-      score: Number(data.score || 0),
-      best_option: String(data.best_option || ''),
-      correct: Boolean(data.correct),
-      feedback,
+    const data = await response.json() as {
+      attempt_id?: string; score?: number; best_option?: string; correct?: boolean; feedback?: string; error?: string
     }
-    void translateScenarioExplanation(submittedScenario.id, feedback)
+    if (!response.ok || data.attempt_id !== pending.attempt_id) {
+      throw new Error(data.error || '实战结果尚未保存。')
+    }
+    if (pendingScenarioAttempt.value?.attempt_id === pending.attempt_id) {
+      pendingScenarioAttempt.value = null
+      try { localStorage.removeItem('zhixue:scenario-pending-v1') } catch { /* cloud result is durable */ }
+    }
+    if (requestId === scenarioSubmissionId && currentScenario.value?.id === pending.scenario_id) {
+      const feedback = String(data.feedback || '')
+      scenarioResult.value = {
+        score: Number(data.score || 0),
+        best_option: String(data.best_option || ''),
+        correct: Boolean(data.correct),
+        feedback,
+      }
+      void translateScenarioExplanation(pending.scenario_id, feedback)
+    }
     void loadCloudDashboard()
   } catch (error) {
-    if (requestId !== scenarioSubmissionId) return
-    scenariosError.value = error instanceof Error ? error.message : '实战结果保存失败，请稍后重试。'
+    if (requestId === scenarioSubmissionId) {
+      scenariosError.value = (error instanceof Error ? error.message : '网络异常。') + ' 实战答题保存在本设备，请重试同步。'
+    }
   } finally {
-    if (requestId === scenarioSubmissionId) scenarioSubmitting.value = false
+    // Switching scenarios doesn't unlock an in-flight save; a newer
+    // submission cannot start until this request has settled.
+    scenarioSubmitting.value = false
   }
+}
+async function submitScenario() {
+  const scenario = currentScenario.value
+  const selected = selectedScenarioOption.value
+  if (!scenario || !selected || scenarioSubmitting.value || scenarioResult.value) return
+  if (pendingScenarioAttempt.value) {
+    if (pendingScenarioAttempt.value.scenario_id === scenario.id &&
+        pendingScenarioAttempt.value.selected_option === selected) {
+      await syncPendingScenarioAttempt()
+    } else {
+      scenariosError.value = '上一笔实战答题尚未同步，请先重新同步。'
+    }
+    return
+  }
+  const pending: PendingScenarioAttempt = {
+    attempt_id: crypto.randomUUID(), scenario_id: scenario.id, selected_option: selected,
+    duration_seconds: 0,
+  }
+  pendingScenarioAttempt.value = pending
+  try { localStorage.setItem('zhixue:scenario-pending-v1', JSON.stringify(pending)) }
+  catch { scenariosError.value = '本机无法保存待同步实战答题，请勿关闭页面。' }
+  await syncPendingScenarioAttempt()
 }
 watch([selectedTrackId, examTracks, activeModule], () => {
   if (activeModule.value === 'practical') void loadScenarios()
@@ -902,12 +992,13 @@ async function startPractice() {
       data = await response.json() as typeof data
     } else {
       const mode = activeReviewMode.value
-      const reviewBatchLimit = mode === 'unlearned' ? questionBatchSize : 50
-      // 未学习题会在答题后离开此筛选集，因此每组始终从剩余未学习题的开头取，避免 offset 导致跳题。
+      const reviewBatchLimit = questionBatchSize
+      // Due/unlearned results leave the filtered pool when submitted. Fetch the
+      // next remaining batch at offset zero instead of skipping shifted rows.
       const params = new URLSearchParams({
         track: selectedTrack.value.id,
         limit: String(reviewBatchLimit),
-        offset: '0',
+        offset: String(mode === 'unlearned' || mode === 'due' ? 0 : questionBatchOffset.value),
         mode,
         source: questionSourceFilter.value,
       })
@@ -918,10 +1009,6 @@ async function startPractice() {
       }
       response = await fetch('/api/wrong-questions?' + params.toString())
       data = await response.json() as typeof data
-      if (mode !== 'unlearned') {
-        data.total = data.items?.length || 0
-        data.has_more = false
-      }
     }
     if (requestId !== practiceLoadRequestId) return
     if (!response.ok) throw new Error(data.error || '题库加载失败')
@@ -936,9 +1023,7 @@ async function startPractice() {
       throw new Error(messages[activeReviewMode.value])
     }
     quizQuestions.value = data.items
-    if (activeReviewMode.value !== 'unlearned' || questionBatchOffset.value === 0) {
-      questionBankTotal.value = data.total || data.items.length
-    }
+    questionBankTotal.value = data.total ?? data.items.length
     questionBankHasMore.value = Boolean(data.has_more)
     quizIndex.value = 0
     selectedOption.value = ''
@@ -954,39 +1039,75 @@ async function startPractice() {
   }
 }
 async function nextQuestionBatch() {
-  if (questionBankHasMore.value) questionBatchOffset.value += questionBatchSize
-  else questionBatchOffset.value = 0
+  if (questionBankHasMore.value && activeReviewMode.value !== 'unlearned' && activeReviewMode.value !== 'due') {
+    questionBatchOffset.value += questionBatchSize
+  } else {
+    questionBatchOffset.value = 0
+  }
   quizError.value = ''
   await startPractice()
 }
-async function submitPracticeAnswer() {
-  if (!currentQuestion.value || !selectedOption.value || quizSubmitted.value) return
-  const question = currentQuestion.value
-  const answer = selectedOption.value
-  const requestId = ++practiceAnswerRequestId
-  quizSubmitted.value = true
-  if (answer === question.answer) quizCorrect.value += 1
-  void translateQuestionExplanation(question)
+type PendingPracticeAttempt = {
+  attempt_id: string
+  question_id: string
+  answer: string
+  duration_seconds: number
+}
+// Persist the request before sending. Retrying after an ambiguous network failure
+// uses the same server-side idempotency key, so one answer creates one review event.
+const pendingPracticeAttempt = ref<PendingPracticeAttempt | null>(readStored('zhixue:practice-pending-v1', null))
+const practiceSaving = ref(false)
+
+async function syncPendingPracticeAttempt() {
+  const pending = pendingPracticeAttempt.value
+  if (!pending || practiceSaving.value || !authenticated.value) return
+  practiceSaving.value = true
   try {
     const response = await fetch('/api/attempts', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        question_id: question.id,
-        answer,
-        duration_seconds: quizStartedAt.value ? Math.floor((Date.now() - quizStartedAt.value) / 1000) : 0,
-      }),
+      body: JSON.stringify(pending),
     })
-    const data = await response.json() as { error?: string; progress?: QuestionReviewProgress }
-    if (requestId !== practiceAnswerRequestId) return
-    if (!response.ok) throw new Error(data.error || '本次答题已显示，但保存到学习记录失败。')
-    if (data.progress) questionProgressById.value[question.id] = data.progress
+    const data = await response.json() as { error?: string; attempt_id?: string; progress?: QuestionReviewProgress }
+    if (!response.ok || data.attempt_id !== pending.attempt_id) {
+      throw new Error(data.error || '答题记录尚未同步。')
+    }
+    if (data.progress) questionProgressById.value[pending.question_id] = data.progress
+    if (pendingPracticeAttempt.value?.attempt_id === pending.attempt_id) {
+      pendingPracticeAttempt.value = null
+      try { localStorage.removeItem('zhixue:practice-pending-v1') } catch { /* cloud receipt is durable */ }
+    }
+    quizError.value = ''
     void loadCloudDashboard()
   } catch (error) {
-    if (requestId === practiceAnswerRequestId) {
-      quizError.value = error instanceof Error ? error.message : '网络异常：本次答题结果尚未保存到云端。'
-    }
+    quizError.value = (error instanceof Error ? error.message : '网络异常。') + ' 答题保存在本设备，请重新同步。'
+  } finally {
+    practiceSaving.value = false
   }
+}
+async function submitPracticeAnswer() {
+  const question = currentQuestion.value
+  if (!question || !selectedOption.value || practiceSaving.value) return
+  if (quizSubmitted.value) {
+    if (pendingPracticeAttempt.value?.question_id === question.id) await syncPendingPracticeAttempt()
+    return
+  }
+  if (pendingPracticeAttempt.value) {
+    quizError.value = '上一笔答题还未同步，请先完成同步。'
+    return
+  }
+  const answer = selectedOption.value
+  const pending: PendingPracticeAttempt = {
+    attempt_id: crypto.randomUUID(), question_id: question.id, answer,
+    duration_seconds: quizStartedAt.value ? Math.max(0, Math.floor((Date.now() - quizStartedAt.value) / 1000)) : 0,
+  }
+  pendingPracticeAttempt.value = pending
+  try { localStorage.setItem('zhixue:practice-pending-v1', JSON.stringify(pending)) }
+  catch { quizError.value = '本机无法保存待同步答题，请勿关闭页面，直到同步成功。' }
+  quizSubmitted.value = true
+  if (answer === question.answer) quizCorrect.value += 1
+  void translateQuestionExplanation(question)
+  await syncPendingPracticeAttempt()
 }
 function getExplanationLanguage(question: PracticeQuestion): 'ja-JP' | 'en-US' | 'zh-CN' {
   // question.language describes the question stem (usually Japanese), not the explanation.
@@ -1302,15 +1423,22 @@ async function loadLanguageCards() {
   languageCardsError.value = ''
   languageCards.value = []
   try {
-    const response = await fetch('/api/language-cards?lang=' + encodeURIComponent(language), {
-      signal: controller.signal,
-    })
-    const data = await response.json() as { items?: LanguageCard[]; error?: string }
-    if (generation !== languageCardsLoadGeneration || language !== studyLanguage.value) return
-    if (!response.ok) throw new Error(data.error || '语言学习内容加载失败')
-    languageCards.value = data.items || []
+    // Each response is bounded to keep peak network/JSON parsing memory down
+    // on iPhone Safari. Existing 5,000-card filters and progress are unchanged.
+    const batchSize = 1000
+    for (let offset = 0; offset <= 10000; offset += batchSize) {
+      const params = new URLSearchParams({ lang: language, limit: String(batchSize), offset: String(offset) })
+      const response = await fetch('/api/language-cards?' + params, { signal: controller.signal })
+      const data = await response.json() as { items?: LanguageCard[]; error?: string }
+      if (generation !== languageCardsLoadGeneration || language !== studyLanguage.value) return
+      if (!response.ok || !Array.isArray(data.items)) throw new Error(data.error || '语言学习内容加载失败')
+      languageCards.value.push(...data.items)
+      if (data.items.length < batchSize) break
+    }
   } catch (error) {
     if (generation !== languageCardsLoadGeneration || controller.signal.aborted) return
+    // Do not present a partially loaded deck as the complete curriculum.
+    languageCards.value = []
     languageCardsError.value = error instanceof Error ? error.message : '语言学习内容加载失败，请稍后再试。'
   } finally {
     if (generation === languageCardsLoadGeneration) {
@@ -1450,7 +1578,7 @@ onMounted(async () => {
     // Speech playback will report its own browser/device error when requested.
   }
   await checkAuth()
-  if (authenticated.value) { void syncExamHistory(); void hydrateCloudProgress(); void refreshDailyTasks(todayKey.value); void reconcilePriorDailyTasks(); void syncPendingMockSubmission() }
+  if (authenticated.value) { restoreActiveMockExam(); void syncExamHistory(); void hydrateCloudProgress(); void refreshDailyTasks(todayKey.value); void reconcilePriorDailyTasks(); void syncPendingMockSubmission(); void syncPendingPracticeAttempt(); void syncPendingScenarioAttempt() }
 })
 
 type DictionaryEntry = {
@@ -2153,6 +2281,10 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
 
             <section class="practice-section">
               <div class="section-heading practice-heading"><div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2></div></div>
+              <p v-if="pendingPracticeAttempt" class="dictionary-status" role="status">
+                有答题尚未同步到云端。
+                <button type="button" class="text-link" :disabled="practiceSaving" @click="syncPendingPracticeAttempt">{{ practiceSaving ? '同步中…' : '重新同步答题' }}</button>
+              </p>
               <div class="question-source-filters" role="group" aria-label="题目来源筛选">
                 <button v-for="filter in questionSourceFilters.filter(item => item.id !== 'licensed' || selectedTrackId === 'exam-fe')" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" :disabled="selectedTrackId === 'exam-fe' && feBankLoading" @click="selectQuestionSource(filter.id)">{{ filter.label }}（{{ filter.id === 'all' ? (selectedTrack?.question_count || 0) : filter.id === 'official' ? (selectedTrack?.official_question_count || 0) : filter.id === 'licensed' ? (selectedTrack?.adapted_question_count || 0) : (selectedTrack?.prediction_question_count || 0) }}）</button>
               </div>
@@ -2198,6 +2330,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <h3>本次练习完成</h3>
                   <p>正确率 {{ Math.round(quizCorrect / quizQuestions.length * 100) }}%。本次成绩已加入当前设备的历史记录。</p>
                   <p class="muted">当前筛选题量 {{ questionBankTotal }} 题 · 本组 {{ questionBatchOffset + 1 }}–{{ Math.min(questionBatchOffset + quizQuestions.length, questionBankTotal) }} 题</p>
+                  <p v-if="quizError" class="practice-error" role="alert">{{ quizError }}</p>
                   <button class="primary-button" @click="nextQuestionBatch" :disabled="quizLoading">{{ quizLoading ? '正在加载…' : questionBankHasMore ? '继续下一组（10 题）' : '从头再练' }} <ArrowRight :size="16" /></button>
                 </template>
                 <template v-else>
@@ -2255,7 +2388,8 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <span v-if="!quizSubmitted" class="question-hint">选择一个答案后提交</span><span v-else class="question-hint">当前得分：{{ quizCorrect }} / {{ quizIndex + 1 }}</span>
                   <button v-if="quizSubmitted && !questionProgressById[currentQuestion.id]?.mastered" class="secondary-button" @click="setQuestionMastery(currentQuestion.id, true)">标记掌握</button>
                   <button v-else-if="quizSubmitted && questionProgressById[currentQuestion.id]?.mastered" class="secondary-button" @click="setQuestionMastery(currentQuestion.id, false)">重新加入复习</button>
-                  <button v-if="!quizSubmitted" class="primary-button" :disabled="!selectedOption" @click="submitPracticeAnswer">提交答案 <ArrowRight :size="15" /></button>
+                  <button v-if="!quizSubmitted" class="primary-button" :disabled="!selectedOption || practiceSaving || Boolean(pendingPracticeAttempt)" @click="submitPracticeAnswer">提交答案 <ArrowRight :size="15" /></button>
+                  <button v-else-if="pendingPracticeAttempt?.question_id === currentQuestion.id" class="primary-button" :disabled="practiceSaving" @click="submitPracticeAnswer">{{ practiceSaving ? '同步中…' : '重新同步答题' }}</button>
                   <button v-else class="primary-button" @click="nextPracticeQuestion">{{ isLastQuestion ? '查看本次成绩' : '下一题' }} <ArrowRight :size="15" /></button>
                 </div>
               </div>
@@ -2292,6 +2426,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <button class="primary-button" @click="mockSubmitted = false; mockQuestions = []; mockAnswers = {}; mockError = ''">结束复盘 <ArrowRight :size="16" /></button>
               </div>
               <div v-else class="mock-exam-active">
+                <p v-if="mockStorageWarning" class="dictionary-status dictionary-error" role="alert">{{ mockStorageWarning }}</p>
                 <div class="panel mock-timer-panel">
                   <div><small>剩余时间</small><strong :class="{ 'mock-time-warning': mockRemainingSeconds <= 60 }">{{ formatMockTime(mockRemainingSeconds) }}</strong></div>
                   <div><small>已作答</small><strong>{{ mockAnsweredCount }} / {{ mockQuestions.length }}</strong></div>
@@ -2350,6 +2485,10 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
         </template>
 
         <template v-else-if="activeModule === 'practical'">
+          <p v-if="pendingScenarioAttempt" class="dictionary-status" role="status">
+            有实战答题尚未同步。
+            <button type="button" class="text-link" :disabled="scenarioSubmitting" @click="syncPendingScenarioAttempt">{{ scenarioSubmitting ? '同步中…' : '重新同步实战答题' }}</button>
+          </p>
           <section class="section-block module-page-section">
             <div class="section-heading"><div><h2>把知识用在真实工作情境里</h2></div></div>
             <div class="panel practice-start-card">
