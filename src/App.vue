@@ -436,7 +436,7 @@ const examTracks = ref<ExamTrack[]>([])
 const selectedTrackId = ref('exam-sg')
 const tracksLoading = ref(false)
 const tracksError = ref('')
-const questionSourceFilter = ref<'all' | 'official' | 'generated' | 'licensed'>('generated')
+const questionSourceFilter = ref<'all' | 'official' | 'generated' | 'licensed'>('all')
 const activeReviewMode = ref<'all' | 'unlearned' | 'mastered' | 'due' | 'wrong'>('all')
 const questionSourceFilters = [
   { id: 'all', label: '全部题目' },
@@ -730,6 +730,8 @@ async function loadExamTracks() {
     if (!response.ok) throw new Error(data.error || '考试列表加载失败')
     examTracks.value = (data.items || []).filter(track => track.kind === 'exam')
     if (!examTracks.value.some(track => track.id === selectedTrackId.value)) selectedTrackId.value = examTracks.value[0]?.id || ''
+    // SG is the initial exam; populate its domain selector on first load too.
+    if (selectedTrackId.value === 'exam-sg') void loadPracticeTopics()
   } catch (error) {
     tracksError.value = error instanceof Error ? error.message : '考试列表加载失败，请稍后重试。'
   } finally {
