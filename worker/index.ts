@@ -549,7 +549,7 @@ function detectDictionaryLanguage(query: string): 'ja' | 'zh' | 'en' {
   if (/[\u3400-\u9fff]/.test(text)) return 'ja'
   return 'en'
 }
-async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' | 'it' = 'auto', db?: D1Database, ai?: Ai): Promise<DictionaryApiEntry[]> {
+async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' | 'it' = 'auto', db?: D1Database): Promise<DictionaryApiEntry[]> {
   let technicalItems: DictionaryApiEntry[] = []
   if (db) {    try {
       technicalItems = await searchTechnicalVocabulary(db, query, requestedLanguage)
@@ -573,20 +573,20 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
   if (language === 'ja') {
     const offline = commonJapaneseTranslations[query.trim()]
     ;[en, zh] = await Promise.all([
-      offline?.en ? Promise.resolve(offline.en) : translateText(query, 'ja-JP', 'en-US', ai),
-      offline?.zh ? Promise.resolve(offline.zh) : translateText(query, 'ja-JP', 'zh-CN', ai),
+      offline?.en ? Promise.resolve(offline.en) : translateText(query, 'ja-JP', 'en-US'),
+      offline?.zh ? Promise.resolve(offline.zh) : translateText(query, 'ja-JP', 'zh-CN'),
     ])
   } else if (language === 'en') {
     const offline = commonEnglishTranslations[query.trim().toLowerCase()]
     ;[ja, zh] = await Promise.all([
-      offline?.ja ? Promise.resolve(offline.ja) : translateText(query, 'en-US', 'ja-JP', ai),
-      offline?.zh ? Promise.resolve(offline.zh) : translateText(query, 'en-US', 'zh-CN', ai),
+      offline?.ja ? Promise.resolve(offline.ja) : translateText(query, 'en-US', 'ja-JP'),
+      offline?.zh ? Promise.resolve(offline.zh) : translateText(query, 'en-US', 'zh-CN'),
     ])
   } else {
     const offline = commonChineseTranslations[query.trim()]
     ;[ja, en] = await Promise.all([
-      offline?.ja ? Promise.resolve(offline.ja) : translateText(query, 'zh-CN', 'ja-JP', ai),
-      offline?.en ? Promise.resolve(offline.en) : translateText(query, 'zh-CN', 'en-US', ai),
+      offline?.ja ? Promise.resolve(offline.ja) : translateText(query, 'zh-CN', 'ja-JP'),
+      offline?.en ? Promise.resolve(offline.en) : translateText(query, 'zh-CN', 'en-US'),
     ])
     zh = query
   }
@@ -946,7 +946,7 @@ export default {
         return json({ items: [], error: 'lang 参数只支持 auto、ja、en、zh、it。' }, 400)
       }
       try {
-        const items = await lookupDictionary(query, requestedLanguage as 'auto' | 'ja' | 'en' | 'zh' | 'it', env.DB, env.AI)
+        const items = await lookupDictionary(query, requestedLanguage as 'auto' | 'ja' | 'en' | 'zh' | 'it', env.DB)
         return json({
           items,
           query,
