@@ -318,6 +318,7 @@ EN_VOCAB = [
  ("successful","成功的","表示达到预期目标")
 ]
 JP_GRAMMAR = [
+ (r"んだ(?=[。！？!?…]*$)|のだ(?=[。！？!?…]*$)","说明／解释语气","「のだ」的口语形式「んだ」用于解释、强调当前情况。"),
  (r"誰の[^、。！？!?\s]+?(?=です|だ|だった|[。！？!?…]|$)|何の[^、。！？!?\s]+?(?=です|だ|だった|[。！？!?…]|$)","疑問词＋の＋名词：所属・内容","「誰の＋名詞」は持ち主を、「何の＋名詞」は種類や内容を尋ねる。「の」は疑問詞と名詞をつなぐ。"),
  (r"ですか(?=[。！？!?…]*$)","ですか：礼貌疑问句","名词或な形容词等后接「ですか」构成礼貌疑问；「か」标记疑问，不是独立的重点词汇。"),
  (r"でしょうか(?=[。！？!?…]*$)","でしょうか：委婉疑问","比直接的「ですか」更委婉，常用于询问或确认。"),
@@ -439,6 +440,22 @@ def japanese_surface_forms(lemma):
                       stem+a+"なかった", stem+te, stem+past})
     return {form: (lemma, zh) for form in forms}
 
+def japanese_safe_word_span(sentence, start, end, term):
+    """Conservative protection against short kana matches inside longer words."""
+    before = sentence[start - 1] if start else ""
+    after = sentence[end:end + 5]
+    # いつ is not an independent word within そいつ / こいつ / あいつ / どいつ.
+    if term == "いつ" and before in {"そ", "こ", "あ", "ど"}:
+        return False
+    # Do not treat the stem 分からない as a causal/starting-point から.
+    if term == "から" and sentence[:start].endswith(("分", "判", "解")) and re.match(r"ない|なかった|ず", after):
+        return False
+    # Kana-leading entries embedded in an uninterrupted hiragana word are
+    # uncertain; prefer a missed highlight to a false explanation.
+    if term and re.match(r"[ぁ-ん]", term[0]) and re.match(r"[ぁ-ん]", before) and before not in {"は", "が", "を", "に", "で", "と", "へ", "の", "も"}:
+        return False
+    return True
+
 @lru_cache(maxsize=100000)
 def make_hits(sentence, lang):
     """Find meaningful, context-aware spans with language-specific boundaries and balanced coverage."""
@@ -452,6 +469,8 @@ def make_hits(sentence, lang):
         for match in re.finditer(pattern, sentence, re.I if lang == "en" else 0):
             term = match.group()
             if not term.strip():
+                continue
+            if lang == "ja" and not japanese_safe_word_span(sentence, match.start(), match.end(), term):
                 continue
             if lang == "ja" and term in {"か", "の", "は", "が", "を", "に", "で", "と", "へ"}:
                 particle_notes = {
@@ -499,6 +518,8 @@ def make_hits(sentence, lang):
         if lang == "en":
             pattern = r"(?<![A-Za-z])" + pattern + r"(?![A-Za-z])"
         for match in re.finditer(pattern, sentence, re.I if lang == "en" else 0):
+            if lang == "ja" and not japanese_safe_word_span(sentence, match.start(), match.end(), match.group()):
+                continue
             candidates.append({
                 "start": match.start(), "end": match.end(), "type": "vocabulary",
                 "term": match.group(), "meaning": meaning, "explanation": explanation,
@@ -526,6 +547,8 @@ def make_hits(sentence, lang):
                 if surface == lemma:
                     continue
                 for match in re.finditer(re.escape(surface), sentence):
+                    if not japanese_safe_word_span(sentence, match.start(), match.end(), match.group()):
+                        continue
                     candidates.append({
                         "start": match.start(), "end": match.end(), "type": "vocabulary",
                         "term": match.group(), "meaning": zh + "（原形：" + base + "）",
@@ -578,6 +601,12 @@ def validate_annotation_rules():
     japanese_inflected = make_hits("毎日ご飯を食べました。", "ja")
     tabemashita = next((hit for hit in japanese_inflected if hit["type"] == "vocabulary" and hit["term"] == "食べました"), None)
     assert tabemashita and "食べる" in tabemashita["explanation"], "Japanese inflections should link surface form to dictionary form"
+
+    # A lexical substring must never become a standalone word or particle.
+    jp_regression = make_hits("そいつの使い方が分からないんだ。", "ja")
+    assert not any(hit["term"] == "いつ" for hit in jp_regression), "いつ inside そいつ is not a time word"
+    assert not any(hit["term"] == "から" for hit in jp_regression), "から inside 分からない is not a particle"
+    assert any(hit["term"] == "んだ" and hit["type"] == "grammar" for hit in jp_regression), "Explanation form んだ should be recognized"
 
     # Production regressions: no invented vocabulary and context-specific explanations.
     english_sentence = "Japan is a rich country."
