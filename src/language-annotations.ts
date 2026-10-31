@@ -127,7 +127,8 @@ function fallback(card: AnnotatedSentence, boundaries: Set<number>): LanguageHig
   for (const rule of GRAMMAR) {
     if (rule.language !== card.language) continue
     for (const match of card.term.matchAll(rule.pattern)) {
-      const start = match.index
+      const start = match.index ?? -1
+      if (start < 0) continue
       const end = start + match[0].length
       if (validBoundary(card, start, end, 'grammar', boundaries)) {
         found.push({ start, end, term: match[0], type: 'grammar', meaning: rule.meaning, explanation: rule.explanation })
@@ -138,7 +139,8 @@ function fallback(card: AnnotatedSentence, boundaries: Set<number>): LanguageHig
     if ((card.language === 'ja') !== /[^\x00-\x7F]/.test(term)) continue
     const pattern = new RegExp(term, card.language === 'en' ? 'gi' : 'g')
     for (const match of card.term.matchAll(pattern)) {
-      const start = match.index
+      const start = match.index ?? -1
+      if (start < 0) continue
       const end = start + match[0].length
       if (validBoundary(card, start, end, 'vocabulary', boundaries)) {
         found.push({ start, end, type: 'vocabulary', term: match[0], ...note })
