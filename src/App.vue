@@ -2181,7 +2181,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 </div>
                 <p v-if="selectedTrackId === 'exam-sg'" class="dictionary-status">2016〜2019年度は旧制度の午前問題です。2020〜2022年度のCBT過去問はIPA非公開です。</p>
                 <p v-if="selectedTrackId === 'exam-fe'" class="dictionary-status">2019年度は旧制度の午前問題です。2020〜2022年度のCBT過去問はIPA非公開です。</p>
-                <p class="dictionary-status">2022年の公開教材は実際の試験問題ではなく、<a href="https://www.ipa.go.jp/shiken/syllabus/henkou/2022/20220425.html" target="_blank" rel="noopener noreferrer">IPA公式サンプル問題 <ExternalLink :size="12" /></a>です。</p>
+                <p class="dictionary-status">2022年の公開教材は実際の試験問題ではなく、<a href="https://www.ipa.go.jp/shiken/syllabus/henkou/2022/20220425.html" target="_blank" rel="noopener noreferrer">IPA公式サンプル問題を見る</a>です。</p>
               </div>
               <div class="question-category-section">
                 <div class="question-category-heading"><strong>学习状态</strong><span>按当前题库筛选</span></div>
