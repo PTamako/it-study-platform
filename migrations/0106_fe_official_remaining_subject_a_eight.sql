@@ -83,4 +83,4 @@ AをNAND(A,A)に入力しNOT Aを生成。
 BをNAND(B,B)に入力しNOT Bを生成。
 この二つをNANDで接続し，その結果をさらにNAND(X,X)に入力してYを生成。
 したがって Y＝NOT(A OR B)，いわゆるNOR。
-※重要：選択肢ア・イ・ウ・エはそれぞれA／B／Yの独立した波形図。各図の正確な時間位置は上部「IPA 官方原卷」から確認すること。', '[{"id":"a","text":"ア：公式PDFの波形図ア"},{"id":"b","text":"イ：公式PDFの波形図イ"},{"id":"c","text":"ウ：公式PDFの波形図ウ"},{"id":"d","text":"エ：公式PDFの波形図エ"}]', '"b"', '1段目はそれぞれNOT A，NOT B，2段目NANDでA OR B，最終NANDでNOT(A OR B)。AとBの双方が0のときだけYが1になる波形はイ。', 'official', 'https://www.ipa.go.jp/shiken/mondai-kaiotu/sg_fe/koukai/rcu1hd0000012qj6-att/2026r08_fe_kamoku_a_qs.pdf', 'ja', 'A', 'explicit');
+※選択肢のA／B／Yは，波形が切り替わる時刻で区切った七つの等幅区間における信号レベル（0＝低，1＝高）を，左から右に示したもの。元の波形図はIPA公式問題冊子にも掲載されている。', '[{"id":"a","text":"ア：A=0010101／B=1010100／Y=1101011"},{"id":"b","text":"イ：A=0100010／B=0001010／Y=1010101"},{"id":"c","text":"ウ：A=0100010／B=0001010／Y=0101000"},{"id":"d","text":"エ：A=0010101／B=1010100／Y=0010100"}]', '"b"', '1段目はそれぞれNOT A，NOT B，2段目NANDでA OR B，最終NANDでNOT(A OR B)。AとBの双方が0のときだけYが1になる波形はイ。', 'official', 'https://www.ipa.go.jp/shiken/mondai-kaiotu/sg_fe/koukai/rcu1hd0000012qj6-att/2026r08_fe_kamoku_a_qs.pdf', 'ja', 'A', 'explicit');
