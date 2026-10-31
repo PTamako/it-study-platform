@@ -1216,21 +1216,21 @@ function nextPracticeQuestion() {
 }
 
 const moduleInfo = {
-  home: { title: '今天，学一点新的。', subtitle: '把考试、语言和专业知识，放进一个顺手的学习空间。' },
-  exam: { title: '考试备考', subtitle: '日常刷题、复习错题与限时模拟考试。' },
-  practical: { title: '实战训练', subtitle: '在工作情境中判断风险、选择行动，并查看评分与解释。' },
-  language: { title: '语言学习', subtitle: '选择日语或英语，按实际学习内容练习表达、理解和发音。' },
-  dictionary: { title: '中日英互译与 IT 术语', subtitle: '中日英自动识别和互译，三语发音与离线 IT 术语。' },
+  home: { title: '学习首页', subtitle: '考试、语言与 IT 知识，一站练习。' },
+  exam: { title: '考试备考', subtitle: '刷题、错题复习与模拟考试。' },
+  practical: { title: '实战训练', subtitle: '工作情境判断与答题复盘。' },
+  language: { title: '语言学习', subtitle: '日语与英语的例句、发音和复习。' },
+  dictionary: { title: '词典与 IT 术语', subtitle: '中日英互译、发音与离线词库。' },
 } as const
 
 const currentInfo = computed(() => moduleInfo[activeModule.value])
-const searchPlaceholder = computed(() => activeModule.value === 'dictionary' ? '输入中文、日语、英语或 IT 缩写，例如 認証 / 认证 / MFA…' : '搜索考试、课程、知识点…')
+const searchPlaceholder = computed(() => activeModule.value === 'dictionary' ? '输入中、日、英文或 IT 缩写…' : '搜索考试、课程、知识点…')
 
 const modules = [
-  { id: 'exam' as const, title: '考试备考', en: 'EXAM PREP', desc: '日常练习 · 错题复习 · 限时模拟考试', icon: GraduationCap, tone: 'lavender', count: '题量以题库数据为准' },
-  { id: 'practical' as const, title: '实战训练', en: 'PRACTICAL LAB', desc: '日语安全情境 · 日语语音 · 中日双语解析', icon: ShieldCheck, tone: 'blue', count: '400 个情境 · 评分 · 复盘' },
-  { id: 'language' as const, title: '语言学习', en: 'LANGUAGE', desc: '日语 / 英语 · 例句 · 发音 · 复习', icon: Languages, tone: 'peach', count: '选择语言开始学习' },
-  { id: 'dictionary' as const, title: '中日英互译与 IT 术语', en: 'DICTIONARY', desc: '中日英互译 · 三语发音 · 离线 IT 词库', icon: BookMarked, tone: 'blue', count: '三语词汇与专业术语' },
+  { id: 'exam' as const, title: '考试备考', en: 'EXAM PREP', desc: '刷题 · 错题 · 模拟考试', icon: GraduationCap, tone: 'lavender', count: 'SG / FE 练习' },
+  { id: 'practical' as const, title: '实战训练', en: 'PRACTICAL LAB', desc: '情境判断 · 朗读 · 复盘', icon: ShieldCheck, tone: 'blue', count: 'SG / FE 情境' },
+  { id: 'language' as const, title: '语言学习', en: 'LANGUAGE', desc: '日语 · 英语 · 复习', icon: Languages, tone: 'peach', count: '日语 / 英语' },
+  { id: 'dictionary' as const, title: '词典与 IT 术语', en: 'DICTIONARY', desc: '互译 · 发音 · 离线 IT 词库', icon: BookMarked, tone: 'blue', count: '中 / 日 / 英' },
 ]
 
 type LanguageHighlight = { start: number; end: number; type: 'vocabulary' | 'grammar'; term: string; meaning: string; explanation: string }
@@ -2270,9 +2270,9 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
         <span class="brand-mark"><BookOpen :size="23" /></span>
         <span class="brand-copy"><strong>知学</strong></span>
       </button>
-      <div class="side-label">学习空间</div>
+      <div class="side-label">学习导航</div>
       <nav class="nav-list">
-        <button class="nav-item" :class="{ active: activeModule === 'home' }" @click="navigate('home')"><span class="nav-icon"><Sparkles :size="18" /></span>学习首页</button>
+        <button class="nav-item" :class="{ active: activeModule === 'home' }" @click="navigate('home')"><span class="nav-icon"><Sparkles :size="18" /></span>首页</button>
         <button v-for="item in modules" :key="item.id" class="nav-item" :class="{ active: activeModule === item.id }" @click="navigate(item.id)">
           <span class="nav-icon"><component :is="item.icon" :size="18" /></span>{{ item.title }}
         </button>
@@ -2298,7 +2298,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
 
       <p v-if="authError" class="auth-error" role="alert">{{ authError }}</p>
       <nav v-if="showMobileMenu" id="mobile-nav-list" class="mobile-nav" aria-label="主导航">
-        <button type="button" :class="{ active: activeModule === 'home' }" :aria-current="activeModule === 'home' ? 'page' : undefined" @click="navigate('home')">学习首页</button>
+        <button type="button" :class="{ active: activeModule === 'home' }" :aria-current="activeModule === 'home' ? 'page' : undefined" @click="navigate('home')">首页</button>
         <button v-for="item in modules" :key="item.id" type="button" :class="{ active: activeModule === item.id }" :aria-current="activeModule === item.id ? 'page' : undefined" @click="navigate(item.id)">{{ item.title }}</button>
       </nav>
 
@@ -2316,9 +2316,9 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
           <section class="hero-panel">
             <div class="hero-content">
 
-              <h2>学习不必赶路，<br /><span>但每一步都算数。</span></h2>
+              <h2>每天学一点，<br /><span>进步看得见。</span></h2>
 
-              <button class="primary-button" @click="navigate('exam')">继续我的学习 <ArrowRight :size="17" /></button>
+              <button class="primary-button" @click="navigate('exam')">开始练习 <ArrowRight :size="17" /></button>
 
             </div>
             <div class="hero-art" aria-hidden="true">
@@ -2331,18 +2331,18 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
           </section>
 
           <section class="section-block">
-            <div class="section-heading"><div><h2>你想从哪里开始？</h2></div></div>
+            <div class="section-heading"><div><h2>选择学习模块</h2></div></div>
             <div class="module-grid">
               <button v-for="item in modules" :key="item.id" class="module-card" @click="navigate(item.id)">
                 <div class="module-card-top"><span class="module-icon" :class="item.tone"><component :is="item.icon" :size="22" /></span><span class="card-arrow"><ArrowRight :size="17" /></span></div>
-                <div class="module-en">{{ item.en }}</div><h3>{{ item.title }}</h3><p>{{ item.desc }}</p>
+                <h3>{{ item.title }}</h3><p>{{ item.desc }}</p>
                 <div class="module-card-foot"><span>{{ item.count }}</span><ChevronRight :size="15" /></div>
               </button>
             </div>
           </section>
 
           <section class="progress-dashboard">
-            <div class="section-heading"><div><h2>云端学习数据</h2></div></div>
+            <div class="section-heading"><div><h2>学习概览</h2></div></div>
             <p v-if="cloudDashboardError" class="dictionary-status dictionary-error">{{ cloudDashboardError }}</p>
             <div v-if="cloudDashboard" class="metric-grid">
               <div class="panel metric-card"><span class="metric-icon"><CheckCircle2 :size="18" /></span><small>云端答题</small><strong>{{ cloudDashboard.exam.attempted_questions }}</strong><span>{{ cloudDashboard.exam.accuracy_percent === null ? '暂无记录' : '正确率 ' + cloudDashboard.exam.accuracy_percent + '%' }}</span></div>
@@ -2377,14 +2377,14 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
             </div>
           </section>
           <section class="progress-dashboard">
-            <div class="section-heading"><div><h2>学习成果一览</h2></div><button class="text-link" @click="navigate('exam')">查看考试记录 <ArrowRight :size="14" /></button></div>
+            <div class="section-heading"><div><h2>练习成绩</h2></div><button class="text-link" @click="navigate('exam')">查看考试记录 <ArrowRight :size="14" /></button></div>
             <div class="metric-grid">
               <div class="panel metric-card"><span class="metric-icon"><CheckCircle2 :size="18" /></span><small>累计答题</small><strong>{{ totalAnswered }}</strong><span>道题</span></div>
               <div class="panel metric-card"><span class="metric-icon"><Target :size="18" /></span><small>总体正确率</small><strong>{{ overallAccuracy === null ? '—' : overallAccuracy + '%' }}</strong><span>{{ overallAccuracy === null ? '记录首次练习后显示' : totalCorrect + ' 道答对' }}</span></div>
               <div class="panel metric-card"><span class="metric-icon"><TrendingUp :size="18" /></span><small>最近一次练习</small><strong>{{ latestRecord ? Math.round(latestRecord.correct / latestRecord.total * 100) + '%' : '—' }}</strong><span>{{ latestRecord ? latestRecord.exam + ' · ' + latestRecord.date : '暂无历史成绩' }}</span></div>
             </div>
             <div class="panel curve-panel">
-              <div class="panel-heading"><div><h3>近 7 天正确率曲线</h3></div><span class="curve-legend"><i></i>正确率</span></div>
+              <div class="panel-heading"><div><h3>近 7 天正确率</h3></div><span class="curve-legend"><i></i>正确率</span></div>
               <div v-if="examRecords.length" class="curve-chart">
                 <div v-for="day in curveRecords" :key="day.date" class="curve-column">
                   <div class="curve-value">{{ day.accuracy === null ? '—' : day.accuracy + '%' }}</div>
@@ -2397,14 +2397,14 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
           </section>
           <section class="bottom-grid">
             <div class="panel recent-panel">
-              <div class="panel-heading"><div><h3>最近查过的词</h3><p>把不熟悉的词，慢慢变成熟悉。</p></div><button class="text-link" @click="navigate('dictionary')">打开词典 <ArrowRight :size="14" /></button></div>
+              <div class="panel-heading"><div><h3>最近查过的词</h3></div><button class="text-link" @click="navigate('dictionary')">打开词典 <ArrowRight :size="14" /></button></div>
               <div v-for="entry in recentDictionaryEntries.slice(0, 2)" :key="entry.term" class="word-row">
                 <div class="word-letter">{{ (entry.language === 'en' && entry.englishTerm ? entry.englishTerm : entry.term).slice(0,1) }}</div>
                 <div class="word-details"><strong>{{ entry.language === 'en' && entry.englishTerm ? entry.englishTerm : entry.term }} <small>{{ entry.reading || entry.phonetic || '' }}</small></strong><span>{{ entry.en || entry.translationJa || '' }}</span></div>
                 <button v-if="entry.englishTerm || entry.language === 'en'" class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" aria-label="播放英语发音" title="播放英语发音"><Volume2 :size="14" /><span>EN</span></button>
                 <button v-if="entry.reading || entry.language === 'ja' || entry.language === 'en' || entry.englishTerm" class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" aria-label="播放日语辅助读音" title="播放日语辅助读音（片假名为近似提示）"><Languages :size="14" /><span>日</span></button>
               </div>
-              <div v-if="recentDictionaryEntries.length === 0" class="recent-dictionary-empty">查过的词会显示在这里，方便继续复习。</div>
+              <div v-if="recentDictionaryEntries.length === 0" class="recent-dictionary-empty">查词记录将显示在这里。</div>
             </div>
             <div class="panel daily-panel">
               <div class="daily-icon"><Clock3 :size="19" /></div><div class="daily-copy"><h3>今日小目标</h3><button class="text-link" @click="navigate('language')">开始轻量练习 <ArrowRight :size="14" /></button></div>
@@ -2432,31 +2432,31 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
             <section class="practice-section">
               <div class="section-heading practice-heading"><div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2></div></div>
               <p v-if="pendingPracticeAttempt" class="dictionary-status" role="status">
-                有答题尚未同步到云端。
-                <button type="button" class="text-link" :disabled="practiceSaving" @click="syncPendingPracticeAttempt">{{ practiceSaving ? '同步中…' : '重新同步答题' }}</button>
+                答题待同步。
+                <button type="button" class="text-link" :disabled="practiceSaving" @click="syncPendingPracticeAttempt">{{ practiceSaving ? '同步中…' : '重试同步' }}</button>
               </p>
               <div class="question-source-filters" role="group" aria-label="题目来源筛选">
                 <button v-for="filter in questionSourceFilters.filter(item => item.id !== 'licensed' || selectedTrackId === 'exam-fe')" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" :disabled="selectedTrackId === 'exam-fe' && feBankLoading" @click="selectQuestionSource(filter.id)">{{ filter.label }}（{{ filter.id === 'all' ? (selectedTrack?.question_count || 0) : filter.id === 'official' ? (selectedTrack?.official_question_count || 0) : filter.id === 'licensed' ? (selectedTrack?.adapted_question_count || 0) : (selectedTrack?.prediction_question_count || 0) }}）</button>
               </div>
               <div v-if="practiceHasDetailedFilters" class="question-category-section">
-                <div class="question-category-heading"><strong>年度・科目・分野</strong><span>题源和学习状态可组合筛选</span></div>
+                <div class="question-category-heading"><strong>筛选题目</strong></div>
                 <div class="fe-filter-controls">
                   <label>年度
                     <select v-model="practiceYear" :aria-label="selectedTrackId === 'exam-sg' ? 'SG 年度' : 'FE 年度'" @change="applyPracticeFilter('year')">
-                      <option value="">すべて</option>
-                      <option v-for="year in practiceYearOptions" :key="year" :value="String(year)">{{ year }}年度</option>
+                      <option value="">全部</option>
+                      <option v-for="year in practiceYearOptions" :key="year" :value="String(year)">{{ year }} 年</option>
                     </select>
                   </label>
                   <label>科目
                     <select v-model="practiceSection" :aria-label="selectedTrackId === 'exam-sg' ? 'SG 科目' : 'FE 科目'" @change="applyPracticeFilter('section')">
-                      <option value="all">すべて</option>
-                      <option value="A">{{ selectedTrackId === 'exam-sg' ? '科目A（旧午前を含む）' : '科目A' }}</option>
-                      <option value="B">科目B</option>
+                      <option value="all">全部</option>
+                      <option value="A">{{ selectedTrackId === 'exam-sg' ? '科目 A（含旧午前题）' : '科目 A' }}</option>
+                      <option value="B">科目 B</option>
                     </select>
                   </label>
-                  <label>分野
+                  <label>领域
                     <select v-model="practiceTopic" :aria-label="selectedTrackId === 'exam-sg' ? 'SG 分野' : 'FE 分野'" @change="applyPracticeFilter('topic')">
-                      <option value="">すべて</option>
+                      <option value="">全部</option>
                       <option v-for="item in practiceTopicOptions" :key="item.topic" :value="item.topic">{{ item.topic }}（{{ item.question_count }}）</option>
                     </select>
                   </label>
@@ -2464,12 +2464,12 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
 
               </div>
               <div class="question-category-section">
-                <div class="question-category-heading"><strong>学习状态</strong><span>按当前题库筛选</span></div>
+                <div class="question-category-heading"><strong>学习状态</strong></div>
                 <div class="question-category-filters question-review-filters" role="group" aria-label="题目学习状态">
                   <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'all' }" :aria-pressed="activeReviewMode === 'all'" :disabled="selectedTrackId === 'exam-fe' && feBankLoading" @click="selectReviewMode('all')">全部</button>
                   <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'unlearned' }" :aria-pressed="activeReviewMode === 'unlearned'" :disabled="selectedTrackId === 'exam-fe' && feBankLoading" @click="selectReviewMode('unlearned')">未学习</button>
-                  <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'mastered' }" :aria-pressed="activeReviewMode === 'mastered'" :disabled="selectedTrackId === 'exam-fe' && feBankLoading" @click="selectReviewMode('mastered')">掌握</button>
-                  <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'due' }" :aria-pressed="activeReviewMode === 'due'" :disabled="selectedTrackId === 'exam-fe' && feBankLoading" @click="selectReviewMode('due')">再复习</button>
+                  <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'mastered' }" :aria-pressed="activeReviewMode === 'mastered'" :disabled="selectedTrackId === 'exam-fe' && feBankLoading" @click="selectReviewMode('mastered')">已掌握</button>
+                  <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'due' }" :aria-pressed="activeReviewMode === 'due'" :disabled="selectedTrackId === 'exam-fe' && feBankLoading" @click="selectReviewMode('due')">待复习</button>
                   <button type="button" class="question-category-button" :class="{ active: activeReviewMode === 'wrong' }" :aria-pressed="activeReviewMode === 'wrong'" :disabled="selectedTrackId === 'exam-fe' && feBankLoading" @click="selectReviewMode('wrong')">错题集</button>
                 </div>
               </div>
@@ -2478,18 +2478,18 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <div class="practice-result-icon"><CheckCircle2 :size="28" /></div>
                   <div class="practice-result-score">{{ quizCorrect }} / {{ quizQuestions.length }}</div>
                   <h3>本次练习完成</h3>
-                  <p>正确率 {{ Math.round(quizCorrect / quizQuestions.length * 100) }}%。本次成绩已加入当前设备的历史记录。</p>
+                  <p>正确率 {{ Math.round(quizCorrect / quizQuestions.length * 100) }}%。成绩已保存到本机。</p>
                   <p class="muted">当前筛选题量 {{ questionBankTotal }} 题 · 本组 {{ questionBatchOffset + 1 }}–{{ Math.min(questionBatchOffset + quizQuestions.length, questionBankTotal) }} 题</p>
                   <p v-if="quizError" class="practice-error" role="alert">{{ quizError }}</p>
                   <button class="primary-button" @click="nextQuestionBatch" :disabled="quizLoading">{{ quizLoading ? '正在加载…' : questionBankHasMore ? '继续下一组（10 题）' : '从头再练' }} <ArrowRight :size="16" /></button>
                 </template>
                 <template v-else>
                   <div class="practice-start-icon"><GraduationCap :size="25" /></div>
-                  <h3>准备好开始练习了吗？</h3>
-                  <p v-if="selectedTrack?.question_count">{{ selectedTrack.title }} 题目，提交后查看正确答案与解析。</p>
-                  <p v-else>目前开放的考试可直接进入练习。</p>
+                  <h3>开始刷题</h3>
+                  <p v-if="selectedTrack?.question_count">每组最多 10 题，提交后查看解析。</p>
+                  <p v-else>选择考试后开始练习。</p>
                   <div class="practice-start-actions">
-                    <button class="primary-button" @click="startPractice" :disabled="quizLoading || (selectedTrackId === 'exam-fe' && feBankLoading) || !selectedTrack || selectedTrack.question_count === 0">{{ quizLoading || (selectedTrackId === 'exam-fe' && feBankLoading) ? '正在加载题目…' : selectedTrack?.question_count ? '开始练习（最多 10 题）' : '当前暂无可练习题目' }} <ArrowRight :size="16" /></button>
+                    <button class="primary-button" @click="startPractice" :disabled="quizLoading || (selectedTrackId === 'exam-fe' && feBankLoading) || !selectedTrack || selectedTrack.question_count === 0">{{ quizLoading || (selectedTrackId === 'exam-fe' && feBankLoading) ? '正在加载题目…' : selectedTrack?.question_count ? '开始练习（10 题）' : '当前暂无可练习题目' }} <ArrowRight :size="16" /></button>
                   </div>
                   <p v-if="quizError" class="practice-error">{{ quizError }}</p>
                 </template>
@@ -2505,8 +2505,8 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <span>连续答对 {{ questionProgressById[currentQuestion.id]?.correct_streak || 0 }} 次</span>
                   <span>复习 {{ questionProgressById[currentQuestion.id]?.review_count || 0 }} 次</span>
                 </div>
-                <a v-if="(currentQuestion.source_type === 'official' || currentQuestion.source_type === 'licensed') && currentQuestion.source_reference" class="language-source" :href="currentQuestion.source_reference" target="_blank" rel="noreferrer">IPA公式問題を見る ↗</a>
-                <p v-if="currentQuestion.id === 'fe-ipa-official-2026-a-06'" class="dictionary-status">波形図の選択肢は各区間の0・1で表記しています。元の図も上のIPA公式問題で確認できます。</p>
+                <a v-if="(currentQuestion.source_type === 'official' || currentQuestion.source_type === 'licensed') && currentQuestion.source_reference" class="language-source" :href="currentQuestion.source_reference" target="_blank" rel="noreferrer">查看 IPA 原题 ↗</a>
+                <p v-if="currentQuestion.id === 'fe-ipa-official-2026-a-06'" class="dictionary-status">波形图以 0、1 表示各区间；可查看 IPA 原图。</p>
                 <div class="question-prompt-row">
                   <h3 class="question-prompt">{{ currentQuestion.prompt }}</h3>
                   <button type="button" class="question-speak-button" @click="speakQuestion(currentQuestion)" aria-label="日语朗读题目" title="日语朗读题目"><Volume2 :size="14" /> 听题</button>
@@ -2539,22 +2539,22 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <button v-if="quizSubmitted && !questionProgressById[currentQuestion.id]?.mastered" class="secondary-button" @click="setQuestionMastery(currentQuestion.id, true)">标记掌握</button>
                   <button v-else-if="quizSubmitted && questionProgressById[currentQuestion.id]?.mastered" class="secondary-button" @click="setQuestionMastery(currentQuestion.id, false)">重新加入复习</button>
                   <button v-if="!quizSubmitted" class="primary-button" :disabled="!selectedOption || practiceSaving || Boolean(pendingPracticeAttempt)" @click="submitPracticeAnswer">提交答案 <ArrowRight :size="15" /></button>
-                  <button v-else-if="pendingPracticeAttempt?.question_id === currentQuestion.id" class="primary-button" :disabled="practiceSaving" @click="submitPracticeAnswer">{{ practiceSaving ? '同步中…' : '重新同步答题' }}</button>
+                  <button v-else-if="pendingPracticeAttempt?.question_id === currentQuestion.id" class="primary-button" :disabled="practiceSaving" @click="submitPracticeAnswer">{{ practiceSaving ? '同步中…' : '重试同步' }}</button>
                   <button v-else class="primary-button" @click="nextPracticeQuestion">{{ isLastQuestion ? '查看本次成绩' : '下一题' }} <ArrowRight :size="15" /></button>
                 </div>
               </div>
             </section>
             <section class="section-block mock-exam-section">
-              <div class="section-heading"><div><h2>限时模拟考试</h2><p v-if="selectedTrackId === 'exam-fe'">科目 A 与 B 分开计时；科目 B 的领域比例为模拟近似值。</p><p v-else>共 60 题，限时 120 分钟。</p></div><span v-if="selectedTrackId !== 'exam-fe'" class="source-pill">A 48 题 · B 12 题</span></div>
+              <div class="section-heading"><div><h2>限时模拟考试</h2><p v-if="selectedTrackId === 'exam-fe'">科目 A、B 分别计时；科目 B 为近似题型比例。</p><p v-else>共 60 题，限时 120 分钟。</p></div><span v-if="selectedTrackId !== 'exam-fe'" class="source-pill">A 48 题 · B 12 题</span></div>
               <div v-if="selectedTrackId === 'exam-fe' && !mockStarted && !mockSubmitted" class="question-source-filters" role="group" aria-label="选择 FE 模拟科目">
                 <button v-for="section in (['A', 'B'] as const)" :key="section" type="button" class="source-filter-button" :class="{ active: feMockSection === section }" :aria-pressed="feMockSection === section" :disabled="mockLoading" @click="feMockSection = section; mockError = ''">科目 {{ section }} · {{ section === 'A' ? '60 题 / 90 分钟' : '20 题 / 100 分钟' }}</button>
               </div>
               <div v-if="mockPendingSubmission" class="dictionary-status" role="status">
                 <span>未同步的模拟考试答卷已保留在本设备（{{ mockPendingSubmission.study_date }}）。</span>
-                <button type="button" class="text-link" :disabled="mockSyncing" @click="syncPendingMockSubmission">{{ mockSyncing ? '同步中…' : '重新同步答卷' }}</button>
+                <button type="button" class="text-link" :disabled="mockSyncing" @click="syncPendingMockSubmission">{{ mockSyncing ? '同步中…' : '重试同步' }}</button>
               </div>
               <div v-if="!mockStarted && !mockSubmitted" class="panel practice-start-card">
-                <div class="practice-start-icon"><Clock3 :size="25" /></div><h3>模拟真实考试节奏</h3>
+                <div class="practice-start-icon"><Clock3 :size="25" /></div><h3>模拟考试</h3>
                 <p v-if="selectedTrackId === 'exam-fe'">科目 {{ feMockSection }} 模拟{{ feMockSection === 'A' ? '60 题、90 分钟' : '20 题、100 分钟；算法与程序设计 16 题、信息安全 4 题（按官方约占比近似）' }}。题量不足时不会用重复题补足。</p><p v-else>当前题库有 {{ selectedTrack?.question_count || 0 }} 道可用题目。模拟固定 60 题、限时 120 分钟；题量不足时不会用重复题补足。</p>
                 <button class="primary-button" @click="startMockExam"  :disabled="mockLoading || (selectedTrackId === 'exam-fe' && feBankLoading) || !selectedTrack || (selectedTrack.id !== 'exam-fe' && selectedTrack.id !== 'exam-sg')">{{ mockLoading ? '正在准备题目…' : '开始限时模拟' }} <ArrowRight :size="16" /></button>
                 <p v-if="mockError" class="practice-error">{{ mockError }}</p>
@@ -2584,8 +2584,8 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                 </div>
                 <article v-for="(question, index) in mockQuestions" :key="question.id" class="panel question-card mock-question-card">
                   <div class="question-topline"><span>第 {{ index + 1 }} / {{ mockQuestions.length }} 题 · 科目{{ question.exam_section }} · {{ question.topic }}</span><span class="source-pill">{{ question.source_type === 'generated' ? '预测题库 · 原创' : question.source_type === 'official' ? '历年真题' : question.source_type === 'licensed' ? '真题改编' : '其他题目' }}</span></div>
-                  <a v-if="(question.source_type === 'official' || question.source_type === 'licensed') && question.source_reference" class="language-source" :href="question.source_reference" target="_blank" rel="noreferrer">IPA公式問題を見る ↗</a>
-                  <p v-if="question.id === 'fe-ipa-official-2026-a-06'" class="dictionary-status">波形図の選択肢を0・1の系列で表示しています。必要に応じて上の公式原図をご確認ください。</p>
+                  <a v-if="(question.source_type === 'official' || question.source_type === 'licensed') && question.source_reference" class="language-source" :href="question.source_reference" target="_blank" rel="noreferrer">查看 IPA 原题 ↗</a>
+                  <p v-if="question.id === 'fe-ipa-official-2026-a-06'" class="dictionary-status">波形图以 0、1 表示；可查看 IPA 原图。</p>
                   <div class="question-prompt-row">
                     <h3 class="question-prompt">{{ question.prompt }}</h3>
                     <button type="button" class="question-speak-button" @click="speakQuestion(question)" aria-label="日语朗读题目" title="日语朗读题目"><Volume2 :size="14" /> 听题</button>
@@ -2613,7 +2613,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                 <div class="panel metric-card"><span class="metric-icon"><TrendingUp :size="18" /></span><small>考试记录</small><strong>{{ examRecords.length }}</strong><span>次练习</span></div>
               </div>
               <div class="panel curve-panel">
-                <div class="panel-heading"><div><h3>近 7 天正确率曲线</h3><p>每日答题正确率按题量加权计算，不存在记录的日期不绘制数据。</p></div><button v-if="examRecords.length" class="text-link" :disabled="examHistorySyncing" @click="removeExamRecords">{{ examHistorySyncing ? '正在同步…' : '清除记录' }}</button></div>
+                <div class="panel-heading"><div><h3>近 7 天正确率</h3><p>每日答题正确率按题量加权计算，不存在记录的日期不绘制数据。</p></div><button v-if="examRecords.length" class="text-link" :disabled="examHistorySyncing" @click="removeExamRecords">{{ examHistorySyncing ? '正在同步…' : '清除记录' }}</button></div>
                 <div v-if="examRecords.length" class="curve-chart">
                   <div v-for="day in curveRecords" :key="day.date" class="curve-column">
                     <div class="curve-value">{{ day.accuracy === null ? '—' : day.accuracy + '%' }}</div>
@@ -2636,11 +2636,11 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
 
         <template v-else-if="activeModule === 'practical'">
           <p v-if="pendingScenarioAttempt" class="dictionary-status" role="status">
-            有实战答题尚未同步。
-            <button type="button" class="text-link" :disabled="scenarioSubmitting" @click="syncPendingScenarioAttempt">{{ scenarioSubmitting ? '同步中…' : '重新同步实战答题' }}</button>
+            实战答题待同步。
+            <button type="button" class="text-link" :disabled="scenarioSubmitting" @click="syncPendingScenarioAttempt">{{ scenarioSubmitting ? '同步中…' : '重试同步' }}</button>
           </p>
           <section class="section-block module-page-section">
-            <div class="section-heading"><div><h2>把知识用在真实工作情境里</h2></div></div>
+            <div class="section-heading"><div><h2>情境练习</h2></div></div>
             <div class="panel practice-start-card">
               <div class="section-heading"><div><h3>选择训练方向</h3></div></div>
               <div class="exam-list">
@@ -2652,7 +2652,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
               </div>
             </div>
             <div v-if="selectedTrackId === 'exam-fe'" class="question-category-section">
-              <div class="question-category-heading"><strong>FE 実戦トレーニング</strong><span>原创情境，不作为 IPA 官方真题</span></div>
+              <div class="question-category-heading"><strong>FE 实战训练</strong><span>原创情境，不作为 IPA 官方真题</span></div>
               <div class="question-review-filters question-category-filters" role="group" aria-label="FE 实战训练科目">
                 <button v-for="part in [{ id: 'all', label: '全部' }, { id: 'A', label: '科目A' }, { id: 'B', label: '科目B' }]"
                   :key="part.id" type="button" class="question-category-button" :class="{ active: practicalSection === part.id }"
@@ -2660,11 +2660,11 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
               </div>
             </div>
             <div v-if="scenarios.length > 0" class="question-category-section">
-              <div class="question-category-heading"><strong>分野</strong><span>{{ visibleScenarios.length }} / {{ scenarios.length }} 情境</span></div>
+              <div class="question-category-heading"><strong>领域</strong><span>{{ visibleScenarios.length }} / {{ scenarios.length }} 情境</span></div>
               <div class="fe-filter-controls">
-                <label>分野
+                <label>领域
                   <select :value="practicalCategory" aria-label="实战训练分野" @change="selectPracticalCategory(($event.target as HTMLSelectElement).value)">
-                    <option value="">すべて</option>
+                    <option value="">全部</option>
                     <option v-for="category in practicalCategoryOptions" :key="category" :value="category">{{ category }}</option>
                   </select>
                 </label>
@@ -2718,9 +2718,9 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
 
         <template v-else-if="activeModule === 'language'">
           <section class="language-banner" :class="studyLanguage === 'ja' ? 'japanese' : 'english'">
-            <div><span class="banner-tag">{{ studyLanguage === 'ja' ? '日本語 · JAPANESE' : 'ENGLISH · 英语' }}</span>
-              <h2>{{ studyLanguage === 'ja' ? '実際の場面で使える日本語を身につけよう。' : 'Build confidence one useful phrase at a time.' }}</h2>
-              <p>{{ studyLanguage === 'ja' ? '日常会話や職場で使える表現を、読み方・中国語訳・実例とともに学びます。' : 'Practice daily and workplace English with examples, explanations and speech.' }}</p>
+            <div><span class="banner-tag">{{ studyLanguage === 'ja' ? '日语学习' : '英语学习' }}</span>
+              <h2>{{ studyLanguage === 'ja' ? '练习实用日语' : '练习实用英语' }}</h2>
+              <p>日常与职场表达 · 例句 · 发音</p>
             </div>
             <div class="banner-decoration"><Languages :size="64" stroke-width="1.1" /></div>
           </section>
@@ -2736,7 +2736,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
             </div>
             <section class="language-practice panel" aria-label="主动回忆练习">
               <div class="language-practice-heading">
-                <div><span class="banner-tag">ACTIVE RECALL</span><h3>先回忆，再看答案</h3></div>
+                <div><span class="banner-tag">主动回忆</span><h3>先回忆，再看答案</h3></div>
                 <span class="language-practice-count">待复习 {{ dueLanguageReviewCount }} · {{ visibleLanguageCards.length }} 张</span>
               </div>
               <div v-if="languagePracticeCard" class="language-practice-content">
@@ -2753,13 +2753,13 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <strong>{{ languagePracticeCard.meaning_zh }}</strong>
                   <p>{{ languagePracticeCard.explanation }}</p>
                   <section v-if="languageExpansions(languagePracticeCard, 'vocabulary').length" class="language-expansion">
-                    <strong>🟨 高亮词汇逐项解释</strong>
+                    <strong>词汇解析</strong>
                     <div v-for="(item, index) in languageExpansions(languagePracticeCard, 'vocabulary')" :key="'practice-vocab-' + index">
                       <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                     </div>
                   </section>
                   <section v-if="languageExpansions(languagePracticeCard, 'grammar').length" class="language-expansion grammar">
-                    <strong>{{ sentenceParts(languagePracticeCard).some(part => part.type === 'grammar') ? '🟦 高亮语法逐项解释' : '语法观察提示（未检测到明确结构）' }}</strong>
+                    <strong>{{ sentenceParts(languagePracticeCard).some(part => part.type === 'grammar') ? '语法解析' : '语法提示' }}</strong>
                     <div v-for="(item, index) in languageExpansions(languagePracticeCard, 'grammar')" :key="'practice-grammar-' + index">
                       <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                     </div>
@@ -2767,7 +2767,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <a v-if="languagePracticeCard.source_url" class="language-source-link" :href="languagePracticeCard.source_url" target="_blank" rel="noopener noreferrer">查看句子来源 ↗</a>
                 </div>
                 <div v-else class="language-practice-recall-prompt">
-                  <span class="banner-tag">先回忆，再揭晓</span>
+                  <span class="banner-tag">先回忆</span>
                   <strong>{{ languagePracticeCard.meaning_zh || '请先尝试回忆这句话的意思。' }}</strong>
                   
                 </div>
@@ -2776,10 +2776,10 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <span>连续记住 {{ languageReviews.find(item => item.card_id === languagePracticeCard?.id)?.correct_streak || 0 }} 次</span>
                 </div>
                 <div class="language-practice-actions">
-                  <button type="button" class="language-reveal-button" :aria-expanded="languagePracticeRevealed" @click="languagePracticeRevealed = !languagePracticeRevealed"><span>{{ languagePracticeRevealed ? '隐藏原句与解析' : '显示原句与解析' }}</span><ChevronDown :size="16" :class="{ rotated: languagePracticeRevealed }" aria-hidden="true" /></button>
-                  <button class="primary-button" @click="nextLanguagePractice">跳过 <ArrowRight :size="15" /></button>
-                  <button class="language-review-again" :disabled="languageReviewBusy === languagePracticeCard.id" @click="submitLanguageReview('again')">还不熟 · 稍后再练</button>
-                  <button class="language-review-remembered" :disabled="languageReviewBusy === languagePracticeCard.id" @click="submitLanguageReview('remembered')">记住了 · 安排复习</button>
+                  <button type="button" class="language-reveal-button" :aria-expanded="languagePracticeRevealed" @click="languagePracticeRevealed = !languagePracticeRevealed"><span>{{ languagePracticeRevealed ? '收起答案' : '显示答案' }}</span><ChevronDown :size="16" :class="{ rotated: languagePracticeRevealed }" aria-hidden="true" /></button>
+                  <button class="secondary-button" @click="nextLanguagePractice">跳过 <ArrowRight :size="15" /></button>
+                  <button class="language-review-again" :disabled="languageReviewBusy === languagePracticeCard.id" @click="submitLanguageReview('again')">还不熟</button>
+                  <button class="language-review-remembered" :disabled="languageReviewBusy === languagePracticeCard.id" @click="submitLanguageReview('remembered')">记住了</button>
                   <button class="language-done-button" :disabled="languageProgressHydrating || !languageProgressReady || languageCardSaving.has(languagePracticeCard.id)" @click="toggleLanguageCard(languagePracticeCard.id)">{{ completedLanguageCards.includes(languagePracticeCard.id) ? '取消掌握' : '标记掌握' }}</button>
                 </div>
               </div>
@@ -2794,8 +2794,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
               <button :class="{ chosen: selectedLanguageMastery === 'unmastered' }" @click="selectedLanguageMastery = 'unmastered'">学习中 / 待复习 {{ languageCards.filter(card => !completedLanguageCards.includes(card.id) && !isLanguageCardUnlearned(card)).length }}</button>
               <button :class="{ chosen: selectedLanguageMastery === 'mastered' }" @click="selectedLanguageMastery = 'mastered'">已掌握 {{ languageCards.filter(card => completedLanguageCards.includes(card.id)).length }}</button>
             </div>
-            <p v-if="studyLanguage === 'ja'" class="language-source">日语句子来自 <a href="https://tatoeba.org" target="_blank" rel="noopener noreferrer">Tatoeba</a> 开放例句；每条句子保留来源链接，句中标注词汇与语法。</p>
-            <p v-else class="language-source">英语句子来自 <a href="https://tatoeba.org" target="_blank" rel="noopener noreferrer">Tatoeba</a> 开放例句；每条句子保留来源链接，句中标注词汇与语法。</p>
+            <p class="language-source">例句来源：<a href="https://tatoeba.org" target="_blank" rel="noopener noreferrer">Tatoeba</a>，原句可查看来源链接。</p>
             <p v-if="languageProgressHydrating" class="dictionary-status" role="status">正在同步语言进度…</p>
             <p v-else-if="languageSyncError" class="dictionary-status dictionary-error" role="alert">{{ languageSyncError }}</p>
             <p v-if="languageCardsLoading" class="dictionary-status">正在从学习内容库读取课程…</p>
@@ -2810,13 +2809,13 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                 <p class="language-meaning language-sentence-translation">{{ card.meaning_zh }}</p>
                 <p class="language-explanation">{{ card.explanation }}</p>
                 <section v-if="languageExpansions(card, 'vocabulary').length" class="language-expansion">
-                  <strong>🟨 高亮词汇逐项解释</strong>
+                  <strong>词汇解析</strong>
                   <div v-for="(item, index) in languageExpansions(card, 'vocabulary')" :key="'vocab-' + index">
                     <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                   </div>
                 </section>
                 <section v-if="languageExpansions(card, 'grammar').length" class="language-expansion grammar">
-                  <strong>{{ sentenceParts(card).some(part => part.type === 'grammar') ? '🟦 高亮语法逐项解释' : '语法观察提示（未检测到明确结构）' }}</strong>
+                  <strong>{{ sentenceParts(card).some(part => part.type === 'grammar') ? '语法解析' : '语法提示' }}</strong>
                   <div v-for="(item, index) in languageExpansions(card, 'grammar')" :key="'grammar-' + index">
                     <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
                   </div>
@@ -2831,7 +2830,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                 <button class="secondary-button" :disabled="languagePage <= 1" @click="languagePage = Math.max(1, languagePage - 1)">上一页</button>
                 <button class="secondary-button" :disabled="languagePage >= languagePageCount" @click="languagePage = Math.min(languagePageCount, languagePage + 1)">下一页</button>
               </div>
-              <div v-if="!languageCardsLoading && !languageCardsError && visibleLanguageCards.length === 0" class="empty-state"><BookOpen :size="25" /><strong>{{ selectedLanguageMastery === 'mastered' ? '还没有已掌握的卡片' : selectedLanguageMastery === 'unlearned' ? '这组卡片已经全部开始学习啦' : selectedLanguageMastery === 'unmastered' ? '没有正在学习或待复习的卡片' : '这个分类暂时没有已发布的课程' }}</strong><p>可以切换类别或掌握状态继续学习；进度会在云端保存，并在当前设备保留副本。</p></div>
+              <div v-if="!languageCardsLoading && !languageCardsError && visibleLanguageCards.length === 0" class="empty-state"><BookOpen :size="25" /><strong>{{ selectedLanguageMastery === 'mastered' ? '还没有已掌握的卡片' : selectedLanguageMastery === 'unlearned' ? '这组卡片已经全部开始学习啦' : selectedLanguageMastery === 'unmastered' ? '没有正在学习或待复习的卡片' : '这个分类暂时没有已发布的课程' }}</strong><p>请切换分类或学习状态。</p></div>
             </div>
           </section>
         </template>
@@ -2839,7 +2838,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
         <template v-else>
           <section class="section-block dictionary-view-switch" aria-label="词典页面切换">
             <div class="dictionary-view-tabs" role="tablist" aria-label="词典和生词本">
-              <button role="tab" :aria-selected="dictionaryView === 'search'" :class="{ chosen: dictionaryView === 'search' }" @click="dictionaryView = 'search'"><Search :size="16" /> 查词与 IT 术语</button>
+              <button role="tab" :aria-selected="dictionaryView === 'search'" :class="{ chosen: dictionaryView === 'search' }" @click="dictionaryView = 'search'"><Search :size="16" /> 查词</button>
               <button role="tab" class="saved-book-tab" :aria-selected="dictionaryView === 'saved'" :class="{ chosen: dictionaryView === 'saved' }" @click="dictionaryView = 'saved'"><BookMarked :size="17" /> <span>生词本</span><span class="saved-tab-count">{{ savedWords.length }}</span></button>
             </div>
           </section>
@@ -2860,13 +2859,13 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
               <button class="dictionary-search-button" :disabled="dictionaryLoading" @click="lookupDictionary">{{ dictionaryLoading ? '查找中…' : '查词' }}</button>
             </div>
 
-            <p v-if="lastSearchedTerm && dictionaryDetectedLanguage && dictSourceLang === 'auto' && !dictionaryLoading" class="dictionary-status" role="status">已识别：{{ dictionaryDetectedLanguage === 'zh' ? '中文' : dictionaryDetectedLanguage === 'ja' ? '日语' : dictionaryDetectedLanguage === 'en' ? '英语' : 'IT 术语' }}。识别不正确可手动切换语言。</p>
+            <p v-if="lastSearchedTerm && dictionaryDetectedLanguage && dictSourceLang === 'auto' && !dictionaryLoading" class="dictionary-status" role="status">识别为 {{ dictionaryDetectedLanguage === 'zh' ? '中文' : dictionaryDetectedLanguage === 'ja' ? '日语' : dictionaryDetectedLanguage === 'en' ? '英语' : 'IT 术语' }} · 可手动切换</p>
             <p v-if="dictionaryLoading" class="dictionary-status">正在查词…</p>
             <p v-else-if="dictionaryError" class="dictionary-status dictionary-error">{{ dictionaryError }} <button type="button" class="text-link" @click="lookupDictionary">重试</button></p>
-            <div v-if="!searchText.trim() && !dictionaryLoading" class="dictionary-quick-start"><span>试试查询</span><button @click="quickDictionarySearch('你好', 'zh')">你好 <small>中文</small></button><button @click="quickDictionarySearch('hello', 'en')">hello <small>英语</small></button><button @click="quickDictionarySearch('こんにちは', 'ja')">こんにちは <small>日语</small></button><button @click="quickDictionarySearch('認証', 'it')">認証 <small>IT</small></button><button @click="quickDictionarySearch('ハッシュ', 'it')">ハッシュ <small>安全</small></button><button @click="quickDictionarySearch('API', 'it')">API <small>接口</small></button><button @click="quickDictionarySearch('トランザクション', 'it')">トランザクション <small>数据库</small></button><button @click="quickDictionarySearch('CORS', 'it')">CORS <small>跨域</small></button><button @click="quickDictionarySearch('コンポーネント', 'it')">コンポーネント <small>前端</small></button><button @click="quickDictionarySearch('Cloudflare D1', 'it')">Cloudflare D1 <small>云数据库</small></button><button @click="quickDictionarySearch('プルリクエスト', 'it')">プルリクエスト <small>Git协作</small></button></div>
+            <div v-if="!searchText.trim() && !dictionaryLoading" class="dictionary-quick-start"><span>示例</span><button @click="quickDictionarySearch('你好', 'zh')">你好 <small>中文</small></button><button @click="quickDictionarySearch('hello', 'en')">hello <small>英语</small></button><button @click="quickDictionarySearch('こんにちは', 'ja')">こんにちは <small>日语</small></button><button @click="quickDictionarySearch('認証', 'it')">認証 <small>IT</small></button><button @click="quickDictionarySearch('ハッシュ', 'it')">ハッシュ <small>安全</small></button><button @click="quickDictionarySearch('API', 'it')">API <small>接口</small></button><button @click="quickDictionarySearch('トランザクション', 'it')">トランザクション <small>数据库</small></button><button @click="quickDictionarySearch('CORS', 'it')">CORS <small>跨域</small></button><button @click="quickDictionarySearch('コンポーネント', 'it')">コンポーネント <small>前端</small></button><button @click="quickDictionarySearch('Cloudflare D1', 'it')">Cloudflare D1 <small>云数据库</small></button><button @click="quickDictionarySearch('プルリクエスト', 'it')">プルリクエスト <small>Git协作</small></button></div>
           </section>
           <section class="section-block">
-            <div class="section-heading"><div><h2>中日英互译与 IT 术语</h2></div></div>
+            <div class="section-heading"><div><h2>查询结果</h2></div></div>
             <div class="dictionary-list">
               <article v-for="entry in displayedEntries" :key="entry.term + (entry.tag || '') + (entry.en || '')" class="dictionary-card">
                 <div class="dict-main">
@@ -2876,21 +2875,21 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <p v-if="entry.translationJa" class="dictionary-translation-ja">{{ entry.language === 'ja' ? '日语释义' : '日语翻译／释义' }}：{{ entry.translationJa }}</p>
                   <p v-if="entry.zh" class="dictionary-translation-ja">{{ entry.language === 'zh' ? '中文原文' : '中文翻译／释义' }}：{{ entry.zh }}</p>
                   <p v-if="entry.example" class="dict-example">例句：{{ entry.example }}</p>
-                  <p v-if="entry.technical" class="dictionary-tech-note">来自 IT 专业词汇库</p>
+                  <p v-if="entry.technical" class="dictionary-tech-note">离线 IT 词库</p>
                   <div class="dictionary-ai-section">
                     <div v-if="!dictionaryAiAnswers[dictionaryAiKey(entry)]" class="dictionary-ai-action-row">
                       <button type="button" class="secondary-button dictionary-ai-button"
                         :disabled="dictionaryAiBusy"
                         @click="supplementDictionaryWithAi(entry)">
                         {{ dictionaryAiBusy && dictionaryAiActiveKey === dictionaryAiKey(entry) ? 'AI 解释中…'
-                          : (!entry.zh || (!entry.en && !entry.englishTerm) || !entry.translationJa) ? 'AI 补充翻译与用法' : 'AI 解释语境与多义词' }}
+                          : (!entry.zh || (!entry.en && !entry.englishTerm) || !entry.translationJa) ? 'AI 补充释义' : 'AI 语境解析' }}
                       </button>
-                      <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次新调用' : '今日 AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small>
+                      <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次' : 'AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small>
                     </div>
                     <div v-if="dictionaryAiAnswers[dictionaryAiKey(entry)]" class="dictionary-ai-result">
                       <strong>AI 辅助解析</strong>
                       <p>{{ dictionaryAiAnswers[dictionaryAiKey(entry)] }}</p>
-                      <small>AI 内容可能出错，以原词典和实际语境为准。</small>
+                      <small>AI 仅供参考，请以词典为准。</small>
                     </div>
                     <p v-if="dictionaryAiErrors[dictionaryAiKey(entry)]" class="dictionary-status dictionary-error" role="alert">{{ dictionaryAiErrors[dictionaryAiKey(entry)] }}</p>
                   </div>
@@ -2898,16 +2897,16 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                 </div>
                 <div class="dict-actions"><button class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + (entry.englishTerm || entry.term)" title="播放英语发音"><Volume2 :size="14" /><span>EN</span></button><button class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语辅助读音：' + (entry.englishTerm || entry.term)" title="播放日语辅助读音"><Languages :size="14" /><span>日</span></button><button class="round-action pronunciation-button" @click="speakDictionaryChinese(entry)" :aria-label="'播放中文发音：' + entry.term" title="播放中文发音"><Volume2 :size="14" /><span>中</span></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" :disabled="vocabularyHydrating || !vocabularySyncReady" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
               </article>
-              <div v-if="lastSearchedTerm.trim().toLowerCase() === searchText.trim().toLowerCase() && displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>没有找到匹配词条</strong><p>可尝试中文、日文、英文词语或 IT 缩写。纯汉字的语言可能有歧义，请手动选择「中文」或「日语」。IT 模式只查询本地词库。</p></div>
+              <div v-if="lastSearchedTerm.trim().toLowerCase() === searchText.trim().toLowerCase() && displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>没有找到匹配词条</strong><p>换个关键词或语言试试；IT 模式仅查离线词库。</p></div>
               <div v-if="searchText.trim() && !dictionaryLoading && (dictionaryError || (lastSearchedTerm && displayedEntries.length === 0))" class="dictionary-ai-section dictionary-ai-fallback">
                 <button v-if="!dictionaryAiAnswers[dictionaryAiKey(null)]" type="button" class="secondary-button dictionary-ai-button"
                   :disabled="dictionaryAiBusy" @click="supplementDictionaryWithAi(null)">
-                  {{ dictionaryAiBusy && dictionaryAiActiveKey === dictionaryAiKey(null) ? 'AI 解释中…' : '尝试 AI 辅助解释当前词句' }}
+                  {{ dictionaryAiBusy && dictionaryAiActiveKey === dictionaryAiKey(null) ? 'AI 解释中…' : 'AI 辅助解释' }}
                 </button>
-                <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次新调用' : '今日 AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small>
+                <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次' : 'AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small>
                 <div v-if="dictionaryAiAnswers[dictionaryAiKey(null)]" class="dictionary-ai-result">
                   <strong>AI 辅助解析</strong><p>{{ dictionaryAiAnswers[dictionaryAiKey(null)] }}</p>
-                  <small>AI 内容可能出错，不代表已找到权威词典释义。</small>
+                  <small>AI 仅供参考，并非权威词典释义。</small>
                 </div>
                 <p v-if="dictionaryAiErrors[dictionaryAiKey(null)]" class="dictionary-status dictionary-error" role="alert">{{ dictionaryAiErrors[dictionaryAiKey(null)] }}</p>
               </div>
@@ -2915,7 +2914,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
           </section>
           </template>
           <section v-if="dictionaryView === 'saved'" class="section-block saved-vocabulary-block">
-            <div class="section-heading"><div><h2>个人生词本</h2></div></div>
+            <div class="section-heading"><div><h2>生词本</h2></div></div>
             <p v-if="vocabularyStatus" class="dictionary-status" role="status">{{ vocabularyStatus }}</p>
             <div v-if="savedVocabularyEntries.length" class="saved-vocabulary-list">
               <article v-for="entry in savedVocabularyEntries" :key="entry.term" class="saved-vocabulary-row">
