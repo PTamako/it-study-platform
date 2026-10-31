@@ -8,7 +8,7 @@ const worker = await readFile(new URL('../worker/index.ts', import.meta.url), 'u
 test('English dictionary results always expose a separate Japanese-aid player', () => {
   assert.match(app, /title="播放英语发音"/)
   assert.match(app, /title="播放日语辅助读音"/)
-  assert.match(app, /title: '英日发音与 IT 术语'/)
+  assert.match(app, /title: '中日英互译与 IT 术语'/)
   assert.match(app, /function speakDictionaryEnglish\(entry: DictionaryEntry\)/)
   assert.match(app, /function speakDictionaryJapanese\(entry: DictionaryEntry\)/)
 })
@@ -26,7 +26,7 @@ test('speech voice selection never falls back to an arbitrary first voice', () =
 })
 
 test('Japanese playback does not pretend an unknown English term has a verified kana guide', () => {
-  assert.match(app, /const text = entry\.reading \|\| \(entry\.language === 'ja' \? entry\.term : ''\)/)
+  assert.match(app, /const text = entry\.language === 'ja' \? \(entry\.reading \|\| entry\.term\) : \(entry\.translationJa \|\| entry\.reading \|\| ''\)/)
   assert.match(app, /该词暂未收录日语假名读音/)
 })
 
@@ -275,10 +275,13 @@ test('Japanese dictionary results show a real Japanese explanation when availabl
 })
 
 
-test('dictionary guides users to switch language when selected Japanese/English conflicts with clear input script', () => {
+test('dictionary guides users to switch language for Japanese, English and Chinese input mismatches', () => {
   assert.ok(app.includes('const containsJapaneseKana = /[\\u3040-\\u30ff]/.test(q)'))
   assert.ok(app.includes("requestedLanguage === 'en' && containsJapaneseKana"))
   assert.ok(app.includes('检测到日语输入，请切换到「日语」后再查询'))
   assert.ok(app.includes("requestedLanguage === 'ja' && looksEnglishOnly"))
   assert.ok(app.includes('检测到英语输入，请切换到「英语」后再查询'))
+  assert.ok(app.includes('检测到汉字输入，请选择「中文」或「日语」后查询'))
+  assert.ok(app.includes("requestedLanguage === 'zh' && (containsJapaneseKana || looksEnglishOnly)"))
+  assert.ok(app.includes('检测到常见中文表达，请切换到「中文」后查询'))
 })
