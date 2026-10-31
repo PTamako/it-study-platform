@@ -5,6 +5,7 @@ import { tokyoDate, mergeDailyTaskStates } from './daily-tasks'
 import { utcReviewMillis } from './review-time'
 import { fetchVocabularySnapshot } from './vocabulary-sync'
 import { getLanguageExpansions, getSentenceParts } from './language-annotations'
+import { fetchLanguageCorpus } from './language-corpus'
 import { parseMockSnapshot, type MockSnapshot } from './mock-recovery'
 import ExamScratchTools from './ExamScratchTools.vue'
 import {
@@ -1382,33 +1383,35 @@ const languageProgress = computed(() => {
   const done = ids.filter(id => masteredLanguageIds.value.has(id)).length
   return { done, total: ids.length, percent: ids.length ? Math.round(done / ids.length * 100) : 0 }
 })
+const languageDeckCache = new Map<'ja' | 'en', LanguageCard[]>()
 let languageCardsLoadGeneration = 0
 let languageCardsAbort: AbortController | undefined
 async function loadLanguageCards() {
   const generation = ++languageCardsLoadGeneration
   const language = studyLanguage.value
   languageCardsAbort?.abort()
+  languageCardsAbort = undefined
+  languageCardsError.value = ''
+
+  // Reuse already downloaded lessons when toggling Japanese/English. The
+  // content/annotations are generated at build time and need zero D1 reads.
+  const cached = languageDeckCache.get(language)
+  if (cached) {
+    languageCards.value = cached
+    languageCardsLoading.value = false
+    return
+  }
   const controller = new AbortController()
   languageCardsAbort = controller
   languageCardsLoading.value = true
-  languageCardsError.value = ''
   languageCards.value = []
   try {
-    // Each response is bounded to keep peak network/JSON parsing memory down
-    // on iPhone Safari. Existing 5,000-card filters and progress are unchanged.
-    const batchSize = 1000
-    for (let offset = 0; offset <= 10000; offset += batchSize) {
-      const params = new URLSearchParams({ lang: language, limit: String(batchSize), offset: String(offset) })
-      const response = await fetch('/api/language-cards?' + params, { signal: controller.signal })
-      const data = await response.json() as { items?: LanguageCard[]; error?: string }
-      if (generation !== languageCardsLoadGeneration || language !== studyLanguage.value) return
-      if (!response.ok || !Array.isArray(data.items)) throw new Error(data.error || '语言学习内容加载失败')
-      languageCards.value.push(...data.items)
-      if (data.items.length < batchSize) break
-    }
+    const items = await fetchLanguageCorpus<LanguageCard>(language, controller.signal)
+    if (generation !== languageCardsLoadGeneration || language !== studyLanguage.value) return
+    languageDeckCache.set(language, items)
+    languageCards.value = items
   } catch (error) {
     if (generation !== languageCardsLoadGeneration || controller.signal.aborted) return
-    // Do not present a partially loaded deck as the complete curriculum.
     languageCards.value = []
     languageCardsError.value = error instanceof Error ? error.message : '语言学习内容加载失败，请稍后再试。'
   } finally {
@@ -1428,13 +1431,15 @@ async function submitLanguageReview(result: 'again' | 'remembered') {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ card_id: card.id, result }),
     })
-    const data = await response.json().catch(() => ({})) as { error?: string }
+    const data = await response.json().catch(() => ({})) as { error?: string; review?: LanguageReview }
     if (!response.ok) throw new Error(data.error || '复习记录保存失败。')
-    const refreshed = await fetch('/api/language-review')
-    if (refreshed.ok) {
-      const rows = await refreshed.json() as { items?: LanguageReview[] }
-      languageReviews.value = rows.items || []
-    }
+    // The write returns only the affected review row. Never re-read the entire
+    // review table after each answer (the old request burned D1 read quota).
+    if (!data.review) throw new Error('复习记录已保存，但同步结果不完整。请刷新同步。')
+    languageReviews.value = [
+      ...languageReviews.value.filter(item => item.card_id !== card.id),
+      data.review,
+    ]
     languagePracticeRevealed.value = false
     if (result === 'remembered') {
       languagePracticeIndex.value = visibleLanguageCards.value.length
