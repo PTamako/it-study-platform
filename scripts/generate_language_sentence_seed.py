@@ -440,7 +440,7 @@ def japanese_surface_forms(lemma):
                       stem+a+"なかった", stem+te, stem+past})
     return {form: (lemma, zh) for form in forms}
 
-def japanese_safe_word_span(sentence, start, end, term):
+def japanese_safe_word_span(sentence, start, end, term, kind="vocabulary"):
     """Conservative protection against short kana matches inside longer words."""
     before = sentence[start - 1] if start else ""
     after = sentence[end:end + 5]
@@ -452,7 +452,7 @@ def japanese_safe_word_span(sentence, start, end, term):
         return False
     # Kana-leading entries embedded in an uninterrupted hiragana word are
     # uncertain; prefer a missed highlight to a false explanation.
-    if term and re.match(r"[ぁ-ん]", term[0]) and re.match(r"[ぁ-ん]", before) and before not in {"は", "が", "を", "に", "で", "と", "へ", "の", "も"}:
+    if kind == "vocabulary" and term and re.match(r"[ぁ-ん]", term[0]) and re.match(r"[ぁ-ん]", before) and before not in {"は", "が", "を", "に", "で", "と", "へ", "の", "も"}:
         return False
     return True
 
@@ -470,7 +470,7 @@ def make_hits(sentence, lang):
             term = match.group()
             if not term.strip():
                 continue
-            if lang == "ja" and not japanese_safe_word_span(sentence, match.start(), match.end(), term):
+            if lang == "ja" and not japanese_safe_word_span(sentence, match.start(), match.end(), term, "grammar"):
                 continue
             if lang == "ja" and term in {"か", "の", "は", "が", "を", "に", "で", "と", "へ"}:
                 particle_notes = {
