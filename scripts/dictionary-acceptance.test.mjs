@@ -8,7 +8,7 @@ const worker = await readFile(new URL('../worker/index.ts', import.meta.url), 'u
 test('English dictionary results always expose a separate Japanese-aid player', () => {
   assert.match(app, /title="播放英语发音"/)
   assert.match(app, /title="播放日语辅助读音"/)
-  assert.match(app, /title: '中日英互译与 IT 术语'/)
+  assert.match(app, /title: '词典与 IT 术语'/)
   assert.match(app, /function speakDictionaryEnglish\(entry: DictionaryEntry\)/)
   assert.match(app, /function speakDictionaryJapanese\(entry: DictionaryEntry\)/)
 })
