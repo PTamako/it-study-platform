@@ -97,7 +97,7 @@ test('SG/FE keep year and subject filters without historical notices or sample P
   const app = readFileSync(new URL('../src/App.vue', import.meta.url), 'utf8')
   assert.match(app, /\[2026, 2025, 2024, 2023, 2019\]/)
   assert.match(app, /\[2026, 2025, 2024, 2023, 2019, 2018, 2017, 2016\]/)
-  assert.match(app, /<option value="B">科目B<\/option>/)
+  assert.match(app, /<option value="B">科目 B<\/option>/)
   assert.doesNotMatch(app, /CBT過去問はIPA非公開です/)
   assert.doesNotMatch(app, /2022年公開のサンプル問題は本試験の過去問ではありません/)
   assert.doesNotMatch(app, /sg_set_sample_qs\.pdf|fe_kamoku_[ab]_set_sample_qs\.pdf/)
