@@ -1021,3 +1021,26 @@ button[aria-disabled="true"] {
 
 /* Reserve FE status space while it loads so the header never collapses after refresh. */
 .fe-bank-inline-status-idle{visibility:hidden}
+
+
+/* Dictionary examples: four quiet inline shortcuts instead of a multi-row tag cloud. */
+.dictionary-quick-start{
+  display:flex;align-items:center;flex-wrap:nowrap;gap:5px;
+  width:100%;min-width:0;max-width:100%;overflow-x:auto;overflow-y:hidden;
+  margin:5px 0 0;padding:0;white-space:nowrap;
+  scrollbar-width:none;-webkit-overflow-scrolling:touch;
+}
+.dictionary-quick-start::-webkit-scrollbar{display:none}
+.dictionary-quick-start>span{
+  flex:0 0 auto;width:auto;margin:0 4px 0 0;
+  color:#a0a6b6;font-size:11px;font-weight:400;line-height:1.3;
+}
+.dictionary-quick-start button{
+  display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;
+  min-height:34px;min-width:0;padding:4px 7px;
+  border:0;border-radius:7px;background:transparent;box-shadow:none;
+  color:#80899f;font-size:12px;font-weight:500;line-height:1.3;
+  transition:color .15s ease,background-color .15s ease;
+}
+.dictionary-quick-start button:hover{border-color:transparent;background:#f2f4fa;color:#5867bd}
+.dictionary-quick-start button:focus-visible{outline:2px solid #a9b1ff;outline-offset:0}
