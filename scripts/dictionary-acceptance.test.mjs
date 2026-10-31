@@ -105,7 +105,7 @@ test('speech plays on the first tap while language voices are still loading', ()
 
 test('speech stops when leaving a module or switching exam/practical content', () => {
   assert.match(app, /function navigate\(id: ModuleId\) \{\s*stopSpeech\(\)/)
-  assert.match(app, /function selectExam\(track: ExamTrack\) \{\s*stopSpeech\(\)/)
+  assert.match(app, /function selectExam\(track: ExamTrack\) \{[\s\S]*?if \(selectedTrackId\.value === track\.id\) return\s*stopSpeech\(\)/)
   assert.match(app, /function nextPracticeQuestion\(\) \{\s*stopSpeech\(\)/)
   assert.match(app, /function nextScenario\(\) \{\s*stopSpeech\(\)/)
 })
