@@ -1257,7 +1257,7 @@ export default {
       try {
         const { results } = await env.DB.prepare(
           `SELECT id, track_id, title, category, difficulty, situation, task,
-                  options_json, explanation, source_type
+                  options_json, explanation, source_type, exam_section
            FROM practical_scenarios WHERE track_id = ? ORDER BY id`,
         ).bind(trackId).all()
         return json({ items: results.map((row: Record<string, unknown>) => ({
