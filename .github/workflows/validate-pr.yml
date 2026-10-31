@@ -34,6 +34,12 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Restore cached Tatoeba sentence exports
+        uses: actions/cache@v4
+        with:
+          path: /tmp/language-sentence-sources
+          key: tatoeba-sentence-exports-v1-${{ runner.os }}
+
       - name: Generate attributed Japanese and English sentence migration
         run: python scripts/generate_language_sentence_seed.py
 
