@@ -36,5 +36,5 @@ export function parseMockSnapshot<T>(raw: unknown): MockSnapshot<T> | null {
   for (const [id, answer] of Object.entries(answers)) {
     if (!ids.has(id) || typeof answer !== 'string' || answer.length > 10) return null
   }
-  return s as MockSnapshot<T>
+  return s as unknown as MockSnapshot<T>
 }
