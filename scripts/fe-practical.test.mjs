@@ -70,7 +70,7 @@ test('every FE scenario is answerable, Japanese, unambiguous and scored determin
     const scores = JSON.parse(row.scoring_json)
     assert.deepEqual(choices.map(option => option.id),['a','b','c','d'],row.id)
     assert.equal(new Set(choices.map(option => option.text)).size,4,row.id)
-    assert.ok(choices.every(option => typeof option.text === 'string' && option.text.length > 1),row.id)
+    assert.ok(choices.every(option => typeof option.text === 'string' && option.text.trim().length >= 1),row.id)
     assert.ok(choices.some(option => option.id === row.best_option),row.id)
     assert.equal(scores[row.best_option],100,row.id)
     assert.equal(Object.values(scores).filter(value => value === 100).length,1,row.id)
