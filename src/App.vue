@@ -71,6 +71,7 @@ async function logout() {
     const response = await fetch('/api/auth/logout', { method: 'POST' })
     if (!response.ok) throw new Error('退出登录失败，请检查网络后重试。')
     authenticated.value = false
+    feBankPrepared.value = false
     masterySyncGeneration++
     dailyHydrationRun++
     languageProgressReady.value = false
@@ -845,9 +846,12 @@ watch(selectedTrackId, () => {
   practicalCategory.value = ''
   resetScenarioSelection()
 })
-async function loadExamTracks() {
-  tracksLoading.value = true
-  tracksError.value = ''
+async function loadExamTracks(silent = false) {
+  // Background FE count refresh should not add a loading row above the exam cards.
+  if (!silent) {
+    tracksLoading.value = true
+    tracksError.value = ''
+  }
   try {
     const response = await fetch('/api/tracks')
     const data = await response.json() as { items?: ExamTrack[]; error?: string }
@@ -857,12 +861,14 @@ async function loadExamTracks() {
     // SG is the initial exam; populate its domain selector on first load too.
     if (selectedTrackId.value === 'exam-sg') void loadPracticeTopics()
   } catch (error) {
+    if (silent) throw error
     tracksError.value = error instanceof Error ? error.message : '考试列表加载失败，请稍后重试。'
   } finally {
-    tracksLoading.value = false
+    if (!silent) tracksLoading.value = false
   }
 }
 const feBankLoading = ref(false)
+const feBankPrepared = ref(false)
 const feBankError = ref('')
 async function loadPracticeTopics() {
   const requestId = ++practiceTopicLoadId
@@ -898,20 +904,23 @@ function applyPracticeFilter(changed: 'year' | 'section' | 'topic') {
   selectReviewMode('all')
 }
 async function prepareFeBank() {
-  if (feBankLoading.value) return
+  if (feBankLoading.value || feBankPrepared.value) return
   feBankLoading.value = true
   feBankError.value = ''
   try {
     const response = await fetch('/api/fe-question-bank/install', { method: 'POST' })
     const data = await response.json() as { error?: string }
     if (!response.ok) throw new Error(data.error || 'FE 题库加载失败。')
-    await loadExamTracks()
-    await loadPracticeTopics()
+    await loadExamTracks(true)
+    feBankPrepared.value = true
+    if (selectedTrackId.value === 'exam-fe') await loadPracticeTopics()
   } catch (error) {
     feBankError.value = error instanceof Error ? error.message : 'FE 题库加载失败，请重试。'
   } finally { feBankLoading.value = false }
 }
 function selectExam(track: ExamTrack) {
+  // Tapping the already-selected card must not reset filters, questions or scroll position.
+  if (selectedTrackId.value === track.id) return
   stopSpeech()
   practiceAnswerRequestId += 1
   practiceLoadRequestId += 1
@@ -1702,7 +1711,7 @@ async function hydrateVocabulary() {
     savedDictionaryEntries.value = entries
     vocabularyPending.value = pending
     vocabularySyncReady.value = true
-    if (pending.size) vocabularyStatus.value = '部分旧收藏仅保留在本机；请确认后选择同步或移除。'
+    if (pending.size) vocabularyStatus.value = '有未同步的旧收藏，请选择同步或移除。'
   } catch {
     if (loadId === vocabularyLoadId) {
       vocabularyPending.value = new Map(savedWords.value.map(term => [term, 'unknown' as const]))
@@ -2426,11 +2435,12 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
               <div v-if="!tracksLoading && !tracksError && examTracks.length === 0" class="empty-state"><GraduationCap :size="25" /><strong>暂无已启用的考试</strong><p>目前没有可用的考试内容，请稍后刷新。</p></div>
             </div>
 
-            <p v-if="selectedTrackId === 'exam-fe' && feBankLoading" class="dictionary-status" role="status">正在准备 FE 题库…</p>
-            <p v-if="selectedTrackId === 'exam-fe' && feBankError" class="dictionary-status dictionary-error" role="alert">{{ feBankError }} <button class="text-link" @click="prepareFeBank">重试</button></p>
-
             <section class="practice-section">
-              <div class="section-heading practice-heading"><div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2></div></div>
+              <div class="section-heading practice-heading">
+                <div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2></div>
+                <span v-if="selectedTrackId === 'exam-fe'" class="fe-bank-inline-status" :class="{ 'fe-bank-inline-status-idle': !feBankLoading }" :role="feBankLoading ? 'status' : undefined" :aria-hidden="!feBankLoading">同步题库中…</span>
+              </div>
+              <p v-if="selectedTrackId === 'exam-fe' && feBankError" class="dictionary-status dictionary-error" role="alert">{{ feBankError }} <button class="text-link" @click="prepareFeBank">重试</button></p>
               <p v-if="pendingPracticeAttempt" class="dictionary-status" role="status">
                 答题待同步。
                 <button type="button" class="text-link" :disabled="practiceSaving" @click="syncPendingPracticeAttempt">{{ practiceSaving ? '同步中…' : '重试同步' }}</button>
@@ -2914,20 +2924,37 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
           </section>
           </template>
           <section v-if="dictionaryView === 'saved'" class="section-block saved-vocabulary-block">
-            <div class="section-heading"><div><h2>生词本</h2></div></div>
-            <p v-if="vocabularyStatus" class="dictionary-status" role="status">{{ vocabularyStatus }}</p>
+            <div class="section-heading vocabulary-heading"><div><h2>生词本</h2></div><span class="vocabulary-total">{{ savedVocabularyEntries.length }} 词</span></div>
+            <div v-if="vocabularyStatus" class="vocabulary-inline-notice" role="status"><BookMarked :size="16" aria-hidden="true" /><span>{{ vocabularyStatus }}</span></div>
             <div v-if="savedVocabularyEntries.length" class="saved-vocabulary-list">
               <article v-for="entry in savedVocabularyEntries" :key="entry.term" class="saved-vocabulary-row">
-                <div class="saved-vocabulary-copy"><strong>{{ entry.term }}</strong><small v-if="entry.reading">{{ entry.reading }}</small><p v-if="entry.en">英语释义：{{ entry.en }}</p><p v-if="entry.translationJa">日语翻译／释义：{{ entry.translationJa }}</p><p v-if="entry.zh">中文翻译／释义：{{ entry.zh }}</p></div>
-                <div class="saved-vocabulary-pronunciations">
-                  <button class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + entry.term" title="英语原音"><Volume2 :size="16" /><span>EN</span></button>
-                  <button class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语辅助读音：' + entry.term" title="日语辅助读音"><Languages :size="16" /><span>日</span></button>
-                  <button class="round-action pronunciation-button" @click="speakDictionaryChinese(entry)" :aria-label="'播放中文发音：' + entry.term" title="中文发音"><Volume2 :size="16" /><span>中</span></button>
+                <header class="saved-vocabulary-header">
+                  <div class="saved-vocabulary-title"><h3>{{ entry.term }}</h3><span v-if="entry.tag && entry.tag !== '生词本'" class="saved-vocabulary-tag">{{ entry.tag }}</span></div>
+                  <p v-if="entry.reading || entry.phonetic" class="saved-vocabulary-reading">{{ entry.reading || entry.phonetic }}</p>
+                </header>
+                <div class="saved-vocabulary-definitions">
+                  <div v-if="entry.en" class="saved-vocabulary-definition"><span class="saved-vocabulary-lang" lang="en">EN</span><p>{{ entry.en }}</p></div>
+                  <div v-if="entry.translationJa" class="saved-vocabulary-definition"><span class="saved-vocabulary-lang" lang="ja">日</span><p>{{ entry.translationJa }}</p></div>
+                  <div v-if="entry.zh" class="saved-vocabulary-definition"><span class="saved-vocabulary-lang" lang="zh">中</span><p>{{ entry.zh }}</p></div>
+                  <p v-if="!entry.en && !entry.translationJa && !entry.zh" class="saved-vocabulary-missing">暂无完整释义，可重新查词补充。</p>
+                </div>
+                <p v-if="vocabularyPending.has(entry.term)" class="saved-vocabulary-sync-state">{{ vocabularyPending.get(entry.term) === 'deleted' ? '其他设备已取消收藏' : '仅保存在本机' }}</p>
+                <div v-if="speechStatus && speechStatusTarget === entry.term" class="saved-vocabulary-speech-status" role="status" aria-live="polite">
+                  <span>{{ speechStatus }}</span>
+                  <button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续' : '暂停' }}</button>
+                  <button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button>
+                </div>
+                <footer class="saved-vocabulary-footer">
+                  <div class="saved-vocabulary-pronunciations" role="group" :aria-label="'播放词条发音：' + entry.term">
+                    <button type="button" class="vocabulary-speak-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + entry.term"><Volume2 :size="15" /> EN</button>
+                    <button type="button" class="vocabulary-speak-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语发音：' + entry.term"><Volume2 :size="15" /> 日</button>
+                    <button type="button" class="vocabulary-speak-button" @click="speakDictionaryChinese(entry)" :aria-label="'播放中文发音：' + entry.term"><Volume2 :size="15" /> 中</button>
                   </div>
-                <p v-if="speechStatus && speechStatusTarget === entry.term" class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p>
-                <span v-if="vocabularyPending.has(entry.term)">{{ vocabularyPending.get(entry.term) === 'deleted' ? '其他设备已取消，本机保留' : '仅本机保留' }}</span>
-                <button v-if="vocabularyPending.has(entry.term)" class="saved-remove-button" :disabled="vocabularyHydrating || !vocabularySyncReady" @click="restoreVocabulary(entry.term)">同步收藏</button>
-                <button class="saved-remove-button" :disabled="vocabularyHydrating || !vocabularySyncReady" @click="toggleSaved(entry.term)">{{ vocabularyPending.has(entry.term) ? '移除本机副本' : '取消收藏' }}</button>
+                  <div class="saved-vocabulary-manage">
+                    <button v-if="vocabularyPending.has(entry.term)" type="button" class="saved-sync-button" :disabled="vocabularyHydrating || !vocabularySyncReady" @click="restoreVocabulary(entry.term)">同步</button>
+                    <button type="button" class="saved-remove-button" :disabled="vocabularyHydrating || !vocabularySyncReady" @click="toggleSaved(entry.term)"><Bookmark :size="14" />{{ vocabularyPending.has(entry.term) ? '移除本机副本' : '取消收藏' }}</button>
+                  </div>
+                </footer>
               </article>
             </div>
             <div v-else class="empty-state"><BookMarked :size="25" /><strong>还没有收藏词条</strong><p>查询后点击结果卡片旁的书签按钮，即可保存并在这里复习。</p></div>

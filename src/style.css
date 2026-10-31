@@ -219,43 +219,61 @@
 .scenario-feedback .primary-button{margin-top:2px}
 @media(max-width:560px){.scenario-toolbar{align-items:flex-start;flex-direction:column}.scenario-toolbar label{width:100%;align-items:flex-start;flex-direction:column}.scenario-toolbar select{width:100%;max-width:100%}.scenario-card>h3{font-size:17px}}
 
-/* Clear, reachable dictionary views: search and saved vocabulary are separate tabs. */
-.dictionary-view-switch{margin-top:4px;margin-bottom:14px}
-.dictionary-view-tabs{display:flex;gap:8px;flex-wrap:wrap;padding:5px;border:1px solid #e9ebf5;border-radius:14px;background:#fff}
-.dictionary-view-tabs button{display:flex;align-items:center;justify-content:center;gap:8px;min-height:42px;padding:10px 15px;border:0;border-radius:10px;background:transparent;color:#777c91;font-size:12px;font-weight:700}
-.dictionary-view-tabs button.chosen{background:#eeefff;color:#4f5ed3}
-.saved-tab-count{display:inline-grid;place-items:center;min-width:21px;height:21px;padding:0 5px;border-radius:999px;background:#e3e5ff;color:#4f5ed3;font-size:10px}
-.saved-vocabulary-block{margin-top:12px}
-@media(max-width:560px){.dictionary-view-tabs{display:grid;grid-template-columns:1fr 1fr}.dictionary-view-tabs button{padding:10px 8px;font-size:11px}}
-
-
-/* Compact dictionary suggestions and a book-like vocabulary tab */
+/* Dictionary tabs and compact, mobile-first saved vocabulary cards. */
+.dictionary-view-switch{margin-top:4px;margin-bottom:16px}
+.dictionary-view-tabs{display:flex;gap:5px;padding:5px;border:1px solid #e5e8f3;border-radius:14px;background:#fff}
+.dictionary-view-tabs button{flex:1 1 0;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:9px 12px;border:1px solid transparent;border-radius:10px;background:transparent;color:#747b93;font-size:13px;font-weight:650}
+.dictionary-view-tabs button.chosen,.dictionary-view-tabs button.saved-book-tab.chosen{background:#f0f2ff;color:#5464ce;border-color:#dfe4ff}
+.dictionary-view-tabs button.saved-book-tab{justify-content:center;box-shadow:none;transform:none}
+.saved-tab-count{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:#e8ebfa;color:#5866c2;font-size:11px;font-weight:700}
+.dictionary-view-tabs button.chosen .saved-tab-count{background:#dfe4ff}
+.saved-vocabulary-block{margin-top:18px}
+.saved-vocabulary-block .section-heading{display:flex;align-items:center;gap:10px}
+.vocabulary-total{margin-left:auto;color:#858ba1;font-size:12px}
+.vocabulary-inline-notice{display:flex;align-items:flex-start;gap:9px;margin:0 0 16px;padding:11px 13px;border:1px solid #e5e9fc;border-radius:12px;background:#f5f7ff;color:#5e6db7;font-size:12px;line-height:1.55}
+.vocabulary-inline-notice svg{flex:0 0 auto;margin-top:1px}
+.saved-vocabulary-list{display:grid;gap:12px;border:0;padding:0;background:none;box-shadow:none}
+.saved-vocabulary-row{min-width:0;display:flex;flex-direction:column;gap:0;padding:18px 20px;border:1px solid #e6e9f2;border-radius:16px;background:#fff;box-shadow:0 3px 16px rgba(37,48,91,.045)}
+.saved-vocabulary-row:last-child{border-bottom:1px solid #e6e9f2}
+.saved-vocabulary-header{min-width:0}
+.saved-vocabulary-title{display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-width:0}
+.saved-vocabulary-title h3{margin:0;color:#303950;font-size:18px;font-weight:750;line-height:1.4;overflow-wrap:anywhere}
+.saved-vocabulary-tag{display:inline-flex;max-width:100%;padding:3px 7px;border-radius:6px;background:#eef1fc;color:#6675b3;font-size:10px;overflow-wrap:anywhere}
+.saved-vocabulary-reading{margin:5px 0 0;color:#8790a6;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.saved-vocabulary-definitions{display:grid;gap:10px;margin-top:15px}
+.saved-vocabulary-definition{display:grid;grid-template-columns:28px minmax(0,1fr);gap:10px;align-items:start}
+.saved-vocabulary-lang{display:inline-grid;place-items:center;min-width:28px;height:23px;margin-top:1px;border-radius:6px;background:#f0f2ff;color:#5d6cc2;font-size:10px;font-weight:750}
+.saved-vocabulary-definition p{min-width:0;margin:0;color:#59637b;font-size:13px;line-height:1.7;overflow-wrap:anywhere;white-space:pre-line}
+.saved-vocabulary-missing{margin:0;font-size:12px;color:#8991a5;line-height:1.6}
+.saved-vocabulary-sync-state{align-self:flex-start;margin:14px 0 0;padding:4px 8px;border-radius:7px;background:#fff6e8;color:#94692f;font-size:11px}
+.saved-vocabulary-speech-status{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:13px;padding:8px 10px;border-radius:9px;background:#f6f8ff;color:#64719e;font-size:12px;line-height:1.5}
+.saved-vocabulary-speech-status>span{flex:1 1 140px;min-width:0;overflow-wrap:anywhere}
+.saved-vocabulary-speech-status .text-link{min-height:32px}
+.saved-vocabulary-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:16px;padding-top:13px;border-top:1px solid #edf0f6}
+.saved-vocabulary-pronunciations{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:6px;max-width:none;min-width:0}
+.vocabulary-speak-button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-width:57px;min-height:38px;padding:7px 9px;border:1px solid #e3e8f5;border-radius:9px;background:#f7f9ff;color:#5969c3;font-size:12px;font-weight:700}
+.vocabulary-speak-button:hover{background:#edf1ff;border-color:#cfd7f4}
+.saved-vocabulary-manage{display:flex;align-items:center;gap:7px;min-width:0}
+.saved-vocabulary-row .saved-remove-button,.saved-vocabulary-row .saved-sync-button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:38px;padding:7px 10px;border:1px solid #e5e8f1;border-radius:9px;background:#fff;color:#777e92;font-size:12px;white-space:nowrap}
+.saved-vocabulary-row .saved-sync-button{border-color:#cfd7ff;color:#5867c0;background:#f2f4ff}
+.saved-vocabulary-row .saved-remove-button:hover{background:#f7f8fb}
 .dictionary-quick-start{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:10px 0 0;color:#9296a8;font-size:10px;line-height:1.5}
 .dictionary-quick-start>span{margin-right:2px;color:#777d92;font-weight:600}
 .dictionary-quick-start button{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid #e8eaf3;border-radius:8px;background:#fff;color:#555d7a;font-size:11px;line-height:1.3;transition:background .15s,border-color .15s}
 .dictionary-quick-start button:hover{border-color:#cdd2fb;background:#f7f7ff}
 .dictionary-quick-start button small{font-size:9px;color:#969bb0}
-.dictionary-view-tabs button.saved-book-tab{position:relative;isolation:isolate;overflow:hidden;min-width:118px;justify-content:flex-start;padding-left:17px;border:1px solid #e6d9b8;border-radius:8px 11px 11px 8px;background:linear-gradient(110deg,#f7edcf,#fff8e6 28%,#fffdf7);box-shadow:inset 4px 0 0 #d6bd82,0 2px 0 #eee4cc;color:#82704a}
-.dictionary-view-tabs button.saved-book-tab:before{content:"";position:absolute;z-index:-1;left:9px;top:0;bottom:0;width:1px;background:#dfcca0}
-.dictionary-view-tabs button.saved-book-tab.chosen{border-color:#c9b17a;background:linear-gradient(110deg,#efe0b5,#fff3d1 30%,#fffaf0);box-shadow:inset 4px 0 0 #b99a5b,0 3px 0 #e5d4aa;color:#70582d;transform:translateY(-1px)}
-.dictionary-view-tabs button.saved-book-tab .saved-tab-count{margin-left:auto;background:#e8d7aa;color:#70582d}
-.saved-vocabulary-block .section-heading{align-items:center}
-.saved-vocabulary-list{position:relative;padding:7px 14px 7px 20px;border:1px solid #e8dfc8;border-radius:8px 14px 14px 8px;background:linear-gradient(90deg,#e9d9b3 0,#f6edda 9px,#fffdf7 10px,#fffdf7 100%);box-shadow:0 5px 14px #4a3d1b0b}
-.saved-vocabulary-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:10px;padding:15px 3px;border-bottom:1px dashed #e8e0d0}
-.saved-vocabulary-row:last-child{border-bottom:0}
-.saved-vocabulary-copy strong{display:inline-block;font-size:14px;color:#3e4359;overflow-wrap:anywhere}
-.saved-vocabulary-copy small{display:block;margin-top:4px;color:#999078;font-size:10px}
-.saved-vocabulary-copy p{margin:6px 0 0;color:#6f7487;font-size:11px;line-height:1.7;overflow-wrap:anywhere}
-.saved-vocabulary-row .saved-remove-button{border:1px solid #eee5d3;border-radius:8px;background:#fffdf8;padding:7px 9px;color:#8b7b5b;font-size:10px;white-space:nowrap}
-.saved-vocabulary-row .saved-remove-button:hover{background:#f8f0df}
 @media(max-width:560px){
- .dictionary-quick-start{gap:6px}
- .dictionary-quick-start>span{width:100%;margin-bottom:1px}
- .dictionary-quick-start button{padding:6px 8px}
- .dictionary-view-tabs button.saved-book-tab{min-width:0;padding:10px 8px 10px 14px;gap:5px}
- .saved-vocabulary-list{padding:5px 9px 5px 15px}
- .saved-vocabulary-row{grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:13px 2px}
- .saved-vocabulary-row .saved-remove-button{grid-column:1 / -1;justify-self:start;margin-left:0}
+  .dictionary-view-tabs button{padding:9px 7px;font-size:13px}
+  .dictionary-quick-start{gap:6px}
+  .dictionary-quick-start>span{width:100%;margin-bottom:1px}
+  .dictionary-quick-start button{padding:6px 8px}
+  .saved-vocabulary-row{padding:16px 15px}
+  .saved-vocabulary-footer{align-items:stretch}
+  .saved-vocabulary-pronunciations{flex:1 1 auto}
+  .saved-vocabulary-manage{margin-left:auto}
+}
+@media(max-width:370px){
+  .saved-vocabulary-manage{margin-left:0;width:100%;justify-content:flex-end}
 }
 
 
@@ -992,3 +1010,14 @@ button[aria-disabled="true"] {
   .question-speak-button{margin-left:0}
   .language-practice-actions .language-reveal-button{min-width:0}
 }
+
+/* Keep FE card selection and background bank refresh visually stationary. */
+.practice-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.fe-bank-inline-status{display:inline-flex;align-items:center;flex:0 0 auto;min-height:24px;padding:3px 8px;border-radius:7px;background:#f0f3ff;color:#5e6dbc;font-size:11px;font-weight:650}
+.exam-list{overflow-anchor:none}
+.exam-card{min-width:0}
+.exam-card .exam-info{min-width:0}
+.exam-card .exam-progress{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+
+/* Reserve FE status space while it loads so the header never collapses after refresh. */
+.fe-bank-inline-status-idle{visibility:hidden}
