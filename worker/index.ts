@@ -1532,7 +1532,17 @@ export default {
       const scenarioId = String(body.scenario_id || '').trim()
       const selectedOption = String(body.selected_option || '').trim()
       const duration = Math.max(0, Math.min(86400, Math.floor(Number(body.duration_seconds) || 0)))
+      const suppliedAttemptId = body.attempt_id
       if (!scenarioId || !selectedOption) return json({ error: '缺少 scenario_id 或 selected_option。' }, 400)
+      if (suppliedAttemptId !== undefined &&
+        (typeof suppliedAttemptId !== 'string' ||
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(suppliedAttemptId))) {
+        return json({ error: '实战答题编号无效。' }, 400)
+      }
+      const attemptId = (suppliedAttemptId as string | undefined) || crypto.randomUUID()
+      const findSaved = () => env.DB.prepare(
+        'SELECT scenario_id, selected_option, score, feedback FROM scenario_attempts WHERE id = ?',
+      ).bind(attemptId).first<{ scenario_id: string; selected_option: string; score: number; feedback: string }>()
       try {
         const scenario = await env.DB.prepare(
           'SELECT id, track_id, options_json, scoring_json, best_option, explanation FROM practical_scenarios WHERE id = ?',
@@ -1542,7 +1552,15 @@ export default {
         if (!options.some(option => option.id === selectedOption)) return json({ error: '所选选项不属于此任务。' }, 400)
         const scoring = JSON.parse(String(scenario.scoring_json || '{}')) as Record<string, number>
         const score = Math.max(0, Math.min(100, Math.floor(Number(scoring[selectedOption] ?? 0))))
-        const attemptId = crypto.randomUUID()
+        const saved = await findSaved()
+        if (saved) {
+          if (saved.scenario_id !== scenarioId || saved.selected_option !== selectedOption) {
+            return json({ error: '实战答题编号已用于不同答案。' }, 409)
+          }
+          return json({ ok: true, attempt_id: attemptId, score: saved.score, selected_option: selectedOption,
+            best_option: String(scenario.best_option), correct: selectedOption === String(scenario.best_option),
+            feedback: saved.feedback })
+        }
         await env.DB.prepare(
           'INSERT INTO scenario_attempts (id, scenario_id, track_id, selected_option, score, feedback, duration_seconds) VALUES (?, ?, ?, ?, ?, ?, ?)',
         ).bind(attemptId, scenarioId, String(scenario.track_id), selectedOption, score, String(scenario.explanation || ''), duration).run()
@@ -1556,6 +1574,20 @@ export default {
           feedback: String(scenario.explanation || ''),
         }, 201)
       } catch {
+        // A duplicate concurrent request must never insert a second scored attempt.
+        try {
+          const saved = await findSaved()
+          if (saved) {
+            if (saved.scenario_id !== scenarioId || saved.selected_option !== selectedOption) {
+              return json({ error: '实战答题编号已用于不同答案。' }, 409)
+            }
+            const scenario = await env.DB.prepare('SELECT best_option FROM practical_scenarios WHERE id = ?')
+              .bind(scenarioId).first<{ best_option: string }>()
+            return json({ ok: true, attempt_id: attemptId, score: saved.score, selected_option: selectedOption,
+              best_option: scenario?.best_option || '', correct: selectedOption === scenario?.best_option,
+              feedback: saved.feedback })
+          }
+        } catch { /* Leave the same attempt id available for retry. */ }
         return json({ error: '实战结果保存失败，请确认 D1 迁移已完成。' }, 503)
       }
     }
