@@ -4,7 +4,7 @@ import { hydrateMastery, mergeExamHistory, restoreMasteredCard } from './progres
 import { tokyoDate, mergeDailyTaskStates } from './daily-tasks'
 import { utcReviewMillis } from './review-time'
 import { fetchVocabularySnapshot } from './vocabulary-sync'
-import { getLanguageHighlights, getLanguageExpansions, getSentenceParts } from './language-annotations'
+import { getLanguageExpansions, getSentenceParts } from './language-annotations'
 import { parseMockSnapshot, type MockSnapshot } from './mock-recovery'
 import ExamScratchTools from './ExamScratchTools.vue'
 import {
@@ -1353,9 +1353,6 @@ const languagePracticeRevealed = ref(false)
 const languagePracticeCard = computed(() => visibleLanguageCards.value.length
   ? visibleLanguageCards.value[languagePracticeIndex.value % visibleLanguageCards.value.length]
   : null)
-function languageHighlights(card: LanguageCard | null) {
-  return getLanguageHighlights(card)
-}
 function languageExpansions(card: LanguageCard | null, type: 'vocabulary' | 'grammar') {
   return getLanguageExpansions(card, type)
 }
