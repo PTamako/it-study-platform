@@ -60,11 +60,12 @@ test('destructive exam history deletion requires typed second confirmation', () 
   const handler = app.slice(start, end)
   const firstConfirm = handler.indexOf('window.confirm(')
   const typedConfirm = handler.indexOf("window.prompt('二次确认")
-  const deleteRequest = handler.indexOf("fetch('/api/exam-history', { method: 'DELETE' })")
+  const deleteRequest = handler.indexOf("fetch('/api/exam-history', { method: 'DELETE',")
   assert.ok(firstConfirm >= 0, 'first confirmation must be present')
   assert.ok(typedConfirm > firstConfirm, 'typed confirmation must follow first confirmation')
   assert.ok(deleteRequest > typedConfirm, 'DELETE request must occur only after both confirmations')
   assert.match(handler, /confirmation !== '清除'/)
+  assert.match(handler, /body: JSON\.stringify\(\{ confirmation \}\)/)
 })
 
 test('parallel incorrect logins cannot bypass the five attempt limit', async () => {

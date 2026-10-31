@@ -1,144 +1,53 @@
-# 知学 · 个人学习空间
+# 知学 · 个人学习平台
 
-面向个人使用的手机优先学习平台，技术栈为 Vue 3、TypeScript、Vite、Cloudflare Workers 与 D1。
+Vue 3 / TypeScript / Vite + Cloudflare Workers (静态网站和 API 共用一个 Worker) + D1 + 按需 Workers AI。手机优先的个人学习平台。
 
-## 功能模块
+## 目前提供的功能（2026-10-31）
 
-- **题库与官方题源**：新增 `question_sources` 元数据表与 `/api/question-sources`，按所选考试显示对应官方来源。练习区提供“全部题目 / 官方过去问 / 专项练习 / 授权题目”来源筛选，`/api/questions` 支持 `source=all|official|generated|licensed`。当前官方区域主要提供链接目录，官方题文尚未完整导入；官方筛选为空时会明确提示，不会拿自编题冒充真题。详见 `docs/question-bank-expansion.md`。
-- **语言间隔复习**：`/api/language-review` 记录每张语言卡的复习次数、连续记住次数与下次复习时间；记住后按 1、3、7、14 天逐步延长间隔，选择“还不熟”则安排约 10 分钟后重试。需要先应用 `0013_language_spaced_repetition.sql`，并在 D1 迁移完成后部署 Worker。
-- **考试备考**：考试列表从 D1 已启用模块动态读取，显示每项考试实际题量。当前 SG 已通过多批迁移接入平台自编练习题（最新 `0014_sg_question_bank_pack_2.sql` 新增 22 道日语题干、中文解析的原创练习题；不是官方过去问），实际题量由 D1 动态计算；FE/AP 在对应题库未接入前不会启动练习。答案会即时判分，并通过 `/api/attempts` 将每次答案写入 D1；可通过 `/api/wrong-questions?track=exam-sg` 按错题频次提取复习题。
-- **语言学习**：统一入口后选择日语或英语，从 `language_cards` 表读取课程卡片，支持分类筛选、读音、中文解释、例句、浏览器发音及本地掌握进度。当前内容为平台自编学习资料，已明确标注，不冒充官方课程。
-- **英日发音词典与 IT 术语**：词典以英语学习为中心，展示英语释义、在线词典提供的 IPA（如有）、可用时的日语片假名近似读音、日语释义/读音和例句；可分开播放英语原音与日语读音。播放器在点击事件内同步调用浏览器 SpeechSynthesis，显示播放开始/完成/失败状态；不依赖付费 TTS 服务。IT 术语优先查 D1 `vocabulary`，匹配本地条目后不请求第三方翻译；「IT 术语（离线）」模式只查本地库。迁移 `0076_expand_offline_it_dictionary.sql` 提供 136 条 IT 术语词条种子，覆盖编程、前端、数据库、网络、云部署、运维、安全和算法；为既有术语补充中英日别名，并跳过同名重复卡片。普通英语/日语词汇仍使用免费在线词典与英日翻译备用；中文词典模式和中文翻译请求不在当前用户界面支持。设备没有合适的系统语音、浏览器静音或上游词典限流时，播放/查询仍可能失败，应按 [英日词典模块验收清单](docs/dictionary-module-acceptance.md) 进行实际设备检查。支持最近查询、生词本及 D1 跨设备同步。
-- **学习计划与今日进度**：每日任务清单、目标分钟数、完成比例；任务完成状态按日期保存在当前设备。
-- **实战训练**：独立页面模块读取 `practical_scenarios`，显示情境、选项、分数和复盘反馈；`/api/scenarios` 返回任务，`POST /api/scenario-attempts` 在 Worker 端判分并把结果保存到 `scenario_attempts`。迁移 `0017_sg_practical_scenarios_pack.sql` 再增补 25 个情境，覆盖第三方账号、勒索软件、云共享、MFA、备份恢复、漏洞修补、个人信息误发、审计日志、数据脱敏、开发密钥、环境隔离等。内容为平台原创情境，不冒充官方真题。
-- **考试统计与历史成绩**：练习题答案写入 `study_attempts`；实战分数写入 `scenario_attempts`。首页旧的手动成绩与每日任务仍然保存在浏览器 localStorage，不应与云端答题记录混为一谈。
-- **PWA**：支持通过 iPhone Safari 的“分享 → 添加到主屏幕”安装为类 App 入口。
+- **SG 信息安全管理考试**：官方已核实的过去问和原创预测题分开显示；练习、错题、掌握状态、A/B 48+12 限时模拟和实战训练。
+- **FE 基本情報技術者**：2023～2026 年 IPA 公开题 104 道（A 80、B 24），另有 2019 年旧制度上午原题 12 道；原创和改编题分别标记来源。科目 A 为 60 题／90 分钟，科目 B 为 20 题／100 分钟（算法 16、安全 4）。图示题的人工移动端验收仍待完成。
+- **语言学习**：日语和英语各 5,000 张带中文翻译的 Tatoeba 来源句子卡；日常／职场分类、词汇与语法高亮、发音、复习计划和云端掌握状态。数据经构建生成，不能把上游语料的变更误认为人工审核内容。
+- **三语词典**：中日英查询、D1 离线 IT 术语、Jisho、Free Dictionary、MyMemory 与 Google 免费翻译备用；普通查词不调用生成式 AI。用户主动点击时可用 Workers AI 生成辅助解析，每个日本日历日最多 20 次新推理（命中缓存不扣次数）。
+- **生词本、进度、每日计划和历史记录**：单用户登录后使用 D1 同步；离线待同步记录优先保全，已同步词条以最新云端快照为准。
+- **PWA 和浏览器发音**：提供 iPhone Safari 添加到主屏幕的入口；不缓存个人 API 响应。实际语音由浏览器和系统语音决定，CI 无法替代真机试听。
 
-## 本地运行
+**考试题源约束**：题源 URL 不等于题目已录入。2019 旧制度试题与 2022 公开样题需要与现行 FE/SG CBT 真题严格区分；2020～2022 CBT 的未公开题不得冒充官方过去问。参见 `docs/fe-question-bank-status.md` 和 `docs/sg-fe-2019-2022-source-coverage.md`。
 
-环境要求：Node.js 20 或更新版本。
+## 开发与本地验收
 
-```sh
-npm install
+要求 Node.js **22.x**（不支持 Node 20）、Python 3.8+，推荐 Python 3.12。首次运行先执行 `npm ci`。
+
+```bash
+nvm use 22
+npm ci
 npm run dev
-npm run typecheck
-npm run build
+# 完整验收：生成许可语料/FE 种子、单元测试、类型检查、构建和本地迁移
+npm run check:local
 ```
 
-## Cloudflare Workers 部署（前端 + API）
+本地生成的 `0081/0084/0087` 语言迁移和 `0092` FE 种子依赖生成脚本；不要手工编辑或在生产库重放已执行迁移。Tatoeba 下载是不断更新的外部数据源，若要保证**完全可重现的内容**，应使用审定并固定校验值的源数据快照；未锁定前禁止把不同日期的生成结果称为同一固定语料版本。
 
-本项目不依赖单独的 Pages 项目。Cloudflare Workers Static Assets 会与 Worker API 一起部署：
+## Cloudflare 部署
 
-- 前端构建目录：`dist/`
-- Worker 入口：`worker/index.ts`
-- 静态资源绑定：`ASSETS`
-- API 路由：`/api/*` 由 Worker 处理；其他请求由静态资源托管处理。
-- Vue 单页应用启用 SPA fallback，刷新前端页面路径时回退到 `index.html`。
+```bash
+nvm use 22
+npm ci
+npm run check:local
+npx wrangler d1 migrations apply it-study-platform-db --remote
+npx wrangler deploy
+```
 
-### 首次部署
+- Worker：`it-study-platform`；生产 D1：`it-study-platform-db`；API 前缀 `/api/*`。
+- GitHub PR 由 `validate-pr.yml` 验证；合并后 `deploy-cloudflare.yml` 运行同样的数据生成、测试、本地迁移、远程增量迁移、部署及线上检查。
+- `ci.yml` 仅保留手动复验，避免 PR 和主分支重复计费运行。PR 验证和生产部署的检查应设置为分支保护的必要条件（在 GitHub Settings 中配置）。
+- 必须在 GitHub Actions 中配置 `CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`；在 Cloudflare Worker Secrets 中配置 **`AUTH_PASSWORD`（≥16 字符）**和**`AUTH_SESSION_SECRET`（≥32 字符）**。不得提交真实密钥。
+- 登录：HttpOnly、Secure、SameSite=Strict，12 小时签名会话；登录失败及写入有限流。未登录个人 API 返回 401。同源检验为服务端执行。
+- 公共词典：D1 存储 1 分钟期的匿名散列计数（同来源 30 次/分钟），超限返回 429；不保存原始 IP。需要先应用 `0114_public_dictionary_rate_limits.sql` 才能启用此功能。未配置生产认证密钥时用户登录不可用。
+- 历史成绩的全量清除不仅有前端二次确认，服务端也要求请求体 `{\"confirmation\":\"清除\"}`；操作不可恢复，执行前需备份。
+- 限时模考仅在服务器交卷评分后返回本次试卷答案及解析；**这不是高安全防作弊机制**，因为个人学习的普通练习接口仍可查看题库答案。
 
-1. 在项目根目录安装依赖并构建前端：
+**数据保护**：千万不要在正式数据库运行 `scripts/manual-launch-reset.sql`。迁移只做兼容的增量变更，不能删除现有答题、错题、生词本、语言复习、成绩记录。生产数据未完成备份前，不得执行未经审核的破坏性迁移。
 
-   ```sh
-   npm ci
-   npm run build
-   ```
+## 验证
 
-2. 登录 Cloudflare（如尚未授权）：
-
-   ```sh
-   npx wrangler login
-   ```
-
-3. 将全部表结构、题库、语言卡片、实战情境和 IT 术语词库应用到远程 D1。命令会按编号自动执行所有尚未应用的迁移；词典改进包含 `0076_expand_offline_it_dictionary.sql`：
-
-   ```sh
-   npx wrangler d1 migrations apply it-study-platform-db --remote
-   ```
-
-4. 部署前端静态资源与 Worker API：
-
-   ```sh
-   npx wrangler deploy
-   ```
-
-### GitHub PR 合并后自动部署 Cloudflare
-
-仓库包含 `.github/workflows/deploy-cloudflare.yml`：每次合并到 `main` 后，GitHub Actions 会重新安装依赖、构建前端、应用已提交的 D1 远程迁移、部署 Worker 与静态资源，并检查健康接口。也可以在 Actions 页面手动运行部署工作流。
-
-首次启用前，在 GitHub 仓库 **Settings → Secrets and variables → Actions → New repository secret** 配置：
-
-- `CLOUDFLARE_API_TOKEN`：仅授予该账户所需的 Workers Scripts（编辑/部署）和 D1（读写/迁移）权限。
-- `CLOUDFLARE_ACCOUNT_ID`：Cloudflare 账户 ID。
-
-不要把 Token 写入代码或提交到仓库。未配置上述 Secrets 时，部署工作流会明确失败，不会假装部署成功。合并 PR 前，先检查 PR 的 Validate 工作流；合并后再检查 Deploy to Cloudflare 工作流和线上健康接口。
-
-### 通过 Cloudflare 控制台连接 GitHub 自动部署
-
-在 Cloudflare Workers Builds 中只保留一个关联此仓库的生产部署。`wrangler.toml` 的 `name` 固定为 `it-study-platform`，因此本地 `npx wrangler deploy` 与 Git 自动部署都应更新同一个 Worker，而不是另建 `it-study-platform-api`。部署配置变更后，先构建，再部署，并验证主站和 API。若 Cloudflare 中仍留有历史 `it-study-platform-api` Worker，验证主 Worker 正常前请不要删除；确认无流量后再从控制台停用或删除旧服务。
-
-部署前先完成一次远程 D1 迁移。Git 自动部署本身不会自动执行 SQL migration。手机端暂时无法执行远程 D1 迁移时，可以先继续提交 `migrations/*.sql`；待能使用电脑或 Cloudflare 控制台后，再按编号一次性应用所有未执行迁移。迁移使用 `INSERT OR IGNORE` 与固定 ID，重复导入已有种子数据不会重复插入相同 ID。
-
-- `wrangler.toml` 中已配置 Cloudflare D1 数据库 ID。该 ID 不是密码，但请勿把 API Token 等访问凭据提交到仓库。
-- 本地密钥放在被 Git 忽略的 `.dev.vars` 文件中；线上密钥使用 Cloudflare Worker Secrets。
-- **不要**把密码、Token、API Key 写进前端代码或提交到 GitHub。
-
-## 部署后验证
-
-将下面的 `<WORKER_URL>` 替换为 Cloudflare 分配的 Worker 地址：
-
-- `<WORKER_URL>/`：应显示学习平台页面。
-- `<WORKER_URL>/api/health`：D1 初始化成功后应返回 `ok: true`。
-- `<WORKER_URL>/api/tracks`：返回已启用的学习模块及每项考试的实际题量。
-- `<WORKER_URL>/api/language-cards?lang=ja`：读取日语学习卡；改为 `lang=en` 读取英语课程。
-- `<WORKER_URL>/api/dictionary?q=authentication&lang=en`：命中 IT 词库时直接返回本地英日释义、读音和例句；不请求翻译服务。
-- `<WORKER_URL>/api/dictionary?q=hello&lang=en`：应尝试返回英语释义、IPA（若词典提供）、日语辅助读音（若有本地收录）和日语翻译；在线词典故障时可能缺少其中部分内容。
-- `<WORKER_URL>/api/dictionary?q=こんにちは&lang=ja`：应返回日语词条与对应英文结果。`lang=zh` 应返回 400，用户界面不进行中文翻译。
-
-## 题库真实性
-
-当前页面中的词条和表达仅用于演示交互，不代表官方题库。导入考试真题前，应核实来源、使用许可与考试机构的公开规则。官方题目、授权题目、AI 生成练习题必须分别标注。
-
-## 安全与测试
-
-- `.env*`、`.dev.vars`、构建产物和依赖目录均加入了 Git 忽略规则。
-- 提交前运行类型检查与生产构建。
-- 后续应增加自动化测试和密钥泄漏扫描。
-- Worker 提供只读查询 API，并开放 `/api/attempts` 与 `/api/scenario-attempts` 两个经过字段校验的 POST 写入接口。当前没有用户账号/身份认证，适用于个人测试，不应存放敏感信息；若公开部署给多人使用，必须先加入身份认证、用户隔离、滥用限制与 CSRF/来源策略。
-- 当前学习计划勾选状态与手动考试成绩先保存在浏览器 localStorage 中：同一设备、同一浏览器可保留记录，但清理网站数据后会丢失，也不会自动同步到其他设备。后续接入账号/安全的写入 API 后，再迁移到 D1。
-
-
-## SG 题库分类与目标
-
-SG 题库在界面上只保留两个分类：
-
-- **历年真题**（`source_type='official'`）：仅导入 IPA 官方公开的 SG 试题与答案；每题应保存年度、题号和官方 PDF 来源。
-- **预测题库**（`source_type='generated'`）：知学原创预测题，题干为日语并配中文解析，不得标注为官方真题。
-
-总量目标约 **1,100 题**。界面显示的是真实数据库数量；目标数只是目标，不代表已完成。IPA 的 CBT 公开题只覆盖实际考试的一部分，官方公开题以 IPA 页面为准：
-- [SG/FE 公开问题（2026 年度）](https://www.ipa.go.jp/shiken/mondai-kaiotu/sg_fe/koukai/2026r08.html)
-- [SG/FE 公开问题（2025 年度）](https://www.ipa.go.jp/shiken/mondai-kaiotu/sg_fe/koukai/2025r07.html)
-- [SG/FE 公开问题（2024 年度）](https://www.ipa.go.jp/shiken/mondai-kaiotu/sg_fe/koukai/2024r06.html)
-- [SG/FE 公开问题（2023 年度）](https://www.ipa.go.jp/shiken/mondai-kaiotu/sg_fe/koukai/2023r05.html)
-
-不要把官方题源链接列表当作题目本身。正式导入时，题目需能在站内作答，并记录答案、解析与来源信息。
-
-
-## SG question bank progress
-
-- `migrations/0014_sg_question_bank_pack_2.sql`: 22 original prediction questions.
-- `migrations/0015_sg_prediction_pack_3.sql`: 56 additional original prediction questions (stable IDs, `source_type='generated'`, Japanese prompts/options and Chinese explanations).
-- `migrations/0016_sg_official_2025_public_questions.sql`: 15 official-source questions from the 2025 IPA public SG paper, mapped to the published answer key and referencing the source PDF.
-- `migrations/0017_sg_practical_scenarios_pack.sql`: 25 additional authored practical scenarios. The `practical` page was missing from the module registry/template even though loading/submission APIs already existed; this migration plus the UI entry exposes the end-to-end flow.
-- `migrations/0018_sg_official_2026_public_questions.sql`: 15 questions from IPA's FY2026 public SG paper, with answers mapped to the official answer key.
-- `migrations/0019_sg_official_2024_public_questions.sql`: 15 questions from IPA's FY2024 public SG paper, with answers mapped to the official answer key.
-- `migrations/0020_sg_official_2023_public_questions.sql`: 15 questions from IPA's FY2023 public SG paper, with answers mapped to the official answer key.\n- `migrations/0021_sg_official_2019_autumn_am_questions_01_15.sql`: first 15 legacy written-exam questions from 2019 autumn morning session, with question/options and official answer-key mapping.\n- `migrations/0022_sg_official_2019_autumn_am_questions_16_20.sql`: next five 2019 autumn morning questions (16–20), with item-level answer verification and explanations.\n- `migrations/0023_sg_prediction_pack_4.sql`: 30 additional original SG prediction questions covering DNS, crypto, authentication attacks, incident response, logs, backup, vulnerabilities, cloud, privacy, web security, BCP, audit and physical security.\n- `migrations/0024_sg_official_2019_autumn_am_questions_21_24.sql`: four more verified 2019 autumn morning questions (21–24), with official-source references and Chinese explanations.
-
-There are now 75 official-source question records in migrations: 60 from the 2023–2026 public-paper batches plus 15 from the 2019 autumn legacy written exam. The 448-historical-question goal is not yet met; continue importing the remaining 2019 questions and the 2016–2018 sessions in verified batches.
-- Mock exam behavior: exactly 60 unique questions, 2 points per question (120 points total), 120-minute limit; no repeated-question padding. Unanswered questions are recorded as incorrect when the exam is submitted, so they can appear in the wrong-question review.
-- Historical questions must be imported from verifiable IPA source documents with the official answer key; links alone do not count as imported questions. The 448-question historical target is not yet met and must not be presented as complete until verified question records exist in D1.
-
-- `migrations/0025_sg_official_2019_autumn_am_questions_25_27_30.sql`: four additional 2019 autumn official questions (25, 26, 27, 30); questions 28–29 were left out of this batch pending item-level transcription verification.
-- `docs/sg-exam-final-acceptance.md`: final acceptance checklist for target counts, answer/source integrity, practice and review flows, mock exams, mobile layout, API/database checks, and deployment.
-
-- `migrations/0026_sg_official_2019_autumn_am_questions_28_29.sql`: two additional 2019 autumn official questions (28–29), covering SMTP-AUTH and honeypots, with official answer-key mappings.
+自动化执行 `npm test`、`npm run build`、本地 D1 migration、`wrangler deploy --dry-run`。部署后检查 `/api/health`、未登录个人 API 的 401 和语言语料完整性。实际生产 D1 的数据量、真机 TTS 和移动端外观仍需独立验收。详细工作清单见 `docs/platform-final-acceptance.md`。

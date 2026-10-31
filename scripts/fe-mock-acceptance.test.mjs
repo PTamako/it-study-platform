@@ -15,6 +15,7 @@ async function run(query, records = []) {
 test('FE科目A is a separate 60-question 90-minute exam', async () => {
   const { status, data } = await run('track=exam-fe&section=A', rows(65, 'A', '知識'))
   assert.equal(status, 200); assert.equal(data.items.length, 60); assert.equal(data.duration_minutes, 90); assert.ok(data.items.every(x => x.exam_section === 'A'))
+  assert.ok(data.items.every(x => !Object.hasOwn(x, 'answer') && !Object.hasOwn(x, 'explanation')), 'unsubmitted exam must not leak answer keys or explanations')
 })
 test('FE科目B is a separate 20-question 100-minute exam with approximate 16/4 mix', async () => {
   const { status, data } = await run('track=exam-fe&section=B', [...rows(18, 'B', 'FE算法与程序设计'), ...rows(6, 'B', 'FE信息安全')])

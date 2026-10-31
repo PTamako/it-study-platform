@@ -52,6 +52,7 @@ async function login() {
     void hydrateCloudProgress()
     void refreshDailyTasks(todayKey.value)
     void reconcilePriorDailyTasks()
+    restoreMockReview()
     restoreActiveMockExam()
     void syncPendingMockSubmission()
     void syncPendingPracticeAttempt()
@@ -380,7 +381,7 @@ async function removeExamRecords() {
   const confirmation = window.prompt('二次确认：此操作无法恢复。请输入「清除」以继续。')
   if (confirmation !== '清除') return
   try {
-    const response = await fetch('/api/exam-history', { method: 'DELETE' })
+    const response = await fetch('/api/exam-history', { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ confirmation }) })
     const data = await response.json().catch(() => ({})) as { error?: string }
     if (!response.ok) throw new Error(data.error || '云端记录清除失败。')
     examRecords.value = []
@@ -468,6 +469,7 @@ const mockStartedAt = ref(0)
 const mockNow = ref(Date.now())
 const mockDurationMinutes = ref(30)
 const MOCK_ACTIVE_KEY = 'zhixue:mock-active-v1'
+const MOCK_REVIEW_KEY = 'zhixue:mock-review-v1'
 const mockStorageWarning = ref('')
 let mockTimer: ReturnType<typeof setInterval> | undefined
 function persistActiveMockExam() {
@@ -516,6 +518,21 @@ function restoreActiveMockExam() {
   if (mockRemainingSeconds.value <= 0) void finishMockExam(true)
 }
 
+// Keep a pending/graded review on the device when the browser reloads while
+// the server is saving an exam. No answer keys are cached before grading.
+function restoreMockReview() {
+  if (!authenticated.value || mockStarted.value || mockQuestions.value.length) return
+  const raw = readStored<unknown>(MOCK_REVIEW_KEY, null)
+  const snapshot = parseMockSnapshot<PracticeQuestion>(raw)
+  if (!snapshot || (!mockPendingSubmission.value && !(raw as { graded?: boolean }).graded)) return
+  selectedTrackId.value = snapshot.track
+  if (snapshot.track === 'exam-fe') feMockSection.value = snapshot.section === 'B' ? 'B' : 'A'
+  mockQuestions.value = snapshot.questions
+  mockAnswers.value = snapshot.answers
+  mockSubmitted.value = true
+  mockStarted.value = false
+}
+
 const mockRemainingSeconds = computed(() => mockStarted.value && !mockSubmitted.value
   ? Math.max(0, Math.ceil((mockDeadline.value - mockNow.value) / 1000))
   : 0)
@@ -543,6 +560,7 @@ async function startMockExam() {
     if (!data.items || data.items.length !== required || (isFe ? data.section !== feMockSection.value || data.duration_minutes !== (feMockSection.value === 'A' ? 90 : 100) : data.section_counts?.A !== 48 || data.section_counts?.B !== 12)) {
       throw new Error('组卷结果不符合所选考试的题型、题数或时间要求，请稍后重试。')
     }
+    try { localStorage.removeItem(MOCK_REVIEW_KEY) } catch { /* best effort */ }
     mockQuestions.value = data.items
     mockAnswers.value = {}
     mockDurationMinutes.value = isFe ? (feMockSection.value === 'A' ? 90 : 100) : 120
@@ -584,9 +602,26 @@ async function syncPendingMockSubmission() {
     })
     const data = await response.json() as {
       error?: string; submission_id?: string; correct_count?: number; total?: number; exam_name?: string; study_date?: string
+      review?: Array<{ id: string; answer: string; explanation: string }>
     }
     if (!response.ok || data.submission_id !== pending.submission_id || !Number.isInteger(data.correct_count) || data.total !== pending.answers.length) {
       throw new Error(data.error || '交卷结果暂未成功同步。')
+    }
+    if (!Array.isArray(data.review) || data.review.length !== pending.answers.length ||
+      data.review.some(item => typeof item.id !== 'string' || typeof item.answer !== 'string' || typeof item.explanation !== 'string') ||
+      new Set(data.review.map(item => item.id)).size !== pending.answers.length ||
+      data.review.some(item => !pending.answers.some(answer => answer.question_id === item.id))) {
+      throw new Error('交卷已保存，但复盘数据不完整，请使用原交卷编号重试。')
+    }
+    const reviewMap = new Map(data.review.map(item => [item.id, item]))
+    mockQuestions.value = mockQuestions.value.map(question => {
+      const review = reviewMap.get(question.id)
+      return review ? { ...question, answer: review.answer, explanation: review.explanation } : question
+    })
+    const snapshot = readStored<MockSnapshot<PracticeQuestion> | null>(MOCK_REVIEW_KEY, null)
+    if (snapshot) {
+      try { localStorage.setItem(MOCK_REVIEW_KEY, JSON.stringify({ ...snapshot, questions: mockQuestions.value, graded: true })) }
+      catch { /* server has the immutable graded receipt */ }
     }
     const record: ExamRecord = { id: pending.submission_id, date: pending.study_date,
       correct: data.correct_count!, total: data.total!, exam: data.exam_name || pending.track }
@@ -619,12 +654,25 @@ async function finishMockExam(autoSubmit = false) {
   }
   mockPendingSubmission.value = submission
   try {
+    localStorage.setItem(MOCK_REVIEW_KEY, JSON.stringify({
+      track: selectedTrackId.value, section: submission.section,
+      questions: mockQuestions.value, answers: mockAnswers.value,
+      started_at: mockStartedAt.value, deadline: mockDeadline.value,
+      duration_minutes: mockDurationMinutes.value, graded: false,
+    }))
     localStorage.setItem('zhixue:mock-pending-v1', JSON.stringify(submission))
     localStorage.removeItem(MOCK_ACTIVE_KEY)
   } catch {
     mockError.value += ' 浏览器本地保存失败；请勿关闭此页面直到同步完成。'
   }
   await syncPendingMockSubmission()
+}
+function closeMockReview() {
+  mockSubmitted.value = false
+  mockQuestions.value = []
+  mockAnswers.value = {}
+  mockError.value = ''
+  try { localStorage.removeItem(MOCK_REVIEW_KEY) } catch { /* optional local snapshot */ }
 }
 onUnmounted(() => { if (mockTimer) clearInterval(mockTimer); if (dailyRolloverTimer) clearInterval(dailyRolloverTimer); document.removeEventListener('visibilitychange', onDailyVisibilityChange) })
 
@@ -1621,7 +1669,7 @@ onMounted(async () => {
     // Speech playback will report its own browser/device error when requested.
   }
   await checkAuth()
-  if (authenticated.value) { restoreActiveMockExam(); void syncExamHistory(); void hydrateCloudProgress(); void refreshDailyTasks(todayKey.value); void reconcilePriorDailyTasks(); void syncPendingMockSubmission(); void syncPendingPracticeAttempt(); void syncPendingScenarioAttempt() }
+  if (authenticated.value) { restoreMockReview(); restoreActiveMockExam(); void syncExamHistory(); void hydrateCloudProgress(); void refreshDailyTasks(todayKey.value); void reconcilePriorDailyTasks(); void syncPendingMockSubmission(); void syncPendingPracticeAttempt(); void syncPendingScenarioAttempt() }
 })
 
 type DictionaryEntry = {
@@ -1707,7 +1755,13 @@ async function hydrateVocabulary() {
     // legacy saves or historical deletions; require an explicit restore decision.
     savedWords.value = [...new Set([...localWords, ...liveRows.map(row => row.term)])]
     const entries = [...savedDictionaryEntries.value]
-    for (const row of liveRows) if (!entries.some(entry => entry.term === row.term)) entries.push(row.entry as DictionaryEntry)
+    // The successful complete cloud snapshot is authoritative for live words.
+    // Keep unknown local-only copies and tombstones pending explicit reconciliation.
+    for (const row of liveRows) {
+      const index = entries.findIndex(entry => entry.term === row.term)
+      if (index < 0) entries.push(row.entry as DictionaryEntry)
+      else entries[index] = row.entry as DictionaryEntry
+    }
     savedDictionaryEntries.value = entries
     vocabularyPending.value = pending
     vocabularySyncReady.value = true
@@ -1933,7 +1987,7 @@ async function lookupDictionary() {
   lastSearchedTerm.value = ''
   try {
     const response = await fetch('/api/dictionary?q=' + encodeURIComponent(q) + '&lang=' + encodeURIComponent(requestedLanguage), {
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(18000),
     })
     const data = await response.json() as { items?: DictionaryEntry[]; error?: string; detected_language?: 'ja' | 'en' | 'zh' | 'it' }
     // Ignore late responses from an older query or language selection.
@@ -2570,6 +2624,8 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                 <p v-if="mockError" class="practice-error">{{ mockError }}</p>
               </div>
               <div v-else-if="mockSubmitted" class="panel practice-start-card">
+                <p v-if="mockPendingSubmission || mockSyncing" class="dictionary-status" role="status">答卷正在保存，正确答案将在交卷成功后显示。</p>
+                <template v-else>
                 <div class="practice-result-icon"><CheckCircle2 :size="28" /></div>
                 <div class="practice-result-score">{{ mockAccuracy }}% 正确率</div>
                 <h3>模拟考试已交卷</h3><p>答对 {{ mockCorrectCount }} / {{ mockQuestions.length }} 题 · 已作答 {{ mockAnsweredCount }} / {{ mockQuestions.length }} 题。正确率不代表官方标准分。</p>
@@ -2583,7 +2639,8 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                     <p class="answer-explanation">{{ question.explanation }}</p>
                   </article>
                 </div>
-                <button class="primary-button" @click="mockSubmitted = false; mockQuestions = []; mockAnswers = {}; mockError = ''">结束复盘 <ArrowRight :size="16" /></button>
+                <button class="primary-button" @click="closeMockReview">结束复盘 <ArrowRight :size="16" /></button>
+                </template>
               </div>
               <div v-else class="mock-exam-active">
                 <p v-if="mockStorageWarning" class="dictionary-status dictionary-error" role="alert">{{ mockStorageWarning }}</p>

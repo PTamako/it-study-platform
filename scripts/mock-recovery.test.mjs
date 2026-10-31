@@ -37,3 +37,9 @@ test('corrupted, repeated, or conflicting mock data is never restored', () => {
   const badDeadline = mk(); badDeadline.deadline -= 2000
   assert.equal(parseMockSnapshot(badDeadline), null)
 })
+
+test('mock snapshots remain resumable without answer keys before grading', () => {
+  const before = mk()
+  for (const question of before.questions) delete question.answer
+  assert.deepEqual(parseMockSnapshot(before), before)
+})

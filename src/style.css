@@ -1044,3 +1044,22 @@ button[aria-disabled="true"] {
 }
 .dictionary-quick-start button:hover{border-color:transparent;background:#f2f4fa;color:#5867bd}
 .dictionary-quick-start button:focus-visible{outline:2px solid #a9b1ff;outline-offset:0}
+
+/* Audit follow-up: keep primary touch targets accessible on narrow phones.
+   Older 9–11px captions remain desktop-only where they do not carry actions. */
+@media(max-width:760px){
+  .saved-vocabulary-row .saved-remove-button,
+  .saved-vocabulary-row .saved-sync-button,
+  .vocabulary-speak-button,
+  .dictionary-quick-start button,
+  .dictionary-view-tabs button,
+  .dictionary-language-picker button,
+  .source-filter-button,
+  .dictionary-search-button,
+  .question-speak-button{min-height:44px;font-size:12px}
+  .saved-vocabulary-row{padding:15px 14px}
+  .saved-vocabulary-pronunciations,.saved-vocabulary-manage{flex-wrap:wrap;max-width:100%}
+  .saved-vocabulary-definition p,.saved-vocabulary-reading,.saved-vocabulary-missing{font-size:13px}
+  .question-option strong,.question-topic,.question-hint,.practice-start-card p,
+  .language-source,.dictionary-quick-start>span,.question-topline{font-size:12px}
+}

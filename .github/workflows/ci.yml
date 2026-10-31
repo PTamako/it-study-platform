@@ -4,11 +4,10 @@ concurrency:
   group: validate-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+# The comprehensive validate-pr workflow runs for PRs; deployment checks main.
+# Keep this legacy validation available manually without duplicate CI spending.
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 jobs:
   build:

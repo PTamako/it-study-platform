@@ -16,13 +16,13 @@ const uuid = '00000000-0000-4000-8000-000000000001'
 function setup(sectionB = 12) {
   const sql = new DatabaseSync(':memory:')
   sql.exec(`
-    CREATE TABLE questions(id TEXT PRIMARY KEY, track_id TEXT, topic TEXT, exam_section TEXT, answer_json TEXT);
+    CREATE TABLE questions(id TEXT PRIMARY KEY, track_id TEXT, topic TEXT, exam_section TEXT, answer_json TEXT, explanation TEXT DEFAULT 'review');
     CREATE TABLE mock_exam_submissions(id TEXT PRIMARY KEY, track_id TEXT, exam_section TEXT, payload_json TEXT, result_json TEXT);
     CREATE TABLE study_attempts(id TEXT PRIMARY KEY, question_id TEXT, user_answer_json TEXT, is_correct INTEGER, duration_seconds INTEGER);
     CREATE TABLE question_review_state(question_id TEXT PRIMARY KEY,track_id TEXT,review_count INTEGER,correct_streak INTEGER,last_result TEXT,next_review_at TEXT,mastered INTEGER,updated_at TEXT);
     CREATE TABLE exam_history(id TEXT PRIMARY KEY,study_date TEXT,exam_name TEXT,question_count INTEGER,correct_count INTEGER);
   `)
-  const put = sql.prepare("INSERT INTO questions VALUES(?,'exam-sg','セキュリティ',?,'\"a\"')")
+  const put = sql.prepare("INSERT INTO questions (id,track_id,topic,exam_section,answer_json) VALUES(?,'exam-sg','セキュリティ',?,'\"a\"')")
   const answers = []
   for (let i = 0; i < 48 + sectionB; i++) {
     const id = 'sg-test-' + i
@@ -63,6 +63,8 @@ test('one request commits 60 grades and one summary; identical retry is idempote
   const data = await first.json()
   assert.equal(data.correct_count,40)
   assert.equal(data.total,60)
+  assert.equal(data.review.length,60)
+  assert.deepEqual(data.review[0],{id:'sg-test-0',answer:'a',explanation:'review'})
   assert.equal(count(sql,'study_attempts'),60)
   assert.equal(count(sql,'question_review_state'),60)
   assert.equal(count(sql,'exam_history'),1)

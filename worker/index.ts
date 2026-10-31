@@ -669,6 +669,39 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
 }
 
 
+// Limit anonymous dictionary lookups without exposing the visitor IP in D1.
+// The single-user auth secret also salts rotating client buckets. Production
+// requires the secret; unit tests without an auth configuration skip the quota.
+async function checkPublicDictionaryQuota(request: Request, env: Env): Promise<Response | null> {
+  if (!env.AUTH_SESSION_SECRET) return null
+  const now = Math.floor(Date.now() / 1000)
+  const windowStart = Math.floor(now / 60)
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown-client'
+  const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(
+    env.AUTH_SESSION_SECRET + ':dictionary:' + ip + ':' + windowStart))
+  const bucketKey = [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, '0')).join('')
+  try {
+    const row = await env.DB.prepare(
+      'INSERT INTO public_dictionary_rate_limits (bucket_key, requests, expires_at) VALUES (?, 1, ?) '
+      + 'ON CONFLICT(bucket_key) DO UPDATE SET requests = MIN(requests + 1, 31), expires_at = excluded.expires_at '
+      + 'RETURNING requests'
+    ).bind(bucketKey, (windowStart + 1) * 60).first<{ requests: number }>()
+    if (!row || Number(row.requests) > 30) {
+      return new Response(JSON.stringify({ error: '查词操作较频繁，请稍后重试。' }), {
+        status: 429, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store',
+          'retry-after': String(Math.max(1, (windowStart + 1) * 60 - now)) },
+      })
+    }
+    // Bounded amortized cleanup; don't issue a full-table DELETE on every lookup.
+    if (Number(row.requests) === 1) {
+      await env.DB.prepare('DELETE FROM public_dictionary_rate_limits WHERE expires_at < ?').bind(now - 60).run()
+    }
+    return null
+  } catch {
+    return json({ error: '词典查询保护暂不可用，请稍后重试。' }, 503)
+  }
+}
+
 // Atomic D1 reservations cap actual model calls, including concurrent requests.
 const DICTIONARY_AI_DAILY_LIMIT = 20
 const DICTIONARY_AI_CACHE_SECONDS = 30 * 24 * 60 * 60
@@ -756,8 +789,8 @@ export default {
           ? json(JSON.parse(saved.result_json))
           : json({ error: '交卷编号已用于另一份答案，请不要覆盖原成绩。' }, 409)
         const marks = questionIds.map(() => '?').join(',')
-        const result = await env.DB.prepare(`SELECT id, track_id, topic, exam_section, answer_json FROM questions WHERE id IN (${marks})`).bind(...questionIds).all()
-        const rows = result.results as Array<{ id: string; track_id: string; topic: string; exam_section: string; answer_json: string }>
+        const result = await env.DB.prepare(`SELECT id, track_id, topic, exam_section, answer_json, explanation FROM questions WHERE id IN (${marks})`).bind(...questionIds).all()
+        const rows = result.results as Array<{ id: string; track_id: string; topic: string; exam_section: string; answer_json: string; explanation: string }>
         if (rows.length !== required || rows.some(row => row.track_id !== track)) {
           return json({ error: '题库已发生变化，无法安全交卷。' }, 409)
         }
@@ -777,7 +810,12 @@ export default {
         })
         const correctCount = grades.filter(grade => grade.correct).length
         const examName = track === 'exam-fe' ? 'FE 科目' + section + ' 模擬試験' : 'SG 模擬試験'
-        const summary = { ok: true, submission_id: submissionId, track, section, correct_count: correctCount, total: required, exam_name: examName, study_date: date }
+        // Return answer keys only after server-side grading, never in the exam paper.
+        const review = answers.map(answer => {
+          const row = byId.get(answer.question_id)!
+          return { id: row.id, answer: JSON.parse(row.answer_json), explanation: row.explanation || '' }
+        })
+        const summary = { ok: true, submission_id: submissionId, track, section, correct_count: correctCount, total: required, exam_name: examName, study_date: date, review }
         // D1 Free caps queries per Worker invocation. JSON1 expands 60 grades
         // inside just two SQL statements, instead of 120 separate updates.
         // Together with receipt + exam history, the whole mock is 4 atomic writes.
@@ -1053,6 +1091,8 @@ export default {
 
     // 中日英互译词典：IT 词条先查本地 D1；普通词使用在线词典和翻译。
     if (url.pathname === '/api/dictionary') {
+      const quotaFailure = await checkPublicDictionaryQuota(request, env)
+      if (quotaFailure) return quotaFailure
       const query = (url.searchParams.get('q') || '').trim()
       if (!query) return json({ items: [], error: '请提供要查询的词语。' }, 400)
       if (query.length > 100) return json({ items: [], error: '查询内容不能超过 100 个字符。' }, 400)
@@ -1500,6 +1540,16 @@ export default {
     // 手动汇总的历史考试成绩从浏览器迁移到 D1；客户端为每条记录生成稳定 ID，重复提交不会重复计数。
     if (url.pathname === '/api/exam-history') {
       if (request.method === 'DELETE') {
+        // The browser prompt is only UX. Require the irreversible action to be
+        // explicitly confirmed at the API boundary too (authenticated + same-origin).
+        let confirmed = false
+        try {
+          const raw = await request.text()
+          if (raw.length > 300) return json({ error: '确认内容过长。' }, 413)
+          const body = JSON.parse(raw) as { confirmation?: unknown }
+          confirmed = Boolean(body && typeof body === 'object' && !Array.isArray(body) && body.confirmation === '清除')
+        } catch { /* No destructive action for an invalid or empty body. */ }
+        if (!confirmed) return json({ error: '请明确确认清除全部考试历史。' }, 400)
         try {
           const result = await env.DB.prepare('DELETE FROM exam_history').run()
           return json({ ok: true, deleted: Number(result.meta?.changes || 0) })
@@ -1795,7 +1845,9 @@ export default {
         const decode = (row: Record<string, unknown>) => ({
           ...row,
           options: JSON.parse(String(row.options_json || '[]')),
-          answer: JSON.parse(String(row.answer_json || 'null')),
+          // Timed exam requests expose neither answers nor solutions before submission.
+          answer: undefined,
+          explanation: undefined,
           options_json: undefined,
           answer_json: undefined,
         })

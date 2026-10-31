@@ -40,7 +40,7 @@ const glossaryMigration = await readFile(new URL('../migrations/0077_expand_it_g
 test('dictionary ignores stale requests and offers retry after errors', () => {
   assert.match(app, /let dictionaryRequestId = 0/)
   assert.match(app, /if \(requestId !== dictionaryRequestId\) return/)
-  assert.match(app, /AbortSignal\.timeout\(8000\)/)
+  assert.match(app, /AbortSignal\.timeout\(18000\)/)
   assert.match(app, /@click="lookupDictionary">重试/)
 })
 
