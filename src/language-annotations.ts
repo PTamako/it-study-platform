@@ -92,10 +92,14 @@ function validBoundary(card: AnnotatedSentence, start: number, end: number, kind
 function normalizedOffsets(sentence: string, start: number, end: number, term: string): [number, number] | null {
   // Python's Tatoeba generator counts Unicode codepoints while JS string
   // offsets are UTF-16 code units. Convert when an astral symbol occurs first.
-  if (sentence.slice(start, end) === term) return [start, end]
   const points = Array.from(sentence)
-  if (start < 0 || end > points.length || points.slice(start, end).join('') !== term) return null
-  return [points.slice(0, start).join('').length, points.slice(0, end).join('').length]
+  // Dataset offsets are Python codepoint indexes: decode them first even if
+  // an unrelated duplicate word happens to fit the raw UTF-16 offset.
+  if (start >= 0 && end <= points.length && points.slice(start, end).join('') === term) {
+    return [points.slice(0, start).join('').length, points.slice(0, end).join('').length]
+  }
+  // Some hand-written / legacy browser annotations already use UTF-16 offsets.
+  return sentence.slice(start, end) === term ? [start, end] : null
 }
 
 function normalize(card: AnnotatedSentence, value: unknown, boundaries: Set<number>): LanguageHighlight | null {
