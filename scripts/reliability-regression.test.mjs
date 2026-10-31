@@ -26,6 +26,15 @@ function setup() {
       question_id TEXT PRIMARY KEY, track_id TEXT, review_count INTEGER,
       correct_streak INTEGER, last_result TEXT, next_review_at TEXT,
       mastered INTEGER, updated_at TEXT);
+    CREATE TABLE practical_scenarios (
+      id TEXT PRIMARY KEY, track_id TEXT, options_json TEXT, scoring_json TEXT,
+      best_option TEXT, explanation TEXT);
+    CREATE TABLE scenario_attempts (
+      id TEXT PRIMARY KEY, scenario_id TEXT, track_id TEXT, selected_option TEXT,
+      score INTEGER, feedback TEXT, duration_seconds INTEGER);
+    INSERT INTO practical_scenarios VALUES (
+      'scenario-1','exam-sg','[{"id":"a","text":"yes"},{"id":"b","text":"no"}]',
+      '{"a":100,"b":0}','a','review this case');
   `)
   const stmt = sql.prepare(`INSERT INTO questions VALUES
     (?,'exam-sg','セキュリティ','standard','single_choice','test','[{"id":"a","text":"yes"},{"id":"b","text":"no"}]',
@@ -53,8 +62,12 @@ function setup() {
     method:'POST',headers:{origin:'https://study.test','content-type':'application/json'},
     body:JSON.stringify({attempt_id:id,question_id:'sg-reliability-000',answer,duration_seconds:1}),
   }),{DB})
+  const scenario = (id=uuid, selected_option='a')=>worker.fetch(new Request('https://study.test/api/scenario-attempts', {
+    method:'POST',headers:{origin:'https://study.test','content-type':'application/json'},
+    body:JSON.stringify({attempt_id:id,scenario_id:'scenario-1',selected_option,duration_seconds:1}),
+  }),{DB})
   const get = (query)=>worker.fetch(new Request('https://study.test'+query),{DB})
-  return { sql, post, get, setCrash(v){crash=v} }
+  return { sql, post, scenario, get, setCrash(v){crash=v} }
 }
 test('individual retry with a fixed id saves one answer and one review event',async()=>{
   const {sql,post}=setup()
@@ -98,4 +111,14 @@ test('random question pagination is deterministic for one seed and never repeats
   assert.equal(first.total, 65)
   assert.deepEqual(first.items.map(item => item.id), repeated.items.map(item => item.id))
   assert.equal(new Set([...first.items, ...second.items].map(item => item.id)).size, 65)
+})
+
+test('one scenario attempt ID never creates two scored history records', async () => {
+  const {sql,scenario} = setup()
+  assert.equal((await scenario()).status,201)
+  const retry = await scenario()
+  assert.equal(retry.status,200)
+  assert.equal((await retry.json()).score,100)
+  assert.equal(sql.prepare('SELECT count(*) n FROM scenario_attempts').get().n,1)
+  assert.equal((await scenario(uuid,'b')).status,409)
 })
