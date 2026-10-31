@@ -177,6 +177,34 @@ test('IPA original 2023-2026 A/B answer keys and options match reviewed PDFs', (
   }
 })
 
+test('all 104 IPA answer keys match the eight independently checked official answer PDFs', () => {
+  const db = setup()
+  const officialKeys = {
+    '2023A': 'ccddbcbdccdcdcdbccda',
+    '2023B': 'ahddda',
+    '2024A': 'cdbdcacccdcdccddadda',
+    '2024B': 'bddbec',
+    '2025A': 'dbbcacddcacdddcdbddb',
+    '2025B': 'fabheh',
+    '2026A': 'bcbbbbdaccacadcabaab',
+    '2026B': 'dfadbi',
+  }
+  let seen = 0
+  for (const [yearAndSection, answerSequence] of Object.entries(officialKeys)) {
+    const year = yearAndSection.slice(0, 4)
+    const section = yearAndSection[4].toLowerCase()
+    assert.equal(answerSequence.length, section === 'a' ? 20 : 6)
+    for (let number = 1; number <= answerSequence.length; number++) {
+      const id = 'fe-ipa-official-' + year + '-' + section + '-' + String(number).padStart(2, '0')
+      const row = db.prepare('SELECT answer_json FROM questions WHERE id = ?').get(id)
+      assert.ok(row, 'IPA published original must exist: ' + id)
+      assert.equal(JSON.parse(row.answer_json), answerSequence[number - 1], id)
+      seen++
+    }
+  }
+  assert.equal(seen, 104)
+})
+
 test('repeat FE migrations are idempotent, preserve attempts, source classes and mastery', () => {
   const db = setup()
   db.exec("INSERT INTO study_attempts VALUES ('attempt-1','fe-ipa-official-2026-a-02','\"c\"')")
