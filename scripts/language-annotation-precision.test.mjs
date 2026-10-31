@@ -36,7 +36,7 @@ test('Japanese: never turn いつ in そいつ into an unrelated question word, 
   assert.ok(!terms.includes('いつ') && !terms.includes('から'), 'subword and false grammar must be rejected')
   assert.deepEqual(getLanguageExpansions(c, 'grammar').map(item => item.term).sort(), ['が', 'の', 'んだ'].sort())
   assert.deepEqual(getLanguageExpansions(c, 'vocabulary').map(item => item.term).sort(), ['そいつ', '使い方', '分からない'].sort())
-  assert.equal(getLanguageExpansions(c, 'grammar').find(item => item.term === 'が')?.meaning, '主语／描述对象')
+  assert.equal(getLanguageExpansions(c, 'grammar').find(item => item.term === 'が')?.meaning, '不知道的内容')
   assert.equal(getSentenceParts(c).map(part => part.text).join(''), sentence)
 })
 
