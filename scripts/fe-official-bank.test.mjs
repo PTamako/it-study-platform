@@ -21,6 +21,9 @@ const official2025B5 = read('../migrations/0102_fe_official_2025_subject_b_05.sq
 const official2023A = read('../migrations/0103_fe_official_2023_subject_a_nine.sql')
 const official2024A = read('../migrations/0104_fe_official_2024_subject_a_nine.sql')
 const official2023_2024B = read('../migrations/0105_fe_official_2023_2024_subject_b_four.sql')
+const finalA = read('../migrations/0106_fe_official_remaining_subject_a_eight.sql')
+const finalAlgorithms = read('../migrations/0107_fe_official_2023_2024_b_four.sql')
+const finalSecurity = read('../migrations/0108_fe_official_2023_2025_security_b6_three.sql')
 function setup() {
   const db = new DatabaseSync(':memory:')
   db.exec(`CREATE TABLE study_tracks (id TEXT PRIMARY KEY);
@@ -57,6 +60,9 @@ function setup() {
   db.exec(official2023A)
   db.exec(official2024A)
   db.exec(official2023_2024B)
+  db.exec(finalA)
+  db.exec(finalAlgorithms)
+  db.exec(finalSecurity)
   return db
 }
 
@@ -85,13 +91,13 @@ test('FE bootstraps usable 60 A / 16 algorithm + 4 security B bank without a use
   const db = setup()
   const count = where => db.prepare('SELECT COUNT(*) AS n FROM questions WHERE ' + where).get().n
   assert.equal(feSeeds.length, 80)
-  assert.equal(count("track_id = 'exam-fe'"), 213)
-  assert.equal(count("source_type = 'official'"), 89)
+  assert.equal(count("track_id = 'exam-fe'"), 228)
+  assert.equal(count("source_type = 'official'"), 104)
   assert.equal(count("source_type = 'licensed'"), 74)
   assert.equal(count("source_type = 'generated'"), 50)
-  assert.equal(count("exam_section = 'A' AND exam_section_method = 'explicit'"), 156)
-  assert.equal(count("exam_section = 'B' AND topic = 'FE算法与程序设计' AND exam_section_method = 'explicit'"), 48)
-  assert.equal(count("exam_section = 'B' AND topic = 'FE信息安全' AND exam_section_method = 'explicit'"), 9)
+  assert.equal(count("exam_section = 'A' AND exam_section_method = 'explicit'"), 164)
+  assert.equal(count("exam_section = 'B' AND topic = 'FE算法与程序设计' AND exam_section_method = 'explicit'"), 56)
+  assert.equal(count("exam_section = 'B' AND topic = 'FE信息安全' AND exam_section_method = 'explicit'"), 12)
   assert.equal(count("prompt LIKE '%・改編%' AND source_type='official'"), 0)
   assert.equal(count("prompt LIKE '%自主練習%' AND source_type='official'"), 0)
 })
@@ -126,6 +132,11 @@ test('original FE A/B additions remain clearly distinct from IPA official questi
 test('IPA original 2023-2026 A/B answer keys and options match reviewed PDFs', () => {
   const db = setup()
   const expected = new Map([
+    ['2023:A:10','c'],['2023:A:11','d'],['2023:A:13','d'],
+    ['2023:B:4','d'],['2023:B:5','d'],['2023:B:6','a'],
+    ['2024:A:3','b'],['2024:A:13','c'],['2024:A:19','d'],
+    ['2024:B:3','d'],['2024:B:5','e'],['2024:B:6','c'],
+    ['2025:A:14','d'],['2025:B:6','h'],['2026:A:6','b'],
     ['2023:B:2','h'],['2023:B:3','d'],
     ['2024:B:2','d'],['2024:B:4','b'],
     ['2023:A:2','c'],['2023:A:6','c'],['2023:A:9','c'],['2023:A:14','c'],
@@ -187,13 +198,16 @@ test('repeat FE migrations are idempotent, preserve attempts, source classes and
   db.exec(official2023A)
   db.exec(official2024A)
   db.exec(official2023_2024B)
-  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM questions").get().n, 213)
+  db.exec(finalA)
+  db.exec(finalAlgorithms)
+  db.exec(finalSecurity)
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM questions").get().n, 228)
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM study_attempts").get().n, 1)
   assert.equal(db.prepare("SELECT mastered FROM question_review_state WHERE question_id='fe-ipa-official-2026-a-02'").get().mastered, 1)
   assert.equal(db.prepare("SELECT prompt FROM questions WHERE id='fe-ipa-official-2026-a-02'").get().prompt, originalPrompt)
   // Exam prompts can legitimately contain SQL examples such as DELETE FROM.
   // Verify the executed migration statements instead of flagging SQL inside questions.
-  for (const script of [catalog, official, practice, extraOfficial, latestOfficial, subjectB, additional2025, legacySources, additional2025B, more2025B, originalA, originalB, official2025B5, official2023A, official2024A, official2023_2024B]) {
+  for (const script of [catalog, official, practice, extraOfficial, latestOfficial, subjectB, additional2025, legacySources, additional2025B, more2025B, originalA, originalB, official2025B5, official2023A, official2024A, official2023_2024B, finalA, finalAlgorithms, finalSecurity]) {
     assert.match(script, /^INSERT OR IGNORE INTO (?:questions|question_sources)\b/m)
     const topLevelStatements = script.split('\n').filter(line => /^INSERT OR IGNORE INTO (?:questions|question_sources)\b/.test(line))
     assert.ok(topLevelStatements.length > 0)
