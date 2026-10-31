@@ -2872,7 +2872,13 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
             <p v-if="lastSearchedTerm && dictionaryDetectedLanguage && dictSourceLang === 'auto' && !dictionaryLoading" class="dictionary-status" role="status">识别为 {{ dictionaryDetectedLanguage === 'zh' ? '中文' : dictionaryDetectedLanguage === 'ja' ? '日语' : dictionaryDetectedLanguage === 'en' ? '英语' : 'IT 术语' }} · 可手动切换</p>
             <p v-if="dictionaryLoading" class="dictionary-status">正在查词…</p>
             <p v-else-if="dictionaryError" class="dictionary-status dictionary-error">{{ dictionaryError }} <button type="button" class="text-link" @click="lookupDictionary">重试</button></p>
-            <div v-if="!searchText.trim() && !dictionaryLoading" class="dictionary-quick-start"><span>示例</span><button @click="quickDictionarySearch('你好', 'zh')">你好 <small>中文</small></button><button @click="quickDictionarySearch('hello', 'en')">hello <small>英语</small></button><button @click="quickDictionarySearch('こんにちは', 'ja')">こんにちは <small>日语</small></button><button @click="quickDictionarySearch('認証', 'it')">認証 <small>IT</small></button><button @click="quickDictionarySearch('ハッシュ', 'it')">ハッシュ <small>安全</small></button><button @click="quickDictionarySearch('API', 'it')">API <small>接口</small></button><button @click="quickDictionarySearch('トランザクション', 'it')">トランザクション <small>数据库</small></button><button @click="quickDictionarySearch('CORS', 'it')">CORS <small>跨域</small></button><button @click="quickDictionarySearch('コンポーネント', 'it')">コンポーネント <small>前端</small></button><button @click="quickDictionarySearch('Cloudflare D1', 'it')">Cloudflare D1 <small>云数据库</small></button><button @click="quickDictionarySearch('プルリクエスト', 'it')">プルリクエスト <small>Git协作</small></button></div>
+            <div v-if="!searchText.trim() && !dictionaryLoading" class="dictionary-quick-start" aria-label="快捷查词示例">
+              <span>试试</span>
+              <button type="button" @click="quickDictionarySearch('你好', 'zh')">你好</button>
+              <button type="button" @click="quickDictionarySearch('hello', 'en')">hello</button>
+              <button type="button" @click="quickDictionarySearch('こんにちは', 'ja')">こんにちは</button>
+              <button type="button" @click="quickDictionarySearch('API', 'it')">API</button>
+            </div>
           </section>
           <section class="section-block">
             <div class="section-heading"><div><h2>查询结果</h2></div></div>
