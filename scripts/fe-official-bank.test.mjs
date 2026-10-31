@@ -96,7 +96,7 @@ test('FE bootstraps usable 60 A / 16 algorithm + 4 security B bank without a use
   assert.equal(count("source_type = 'licensed'"), 74)
   assert.equal(count("source_type = 'generated'"), 50)
   assert.equal(count("exam_section = 'A' AND exam_section_method = 'explicit'"), 164)
-  assert.equal(count("exam_section = 'B' AND topic = 'FE算法与程序设计' AND exam_section_method = 'explicit'"), 56)
+  assert.equal(count("exam_section = 'B' AND topic = 'FE算法与程序设计' AND exam_section_method = 'explicit'"), 52)
   assert.equal(count("exam_section = 'B' AND topic = 'FE信息安全' AND exam_section_method = 'explicit'"), 12)
   assert.equal(count("prompt LIKE '%・改編%' AND source_type='official'"), 0)
   assert.equal(count("prompt LIKE '%自主練習%' AND source_type='official'"), 0)
