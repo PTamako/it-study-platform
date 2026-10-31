@@ -5,6 +5,7 @@ import { tokyoDate, mergeDailyTaskStates } from './daily-tasks'
 import { utcReviewMillis } from './review-time'
 import { fetchVocabularySnapshot } from './vocabulary-sync'
 import { parseMockSnapshot, type MockSnapshot } from './mock-recovery'
+import ExamScratchTools from './ExamScratchTools.vue'
 import {
   BookOpen, Languages, Search, GraduationCap,
   ChevronRight, ChevronDown, Sparkles, Clock3, Flame, Bookmark, Volume2, ArrowRight,
@@ -2581,6 +2582,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                     <span>{{ practiceOptionLabel(currentQuestion, option.id) }}</span><strong>{{ option.text }}</strong><CheckCircle2 v-if="quizSubmitted && option.id === currentQuestion.answer" :size="17" />
                   </button>
                 </div>
+                <ExamScratchTools :key="'practice-' + currentQuestion.id" />
                 <div v-if="quizSubmitted" class="answer-explanation" :class="{ right: selectedOption === currentQuestion.answer }">
                   <strong>{{ selectedOption === currentQuestion.answer ? '回答正确！' : '这题答错了' }} 正确答案：{{ practiceOptionLabel(currentQuestion, currentQuestion.answer) }}</strong>
                   <template v-if="getExplanationLanguage(currentQuestion) !== 'zh-CN'">
@@ -2668,6 +2670,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                       <span>{{ practiceOptionLabel(question, option.id) }}</span><strong>{{ option.text }}</strong>
                     </button>
                   </div>
+                  <ExamScratchTools :key="'mock-' + question.id" />
                 </article>
                 <p v-if="mockError" class="practice-error">{{ mockError }}</p>
               </div>
@@ -2759,6 +2762,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <CheckCircle2 v-if="scenarioResult && option.id === scenarioResult.best_option" :size="17" />
                 </button>
               </div>
+              <ExamScratchTools :key="'practical-' + currentScenario.id" />
               <div v-if="scenarioResult" class="answer-explanation" :class="{ right: scenarioResult.correct }">
                 <strong>{{ scenarioResult.correct ? '判断正确' : '可以做得更好' }} · 得分 {{ scenarioResult.score }}/100 · 推荐选项 {{ scenarioResult.best_option.toUpperCase() }}</strong>
                 <p class="explanation-original-label">日文解析</p>
