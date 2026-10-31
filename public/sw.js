@@ -1,5 +1,5 @@
-const CACHE_NAME = 'zhixue-app-v2'
-const APP_SHELL = ['/', '/manifest.webmanifest', '/icon.svg']
+const CACHE_NAME = 'zhixue-app-v3'
+const APP_SHELL = ['/', '/manifest.webmanifest', '/icon-192.png', '/icon-512.webp']
 const API_PREFIX = '/api/'
 
 self.addEventListener('install', (event) => {
