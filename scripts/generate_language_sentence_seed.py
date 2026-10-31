@@ -782,6 +782,28 @@ def main():
               "vocabulary_expansion_json":json.dumps(expansion(hits,"vocabulary",lang),ensure_ascii=False,separators=(",",":")),
               "grammar_expansion_json":json.dumps(expansion(hits,"grammar",lang),ensure_ascii=False,separators=(",",":"))})
     if len({item["id"] for item in cards})!=10000: raise RuntimeError("Duplicate sentence IDs")
+    # Public licensed learning content is generated at build time and served as
+    # immutable, fingerprinted static assets. Viewing or changing the lesson
+    # language must never read 5,000 rows from a user's D1 allowance.
+    static_root = ROOT / "public/language-cards"
+    static_root.mkdir(parents=True, exist_ok=True)
+    manifest = {"version": 1}
+    for language in ("ja", "en"):
+        language_cards = [item for item in cards if item["language"] == language]
+        if len(language_cards) != 5000:
+            raise RuntimeError("Public sentence corpus count mismatch for " + language)
+        payload = json.dumps({"items": language_cards}, ensure_ascii=False, separators=(",", ":"))
+        fingerprint = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+        filename = language + "." + fingerprint + ".json"
+        (static_root / filename).write_text(payload + "\n", encoding="utf-8")
+        manifest[language] = "/language-cards/" + filename
+        # Do not accumulate old published asset versions in repeated local runs.
+        for previous in static_root.glob(language + ".*.json"):
+            if previous.name != filename:
+                previous.unlink()
+    (static_root / "manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+    print("Generated public static language corpus: 5000 Japanese + 5000 English cards; D1 reads on lesson load: 0")
     columns=["id","language","category","term","reading","meaning_zh","explanation","example","example_meaning_zh","example_source_url","source_type","content_type","source_url","highlight_json","vocabulary_expansion_json","grammar_expansion_json"]
     lines=["-- Generated from Tatoeba community sentences and Chinese translations. Sentence URLs provide attribution.","-- Tatoeba data: CC BY 2.0 FR; see https://tatoeba.org/en/terms_of_use."]
     insert_prefix = "INSERT OR IGNORE INTO language_cards ("+", ".join(columns)+") VALUES"
