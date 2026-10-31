@@ -108,7 +108,7 @@ function normalize(card: AnnotatedSentence, value: unknown, boundaries: Set<numb
       return { start, end, term: hit.term, type: hit.type,
         meaning: '不知道的内容', explanation: '「～が分からない」表示不知道／不明白某事。本句「使い方が分からない」就是不知道使用方法。' }
     }
-    if (hit.term === 'の') {
+    if (hit.term === 'の' && typeof Intl.Segmenter === 'function') {
       const tokens = [...new Intl.Segmenter('ja', { granularity: 'word' }).segment(card.term)]
       const previous = tokens.find(token => token.index + token.segment.length === start)
       const next = tokens.find(token => token.index === end)
