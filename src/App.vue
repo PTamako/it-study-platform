@@ -1388,15 +1388,22 @@ async function loadLanguageCards() {
   languageCardsError.value = ''
   languageCards.value = []
   try {
-    const response = await fetch('/api/language-cards?lang=' + encodeURIComponent(language), {
-      signal: controller.signal,
-    })
-    const data = await response.json() as { items?: LanguageCard[]; error?: string }
-    if (generation !== languageCardsLoadGeneration || language !== studyLanguage.value) return
-    if (!response.ok) throw new Error(data.error || '语言学习内容加载失败')
-    languageCards.value = data.items || []
+    // Each response is bounded to keep peak network/JSON parsing memory down
+    // on iPhone Safari. Existing 5,000-card filters and progress are unchanged.
+    const batchSize = 1000
+    for (let offset = 0; offset <= 10000; offset += batchSize) {
+      const params = new URLSearchParams({ lang: language, limit: String(batchSize), offset: String(offset) })
+      const response = await fetch('/api/language-cards?' + params, { signal: controller.signal })
+      const data = await response.json() as { items?: LanguageCard[]; error?: string }
+      if (generation !== languageCardsLoadGeneration || language !== studyLanguage.value) return
+      if (!response.ok || !Array.isArray(data.items)) throw new Error(data.error || '语言学习内容加载失败')
+      languageCards.value.push(...data.items)
+      if (data.items.length < batchSize) break
+    }
   } catch (error) {
     if (generation !== languageCardsLoadGeneration || controller.signal.aborted) return
+    // Do not present a partially loaded deck as the complete curriculum.
+    languageCards.value = []
     languageCardsError.value = error instanceof Error ? error.message : '语言学习内容加载失败，请稍后再试。'
   } finally {
     if (generation === languageCardsLoadGeneration) {
