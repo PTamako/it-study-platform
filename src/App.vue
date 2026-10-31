@@ -781,10 +781,9 @@ async function syncPendingScenarioAttempt() {
       scenariosError.value = (error instanceof Error ? error.message : '网络异常。') + ' 实战答题保存在本设备，请重试同步。'
     }
   } finally {
-    // Old responses may not change the submitting state of a newer request.
-    if (requestId === scenarioSubmissionId || pendingScenarioAttempt.value?.attempt_id === pending.attempt_id) {
-      scenarioSubmitting.value = false
-    }
+    // Switching scenarios doesn't unlock an in-flight save; a newer
+    // submission cannot start until this request has settled.
+    scenarioSubmitting.value = false
   }
 }
 async function submitScenario() {
