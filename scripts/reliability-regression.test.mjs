@@ -89,3 +89,13 @@ test('review API exposes total, has_more and later pages beyond fifty items',asy
   assert.equal(final.items.length,5)
   assert.equal(final.has_more,false)
 })
+
+test('random question pagination is deterministic for one seed and never repeats IDs', async () => {
+  const { get } = setup()
+  const first = await (await get('/api/questions?track=exam-sg&mode=random&seed=17&limit=35&offset=0')).json()
+  const second = await (await get('/api/questions?track=exam-sg&mode=random&seed=17&limit=35&offset=35')).json()
+  const repeated = await (await get('/api/questions?track=exam-sg&mode=random&seed=17&limit=35&offset=0')).json()
+  assert.equal(first.total, 65)
+  assert.deepEqual(first.items.map(item => item.id), repeated.items.map(item => item.id))
+  assert.equal(new Set([...first.items, ...second.items].map(item => item.id)).size, 65)
+})
