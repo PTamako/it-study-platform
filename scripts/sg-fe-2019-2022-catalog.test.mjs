@@ -93,14 +93,13 @@ test('running 2019/2022 migrations again is harmless to saved answers and master
   }
 })
 
-test('2019 FE practice year is selectable and 2020-2022 non-disclosure is explained in both exam screens', () => {
+test('SG/FE keep year and subject filters without historical notices or sample PDF links', () => {
   const app = readFileSync(new URL('../src/App.vue', import.meta.url), 'utf8')
   assert.match(app, /\[2026, 2025, 2024, 2023, 2019\]/)
-  assert.match(app, /2020〜2022年度のCBT過去問はIPA非公開です/g)
-  assert.match(app, /IPAサンプル問題・SG 60問/)
-  assert.match(app, /科目A 60問/)
-  assert.match(app, /科目B 20問/)
-  assert.match(app, /sg_set_sample_qs\.pdf/)
-  assert.match(app, /fe_kamoku_b_set_sample_qs\.pdf/)
+  assert.match(app, /\[2026, 2025, 2024, 2023, 2019, 2018, 2017, 2016\]/)
+  assert.match(app, /<option value="B">科目B<\/option>/)
+  assert.doesNotMatch(app, /CBT過去問はIPA非公開です/)
+  assert.doesNotMatch(app, /2022年公開のサンプル問題は本試験の過去問ではありません/)
+  assert.doesNotMatch(app, /sg_set_sample_qs\.pdf|fe_kamoku_[ab]_set_sample_qs\.pdf/)
   assert.doesNotMatch(app, /2022年度.*公式過去問を\d+問収録/)
 })
