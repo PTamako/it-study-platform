@@ -398,6 +398,14 @@ type PracticeQuestion = {
   id: string; track_id: string; topic: string; difficulty: string; prompt: string;
   options: PracticeOption[]; answer: string; explanation: string; source_type: string; source_reference?: string; language: string; exam_section?: 'A' | 'B' | null; exam_section_method?: 'explicit' | 'case_pattern' | 'default_a' | 'unclassified' | null
 }
+// IPA FE questions use Japanese answer labels ア～コ; internal answer IDs remain a～j.
+function practiceOptionLabel(question: PracticeQuestion, optionId: string): string {
+  if (question.track_id === 'exam-fe' && question.source_type === 'official') {
+    const index = 'abcdefghij'.indexOf(optionId.toLowerCase())
+    if (index >= 0) return 'アイウエオカキクケコ'[index]
+  }
+  return optionId.toUpperCase()
+}
 type QuestionExplanationTranslation = { source_text: string; translation_zh: string }
 const questionExplanationTranslations = ref<Record<string, QuestionExplanationTranslation>>(readStored('zhixue:question-explanation-zh', {}))
 const questionExplanationTranslating = ref<Record<string, boolean>>({})
@@ -1711,7 +1719,7 @@ let speechRequestId = 0
 function speakQuestion(question: PracticeQuestion | null) {
   if (!question) return
   // Exam content is Japanese; target its own control/status area and never use a Chinese voice.
-  const options = question.options.map(option => `${option.id.toUpperCase()}。 ${option.text}`).join('。')
+  const options = question.options.map(option => `${practiceOptionLabel(question, option.id)}。 ${option.text}`).join('。')
   speakJapaneseQuestion(`${question.prompt}。選択肢：${options}`, `exam:${question.id}`)
 }
 function speakJapaneseQuestion(text: string, statusTarget = '') {
@@ -2212,11 +2220,11 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <div v-if="speechStatus && speechStatusTarget === 'exam:' + currentQuestion.id" class="dictionary-speech-controls" role="status" aria-live="polite"><p class="dictionary-status">{{ speechStatus }}</p><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 <div class="question-options">
                   <button v-for="option in currentQuestion.options" :key="option.id" class="question-option" :class="{ selected: selectedOption === option.id, correct: quizSubmitted && option.id === currentQuestion.answer, incorrect: quizSubmitted && selectedOption === option.id && option.id !== currentQuestion.answer }" :disabled="quizSubmitted" @click="selectedOption = option.id">
-                    <span>{{ option.id.toUpperCase() }}</span><strong>{{ option.text }}</strong><CheckCircle2 v-if="quizSubmitted && option.id === currentQuestion.answer" :size="17" />
+                    <span>{{ practiceOptionLabel(currentQuestion, option.id) }}</span><strong>{{ option.text }}</strong><CheckCircle2 v-if="quizSubmitted && option.id === currentQuestion.answer" :size="17" />
                   </button>
                 </div>
                 <div v-if="quizSubmitted" class="answer-explanation" :class="{ right: selectedOption === currentQuestion.answer }">
-                  <strong>{{ selectedOption === currentQuestion.answer ? '回答正确！' : '这题答错了' }} 正确答案：{{ currentQuestion.answer.toUpperCase() }}</strong>
+                  <strong>{{ selectedOption === currentQuestion.answer ? '回答正确！' : '这题答错了' }} 正确答案：{{ practiceOptionLabel(currentQuestion, currentQuestion.answer) }}</strong>
                   <template v-if="getExplanationLanguage(currentQuestion) !== 'zh-CN'">
                     <p class="explanation-original-label">原文解析</p>
                     <p>{{ currentQuestion.explanation }}</p>
@@ -2294,7 +2302,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   </div>
                   <div class="question-options">
                     <button v-for="option in question.options" :key="option.id" class="question-option" :class="{ selected: mockAnswers[question.id] === option.id }" @click="mockAnswers[question.id] = option.id">
-                      <span>{{ option.id.toUpperCase() }}</span><strong>{{ option.text }}</strong>
+                      <span>{{ practiceOptionLabel(question, option.id) }}</span><strong>{{ option.text }}</strong>
                     </button>
                   </div>
                 </article>
