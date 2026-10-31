@@ -2817,9 +2817,11 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
             <div v-if="savedVocabularyEntries.length" class="saved-vocabulary-list">
               <article v-for="entry in savedVocabularyEntries" :key="entry.term" class="saved-vocabulary-row">
                 <div class="saved-vocabulary-copy"><strong>{{ entry.term }}</strong><small v-if="entry.reading">{{ entry.reading }}</small><p v-if="entry.en">英语释义：{{ entry.en }}</p><p v-if="entry.translationJa">日语翻译／释义：{{ entry.translationJa }}</p><p v-if="entry.zh">中文翻译／释义：{{ entry.zh }}</p></div>
-                <button class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + entry.term" title="英语原音"><Volume2 :size="16" /><span>EN</span></button>
-                <button class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语辅助读音：' + entry.term" title="日语辅助读音"><Languages :size="16" /><span>日</span></button>
-                <button class="round-action pronunciation-button" @click="speakDictionaryChinese(entry)" :aria-label="'播放中文发音：' + entry.term" title="中文发音"><Volume2 :size="16" /><span>中</span></button>
+                <div class="saved-vocabulary-pronunciations">
+                  <button class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + entry.term" title="英语原音"><Volume2 :size="16" /><span>EN</span></button>
+                  <button class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语辅助读音：' + entry.term" title="日语辅助读音"><Languages :size="16" /><span>日</span></button>
+                  <button class="round-action pronunciation-button" @click="speakDictionaryChinese(entry)" :aria-label="'播放中文发音：' + entry.term" title="中文发音"><Volume2 :size="16" /><span>中</span></button>
+                  </div>
                 <p v-if="speechStatus && speechStatusTarget === entry.term" class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p>
                 <span v-if="vocabularyPending.has(entry.term)">{{ vocabularyPending.get(entry.term) === 'deleted' ? '其他设备已取消，本机保留' : '仅本机保留' }}</span>
                 <button v-if="vocabularyPending.has(entry.term)" class="saved-remove-button" :disabled="vocabularyHydrating || !vocabularySyncReady" @click="restoreVocabulary(entry.term)">同步收藏</button>
