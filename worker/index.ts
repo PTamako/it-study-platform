@@ -1270,10 +1270,13 @@ export default {
       const mode = ['wrong', 'due', 'practice', 'mastered', 'unlearned'].includes(requestedMode) ? requestedMode : 'wrong'
       const requestedSource = (url.searchParams.get('source') || '').trim()
       const source = ['official', 'generated', 'licensed'].includes(requestedSource) ? requestedSource : ''
-      const year = trackId === 'exam-fe' && /^20[0-2][0-9]$/.test(url.searchParams.get('year') || '') ? url.searchParams.get('year')! : ''
-      const yearPattern = year ? '%-' + year + '-%' : ''
-      const section = trackId === 'exam-fe' && ['A', 'B'].includes(url.searchParams.get('section') || '') ? url.searchParams.get('section')! : ''
-      const selectedTopic = trackId === 'exam-fe' ? (url.searchParams.get('topic') || '').trim().slice(0,100) : ''
+      const year = (trackId === 'exam-fe' || trackId === 'exam-sg') && /^20[0-2][0-9]$/.test(url.searchParams.get('year') || '') ? url.searchParams.get('year')! : ''
+      // SG official IDs contain the release year, including legacy ids such as
+      // sg-official-2019f-am-25 and sg-official-h29a-2017-q01.
+      // A year selection must never silently count user-generated SG predictions.
+      const yearPattern = year ? (trackId === 'exam-sg' ? 'sg-official-%' + year + '%' : '%-' + year + '-%') : ''
+      const section = (trackId === 'exam-fe' || trackId === 'exam-sg') && ['A', 'B'].includes(url.searchParams.get('section') || '') ? url.searchParams.get('section')! : ''
+      const selectedTopic = (trackId === 'exam-fe' || trackId === 'exam-sg') ? (url.searchParams.get('topic') || '').trim().slice(0,100) : ''
       try {
         const { results } = await env.DB.prepare(
           `SELECT q.id, q.track_id, q.topic, q.difficulty, q.question_type, q.prompt,
@@ -1534,9 +1537,12 @@ export default {
       const trackId = (url.searchParams.get('track') || 'exam-sg').trim().slice(0, 80)
       const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
       const source = ['all', 'official', 'generated', 'licensed'].includes(requestedSource) ? requestedSource : 'all'
-      const year = trackId === 'exam-fe' && /^20[0-2][0-9]$/.test(url.searchParams.get('year') || '') ? url.searchParams.get('year')! : ''
-      const yearPattern = year ? '%-' + year + '-%' : ''
-      const section = trackId === 'exam-fe' && ['A', 'B'].includes(url.searchParams.get('section') || '') ? url.searchParams.get('section')! : ''
+      const year = (trackId === 'exam-fe' || trackId === 'exam-sg') && /^20[0-2][0-9]$/.test(url.searchParams.get('year') || '') ? url.searchParams.get('year')! : ''
+      // SG official IDs contain the release year, including legacy ids such as
+      // sg-official-2019f-am-25 and sg-official-h29a-2017-q01.
+      // A year selection must never silently count user-generated SG predictions.
+      const yearPattern = year ? (trackId === 'exam-sg' ? 'sg-official-%' + year + '%' : '%-' + year + '-%') : ''
+      const section = (trackId === 'exam-fe' || trackId === 'exam-sg') && ['A', 'B'].includes(url.searchParams.get('section') || '') ? url.searchParams.get('section')! : ''
 
       try {
         const { results } = await env.DB.prepare(
@@ -1663,9 +1669,12 @@ export default {
       const mode = url.searchParams.get('mode') || 'random'
       const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
       const source = ['all', 'official', 'generated', 'licensed'].includes(requestedSource) ? requestedSource : 'all'
-      const year = trackId === 'exam-fe' && /^20[0-2][0-9]$/.test(url.searchParams.get('year') || '') ? url.searchParams.get('year')! : ''
-      const yearPattern = year ? '%-' + year + '-%' : ''
-      const section = trackId === 'exam-fe' && ['A', 'B'].includes(url.searchParams.get('section') || '') ? url.searchParams.get('section')! : ''
+      const year = (trackId === 'exam-fe' || trackId === 'exam-sg') && /^20[0-2][0-9]$/.test(url.searchParams.get('year') || '') ? url.searchParams.get('year')! : ''
+      // SG official IDs contain the release year, including legacy ids such as
+      // sg-official-2019f-am-25 and sg-official-h29a-2017-q01.
+      // A year selection must never silently count user-generated SG predictions.
+      const yearPattern = year ? (trackId === 'exam-sg' ? 'sg-official-%' + year + '%' : '%-' + year + '-%') : ''
+      const section = (trackId === 'exam-fe' || trackId === 'exam-sg') && ['A', 'B'].includes(url.searchParams.get('section') || '') ? url.searchParams.get('section')! : ''
 
       try {
         const totalRow = await env.DB.prepare(
