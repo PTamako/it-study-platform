@@ -86,3 +86,33 @@ test('If no trustworthy annotation exists, do not invent an explanation', () => 
   assert.deepEqual(getLanguageExpansions(c, 'grammar'), [])
   assert.deepEqual(getSentenceParts(c).map(x => x.text), ['§§§'])
 })
+
+test('Japanese particle explanations are contextual across different sentences', () => {
+  for (const sentence of ['使い方が分からない。', '数学が分からない。', '予定が分からない。']) {
+    const c = card(sentence, 'ja', [hit(sentence, 'が', 'grammar', 'wrong', 'wrong')])
+    const grammar = getLanguageExpansions(c, 'grammar')
+    assert.ok(grammar.some(entry => entry.term === 'が'))
+    assert.ok(!grammar.find(entry => entry.term === 'が').explanation.includes('使い方'))
+  }
+  const sentence = '学校から家まで歩きます。'
+  const entries = getLanguageExpansions(card(sentence, 'ja', [
+    hit(sentence, 'から', 'grammar', '助词「が」', 'stale unrelated note'),
+    hit(sentence, 'まで', 'grammar', '助词「から」', 'stale unrelated note'),
+  ]), 'grammar')
+  assert.ok(entries.find(entry => entry.term === 'から')?.meaning.includes('起点'))
+  assert.ok(entries.find(entry => entry.term === 'まで')?.meaning.includes('终点'))
+})
+
+test('Unicode codepoint offsets from Python remain accurate in JavaScript rendering', () => {
+  const sentence = '😊 Would you confirm the schedule?'
+  const startCodepoints = Array.from(sentence.slice(0, sentence.indexOf('schedule'))).length
+  const c = card(sentence, 'en', [{
+    start: startCodepoints, end: startCodepoints + 'schedule'.length,
+    term: 'schedule', type: 'vocabulary',
+    meaning: '日程', explanation: '工作计划',
+  }])
+  const note = getLanguageHighlights(c).find(entry => entry.term === 'schedule')
+  assert.equal(note?.start, sentence.indexOf('schedule'))
+  assert.equal(sentence.slice(note.start, note.end), 'schedule')
+  assert.equal(getSentenceParts(c).map(part => part.text).join(''), sentence)
+})
