@@ -1227,10 +1227,10 @@ const currentInfo = computed(() => moduleInfo[activeModule.value])
 const searchPlaceholder = computed(() => activeModule.value === 'dictionary' ? '输入中、日、英文或 IT 缩写…' : '搜索考试、课程、知识点…')
 
 const modules = [
-  { id: 'exam' as const, title: '考试备考', en: 'EXAM PREP', desc: '刷题 · 错题 · 模拟考试', icon: GraduationCap, tone: 'lavender', count: 'SG / FE 练习' },
-  { id: 'practical' as const, title: '实战训练', en: 'PRACTICAL LAB', desc: '情境判断 · 朗读 · 复盘', icon: ShieldCheck, tone: 'blue', count: 'SG / FE 情境' },
-  { id: 'language' as const, title: '语言学习', en: 'LANGUAGE', desc: '日语 · 英语 · 复习', icon: Languages, tone: 'peach', count: '日语 / 英语' },
-  { id: 'dictionary' as const, title: '词典与 IT 术语', en: 'DICTIONARY', desc: '互译 · 发音 · 离线 IT 词库', icon: BookMarked, tone: 'blue', count: '中 / 日 / 英' },
+  { id: 'exam' as const, title: '考试备考', desc: '刷题 · 错题 · 模拟考试', icon: GraduationCap, tone: 'lavender', count: 'SG / FE 练习' },
+  { id: 'practical' as const, title: '实战训练', desc: '情境判断 · 朗读 · 复盘', icon: ShieldCheck, tone: 'blue', count: 'SG / FE 情境' },
+  { id: 'language' as const, title: '语言学习', desc: '日语 · 英语 · 复习', icon: Languages, tone: 'peach', count: '日语 / 英语' },
+  { id: 'dictionary' as const, title: '词典与 IT 术语', desc: '互译 · 发音 · 离线 IT 词库', icon: BookMarked, tone: 'blue', count: '中 / 日 / 英' },
 ]
 
 type LanguageHighlight = { start: number; end: number; type: 'vocabulary' | 'grammar'; term: string; meaning: string; explanation: string }
