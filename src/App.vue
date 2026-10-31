@@ -2203,7 +2203,8 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <span>连续答对 {{ questionProgressById[currentQuestion.id]?.correct_streak || 0 }} 次</span>
                   <span>复习 {{ questionProgressById[currentQuestion.id]?.review_count || 0 }} 次</span>
                 </div>
-                <a v-if="(currentQuestion.source_type === 'official' || currentQuestion.source_type === 'licensed') && currentQuestion.source_reference" class="language-source" :href="currentQuestion.source_reference" target="_blank" rel="noreferrer">IPA 官方原卷 ↗</a>
+                <a v-if="(currentQuestion.source_type === 'official' || currentQuestion.source_type === 'licensed') && currentQuestion.source_reference" class="language-source" :href="currentQuestion.source_reference" target="_blank" rel="noreferrer">IPA公式問題を見る ↗</a>
+                <p v-if="currentQuestion.id === 'fe-ipa-official-2026-a-06'" class="dictionary-status">波形図の選択肢は各区間の0・1で表記しています。元の図も上のIPA公式問題で確認できます。</p>
                 <div class="question-prompt-row">
                   <h3 class="question-prompt">{{ currentQuestion.prompt }}</h3>
                   <button type="button" class="question-speak-button" @click="speakQuestion(currentQuestion)" aria-label="日语朗读题目" title="日语朗读题目"><Volume2 :size="14" /> 听题</button>
@@ -2279,7 +2280,8 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 </div>
                 <article v-for="(question, index) in mockQuestions" :key="question.id" class="panel question-card mock-question-card">
                   <div class="question-topline"><span>第 {{ index + 1 }} / {{ mockQuestions.length }} 题 · 科目{{ question.exam_section }} · {{ question.topic }}</span><span class="source-pill">{{ question.source_type === 'generated' ? '预测题库 · 原创' : question.source_type === 'official' ? '历年真题' : question.source_type === 'licensed' ? '真题改编' : '其他题目' }}</span></div>
-                  <a v-if="(question.source_type === 'official' || question.source_type === 'licensed') && question.source_reference" class="language-source" :href="question.source_reference" target="_blank" rel="noreferrer">IPA 官方原卷 ↗</a>
+                  <a v-if="(question.source_type === 'official' || question.source_type === 'licensed') && question.source_reference" class="language-source" :href="question.source_reference" target="_blank" rel="noreferrer">IPA公式問題を見る ↗</a>
+                  <p v-if="question.id === 'fe-ipa-official-2026-a-06'" class="dictionary-status">波形図の選択肢を0・1の系列で表示しています。必要に応じて上の公式原図をご確認ください。</p>
                   <div class="question-prompt-row">
                     <h3 class="question-prompt">{{ question.prompt }}</h3>
                     <button type="button" class="question-speak-button" @click="speakQuestion(question)" aria-label="日语朗读题目" title="日语朗读题目"><Volume2 :size="14" /> 听题</button>
