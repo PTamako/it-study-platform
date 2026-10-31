@@ -31,6 +31,12 @@ function setup() {
   insert.run('fe-ipa-official-2025-a-01','exam-fe','確率','older','official','A')
   insert.run('fe-ipa-adapt-2026-a-02','exam-fe','確率','adapted','licensed','A')
   insert.run('sg-demo-2026','exam-sg','確率','sg','official','A')
+  insert.run('sg-official-2026-01','exam-sg','情報セキュリティ','sg-2026','official','A')
+  insert.run('sg-official-r06-2024-q01','exam-sg','リスク管理','sg-2024','official','A')
+  insert.run('sg-official-2019f-am-25','exam-sg','情報セキュリティ','sg-2019','official','A')
+  insert.run('sg-official-h29a-2017-q01','exam-sg','リスク管理','sg-2017','official','A')
+  insert.run('sg-b-case-001','exam-sg','情報資産管理','sg-case','generated','B')
+  insert.run('sg-prediction-2026-001','exam-sg','情報セキュリティ','sg-pred','generated','A')
   return { sql, env: { DB: { prepare(query) { return { bind(...args) { return {
     all: async () => ({ results: sql.prepare(query).all(...args) }),
     first: async () => sql.prepare(query).get(...args),
@@ -76,5 +82,51 @@ test('legacy SG practice is unchanged when FE year/section params are not suppli
   const { env } = setup()
   const result = await get(env, '/api/questions?track=exam-sg&source=official&mode=ordered')
   assert.equal(result.status, 200)
-  assert.equal(result.body.total, 1)
+  assert.equal(result.body.total, 5)
+})
+
+test('SG year filters include official 2026 and legacy 2019/2017 papers, not predictions', async () => {
+  const { env } = setup()
+  for (const [year, expectedId] of [
+    ['2026', 'sg-official-2026-01'],
+    ['2024', 'sg-official-r06-2024-q01'],
+    ['2019', 'sg-official-2019f-am-25'],
+    ['2017', 'sg-official-h29a-2017-q01'],
+  ]) {
+    const response = await get(env, '/api/questions?track=exam-sg&source=all&year=' + year + '&mode=ordered')
+    assert.equal(response.status, 200)
+    assert.equal(response.body.total, 1, year)
+    assert.deepEqual(response.body.items.map(x => x.id), [expectedId], year)
+    assert.equal(response.body.items[0].source_type, 'official', year)
+  }
+  const generated = await get(env, '/api/questions?track=exam-sg&source=generated&year=2026')
+  assert.equal(generated.body.total, 0, 'years must not attribute predictions to an IPA session')
+})
+
+test('SG topic categories, A/B section and learning-state reviews share the same filters', async () => {
+  const { env } = setup()
+  const topics = await get(env, '/api/question-categories?track=exam-sg&source=official&year=2026&section=A')
+  assert.equal(topics.status, 200)
+  assert.deepEqual(topics.body.items.map(x => [x.topic, x.question_count]), [['情報セキュリティ', 1]])
+  const cases = await get(env, '/api/questions?track=exam-sg&source=generated&section=B&topic=' +
+    encodeURIComponent('情報資産管理'))
+  assert.equal(cases.status, 200)
+  assert.deepEqual(cases.body.items.map(x => x.id), ['sg-b-case-001'])
+  const wrong = await get(env, '/api/wrong-questions?track=exam-sg&source=official&year=2019&section=A&topic=' +
+    encodeURIComponent('情報セキュリティ') + '&mode=unlearned')
+  assert.equal(wrong.status, 200)
+  assert.equal(wrong.body.total, 1)
+  assert.deepEqual(wrong.body.items.map(x => x.id), ['sg-official-2019f-am-25'])
+  const noCases = await get(env, '/api/question-categories?track=exam-sg&source=generated&section=A&year=2019')
+  assert.deepEqual(noCases.body.items, [])
+})
+
+test('new SG year/section/domain selectors are visible beside the existing FE selector', async () => {
+  const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
+  assert.match(app, /selectedTrackId === 'exam-sg' \? 'SG 年度' : 'FE 年度'/)
+  assert.match(app, /selectedTrackId === 'exam-sg' \? 'SG 科目' : 'FE 科目'/)
+  assert.match(app, /selectedTrackId === 'exam-sg' \? 'SG 分野' : 'FE 分野'/)
+  assert.match(app, /科目A（旧午前を含む）/)
+  assert.match(app, /2016〜2019年度は旧制度の午前問題/)
+  assert.doesNotMatch(app, /selectedTrackId === 'exam-fe'".*年度・科目・分野/)
 })
