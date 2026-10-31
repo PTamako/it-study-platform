@@ -1293,7 +1293,9 @@ export default {
         const card = await env.DB.prepare("SELECT id FROM language_cards WHERE id = ? AND content_type = 'sentence'").bind(cardId).first()
         if (!card) return json({ error: '句子课程卡片不存在。' }, 404)
         const modifier = result === 'again' ? '+10 minutes' : '+1 day'
-        await env.DB.prepare(
+        // RETURNING supplies the single changed row. The client must not
+        // fetch every saved review again after each spaced-repetition answer.
+        const { results } = await env.DB.prepare(
           `INSERT INTO language_card_reviews
              (card_id, review_count, correct_streak, next_review_at, last_reviewed_at, last_result, updated_at)
            VALUES (?, 1, ?, datetime(CURRENT_TIMESTAMP, ?), CURRENT_TIMESTAMP, ?, CURRENT_TIMESTAMP)
@@ -1305,9 +1307,11 @@ export default {
                ELSE CASE MIN(language_card_reviews.correct_streak + 1, 4)
                  WHEN 1 THEN '+1 day' WHEN 2 THEN '+3 days' WHEN 3 THEN '+7 days' ELSE '+14 days' END
              END),
-             last_reviewed_at = CURRENT_TIMESTAMP, last_result = excluded.last_result, updated_at = CURRENT_TIMESTAMP`,
-        ).bind(cardId, result === 'remembered' ? 1 : 0, modifier, result).run()
-        return json({ ok: true, card_id: cardId, result })
+             last_reviewed_at = CURRENT_TIMESTAMP, last_result = excluded.last_result, updated_at = CURRENT_TIMESTAMP
+           RETURNING card_id, review_count, correct_streak, next_review_at, last_reviewed_at, last_result,
+                    CASE WHEN next_review_at <= CURRENT_TIMESTAMP THEN 1 ELSE 0 END AS is_due`,
+        ).bind(cardId, result === 'remembered' ? 1 : 0, modifier, result).all()
+        return json({ ok: true, card_id: cardId, result, review: results[0] })
       } catch {
         return json({ error: '复习记录保存失败，请确认已应用最新的 D1 迁移。' }, 503)
       }
