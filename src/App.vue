@@ -1637,6 +1637,12 @@ const savedDictionaryEntries = ref<DictionaryEntry[]>(readStored('zhixue:saved-d
 const dictionaryLoading = ref(false)
 const dictionaryError = ref('')
 const dictionaryDetectedLanguage = ref<'ja' | 'en' | 'zh' | 'it' | ''>('')
+const dictionaryAiRemaining = ref<number | null>(null)
+const dictionaryAiBusy = ref(false)
+const dictionaryAiActiveKey = ref('')
+const dictionaryAiAnswers = ref<Record<string, string>>({})
+const dictionaryAiErrors = ref<Record<string, string>>({})
+let dictionaryAiRequestId = 0
 const speechStatus = ref('')
 const speechStatusTarget = ref('')
 const lastSearchedTerm = ref('')
@@ -1783,7 +1789,72 @@ async function toggleSaved(term: string) {
     savedWordRequests.delete(term)
   }
 }
+
+function dictionaryAiKey(entry: DictionaryEntry | null): string {
+  return [dictSourceLang.value, lastSearchedTerm.value || searchText.value.trim(), entry?.term || '', entry?.tag || ''].join('|')
+}
+function resetDictionaryAiDisplay() {
+  dictionaryAiRequestId += 1
+  dictionaryAiBusy.value = false
+  dictionaryAiActiveKey.value = ''
+  dictionaryAiAnswers.value = {}
+  dictionaryAiErrors.value = {}
+}
+async function loadDictionaryAiQuota() {
+  if (!authenticated.value) return
+  try {
+    const response = await fetch('/api/dictionary/ai/status')
+    if (!response.ok) return
+    const data = await response.json() as { remaining?: number }
+    if (typeof data.remaining === 'number') dictionaryAiRemaining.value = data.remaining
+  } catch { /* The ordinary dictionary is independent of the AI quota endpoint. */ }
+}
+async function supplementDictionaryWithAi(entry: DictionaryEntry | null) {
+  if (dictionaryAiBusy.value || !authenticated.value) return
+  const term = (entry?.term || searchText.value).normalize('NFKC').trim()
+  if (!term || term.length > 100) return
+  const key = dictionaryAiKey(entry)
+  const requestId = ++dictionaryAiRequestId
+  dictionaryAiBusy.value = true
+  dictionaryAiActiveKey.value = key
+  const errors = { ...dictionaryAiErrors.value }; delete errors[key]; dictionaryAiErrors.value = errors
+  try {
+    const response = await fetch('/api/dictionary/ai', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        term,
+        language: dictSourceLang.value === 'auto' ? (entry?.language || 'auto') : dictSourceLang.value,
+        known: { zh: entry?.zh || '', ja: entry?.translationJa || entry?.japaneseTerm || '',
+          en: entry?.en || entry?.englishTerm || '' },
+      }),
+      signal: AbortSignal.timeout(25000),
+    })
+    const data = await response.json() as { explanation?: string; error?: string; remaining?: number }
+    if (requestId !== dictionaryAiRequestId) return
+    if (typeof data.remaining === 'number') dictionaryAiRemaining.value = data.remaining
+    if (!response.ok || !data.explanation) throw new Error(data.error || 'AI 补充失败，请稍后重试。')
+    dictionaryAiAnswers.value = { ...dictionaryAiAnswers.value, [key]: data.explanation }
+  } catch (error) {
+    if (requestId !== dictionaryAiRequestId) return
+    dictionaryAiErrors.value = { ...dictionaryAiErrors.value, [key]:
+      error instanceof Error && error.name === 'TimeoutError'
+        ? 'AI 请求超时，服务端可能仍在处理。请确认今日剩余次数后再试。'
+        : error instanceof Error ? error.message : 'AI 补充失败。' }
+    void loadDictionaryAiQuota()
+  } finally {
+    if (requestId === dictionaryAiRequestId) {
+      dictionaryAiBusy.value = false
+      dictionaryAiActiveKey.value = ''
+    }
+  }
+}
+watch([activeModule, authenticated], () => {
+  if (activeModule.value === 'dictionary' && authenticated.value) void loadDictionaryAiQuota()
+})
+
 async function lookupDictionary() {
+  resetDictionaryAiDisplay()
   const q = searchText.value.normalize('NFKC').trim().replace(/\s+/g, ' ')
   const requestedLanguage = dictSourceLang.value
   const requestId = ++dictionaryRequestId
@@ -1880,6 +1951,7 @@ async function lookupDictionary() {
   }
 }
 function clearDictionarySearch() {
+  resetDictionaryAiDisplay()
   dictionaryRequestId += 1
   dictionaryLoading.value = false
   speechStatus.value = ''
@@ -1892,6 +1964,7 @@ function clearDictionarySearch() {
 }
 function setDictionaryLanguage(language: 'auto' | 'ja' | 'en' | 'zh' | 'it') {
   if (dictSourceLang.value === language) return
+  resetDictionaryAiDisplay()
   dictSourceLang.value = language
   dictionaryRequestId += 1
   dictionaryLoading.value = false
@@ -1911,6 +1984,7 @@ watch(savedWords, value => localStorage.setItem('zhixue:saved-words', JSON.strin
 
 function navigate(id: ModuleId) {
   stopSpeech()
+  resetDictionaryAiDisplay()
   activeModule.value = id
   showMobileMenu.value = false
   searchText.value = ''
@@ -2803,11 +2877,40 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <p v-if="entry.zh" class="dictionary-translation-ja">{{ entry.language === 'zh' ? '中文原文' : '中文翻译／释义' }}：{{ entry.zh }}</p>
                   <p v-if="entry.example" class="dict-example">例句：{{ entry.example }}</p>
                   <p v-if="entry.technical" class="dictionary-tech-note">来自 IT 专业词汇库</p>
+                  <div class="dictionary-ai-section">
+                    <div v-if="!dictionaryAiAnswers[dictionaryAiKey(entry)]" class="dictionary-ai-action-row">
+                      <button type="button" class="secondary-button dictionary-ai-button"
+                        :disabled="dictionaryAiBusy"
+                        @click="supplementDictionaryWithAi(entry)">
+                        {{ dictionaryAiBusy && dictionaryAiActiveKey === dictionaryAiKey(entry) ? 'AI 解释中…'
+                          : (!entry.zh || (!entry.en && !entry.englishTerm) || !entry.translationJa) ? 'AI 补充翻译与用法' : 'AI 解释语境与多义词' }}
+                      </button>
+                      <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次新调用' : '今日 AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small>
+                    </div>
+                    <div v-if="dictionaryAiAnswers[dictionaryAiKey(entry)]" class="dictionary-ai-result">
+                      <strong>AI 辅助解析</strong>
+                      <p>{{ dictionaryAiAnswers[dictionaryAiKey(entry)] }}</p>
+                      <small>AI 内容可能出错，以原词典和实际语境为准。</small>
+                    </div>
+                    <p v-if="dictionaryAiErrors[dictionaryAiKey(entry)]" class="dictionary-status dictionary-error" role="alert">{{ dictionaryAiErrors[dictionaryAiKey(entry)] }}</p>
+                  </div>
                   <div v-if="speechStatus && speechStatusTarget === entry.term" class="dictionary-speech-controls"><p class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 </div>
                 <div class="dict-actions"><button class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + (entry.englishTerm || entry.term)" title="播放英语发音"><Volume2 :size="14" /><span>EN</span></button><button class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语辅助读音：' + (entry.englishTerm || entry.term)" title="播放日语辅助读音"><Languages :size="14" /><span>日</span></button><button class="round-action pronunciation-button" @click="speakDictionaryChinese(entry)" :aria-label="'播放中文发音：' + entry.term" title="播放中文发音"><Volume2 :size="14" /><span>中</span></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" :disabled="vocabularyHydrating || !vocabularySyncReady" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
               </article>
               <div v-if="lastSearchedTerm.trim().toLowerCase() === searchText.trim().toLowerCase() && displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>没有找到匹配词条</strong><p>可尝试中文、日文、英文词语或 IT 缩写。纯汉字的语言可能有歧义，请手动选择「中文」或「日语」。IT 模式只查询本地词库。</p></div>
+              <div v-if="searchText.trim() && !dictionaryLoading && (dictionaryError || (lastSearchedTerm && displayedEntries.length === 0))" class="dictionary-ai-section dictionary-ai-fallback">
+                <button v-if="!dictionaryAiAnswers[dictionaryAiKey(null)]" type="button" class="secondary-button dictionary-ai-button"
+                  :disabled="dictionaryAiBusy" @click="supplementDictionaryWithAi(null)">
+                  {{ dictionaryAiBusy && dictionaryAiActiveKey === dictionaryAiKey(null) ? 'AI 解释中…' : '尝试 AI 辅助解释当前词句' }}
+                </button>
+                <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次新调用' : '今日 AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small>
+                <div v-if="dictionaryAiAnswers[dictionaryAiKey(null)]" class="dictionary-ai-result">
+                  <strong>AI 辅助解析</strong><p>{{ dictionaryAiAnswers[dictionaryAiKey(null)] }}</p>
+                  <small>AI 内容可能出错，不代表已找到权威词典释义。</small>
+                </div>
+                <p v-if="dictionaryAiErrors[dictionaryAiKey(null)]" class="dictionary-status dictionary-error" role="alert">{{ dictionaryAiErrors[dictionaryAiKey(null)] }}</p>
+              </div>
             </div>
           </section>
           </template>

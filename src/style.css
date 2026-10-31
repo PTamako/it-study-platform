@@ -817,3 +817,16 @@ button[aria-disabled="true"] {
   .fe-filter-controls label:last-child { grid-column:1 / -1; }
   .fe-filter-controls select { font-size:16px; min-height:44px; }
 }
+
+
+/* Dictionary: traditional sources remain primary; optional AI is visually secondary. */
+.dictionary-ai-section{margin-top:10px;padding-top:10px;border-top:1px dashed var(--line,#e5e7eb);min-width:0}
+.dictionary-ai-action-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dictionary-ai-button{font-size:12px;min-height:36px;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+.dictionary-ai-section small{color:var(--text-secondary,#7b8090);font-size:11px;line-height:1.5}
+.dictionary-ai-result{padding:12px;border-radius:10px;background:var(--surface-soft,#f8f9fc);overflow-wrap:anywhere}
+.dictionary-ai-result strong{display:block;font-size:12px;margin-bottom:7px}
+.dictionary-ai-result p{white-space:pre-wrap;margin:0 0 6px;line-height:1.7;font-size:12px}
+.dictionary-ai-fallback{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.dictionary-ai-fallback .dictionary-ai-result,.dictionary-ai-fallback .dictionary-error{width:100%}
+@media(max-width:560px){.dictionary-ai-action-row{align-items:flex-start}.dictionary-ai-button{width:auto;max-width:100%}}
