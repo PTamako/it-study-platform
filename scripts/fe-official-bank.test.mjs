@@ -205,6 +205,21 @@ test('all 104 IPA answer keys match the eight independently checked official ans
   assert.equal(seen, 104)
 })
 
+test('the official 2026 A6 logic-circuit timing chart is answerable without a mandatory PDF popup', () => {
+  const db = setup()
+  const row = db.prepare("SELECT * FROM questions WHERE id = 'fe-ipa-official-2026-a-06'").get()
+  assert.ok(row)
+  const options = JSON.parse(row.options_json)
+  assert.equal(options.length, 4)
+  for (const option of options) {
+    assert.match(option.text, /A=[01]{7}／B=[01]{7}／Y=[01]{7}/)
+    assert.doesNotMatch(option.text, /公式PDFの波形図/)
+  }
+  assert.equal(options[1].text, 'イ：A=0100010／B=0001010／Y=1010101')
+  assert.equal(JSON.parse(row.answer_json), 'b')
+  assert.match(row.source_reference, /2026r08_fe_kamoku_a_qs\.pdf$/)
+})
+
 test('repeat FE migrations are idempotent, preserve attempts, source classes and mastery', () => {
   const db = setup()
   db.exec("INSERT INTO study_attempts VALUES ('attempt-1','fe-ipa-official-2026-a-02','\"c\"')")
