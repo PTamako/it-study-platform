@@ -55,6 +55,7 @@ async function login() {
     restoreActiveMockExam()
     void syncPendingMockSubmission()
     void syncPendingPracticeAttempt()
+    void syncPendingScenarioAttempt()
   } catch (error) {
     authError.value = error instanceof Error ? error.message : '登录失败，请稍后重试。'
   } finally {
@@ -735,10 +736,16 @@ function nextScenario() {
   scenariosError.value = ''
 }
 
-async function submitScenario() {
-  const submittedScenario = currentScenario.value
-  const submittedOption = selectedScenarioOption.value
-  if (!submittedScenario || !submittedOption || scenarioSubmitting.value || scenarioResult.value) return
+type PendingScenarioAttempt = {
+  attempt_id: string
+  scenario_id: string
+  selected_option: string
+  duration_seconds: number
+}
+const pendingScenarioAttempt = ref<PendingScenarioAttempt | null>(readStored('zhixue:scenario-pending-v1', null))
+async function syncPendingScenarioAttempt() {
+  const pending = pendingScenarioAttempt.value
+  if (!pending || scenarioSubmitting.value || !authenticated.value) return
   const requestId = ++scenarioSubmissionId
   scenarioSubmitting.value = true
   scenariosError.value = ''
@@ -746,32 +753,58 @@ async function submitScenario() {
     const response = await fetch('/api/scenario-attempts', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        scenario_id: submittedScenario.id,
-        selected_option: submittedOption,
-        duration_seconds: 0,
-      }),
+      body: JSON.stringify(pending),
     })
-    const data = await response.json() as { score?: number; best_option?: string; correct?: boolean; feedback?: string; error?: string }
-    if (!response.ok) throw new Error(data.error || '实战结果保存失败')
-    // A newer scenario may be selected while the server is scoring this attempt.
-    // Keep the saved attempt, but do not paint its result onto a different scenario.
-    if (requestId !== scenarioSubmissionId || currentScenario.value?.id !== submittedScenario.id) return
-    const feedback = String(data.feedback || '')
-    scenarioResult.value = {
-      score: Number(data.score || 0),
-      best_option: String(data.best_option || ''),
-      correct: Boolean(data.correct),
-      feedback,
+    const data = await response.json() as {
+      attempt_id?: string; score?: number; best_option?: string; correct?: boolean; feedback?: string; error?: string
     }
-    void translateScenarioExplanation(submittedScenario.id, feedback)
+    if (!response.ok || data.attempt_id !== pending.attempt_id) {
+      throw new Error(data.error || '实战结果尚未保存。')
+    }
+    if (pendingScenarioAttempt.value?.attempt_id === pending.attempt_id) {
+      pendingScenarioAttempt.value = null
+      try { localStorage.removeItem('zhixue:scenario-pending-v1') } catch { /* cloud result is durable */ }
+    }
+    if (requestId === scenarioSubmissionId && currentScenario.value?.id === pending.scenario_id) {
+      const feedback = String(data.feedback || '')
+      scenarioResult.value = {
+        score: Number(data.score || 0),
+        best_option: String(data.best_option || ''),
+        correct: Boolean(data.correct),
+        feedback,
+      }
+      void translateScenarioExplanation(pending.scenario_id, feedback)
+    }
     void loadCloudDashboard()
   } catch (error) {
-    if (requestId !== scenarioSubmissionId) return
-    scenariosError.value = error instanceof Error ? error.message : '实战结果保存失败，请稍后重试。'
+    if (requestId === scenarioSubmissionId) {
+      scenariosError.value = (error instanceof Error ? error.message : '网络异常。') + ' 实战答题保存在本设备，请重试同步。'
+    }
   } finally {
-    if (requestId === scenarioSubmissionId) scenarioSubmitting.value = false
+    scenarioSubmitting.value = false
   }
+}
+async function submitScenario() {
+  const scenario = currentScenario.value
+  const selected = selectedScenarioOption.value
+  if (!scenario || !selected || scenarioSubmitting.value || scenarioResult.value) return
+  if (pendingScenarioAttempt.value) {
+    if (pendingScenarioAttempt.value.scenario_id === scenario.id &&
+        pendingScenarioAttempt.value.selected_option === selected) {
+      await syncPendingScenarioAttempt()
+    } else {
+      scenariosError.value = '上一笔实战答题尚未同步，请先重新同步。'
+    }
+    return
+  }
+  const pending: PendingScenarioAttempt = {
+    attempt_id: crypto.randomUUID(), scenario_id: scenario.id, selected_option: selected,
+    duration_seconds: 0,
+  }
+  pendingScenarioAttempt.value = pending
+  try { localStorage.setItem('zhixue:scenario-pending-v1', JSON.stringify(pending)) }
+  catch { scenariosError.value = '本机无法保存待同步实战答题，请勿关闭页面。' }
+  await syncPendingScenarioAttempt()
 }
 watch([selectedTrackId, examTracks, activeModule], () => {
   if (activeModule.value === 'practical') void loadScenarios()
@@ -1543,7 +1576,7 @@ onMounted(async () => {
     // Speech playback will report its own browser/device error when requested.
   }
   await checkAuth()
-  if (authenticated.value) { restoreActiveMockExam(); void syncExamHistory(); void hydrateCloudProgress(); void refreshDailyTasks(todayKey.value); void reconcilePriorDailyTasks(); void syncPendingMockSubmission(); void syncPendingPracticeAttempt() }
+  if (authenticated.value) { restoreActiveMockExam(); void syncExamHistory(); void hydrateCloudProgress(); void refreshDailyTasks(todayKey.value); void reconcilePriorDailyTasks(); void syncPendingMockSubmission(); void syncPendingPracticeAttempt(); void syncPendingScenarioAttempt() }
 })
 
 type DictionaryEntry = {
@@ -2449,6 +2482,10 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
         </template>
 
         <template v-else-if="activeModule === 'practical'">
+          <p v-if="pendingScenarioAttempt" class="dictionary-status" role="status">
+            有实战答题尚未同步。
+            <button type="button" class="text-link" :disabled="scenarioSubmitting" @click="syncPendingScenarioAttempt">{{ scenarioSubmitting ? '同步中…' : '重新同步实战答题' }}</button>
+          </p>
           <section class="section-block module-page-section">
             <div class="section-heading"><div><h2>把知识用在真实工作情境里</h2></div></div>
             <div class="panel practice-start-card">
