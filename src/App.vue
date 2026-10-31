@@ -4,6 +4,7 @@ import { hydrateMastery, mergeExamHistory, restoreMasteredCard } from './progres
 import { tokyoDate, mergeDailyTaskStates } from './daily-tasks'
 import { utcReviewMillis } from './review-time'
 import { fetchVocabularySnapshot } from './vocabulary-sync'
+import { parseMockSnapshot, type MockSnapshot } from './mock-recovery'
 import {
   BookOpen, Languages, Search, GraduationCap,
   ChevronRight, ChevronDown, Sparkles, Clock3, Flame, Bookmark, Volume2, ArrowRight,
@@ -51,6 +52,7 @@ async function login() {
     void hydrateCloudProgress()
     void refreshDailyTasks(todayKey.value)
     void reconcilePriorDailyTasks()
+    restoreActiveMockExam()
     void syncPendingMockSubmission()
     void syncPendingPracticeAttempt()
   } catch (error) {
@@ -463,7 +465,55 @@ const mockDeadline = ref(0)
 const mockStartedAt = ref(0)
 const mockNow = ref(Date.now())
 const mockDurationMinutes = ref(30)
+const MOCK_ACTIVE_KEY = 'zhixue:mock-active-v1'
+const mockStorageWarning = ref('')
 let mockTimer: ReturnType<typeof setInterval> | undefined
+function persistActiveMockExam() {
+  if (!mockStarted.value) return
+  const snapshot: MockSnapshot<PracticeQuestion> = {
+    track: selectedTrackId.value === 'exam-fe' ? 'exam-fe' : 'exam-sg',
+    section: selectedTrackId.value === 'exam-fe' ? feMockSection.value : 'SG',
+    questions: mockQuestions.value,
+    answers: mockAnswers.value,
+    started_at: mockStartedAt.value,
+    deadline: mockDeadline.value,
+    duration_minutes: mockDurationMinutes.value,
+  }
+  try {
+    localStorage.setItem(MOCK_ACTIVE_KEY, JSON.stringify(snapshot))
+    mockStorageWarning.value = ''
+  } catch {
+    mockStorageWarning.value = '本机空间不足，模拟考试无法保存中途进度。请勿刷新页面。'
+  }
+}
+watch([mockStarted, mockAnswers], persistActiveMockExam, { deep: true, flush: 'sync' })
+function restoreActiveMockExam() {
+  if (!authenticated.value || mockStarted.value || mockPendingSubmission.value) return
+  const raw = readStored<unknown>(MOCK_ACTIVE_KEY, null)
+  if (!raw) return
+  const snapshot = parseMockSnapshot<PracticeQuestion>(raw)
+  if (!snapshot) {
+    mockError.value = '本机保存的模拟考试已损坏，未恢复旧答卷。'
+    return
+  }
+  selectedTrackId.value = snapshot.track
+  if (snapshot.track === 'exam-fe') feMockSection.value = snapshot.section === 'B' ? 'B' : 'A'
+  mockQuestions.value = snapshot.questions
+  mockAnswers.value = snapshot.answers
+  mockStartedAt.value = snapshot.started_at
+  mockDeadline.value = snapshot.deadline
+  mockDurationMinutes.value = snapshot.duration_minutes
+  mockNow.value = Date.now()
+  mockSubmitted.value = false
+  mockStarted.value = true
+  if (mockTimer) clearInterval(mockTimer)
+  mockTimer = setInterval(() => {
+    mockNow.value = Date.now()
+    if (mockRemainingSeconds.value <= 0) void finishMockExam(true)
+  }, 500)
+  if (mockRemainingSeconds.value <= 0) void finishMockExam(true)
+}
+
 const mockRemainingSeconds = computed(() => mockStarted.value && !mockSubmitted.value
   ? Math.max(0, Math.ceil((mockDeadline.value - mockNow.value) / 1000))
   : 0)
@@ -562,12 +612,16 @@ async function finishMockExam(autoSubmit = false) {
     track: selectedTrackId.value,
     section: selectedTrackId.value === 'exam-fe' ? feMockSection.value : 'SG',
     study_date: tokyoDate(),
-    duration_seconds: Math.max(0, Math.floor((Date.now() - mockStartedAt.value) / 1000)),
+    duration_seconds: Math.max(0, Math.min(86400, Math.floor((Date.now() - mockStartedAt.value) / 1000))),
     answers: mockQuestions.value.map(item => ({ question_id: item.id, answer: mockAnswers.value[item.id] || '' })),
   }
   mockPendingSubmission.value = submission
-  try { localStorage.setItem('zhixue:mock-pending-v1', JSON.stringify(submission)) }
-  catch { mockError.value += ' 浏览器本地保存失败；请勿关闭此页面直到同步完成。' }
+  try {
+    localStorage.setItem('zhixue:mock-pending-v1', JSON.stringify(submission))
+    localStorage.removeItem(MOCK_ACTIVE_KEY)
+  } catch {
+    mockError.value += ' 浏览器本地保存失败；请勿关闭此页面直到同步完成。'
+  }
   await syncPendingMockSubmission()
 }
 onUnmounted(() => { if (mockTimer) clearInterval(mockTimer); if (dailyRolloverTimer) clearInterval(dailyRolloverTimer); document.removeEventListener('visibilitychange', onDailyVisibilityChange) })
@@ -1482,7 +1536,7 @@ onMounted(async () => {
     // Speech playback will report its own browser/device error when requested.
   }
   await checkAuth()
-  if (authenticated.value) { void syncExamHistory(); void hydrateCloudProgress(); void refreshDailyTasks(todayKey.value); void reconcilePriorDailyTasks(); void syncPendingMockSubmission(); void syncPendingPracticeAttempt() }
+  if (authenticated.value) { restoreActiveMockExam(); void syncExamHistory(); void hydrateCloudProgress(); void refreshDailyTasks(todayKey.value); void reconcilePriorDailyTasks(); void syncPendingMockSubmission(); void syncPendingPracticeAttempt() }
 })
 
 type DictionaryEntry = {
@@ -2329,6 +2383,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                 <button class="primary-button" @click="mockSubmitted = false; mockQuestions = []; mockAnswers = {}; mockError = ''">结束复盘 <ArrowRight :size="16" /></button>
               </div>
               <div v-else class="mock-exam-active">
+                <p v-if="mockStorageWarning" class="dictionary-status dictionary-error" role="alert">{{ mockStorageWarning }}</p>
                 <div class="panel mock-timer-panel">
                   <div><small>剩余时间</small><strong :class="{ 'mock-time-warning': mockRemainingSeconds <= 60 }">{{ formatMockTime(mockRemainingSeconds) }}</strong></div>
                   <div><small>已作答</small><strong>{{ mockAnsweredCount }} / {{ mockQuestions.length }}</strong></div>
