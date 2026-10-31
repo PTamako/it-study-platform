@@ -2330,6 +2330,7 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                   <h3>本次练习完成</h3>
                   <p>正确率 {{ Math.round(quizCorrect / quizQuestions.length * 100) }}%。本次成绩已加入当前设备的历史记录。</p>
                   <p class="muted">当前筛选题量 {{ questionBankTotal }} 题 · 本组 {{ questionBatchOffset + 1 }}–{{ Math.min(questionBatchOffset + quizQuestions.length, questionBankTotal) }} 题</p>
+                  <p v-if="quizError" class="practice-error" role="alert">{{ quizError }}</p>
                   <button class="primary-button" @click="nextQuestionBatch" :disabled="quizLoading">{{ quizLoading ? '正在加载…' : questionBankHasMore ? '继续下一组（10 题）' : '从头再练' }} <ArrowRight :size="16" /></button>
                 </template>
                 <template v-else>
