@@ -1637,6 +1637,12 @@ const savedDictionaryEntries = ref<DictionaryEntry[]>(readStored('zhixue:saved-d
 const dictionaryLoading = ref(false)
 const dictionaryError = ref('')
 const dictionaryDetectedLanguage = ref<'ja' | 'en' | 'zh' | 'it' | ''>('')
+const dictionaryAiRemaining = ref<number | null>(null)
+const dictionaryAiBusy = ref(false)
+const dictionaryAiActiveKey = ref('')
+const dictionaryAiAnswers = ref<Record<string, string>>({})
+const dictionaryAiErrors = ref<Record<string, string>>({})
+let dictionaryAiRequestId = 0
 const speechStatus = ref('')
 const speechStatusTarget = ref('')
 const lastSearchedTerm = ref('')
@@ -1783,7 +1789,72 @@ async function toggleSaved(term: string) {
     savedWordRequests.delete(term)
   }
 }
+
+function dictionaryAiKey(entry: DictionaryEntry | null): string {
+  return [dictSourceLang.value, lastSearchedTerm.value || searchText.value.trim(), entry?.term || '', entry?.tag || ''].join('|')
+}
+function resetDictionaryAiDisplay() {
+  dictionaryAiRequestId += 1
+  dictionaryAiBusy.value = false
+  dictionaryAiActiveKey.value = ''
+  dictionaryAiAnswers.value = {}
+  dictionaryAiErrors.value = {}
+}
+async function loadDictionaryAiQuota() {
+  if (!authenticated.value) return
+  try {
+    const response = await fetch('/api/dictionary/ai/status')
+    if (!response.ok) return
+    const data = await response.json() as { remaining?: number }
+    if (typeof data.remaining === 'number') dictionaryAiRemaining.value = data.remaining
+  } catch { /* The ordinary dictionary is independent of the AI quota endpoint. */ }
+}
+async function supplementDictionaryWithAi(entry: DictionaryEntry | null) {
+  if (dictionaryAiBusy.value || !authenticated.value) return
+  const term = (entry?.term || searchText.value).normalize('NFKC').trim()
+  if (!term || term.length > 100) return
+  const key = dictionaryAiKey(entry)
+  const requestId = ++dictionaryAiRequestId
+  dictionaryAiBusy.value = true
+  dictionaryAiActiveKey.value = key
+  const errors = { ...dictionaryAiErrors.value }; delete errors[key]; dictionaryAiErrors.value = errors
+  try {
+    const response = await fetch('/api/dictionary/ai', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        term,
+        language: dictSourceLang.value === 'auto' ? (entry?.language || 'auto') : dictSourceLang.value,
+        known: { zh: entry?.zh || '', ja: entry?.translationJa || entry?.japaneseTerm || '',
+          en: entry?.en || entry?.englishTerm || '' },
+      }),
+      signal: AbortSignal.timeout(25000),
+    })
+    const data = await response.json() as { explanation?: string; error?: string; remaining?: number }
+    if (requestId !== dictionaryAiRequestId) return
+    if (typeof data.remaining === 'number') dictionaryAiRemaining.value = data.remaining
+    if (!response.ok || !data.explanation) throw new Error(data.error || 'AI 补充失败，请稍后重试。')
+    dictionaryAiAnswers.value = { ...dictionaryAiAnswers.value, [key]: data.explanation }
+  } catch (error) {
+    if (requestId !== dictionaryAiRequestId) return
+    dictionaryAiErrors.value = { ...dictionaryAiErrors.value, [key]:
+      error instanceof Error && error.name === 'TimeoutError'
+        ? 'AI 请求超时，服务端可能仍在处理。请确认今日剩余次数后再试。'
+        : error instanceof Error ? error.message : 'AI 补充失败。' }
+    void loadDictionaryAiQuota()
+  } finally {
+    if (requestId === dictionaryAiRequestId) {
+      dictionaryAiBusy.value = false
+      dictionaryAiActiveKey.value = ''
+    }
+  }
+}
+watch([activeModule, authenticated], () => {
+  if (activeModule.value === 'dictionary' && authenticated.value) void loadDictionaryAiQuota()
+})
+
 async function lookupDictionary() {
+  resetDictionaryAiDisplay()
   const q = searchText.value.normalize('NFKC').trim().replace(/\s+/g, ' ')
   const requestedLanguage = dictSourceLang.value
   const requestId = ++dictionaryRequestId
@@ -1880,6 +1951,7 @@ async function lookupDictionary() {
   }
 }
 function clearDictionarySearch() {
+  resetDictionaryAiDisplay()
   dictionaryRequestId += 1
   dictionaryLoading.value = false
   speechStatus.value = ''
@@ -1892,6 +1964,7 @@ function clearDictionarySearch() {
 }
 function setDictionaryLanguage(language: 'auto' | 'ja' | 'en' | 'zh' | 'it') {
   if (dictSourceLang.value === language) return
+  resetDictionaryAiDisplay()
   dictSourceLang.value = language
   dictionaryRequestId += 1
   dictionaryLoading.value = false
@@ -1911,6 +1984,7 @@ watch(savedWords, value => localStorage.setItem('zhixue:saved-words', JSON.strin
 
 function navigate(id: ModuleId) {
   stopSpeech()
+  resetDictionaryAiDisplay()
   activeModule.value = id
   showMobileMenu.value = false
   searchText.value = ''
