@@ -1316,10 +1316,10 @@ export default {
         const matchedTotal = Number(rows[0]?.filtered_total || 0)
         return json({
           mode,
-          total: mode === 'unlearned' ? matchedTotal : rows.length,
+          total: matchedTotal,
           offset,
           limit,
-          has_more: mode === 'unlearned' && offset + rows.length < matchedTotal,
+          has_more: offset + rows.length < matchedTotal,
           items: rows.map((row: Record<string, unknown>) => ({
             ...row,
             filtered_total: undefined,
@@ -1437,21 +1437,41 @@ export default {
       const questionId = String(body.question_id || '').trim()
       const answer = body.answer
       const duration = Math.max(0, Math.min(86400, Math.floor(Number(body.duration_seconds) || 0)))
+      const suppliedAttemptId = body.attempt_id
       if (!questionId || answer === undefined) return json({ error: '缺少 question_id 或 answer。' }, 400)
+      if (suppliedAttemptId !== undefined &&
+        (typeof suppliedAttemptId !== 'string' ||
+         !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(suppliedAttemptId))) {
+        return json({ error: '答题编号无效。' }, 400)
+      }
+      const attemptId = (suppliedAttemptId as string | undefined) || crypto.randomUUID()
+      const savedAttempt = async () => env.DB.prepare(
+        'SELECT question_id, user_answer_json, is_correct FROM study_attempts WHERE id = ?',
+      ).bind(attemptId).first<{ question_id: string; user_answer_json: string; is_correct: number }>()
       try {
         const question = await env.DB.prepare('SELECT id, track_id, answer_json FROM questions WHERE id = ?').bind(questionId).first() as Record<string, unknown> | null
         if (!question) return json({ error: '题目不存在。' }, 404)
         let expected: unknown
         try { expected = JSON.parse(String(question.answer_json)) } catch { expected = null }
         const correct = JSON.stringify(expected) === JSON.stringify(answer)
-        const attemptId = crypto.randomUUID()
+        const serializedAnswer = JSON.stringify(answer)
+        const existing = await savedAttempt()
+        if (existing) {
+          if (existing.question_id !== questionId || existing.user_answer_json !== serializedAnswer) {
+            return json({ error: '答题编号已用于不同答案。' }, 409)
+          }
+          const progress = await env.DB.prepare(
+            'SELECT question_id, review_count, correct_streak, last_result, next_review_at, mastered FROM question_review_state WHERE question_id = ?',
+          ).bind(questionId).first()
+          return json({ ok: true, attempt_id: attemptId, correct: Boolean(existing.is_correct), answer: expected, progress })
+        }
         // Commit the attempt and review state together. Derive the next state
         // inside the upsert so simultaneous submissions do not lose increments.
         const result = correct ? 'remembered' : 'again'
         await env.DB.batch([
           env.DB.prepare(
             'INSERT INTO study_attempts (id, question_id, user_answer_json, is_correct, duration_seconds) VALUES (?, ?, ?, ?, ?)',
-          ).bind(attemptId, questionId, JSON.stringify(answer), correct ? 1 : 0, duration),
+          ).bind(attemptId, questionId, serializedAnswer, correct ? 1 : 0, duration),
           env.DB.prepare(
             `INSERT INTO question_review_state (question_id, track_id, review_count, correct_streak, last_result, next_review_at, mastered, updated_at)
              VALUES (?, ?, 1, ?, ?, datetime(CURRENT_TIMESTAMP, ?), 0, CURRENT_TIMESTAMP)
@@ -1474,6 +1494,22 @@ export default {
         ).bind(questionId).first()
         return json({ ok: true, attempt_id: attemptId, correct, answer: expected, progress }, 201)
       } catch {
+        // Concurrent identical retries: the unique attempt id rejects the second
+        // batch and prevents the review streak from being incremented again.
+        try {
+          const existing = await savedAttempt()
+          if (existing) {
+            if (existing.question_id !== questionId || existing.user_answer_json !== JSON.stringify(answer)) {
+              return json({ error: '答题编号已用于不同答案。' }, 409)
+            }
+            const progress = await env.DB.prepare(
+              'SELECT question_id, review_count, correct_streak, last_result, next_review_at, mastered FROM question_review_state WHERE question_id = ?',
+            ).bind(questionId).first()
+            const savedQuestion = await env.DB.prepare('SELECT answer_json FROM questions WHERE id = ?').bind(questionId).first<{ answer_json: string }>()
+            return json({ ok: true, attempt_id: attemptId, correct: Boolean(existing.is_correct),
+              answer: savedQuestion ? JSON.parse(savedQuestion.answer_json) : null, progress })
+          }
+        } catch { /* Keep the caller's pending attempt available for retry. */ }
         return json({ error: '答题记录保存失败，请确认 D1 迁移已完成。' }, 503)
       }
     }
