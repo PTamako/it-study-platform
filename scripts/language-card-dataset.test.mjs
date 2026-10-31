@@ -5,6 +5,8 @@ import { readFile } from 'node:fs/promises'
 const migration = await readFile(new URL('../migrations/0081_language_sentence_cards.sql', import.meta.url), 'utf8')
 const refreshMigration = await readFile(new URL('../migrations/0084_refresh_contextual_bilingual_annotations.sql', import.meta.url), 'utf8')
 const rebuildMigration = await readFile(new URL('../migrations/0087_rebuild_contextual_bilingual_sentence_cards.sql', import.meta.url), 'utf8')
+const precisionMigration = await readFile(new URL('../migrations/0115_refresh_precise_bilingual_annotations.sql', import.meta.url), 'utf8')
+const precisionStatements = precisionMigration.split('\n').filter(line => /^UPDATE language_cards SET highlight_json = /.test(line))
 const refreshStatements = refreshMigration.split('\n').filter(line => /^UPDATE language_cards SET highlight_json = /.test(line))
 const rows = rebuildMigration.split('\n').filter(line => /^\s*\('(ja|en)-sentence-/.test(line))
 const ja = rows.filter(line => /^\s*\('ja-sentence-/.test(line))
@@ -151,4 +153,34 @@ test('regenerated bilingual migration upserts cards without cascading away revie
   assert.doesNotMatch(rebuildMigration, /DELETE FROM language_cards|DROP TABLE language_cards|REPLACE INTO language_cards/)
   assert.match(rebuildMigration, /ON CONFLICT\(id\) DO UPDATE SET/)
   assert.doesNotMatch(rebuildMigration, /language_card_progress_rebuild_backup/)
+})
+
+test('new precision migration updates annotations in place without deleting user learning records', () => {
+  assert.equal(precisionStatements.length, 10000)
+  assert.match(precisionMigration, /WHERE id = .* AND content_type = 'sentence'/)
+  assert.doesNotMatch(precisionMigration, /DELETE FROM|DROP TABLE|REPLACE INTO|language_card_reviews|language_card_progress/)
+})
+
+test('full corpus has no cross-particle grammar meaning leakage', () => {
+  const particleNotes = { 'から': '起点', 'まで': '终点', 'より': '比较', 'だけ': '限定', 'しか': '限定' }
+  for (const line of rows.filter(line => /^\\s*\\('ja-sentence-/.test(line))) {
+    const fields = parseSqlTuple(line)
+    const sentence = fields[3]
+    for (const hit of JSON.parse(fields[13])) {
+      if (hit.type === 'grammar' && Object.hasOwn(particleNotes, hit.term)) {
+        assert.match(hit.meaning, new RegExp(particleNotes[hit.term]), 'incorrect note on '+ sentence + ' / '+hit.term)
+      }
+    }
+  }
+})
+
+test('full English corpus does not label verb phrases as article noun phrases', () => {
+  const verbs = /\\b(?:is|are|was|were|has|have|had|will|does|did|starts|started|works|worked|goes|went|needs|needed)\\b/i
+  for (const line of rows.filter(line => /^\\s*\\('en-sentence-/.test(line))) {
+    const fields = parseSqlTuple(line)
+    for (const hit of JSON.parse(fields[13])) {
+      if (hit.type !== 'grammar' || !/^(?:a|an|the) /i.test(hit.term)) continue
+      assert.doesNotMatch(hit.term, verbs, 'Article phrase swallowed a predicate: '+hit.term)
+    }
+  }
 })
