@@ -61,8 +61,9 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Cache-first for versioned build assets; network-first for other same-origin GETs.
-  if (url.pathname.startsWith('/assets/')) {
+  // Cache-first only for hashed assets, including the generated lesson corpus.
+  // The non-fingerprinted manifest remains network-first so deployments update.
+  if (url.pathname.startsWith('/assets/') || /^\/language-cards\/(?:ja|en)\.[a-f0-9]{16}\.json$/.test(url.pathname)) {
     event.respondWith((async () => {
       const cached = await caches.match(request)
       if (cached) return cached
