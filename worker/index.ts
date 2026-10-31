@@ -22,6 +22,7 @@ const protectedPersonalPaths = new Set([
 
 export interface Env {
   DB: D1Database
+  ASSETS?: Fetcher
   AI?: Ai
   APP_ENV?: string
   AUTH_PASSWORD?: string
@@ -1153,7 +1154,9 @@ export default {
       }
     }
 
-    // Language learning cards are stored in D1 with source and license metadata.
+    // Tatoeba sentence cards and their offline grammar annotations are public,
+    // immutable build assets. The legacy API also serves static data so installed
+    // older PWA versions never perform 5,000-row D1 reads on every lesson reload.
     if (url.pathname === '/api/language-cards') {
       const language = url.searchParams.get('lang') || 'ja'
       const category = url.searchParams.get('category') || ''
@@ -1166,18 +1169,25 @@ export default {
         return json({ items: [], error: '无效的语言课程分页参数。' }, 400)
       }
       try {
-        const sql = `SELECT id, language, category, term, reading, meaning_zh, explanation, example, example_meaning_zh, example_source_url, source_url, source_type, content_type, highlight_json, vocabulary_expansion_json, grammar_expansion_json
-           FROM language_cards WHERE content_type = 'sentence' AND language = ? AND (? = '' OR category = ?)
-           ORDER BY CASE category WHEN '日常句子' THEN 0 WHEN '职场语言' THEN 1 ELSE 2 END, id`
-        const stmt = env.DB.prepare(sql + (paged ? ' LIMIT ? OFFSET ?' : ''))
-        const { results } = paged
-          ? await stmt.bind(language, category, category, limit, offset).all()
-          : await stmt.bind(language, category, category).all()
-        const response = json({ items: results })
+        if (!env.ASSETS) throw new Error('Missing static asset binding')
+        const manifestResponse = await env.ASSETS.fetch(new URL('/language-cards/manifest.json', url))
+        if (!manifestResponse.ok) throw new Error('Missing static corpus index')
+        const manifest = await manifestResponse.json() as Record<string, unknown>
+        const path = manifest[language]
+        if (typeof path !== 'string' || !path.startsWith('/language-cards/' + language + '.') || !path.endsWith('.json')) {
+          throw new Error('Invalid static corpus index')
+        }
+        const assetResponse = await env.ASSETS.fetch(new URL(path, url))
+        if (!assetResponse.ok) throw new Error('Missing static corpus')
+        const data = await assetResponse.json() as { items?: Array<Record<string, unknown>> }
+        if (!Array.isArray(data.items) || data.items.length !== 5000) throw new Error('Incomplete static corpus')
+        const filtered = category ? data.items.filter(item => item.category === category) : data.items
+        const items = paged ? filtered.slice(offset, offset + limit) : filtered
+        const response = json({ items })
         response.headers.set('cache-control', 'public, max-age=300')
         return response
       } catch {
-        return json({ items: [], error: '语言课程尚未初始化，请先执行最新的 D1 迁移。' }, 503)
+        return json({ items: [], error: '静态语言课程暂时不可用，请刷新应用。' }, 503)
       }
     }
 
