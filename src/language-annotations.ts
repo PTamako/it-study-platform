@@ -56,7 +56,7 @@ const GRAMMAR: Rule[] = [
 
 const PARTICLES: Record<string, Note> = {
   'の': { meaning: '连接名词／所属', explanation: '连接两个名词，前一名词修饰或限定后一名词。' },
-  'が': { meaning: '主语／描述对象', explanation: '「が」标记句中被描述的对象；与「分からない」搭配时，标记不知道的内容。' },
+  'が': { meaning: '主语／描述对象', explanation: '标记句中被描述或成为关注点的对象；具体要结合后面的谓语理解。' },
   'は': { meaning: '主题', explanation: '提示谈话的主题，后面说明主题相关的信息。' },
   'を': { meaning: '动作对象', explanation: '标记动词作用的对象。' },
   'に': { meaning: '时间／目标／对象', explanation: '需结合后面的动词判断具体作用。' },
@@ -103,7 +103,21 @@ function normalize(card: AnnotatedSentence, value: unknown, boundaries: Set<numb
       typeof hit.meaning !== 'string' || !hit.meaning.trim() ||
       typeof hit.explanation !== 'string' || !hit.explanation.trim()) return null
   if (card.language === 'ja' && hit.type === 'grammar' && PARTICLES[hit.term]) {
-    return { start, end, term: hit.term, type: hit.type, ...PARTICLES[hit.term] }
+    const note = PARTICLES[hit.term]
+    if (hit.term === 'が' && /^分からない/.test(card.term.slice(end))) {
+      return { start, end, term: hit.term, type: hit.type,
+        meaning: '不知道的内容', explanation: '「～が分からない」表示不知道／不明白某事。本句「使い方が分からない」就是不知道使用方法。' }
+    }
+    if (hit.term === 'の') {
+      const tokens = [...new Intl.Segmenter('ja', { granularity: 'word' }).segment(card.term)]
+      const previous = tokens.find(token => token.index + token.segment.length === start)
+      const next = tokens.find(token => token.index === end)
+      if (previous && next) {
+        return { start, end, term: hit.term, type: hit.type, meaning: note.meaning,
+          explanation: '「' + previous.segment + 'の' + next.segment + '」中，前面的名词限定后面的名词，表示所属、内容或性质。' }
+      }
+    }
+    return { start, end, term: hit.term, type: hit.type, ...note }
   }
   return { start, end, term: hit.term, type: hit.type, meaning: hit.meaning, explanation: hit.explanation }
 }
