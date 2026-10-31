@@ -429,7 +429,7 @@ const practiceTopicOptions = ref<{ topic: string; question_count: number }[]>([]
 let practiceTopicLoadId = 0
 const practiceYearOptions = computed(() => selectedTrackId.value === 'exam-sg'
   ? [2026, 2025, 2024, 2023, 2019, 2018, 2017, 2016]
-  : [2026, 2025, 2024, 2023])
+  : [2026, 2025, 2024, 2023, 2019])
 const practiceHasDetailedFilters = computed(() => selectedTrackId.value === 'exam-fe' || selectedTrackId.value === 'exam-sg')
 type ExamTrack = { id: string; kind: string; title: string; subtitle: string; question_count: number; official_question_count?: number; prediction_question_count?: number; adapted_question_count?: number }
 const examTracks = ref<ExamTrack[]>([])
@@ -2179,7 +2179,14 @@ function speakDictionaryJapanese(entry: DictionaryEntry) {
                     </select>
                   </label>
                 </div>
-                <p v-if="selectedTrackId === 'exam-sg'" class="dictionary-status">2016〜2019年度は旧制度の午前問題です。年度を選ぶと公式過去問のみを表示します。</p>
+                <p v-if="selectedTrackId === 'exam-sg'" class="dictionary-status">2016〜2019年度は旧制度の午前問題です。2020〜2022年度のCBT過去問はIPA非公開です。</p>
+                <p v-if="selectedTrackId === 'exam-fe'" class="dictionary-status">2019年度は旧制度の午前問題です。2020〜2022年度のCBT過去問はIPA非公開です。</p>
+                <p class="dictionary-status">2022年公開のサンプル問題は本試験の過去問ではありません。</p>
+                <p v-if="selectedTrackId === 'exam-sg'" class="dictionary-status"><a href="https://www.ipa.go.jp/shiken/syllabus/henkou/2022/ssf7ph000000h5tb-att/sg_set_sample_qs.pdf" target="_blank" rel="noopener noreferrer">IPAサンプル問題・SG 60問（PDF）↗</a></p>
+                <p v-if="selectedTrackId === 'exam-fe'" class="dictionary-status">
+                  <a href="https://www.ipa.go.jp/shiken/syllabus/henkou/2022/ssf7ph000000h5tb-att/fe_kamoku_a_set_sample_qs.pdf" target="_blank" rel="noopener noreferrer">科目A 60問（PDF）↗</a> ·
+                  <a href="https://www.ipa.go.jp/shiken/syllabus/henkou/2022/ssf7ph000000h5tb-att/fe_kamoku_b_set_sample_qs.pdf" target="_blank" rel="noopener noreferrer">科目B 20問（PDF）↗</a>
+                </p>
               </div>
               <div class="question-category-section">
                 <div class="question-category-heading"><strong>学习状态</strong><span>按当前题库筛选</span></div>
