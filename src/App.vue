@@ -2438,7 +2438,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
             <section class="practice-section">
               <div class="section-heading practice-heading">
                 <div><h2>{{ selectedTrack ? selectedTrack.title + ' · 练习题' : '练习题' }}</h2></div>
-                <span v-if="selectedTrackId === 'exam-fe' && feBankLoading" class="fe-bank-inline-status" role="status">同步题库中…</span>
+                <span v-if="selectedTrackId === 'exam-fe'" class="fe-bank-inline-status" :class="{ 'fe-bank-inline-status-idle': !feBankLoading }" :role="feBankLoading ? 'status' : undefined" :aria-hidden="!feBankLoading">同步题库中…</span>
               </div>
               <p v-if="selectedTrackId === 'exam-fe' && feBankError" class="dictionary-status dictionary-error" role="alert">{{ feBankError }} <button class="text-link" @click="prepareFeBank">重试</button></p>
               <p v-if="pendingPracticeAttempt" class="dictionary-status" role="status">

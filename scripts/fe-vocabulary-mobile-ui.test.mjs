@@ -11,7 +11,8 @@ test('reselecting an exam does not reset scroll-sensitive content or restart FE 
   assert.match(app, /feBankPrepared\.value = true/)
   assert.match(app, /await loadExamTracks\(true\)/)
   assert.match(app, /if \(!silent\) tracksLoading\.value = false/)
-  assert.match(app, /class="fe-bank-inline-status" role="status"/)
+  assert.match(app, /class="fe-bank-inline-status" :class="\{ 'fe-bank-inline-status-idle': !feBankLoading \}"/)
+  assert.match(css, /\.fe-bank-inline-status-idle\{visibility:hidden\}/)
   assert.doesNotMatch(app, /<p v-if="selectedTrackId === 'exam-fe' && feBankLoading" class="dictionary-status"/)
 })
 

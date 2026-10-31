@@ -1018,3 +1018,6 @@ button[aria-disabled="true"] {
 .exam-card{min-width:0}
 .exam-card .exam-info{min-width:0}
 .exam-card .exam-progress{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+
+/* Reserve FE status space while it loads so the header never collapses after refresh. */
+.fe-bank-inline-status-idle{visibility:hidden}
