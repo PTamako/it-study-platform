@@ -724,9 +724,9 @@ async function loadScenarios() {
 let scenarioSubmissionId = 0
 function nextScenario() {
   stopSpeech()
-  // Invalidate any in-flight submission so its response cannot overwrite the next scenario.
+  // Invalidate any in-flight submission without unlocking it: a previous
+  // request may still be writing and must retain the same idempotency key.
   scenarioSubmissionId += 1
-  scenarioSubmitting.value = false
   if (!scenarios.value.length) return
   const index = scenarios.value.findIndex(item => item.id === currentScenario.value?.id)
   const next = scenarios.value[(index + 1) % scenarios.value.length]
@@ -781,7 +781,10 @@ async function syncPendingScenarioAttempt() {
       scenariosError.value = (error instanceof Error ? error.message : '网络异常。') + ' 实战答题保存在本设备，请重试同步。'
     }
   } finally {
-    scenarioSubmitting.value = false
+    // Old responses may not change the submitting state of a newer request.
+    if (requestId === scenarioSubmissionId || pendingScenarioAttempt.value?.attempt_id === pending.attempt_id) {
+      scenarioSubmitting.value = false
+    }
   }
 }
 async function submitScenario() {
