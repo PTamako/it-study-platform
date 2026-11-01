@@ -8,8 +8,8 @@ import { feSeeds, seedUrl } from '../worker/fe-question-bank.ts'
 let source = await readFile(new URL('../worker/index.ts', import.meta.url), 'utf8')
 source = source.replace("import { checkWriteRateLimit, handleAuthRequest, requireAuth } from './auth'", `const checkWriteRateLimit = async () => null; const handleAuthRequest = async () => null; const requireAuth = async request => request.headers.get('x-auth') === 'yes' ? null : new Response('{}',{status:401});`)
 source = source.replace("import { feSeeds, seedUrl } from './fe-question-bank'", `const feSeeds = ${JSON.stringify(feSeeds)}; const seedUrl = year => (${JSON.stringify(Object.fromEntries(feSeeds.map(q => [q.year, seedUrl(q.year)])))}[year]);`)
-const js = stripTypeScriptTypes(source, {mode:'transform'})
 source = inlineChineseDictionary(source)
+const js = stripTypeScriptTypes(source, {mode:'transform'})
 const worker = (await import('data:text/javascript;base64,' + Buffer.from(js).toString('base64'))).default
 function setup() {
  const sql = new DatabaseSync(':memory:')
