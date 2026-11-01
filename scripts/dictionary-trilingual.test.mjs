@@ -144,6 +144,7 @@ test('trilingual UI keeps all pronunciation controls and saved-word translation 
   assert.match(app, /speak\(text, 'zh-CN', entry\.term\)/)
   assert.match(app, /v-if="entry\.zh"/)
   assert.match(app, /dictionaryDetectedLanguage\.value = data\.detected_language/)
-  assert.match(app, /中文翻译／释义/)
+  assert.match(app, /class="lexicon-translations"/)
+  assert.match(app, /class="lexicon-lang">中/)
   assert.match(app, /未检测到中文语音/)
 })
