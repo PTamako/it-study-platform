@@ -1453,17 +1453,18 @@ export default {
           query,
           error: items.length ? undefined : requestedLanguage === 'it'
             ? '本地 IT 术语库尚未收录该词。'
-            : '本地词典尚未收录该词，在线翻译也未返回有效结果。可尝试「AI 辅助解释」。',
+            : '本地词典尚未收录该词，在线翻译也未返回有效结果。可手动选择「AI 补译为中日英」。',
           detected_language: requestedLanguage === 'it' ? 'it' : requestedLanguage === 'auto' ? detectDictionaryLanguage(query) : requestedLanguage,
           providers: items.some(item => item.technical)
             ? ['知学 IT 术语库（D1）']
             : (() => {
                 const sourceLanguage = requestedLanguage === 'auto' ? detectDictionaryLanguage(query) : requestedLanguage
-                return sourceLanguage === 'en'
-                  ? ['Free Dictionary', 'MyMemory', 'Google Translate（双主机备用）']
-                  : sourceLanguage === 'ja'
-                    ? ['Jisho', 'MyMemory', 'Google Translate（双主机备用）']
-                    : ['MyMemory', 'Google Translate（双主机备用）']
+                const baseProviders = sourceLanguage === 'en'
+                  ? ['Free Dictionary']
+                  : sourceLanguage === 'ja' ? ['Jisho'] : []
+                return [...baseProviders,
+                  ...(authorizedForAzure ? ['Azure AI Translator F0（官方）'] : []),
+                  'MyMemory', 'Google Translate（双主机备用）']
               })(),
           note: items.some(item => item.technical)
             ? '本地 IT 术语库提供中日英释义与读音，命中时不调用在线翻译。'
