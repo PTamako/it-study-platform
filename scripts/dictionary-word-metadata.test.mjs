@@ -45,7 +45,7 @@ test('standalone words can display labels but sentence inputs cannot', () => {
 })
 test('Chinese pinyin and POS are sourced only from curated word entries', () => {
   assert.deepEqual(meta.getChineseWordGuide('晚上'), { pinyin: 'wǎn shang', partOfSpeech: '时间名词' })
-  assert.deepEqual(meta.getChineseWordGuide('工作'), { pinyin: 'gōngzuò', partOfSpeech: '动词／名词' })
+  assert.deepEqual(meta.getChineseWordGuide('工作'), { pinyin: 'gōng zuò', partOfSpeech: '动词／名词' })
   assert.equal(meta.getChineseWordGuide('今晚可能会下小雨'), undefined)
   assert.equal(meta.getChineseWordGuide('陌生的词'), undefined)
 })
