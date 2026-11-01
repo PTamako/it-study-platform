@@ -82,6 +82,51 @@ test('AI supplement is opt-in, returns a controlled explanation, and caches dupl
   env.sqlite.close()
 })
 
+test('explicit AI translation returns a trilingual dictionary card, shares the quota and caches repetitions', async () => {
+  const env = environment(async (_model, input) => {
+    assert.equal(_model, '@cf/meta/m2m100-1.2b')
+    assert.equal(input.source_lang, 'zh')
+    return { translated_text: input.target_lang === 'ja' ? '大切な約束' : 'an important promise' }
+  })
+  try {
+    const first = await post(env, '重要的约定', { language: 'zh', mode: 'translation' })
+    assert.equal(first.status, 200)
+    assert.equal(first.data.cached, false)
+    assert.equal(first.data.items[0].zh, '重要的约定')
+    assert.equal(first.data.items[0].translationJa, '大切な約束')
+    assert.equal(first.data.items[0].englishTerm, 'an important promise')
+    assert.equal(first.data.items[0].source, 'Workers AI（按需翻译）')
+    assert.equal(first.data.remaining, 19)
+    assert.equal(env.calls, 2, 'one user request runs two language translations')
+    const again = await post(env, '重要的约定', { language: 'zh', mode: 'translation' })
+    assert.equal(again.status, 200)
+    assert.equal(again.data.cached, true)
+    assert.equal(again.data.remaining, 19)
+    assert.equal(env.calls, 2, 'same translation is served from durable cache')
+    assert.equal((await status(env)).data.remaining, 19)
+  } finally { env.sqlite.close() }
+})
+
+test('failed opt-in AI translations fail visibly and keep their reserved allowance', async () => {
+  const env = environment(async () => ({ translated_text: '' }))
+  try {
+    const result = await post(env, '没有译文的例子', { language: 'zh', mode: 'translation' })
+    assert.equal(result.status, 503)
+    assert.match(result.data.error, /已计入今日上限/)
+    assert.equal(result.data.remaining, 19)
+  } finally { env.sqlite.close() }
+})
+
+test('dictionary UI offers AI translations by explicit click only and retains normal AI explanations', async () => {
+  const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
+  assert.match(app, /async function translateMissingDictionaryWithAi\(\)/)
+  assert.match(app, /mode: 'translation'/)
+  assert.match(app, /@click="translateMissingDictionaryWithAi"/)
+  assert.match(app, /AI 补译为中日英/)
+  assert.match(app, /@click="supplementDictionaryWithAi\(null\)"/)
+  assert.match(app, /dictionaryAiRemaining === 0/)
+})
+
 test('parallel requests cannot exceed 20 paid inference attempts in one JST day', async () => {
   const env=environment()
   const results=await Promise.all(Array.from({length:28},(_,i)=>post(env,'word-'+i)))
