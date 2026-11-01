@@ -27,10 +27,9 @@ export interface Env {
   APP_ENV?: string
   AUTH_PASSWORD?: string
   AUTH_SESSION_SECRET?: string
-  // Optional official Azure Translator F0 credentials; never sent to clients.
-  AZURE_TRANSLATOR_KEY?: string
-  // Required for regional / multi-service Translator resources; omit for global resources.
-  AZURE_TRANSLATOR_REGION?: string
+  // Owner-deployed Google Apps Script Web App. Optional; keep its URL and token server-side.
+  GAS_TRANSLATOR_URL?: string
+  GAS_TRANSLATOR_TOKEN?: string
 }
 
 // 统一返回 JSON，并添加基础安全响应头。
@@ -399,14 +398,27 @@ function workersAiLanguageCode(language: string): string {
   return code
 }
 
-async function translateText(text: string, source: string, target: string, ai?: Ai, azureKey?: string, azureRegion?: string): Promise<string> {
+function isTrustedAppsScriptUrl(value: string): boolean {
+  try {
+    const url = new URL(value)
+    // No query strings, fragments, embedded credentials, or preview /dev deployments.
+    return url.protocol === 'https:' && url.hostname === 'script.google.com'
+      && /^\\/macros\\/s\\/[A-Za-z0-9_-]+\\/exec$/.test(url.pathname)
+      && !url.username && !url.password && !url.search && !url.hash
+  } catch {
+    return false
+  }
+}
+
+async function translateText(text: string, source: string, target: string, ai?: Ai,
+  gasUrl?: string, gasToken?: string): Promise<string> {
   const valid = (value: string) =>
     Boolean(value && value.trim() && !/MYMEMORY WARNING|QUERY LENGTH LIMIT|translation unavailable/i.test(value))
     && value.trim().toLocaleLowerCase() !== text.trim().toLocaleLowerCase()
 
-  const cacheKey = new URL('https://translation-cache.it-study-platform.invalid/v3')
-  // Keep authenticated official translations isolated from public best-effort translations.
-  cacheKey.searchParams.set('tier', azureKey ? 'azure' : 'public')
+  const cacheKey = new URL('https://translation-cache.it-study-platform.invalid/v4')
+  // Do not return public-provider results in place of the configured owner's Apps Script.
+  cacheKey.searchParams.set('tier', gasUrl && gasToken ? 'gas' : 'public')
   cacheKey.searchParams.set('q', text)
   cacheKey.searchParams.set('sl', source)
   cacheKey.searchParams.set('tl', target)
@@ -420,48 +432,55 @@ async function translateText(text: string, source: string, target: string, ai?: 
     // 缓存不是翻译请求的必要条件；缓存不可用时继续访问在线服务。
   }
 
-  // Azure Translator (official v3 endpoint). The F0 resource and credentials are
-  // provisioned by the owner; never let public callers consume this subscription.
-  const azureTranslator = async (): Promise<string> => {
-    if (!azureKey) return ''
+  // The deployment URL must be a genuine Apps Script execution URL. Never fetch
+  // arbitrary URLs from env configuration (SSRF) or forward the shared token to another host.
+  const appsScript = async (): Promise<string> => {
+    if (!gasUrl || !gasToken || !isTrustedAppsScriptUrl(gasUrl)) return ''
     try {
-      const lang = (code: string) => {
-        const normalized = providerLanguageCode(code)
-        return normalized.startsWith('zh') ? 'zh-Hans' : normalized.slice(0, 2)
-      }
-      const url = new URL('https://api.cognitive.microsofttranslator.com/translate')
-      url.searchParams.set('api-version', '3.0')
-      url.searchParams.set('from', lang(source))
-      url.searchParams.set('to', lang(target))
-      const headers: Record<string, string> = {
-        'Ocp-Apim-Subscription-Key': azureKey,
-        'content-type': 'application/json; charset=utf-8',
-        accept: 'application/json',
-      }
-      // Global single-service resources don't need a region header. Regional and
-      // multi-service resources do: keep the exact Azure resource location string.
-      if (azureRegion?.trim()) headers['Ocp-Apim-Subscription-Region'] = azureRegion.trim()
-      const response = await fetch(url.toString(), {
-        method: 'POST', headers, body: JSON.stringify([{ Text: text }]),
-        signal: AbortSignal.timeout(4500),
+      const response = await fetch(gasUrl, {
+        method: 'POST', redirect: 'manual',
+        headers: { 'content-type': 'application/json; charset=utf-8', accept: 'application/json' },
+        body: JSON.stringify({
+          token: gasToken,
+          text,
+          source: workersAiLanguageCode(source),
+          target: workersAiLanguageCode(target),
+        }),
+        signal: AbortSignal.timeout(10000),
       })
-      if (!response.ok) {
-        console.warn('[translation] Azure Translator failed', {
-          source, target, status: response.status,
+      let output = response
+      // Google ContentService uses a one-time redirect. Follow only its documented
+      // googleusercontent.com destination with GET, never retransmitting the secret.
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        const location = response.headers.get('location')
+        if (!location) return ''
+        const redirect = new URL(location, gasUrl)
+        if (redirect.protocol !== 'https:' || redirect.hostname !== 'script.googleusercontent.com') {
+          console.warn('[translation] unexpected Apps Script redirect host')
+          return ''
+        }
+        output = await fetch(redirect.toString(), {
+          method: 'GET', redirect: 'error',
+          headers: { accept: 'application/json' },
+          signal: AbortSignal.timeout(10000),
+        })
+      }
+      if (!output.ok) {
+        console.warn('[translation] Apps Script HTTP error', { status: output.status })
+        return ''
+      }
+      const payload = await output.json() as { ok?: boolean; translation?: string; error?: string }
+      if (payload?.ok !== true) {
+        console.warn('[translation] Apps Script returned no translation', {
+          reason: String(payload?.error || 'invalid response').slice(0, 80),
         })
         return ''
       }
-      const payload = await response.json() as Array<{
-        translations?: Array<{ text?: string; to?: string }>
-      }>
-      const translation = Array.isArray(payload) && Array.isArray(payload[0]?.translations)
-        ? payload[0].translations!.find(row => row.to?.toLowerCase() === lang(target).toLowerCase())
-        : undefined
-      const candidate = String(translation?.text || '').trim()
+      const candidate = String(payload.translation || '').trim()
       return valid(candidate) ? candidate : ''
     } catch (error) {
-      console.warn('[translation] Azure Translator unavailable', {
-        source, target, message: error instanceof Error ? error.message : String(error),
+      console.warn('[translation] Apps Script unavailable', {
+        message: error instanceof Error ? error.message : String(error),
       })
       return ''
     }
@@ -525,7 +544,7 @@ async function translateText(text: string, source: string, target: string, ai?: 
     return ''
   }
 
-  let translated = await azureTranslator()
+  let translated = await appsScript()
   if (!translated) {
     const results = await Promise.all([myMemory(), googleFallback()])
     translated = results.find(valid) || ''
@@ -831,7 +850,7 @@ function detectDictionaryLanguage(query: string): 'ja' | 'zh' | 'en' {
   if (/[\u3400-\u9fff]/.test(text)) return 'ja'
   return 'en'
 }
-async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' | 'it' = 'auto', db?: D1Database, azureKey?: string, azureRegion?: string): Promise<DictionaryApiEntry[]> {
+async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' | 'it' = 'auto', db?: D1Database, gasUrl?: string, gasToken?: string): Promise<DictionaryApiEntry[]> {
   let technicalItems: DictionaryApiEntry[] = []
   if (db) {    try {
       technicalItems = await searchTechnicalVocabulary(db, query, requestedLanguage)
@@ -857,22 +876,22 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
     const offline = curatedJapaneseTranslation(query)
     curated = Boolean(offline)
     ;[en, zh] = await Promise.all([
-      offline?.en ? Promise.resolve(offline.en) : translateText(query, 'ja-JP', 'en-US', undefined, azureKey, azureRegion),
-      offline?.zh ? Promise.resolve(offline.zh) : translateText(query, 'ja-JP', 'zh-CN', undefined, azureKey, azureRegion),
+      offline?.en ? Promise.resolve(offline.en) : translateText(query, 'ja-JP', 'en-US', undefined, gasUrl, gasToken),
+      offline?.zh ? Promise.resolve(offline.zh) : translateText(query, 'ja-JP', 'zh-CN', undefined, gasUrl, gasToken),
     ])
   } else if (language === 'en') {
     const offline = curatedEnglishTranslation(query)
     curated = Boolean(offline)
     ;[ja, zh] = await Promise.all([
-      offline?.ja ? Promise.resolve(offline.ja) : translateText(query, 'en-US', 'ja-JP', undefined, azureKey, azureRegion),
-      offline?.zh ? Promise.resolve(offline.zh) : translateText(query, 'en-US', 'zh-CN', undefined, azureKey, azureRegion),
+      offline?.ja ? Promise.resolve(offline.ja) : translateText(query, 'en-US', 'ja-JP', undefined, gasUrl, gasToken),
+      offline?.zh ? Promise.resolve(offline.zh) : translateText(query, 'en-US', 'zh-CN', undefined, gasUrl, gasToken),
     ])
   } else {
     const offline = commonChineseTranslations[query.trim()]
     curated = Boolean(offline)
     ;[ja, en] = await Promise.all([
-      offline?.ja ? Promise.resolve(offline.ja) : translateText(query, 'zh-CN', 'ja-JP', undefined, azureKey, azureRegion),
-      offline?.en ? Promise.resolve(offline.en) : translateText(query, 'zh-CN', 'en-US', undefined, azureKey, azureRegion),
+      offline?.ja ? Promise.resolve(offline.ja) : translateText(query, 'zh-CN', 'ja-JP', undefined, gasUrl, gasToken),
+      offline?.en ? Promise.resolve(offline.en) : translateText(query, 'zh-CN', 'en-US', undefined, gasUrl, gasToken),
     ])
     zh = query
   }
@@ -897,7 +916,7 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
       const firstDefinition = jishoItems.find(entry => entry.en && !entry.en.includes('暂未获得英语释义'))?.en || ''
       let japaneseAid = commonJapaneseExplanations[query.trim()] || ''
       if (!japaneseAid && firstDefinition) {
-        japaneseAid = await translateText(firstDefinition, 'en-US', 'ja-JP', undefined, azureKey, azureRegion)
+        japaneseAid = await translateText(firstDefinition, 'en-US', 'ja-JP', undefined, gasUrl, gasToken)
       }
       items.push(...jishoItems.map((entry, index) => ({
         ...entry,
@@ -1268,7 +1287,8 @@ export default {
       }
       if (remaining) chunks.push(remaining)
       try {
-        const translatedChunks = await Promise.all(chunks.map(chunk => translateText(chunk, source, 'zh-CN', env.AI)))
+        const translatedChunks = await Promise.all(chunks.map(chunk => translateText(chunk, source, 'zh-CN', env.AI,
+          env.GAS_TRANSLATOR_URL, env.GAS_TRANSLATOR_TOKEN)))
         if (translatedChunks.some(value => !value.trim())) {
           return json({ error: '在线翻译暂时不可用，请稍后重试。' }, 503)
         }
@@ -1441,13 +1461,13 @@ export default {
         return json({ items: [], error: 'lang 参数只支持 auto、ja、en、zh、it。' }, 400)
       }
       try {
-        // Only the authenticated user can spend the Azure Translator F0 quota.
-        // Public lookups remain free-provider-only even when Azure is configured.
-        const authorizedForAzure = env.AZURE_TRANSLATOR_KEY
+        // Public lookups still use the free anonymous providers; only the logged-in
+        // owner can consume Google Apps Script's daily LanguageApp.translate quota.
+        const authorizedForAppsScript = env.GAS_TRANSLATOR_URL && env.GAS_TRANSLATOR_TOKEN
           ? !(await requireAuth(request, env)) : false
         const items = await lookupDictionary(query, requestedLanguage as 'auto' | 'ja' | 'en' | 'zh' | 'it', env.DB,
-          authorizedForAzure ? env.AZURE_TRANSLATOR_KEY : undefined,
-          authorizedForAzure ? env.AZURE_TRANSLATOR_REGION : undefined)
+          authorizedForAppsScript ? env.GAS_TRANSLATOR_URL : undefined,
+          authorizedForAppsScript ? env.GAS_TRANSLATOR_TOKEN : undefined)
         return json({
           items,
           query,
@@ -1463,7 +1483,7 @@ export default {
                   ? ['Free Dictionary']
                   : sourceLanguage === 'ja' ? ['Jisho'] : []
                 return [...baseProviders,
-                  ...(authorizedForAzure ? ['Azure AI Translator F0（官方）'] : []),
+                  ...(authorizedForAppsScript ? ['Google Apps Script LanguageApp（个人）'] : []),
                   'MyMemory', 'Google Translate（双主机备用）']
               })(),
           note: items.some(item => item.technical)
