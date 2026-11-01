@@ -27,8 +27,10 @@ export interface Env {
   APP_ENV?: string
   AUTH_PASSWORD?: string
   AUTH_SESSION_SECRET?: string
-  // Optional official DeepL API; server-only and only for authenticated dictionary requests.
-  DEEPL_API_KEY?: string
+  // Optional official Azure Translator F0 credentials; never sent to clients.
+  AZURE_TRANSLATOR_KEY?: string
+  // Required for regional / multi-service Translator resources; omit for global resources.
+  AZURE_TRANSLATOR_REGION?: string
 }
 
 // 统一返回 JSON，并添加基础安全响应头。
@@ -397,14 +399,14 @@ function workersAiLanguageCode(language: string): string {
   return code
 }
 
-async function translateText(text: string, source: string, target: string, ai?: Ai, deeplKey?: string): Promise<string> {
+async function translateText(text: string, source: string, target: string, ai?: Ai, azureKey?: string, azureRegion?: string): Promise<string> {
   const valid = (value: string) =>
     Boolean(value && value.trim() && !/MYMEMORY WARNING|QUERY LENGTH LIMIT|translation unavailable/i.test(value))
     && value.trim().toLocaleLowerCase() !== text.trim().toLocaleLowerCase()
 
-  const cacheKey = new URL('https://translation-cache.it-study-platform.invalid/v2')
-  // Do not return an old anonymous translation when an official DeepL key is configured.
-  cacheKey.searchParams.set('tier', deeplKey ? 'official' : 'public')
+  const cacheKey = new URL('https://translation-cache.it-study-platform.invalid/v3')
+  // Keep authenticated official translations isolated from public best-effort translations.
+  cacheKey.searchParams.set('tier', azureKey ? 'azure' : 'public')
   cacheKey.searchParams.set('q', text)
   cacheKey.searchParams.set('sl', source)
   cacheKey.searchParams.set('tl', target)
@@ -418,29 +420,47 @@ async function translateText(text: string, source: string, target: string, ai?: 
     // 缓存不是翻译请求的必要条件；缓存不可用时继续访问在线服务。
   }
 
-  // Official service is opt-in via a Worker Secret. Never expose the key to the client;
-  // anonymous dictionary traffic is not allowed to spend the user's DeepL quota.
-  const deepl = async (): Promise<string> => {
-    if (!deeplKey) return ''
+  // Azure Translator (official v3 endpoint). The F0 resource and credentials are
+  // provisioned by the owner; never let public callers consume this subscription.
+  const azureTranslator = async (): Promise<string> => {
+    if (!azureKey) return ''
     try {
-      const hostname = deeplKey.endsWith(':fx') ? 'api-free.deepl.com' : 'api.deepl.com'
-      const lang = (code: string) => providerLanguageCode(code).slice(0, 2).toUpperCase()
-      const response = await fetch('https://' + hostname + '/v2/translate', {
-        method: 'POST',
-        headers: { authorization: 'DeepL-Auth-Key ' + deeplKey,
-          'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ text: [text], source_lang: lang(source), target_lang: lang(target) }),
+      const lang = (code: string) => {
+        const normalized = providerLanguageCode(code)
+        return normalized.startsWith('zh') ? 'zh-Hans' : normalized.slice(0, 2)
+      }
+      const url = new URL('https://api.cognitive.microsofttranslator.com/translate')
+      url.searchParams.set('api-version', '3.0')
+      url.searchParams.set('from', lang(source))
+      url.searchParams.set('to', lang(target))
+      const headers: Record<string, string> = {
+        'Ocp-Apim-Subscription-Key': azureKey,
+        'content-type': 'application/json; charset=utf-8',
+        accept: 'application/json',
+      }
+      // Global single-service resources don't need a region header. Regional and
+      // multi-service resources do: keep the exact Azure resource location string.
+      if (azureRegion?.trim()) headers['Ocp-Apim-Subscription-Region'] = azureRegion.trim()
+      const response = await fetch(url.toString(), {
+        method: 'POST', headers, body: JSON.stringify([{ Text: text }]),
         signal: AbortSignal.timeout(4500),
       })
       if (!response.ok) {
-        console.warn('[translation] official provider failed', { source, target, status: response.status })
+        console.warn('[translation] Azure Translator failed', {
+          source, target, status: response.status,
+        })
         return ''
       }
-      const payload = await response.json() as { translations?: Array<{ text?: string }> }
-      const candidate = String(payload.translations?.[0]?.text || '').trim()
+      const payload = await response.json() as Array<{
+        translations?: Array<{ text?: string; to?: string }>
+      }>
+      const translation = Array.isArray(payload) && Array.isArray(payload[0]?.translations)
+        ? payload[0].translations!.find(row => row.to?.toLowerCase() === lang(target).toLowerCase())
+        : undefined
+      const candidate = String(translation?.text || '').trim()
       return valid(candidate) ? candidate : ''
     } catch (error) {
-      console.warn('[translation] official provider unavailable', {
+      console.warn('[translation] Azure Translator unavailable', {
         source, target, message: error instanceof Error ? error.message : String(error),
       })
       return ''
@@ -505,7 +525,7 @@ async function translateText(text: string, source: string, target: string, ai?: 
     return ''
   }
 
-  let translated = await deepl()
+  let translated = await azureTranslator()
   if (!translated) {
     const results = await Promise.all([myMemory(), googleFallback()])
     translated = results.find(valid) || ''
@@ -811,7 +831,7 @@ function detectDictionaryLanguage(query: string): 'ja' | 'zh' | 'en' {
   if (/[\u3400-\u9fff]/.test(text)) return 'ja'
   return 'en'
 }
-async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' | 'it' = 'auto', db?: D1Database, deeplKey?: string): Promise<DictionaryApiEntry[]> {
+async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' | 'it' = 'auto', db?: D1Database, azureKey?: string, azureRegion?: string): Promise<DictionaryApiEntry[]> {
   let technicalItems: DictionaryApiEntry[] = []
   if (db) {    try {
       technicalItems = await searchTechnicalVocabulary(db, query, requestedLanguage)
@@ -837,22 +857,22 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
     const offline = curatedJapaneseTranslation(query)
     curated = Boolean(offline)
     ;[en, zh] = await Promise.all([
-      offline?.en ? Promise.resolve(offline.en) : translateText(query, 'ja-JP', 'en-US', undefined, deeplKey),
-      offline?.zh ? Promise.resolve(offline.zh) : translateText(query, 'ja-JP', 'zh-CN', undefined, deeplKey),
+      offline?.en ? Promise.resolve(offline.en) : translateText(query, 'ja-JP', 'en-US', undefined, azureKey, azureRegion),
+      offline?.zh ? Promise.resolve(offline.zh) : translateText(query, 'ja-JP', 'zh-CN', undefined, azureKey, azureRegion),
     ])
   } else if (language === 'en') {
     const offline = curatedEnglishTranslation(query)
     curated = Boolean(offline)
     ;[ja, zh] = await Promise.all([
-      offline?.ja ? Promise.resolve(offline.ja) : translateText(query, 'en-US', 'ja-JP', undefined, deeplKey),
-      offline?.zh ? Promise.resolve(offline.zh) : translateText(query, 'en-US', 'zh-CN', undefined, deeplKey),
+      offline?.ja ? Promise.resolve(offline.ja) : translateText(query, 'en-US', 'ja-JP', undefined, azureKey, azureRegion),
+      offline?.zh ? Promise.resolve(offline.zh) : translateText(query, 'en-US', 'zh-CN', undefined, azureKey, azureRegion),
     ])
   } else {
     const offline = commonChineseTranslations[query.trim()]
     curated = Boolean(offline)
     ;[ja, en] = await Promise.all([
-      offline?.ja ? Promise.resolve(offline.ja) : translateText(query, 'zh-CN', 'ja-JP', undefined, deeplKey),
-      offline?.en ? Promise.resolve(offline.en) : translateText(query, 'zh-CN', 'en-US', undefined, deeplKey),
+      offline?.ja ? Promise.resolve(offline.ja) : translateText(query, 'zh-CN', 'ja-JP', undefined, azureKey, azureRegion),
+      offline?.en ? Promise.resolve(offline.en) : translateText(query, 'zh-CN', 'en-US', undefined, azureKey, azureRegion),
     ])
     zh = query
   }
@@ -877,7 +897,7 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
       const firstDefinition = jishoItems.find(entry => entry.en && !entry.en.includes('暂未获得英语释义'))?.en || ''
       let japaneseAid = commonJapaneseExplanations[query.trim()] || ''
       if (!japaneseAid && firstDefinition) {
-        japaneseAid = await translateText(firstDefinition, 'en-US', 'ja-JP', undefined, deeplKey)
+        japaneseAid = await translateText(firstDefinition, 'en-US', 'ja-JP', undefined, azureKey, azureRegion)
       }
       items.push(...jishoItems.map((entry, index) => ({
         ...entry,
@@ -1421,10 +1441,13 @@ export default {
         return json({ items: [], error: 'lang 参数只支持 auto、ja、en、zh、it。' }, 400)
       }
       try {
-        // DeepL is permitted only for the authenticated owner; public GETs stay on free sources.
-        const authorizedForOfficial = env.DEEPL_API_KEY ? !(await requireAuth(request, env)) : false
+        // Only the authenticated user can spend the Azure Translator F0 quota.
+        // Public lookups remain free-provider-only even when Azure is configured.
+        const authorizedForAzure = env.AZURE_TRANSLATOR_KEY
+          ? !(await requireAuth(request, env)) : false
         const items = await lookupDictionary(query, requestedLanguage as 'auto' | 'ja' | 'en' | 'zh' | 'it', env.DB,
-          authorizedForOfficial ? env.DEEPL_API_KEY : undefined)
+          authorizedForAzure ? env.AZURE_TRANSLATOR_KEY : undefined,
+          authorizedForAzure ? env.AZURE_TRANSLATOR_REGION : undefined)
         return json({
           items,
           query,
