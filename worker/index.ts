@@ -446,11 +446,16 @@ async function requestAppsScriptTranslation(
       if (redirect.protocol !== 'https:' || redirect.hostname !== 'script.googleusercontent.com') {
         return { translation: '', status: 'redirect_blocked' }
       }
+      // Cloudflare Workers does not support redirect: 'error' (it throws
+      // TypeError). Use 'manual', then reject any unexpected second hop.
       output = await fetch(redirect.toString(), {
-        method: 'GET', redirect: 'error',
+        method: 'GET', redirect: 'manual',
         headers: { accept: 'application/json' },
         signal: AbortSignal.timeout(10000),
       })
+      if (output.status >= 300 && output.status < 400) {
+        return { translation: '', status: 'redirect_blocked' }
+      }
     }
     if (!output.ok) return { translation: '', status: 'http_error' }
     let payload: { ok?: boolean; translation?: string; error?: string }
