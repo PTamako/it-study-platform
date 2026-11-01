@@ -483,7 +483,7 @@ async function translateText(text: string, source: string, target: string, ai?: 
     Boolean(value && value.trim() && !/MYMEMORY WARNING|QUERY LENGTH LIMIT|translation unavailable/i.test(value))
     && value.trim().toLocaleLowerCase() !== text.trim().toLocaleLowerCase()
 
-  const cacheKey = new URL('https://translation-cache.it-study-platform.invalid/v4')
+  const cacheKey = new URL('https://translation-cache.it-study-platform.invalid/v5')
   // Do not return public-provider results in place of the configured owner's Apps Script.
   cacheKey.searchParams.set('tier', gasUrl && gasToken ? 'gas' : 'public')
   cacheKey.searchParams.set('q', text)
