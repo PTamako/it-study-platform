@@ -1,5 +1,6 @@
 import { checkWriteRateLimit, handleAuthRequest, requireAuth } from './auth'
 import { feSeeds, seedUrl } from './fe-question-bank'
+import { eligibleChineseWord, fetchChineseWordMetadata } from './chinese-word-dictionary'
 
 // Personal state is never readable or writable without an authenticated session.
 const protectedPersonalPaths = new Set([
@@ -47,6 +48,8 @@ type DictionaryApiEntry = {
   term: string
   reading?: string
   phonetic?: string
+  pinyin?: string
+  lexicalSource?: string
   partsOfSpeech?: string[]
   senses?: Array<{ partOfSpeech: string; definitions: string[] }>
   en: string
@@ -922,6 +925,10 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
   if (requestedLanguage === 'it') return []
 
   const language: 'ja' | 'en' | 'zh' = requestedLanguage === 'auto' ? detectDictionaryLanguage(query) : requestedLanguage
+  // Start the source-backed Mandarin headword request in parallel with translations.
+  // Only short Chinese words qualify; sentences do not incur another network request.
+  const chineseMetadataPromise = language === 'zh' && eligibleChineseWord(query)
+    ? fetchChineseWordMetadata(query) : Promise.resolve(null)
   let zh = ''
   let ja = ''
   let en = ''
@@ -1003,12 +1010,16 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
       source: curated ? '本地常用词典' : '在线词典/翻译',
     })
   } else if (en || ja) {
+    const lexical = await chineseMetadataPromise
     items.push({
       term: query,
       en,
       englishTerm: en || undefined,
       zh: query,
       translationJa: ja,
+      pinyin: lexical?.pinyin,
+      partsOfSpeech: lexical?.partsOfSpeech,
+      lexicalSource: lexical?.lexicalSource,
       tag: '中日英互译',
       language: 'zh',
       source: curated ? '本地常用词典' : '在线词典/翻译',
