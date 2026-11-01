@@ -1119,6 +1119,8 @@ button[aria-disabled="true"] {
 .lexicon-pronunciation>span{max-width:100%;overflow-wrap:anywhere}
 .lexicon-ipa{font-family:ui-sans-serif,system-ui,"Noto Sans",sans-serif;color:#56647f;font-size:15px}
 .lexicon-parts{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:2px}
+.saved-vocabulary-parts{display:flex;align-items:center;flex-wrap:wrap;gap:6px;margin-top:9px}
+.saved-vocabulary-parts .lexicon-part{font-size:11px;min-height:24px;padding:3px 8px}
 .lexicon-part{
   display:inline-flex;align-items:center;max-width:100%;min-height:26px;
   padding:4px 9px;border-radius:7px;background:#eef2ff;color:#5264ae;
