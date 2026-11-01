@@ -2901,7 +2901,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <header class="lexical-heading">
                     <div class="lexical-heading-main">
                       <div class="lexical-headword-row">
-                        <h3 lang="ja">{{ entry.language === 'en' && entry.englishTerm ? entry.englishTerm : entry.term }}</h3>
+                        <h3 :lang="entry.language === 'ja' ? 'ja' : entry.language === 'en' ? 'en' : 'zh-CN'">{{ entry.language === 'en' && entry.englishTerm ? entry.englishTerm : entry.term }}</h3>
                         <span v-if="isDictionaryWord(entry)" class="lexical-language">{{ entry.language === 'ja' ? '日语' : entry.language === 'en' ? '英语' : '中文' }}</span>
                         <span v-else class="lexical-language lexical-sentence-label">{{ entry.technical ? 'IT 术语' : '翻译' }}</span>
                       </div>
