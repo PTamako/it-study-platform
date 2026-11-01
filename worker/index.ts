@@ -57,6 +57,9 @@ type DictionaryApiEntry = {
   japaneseTerm?: string
   englishTerm?: string
   technical?: boolean
+  // Structured lexical senses are only supplied by a real dictionary source.
+  // Generic translation and AI output must never invent parts of speech.
+  senses?: Array<{ partOfSpeech: string; definitions: string[]; example?: string }>
 }
 
 type LooseRecord = Record<string, any>
@@ -652,14 +655,21 @@ function jishoEntries(rows: LooseRecord[], zh: string): DictionaryApiEntry[] {
     const definitions = senses.slice(0, 3)
       .map((sense) => Array.isArray(sense.english_definitions) ? sense.english_definitions.slice(0, 4).join(', ') : '')
       .filter(Boolean)
-    const parts = senses.flatMap((sense) => Array.isArray(sense.parts_of_speech) ? sense.parts_of_speech : [])
+    const structured = senses.slice(0, 5).map((sense) => ({
+      partOfSpeech: Array.isArray(sense.parts_of_speech)
+        ? String(sense.parts_of_speech[0] || '').slice(0, 70) : '',
+      definitions: (Array.isArray(sense.english_definitions) ? sense.english_definitions : [])
+        .filter((definition): definition is string => typeof definition === 'string')
+        .slice(0, 3).map(definition => definition.slice(0, 180)),
+    })).filter(sense => sense.definitions.length > 0)
     const term = String(jp.word || jp.reading || row.slug || '')
     return {
       term,
       reading: String(jp.reading || ''),
       en: definitions.join('；') || '暂未获得英语释义',
       zh: zh || '',
-      tag: parts[0] ? '日英词典 · ' + String(parts[0]) : '日英词典',
+      tag: '日英词典',
+      senses: structured,
       language: 'ja',
       source: 'Jisho',
     }
@@ -749,29 +759,32 @@ const englishKatakanaReadings: Record<string, string> = {
 function englishDictionaryEntries(rows: LooseRecord[], _zh: string, ja: string): DictionaryApiEntry[] {
   return rows.map((row) => {
     const meanings = (Array.isArray(row.meanings) ? row.meanings : []) as LooseRecord[]
-    const definitions: string[] = []
-    let partOfSpeech = ''
-    let example = ''
-    for (const meaning of meanings) {
-      if (!partOfSpeech) partOfSpeech = String(meaning.partOfSpeech || '')
-      const definitionRows = (Array.isArray(meaning.definitions) ? meaning.definitions : []) as LooseRecord[]
-      for (const definition of definitionRows) {
-        if (definitions.length < 4 && typeof definition.definition === 'string') definitions.push(definition.definition)
-        if (!example && typeof definition.example === 'string') example = definition.example
+    const senses = meanings.slice(0, 6).map((meaning) => {
+      const definitions = (Array.isArray(meaning.definitions) ? meaning.definitions : []) as LooseRecord[]
+      const usable = definitions
+        .filter(definition => typeof definition.definition === 'string' && definition.definition.trim())
+        .slice(0, 3)
+      return {
+        partOfSpeech: String(meaning.partOfSpeech || '').slice(0, 40),
+        definitions: usable.map(definition => String(definition.definition).trim().slice(0, 220)),
+        example: String(usable.find(definition => typeof definition.example === 'string')?.example || '').slice(0, 250) || undefined,
       }
-    }
+    }).filter(sense => sense.definitions.length > 0)
     const phonetics = (Array.isArray(row.phonetics) ? row.phonetics : []) as LooseRecord[]
     const phonetic = String(row.phonetic || phonetics.find((item) => item.text)?.text || '')
     const term = String(row.word || '')
+    const example = senses.find(sense => sense.example)?.example || ''
     return {
       term,
       englishTerm: term,
       reading: englishKatakanaReadings[term.toLowerCase()] || '',
       phonetic,
-      en: definitions.join('；') || '暂未获得详细英语释义',
+      // Legacy flat definition remains for old installed clients and saved vocabulary.
+      en: senses.flatMap(sense => sense.definitions).slice(0, 4).join('；') || '暂未获得详细英语释义',
       zh: _zh || '',
       translationJa: ja || '',
-      tag: partOfSpeech ? '英日词典 · ' + partOfSpeech : '英日词典',
+      tag: '英日词典',
+      senses,
       example,
       language: 'en',
       source: 'Free Dictionary',
