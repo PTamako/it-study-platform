@@ -40,3 +40,13 @@
 - `GET /api/dictionary/ai/status` 显示剩余调用次数；接口与个人状态均受认证保护。模型不可用或用量已满时，**原词典及生词本仍可正常使用**。
 - AI 响应属于参考资料，可能不准确。不会覆盖用户保存的词条、原有专业术语、学习进度或答题记录。
 - 自动测试覆盖常规查词零 AI 调用、缓存命中免费、并发超额阻断、未配置模型、模型失败、恶意输入长度、前端状态与保护性认证检查。真实设备点击和实际模型效果仍需手动体验。
+
+## Azure Translator F0 线上翻译优先方案（2026-11-01）
+
+- 词典优先级：本地精选译文／D1 IT 术语 → 官方 Azure Translator F0（仅登录且配置密钥）→ MyMemory/Google 免费备用接口 → 用户主动点击 Cloudflare AI 补译。
+- Azure 官方 REST v3：`POST https://api.cognitive.microsofttranslator.com/translate?api-version=3.0&from=zh-Hans&to=ja`，JSON body `[{"Text":"..."}]`，使用服务端 `Ocp-Apim-Subscription-Key`；regional/multi-service resource 额外要求 `Ocp-Apim-Subscription-Region`。日语 `ja`、英语 `en`、简体中文 `zh-Hans`，请求独立超时并在失败时尝试免费备用接口。
+- 云端密钥仅在 Worker Secret `AZURE_TRANSLATOR_KEY` 中读取（可选）；`AZURE_TRANSLATOR_REGION`（可选）取资源真实地区，不暴露给客户端，不写入 GitHub 或日志。
+- 对未登录请求，不调用 Azure、不消耗账户额度；配置缺失也不影响原有词典。已登录用户有 Azure 时优先使用它；返回 429／超时／异常响应时回退原有免费源。
+- 官方每月 200 万字符免费额度由 Azure F0 提供。实际费用和可用额度须在 Azure Portal 核实，API 没有创建 F0 资源的能力。本次没有新建 D1 表，也没有改变生词本。
+- 自动验收：`node --test scripts/dictionary-translation-provider.test.mjs`；需覆盖中文查询到日语与英语、匿名无 Azure 调用、global 免地区字段、regional 必填地区、429 回退、密钥不可泄露。
+- 官方文档：[Translator REST v3](https://learn.microsoft.com/en-us/azure/ai-services/translator/text-translation/reference/v3/translate)、[Translator API 快速入门](https://learn.microsoft.com/en-us/azure/cognitive-services/translator/quickstart-translator)、[F0 定价](https://azure.microsoft.com/en-us/pricing/details/cognitive-services/translator/)。
