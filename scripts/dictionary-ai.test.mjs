@@ -84,6 +84,32 @@ test('AI supplement is opt-in, returns a controlled explanation, and caches dupl
   env.sqlite.close()
 })
 
+test('AI context analysis only uses source-backed pronunciation/POS hints and never guesses pitch', async () => {
+  const env = environment(async (model, input) => {
+    assert.equal(typeof model, 'string')
+    const system = String(input.messages?.find(message => message.role === 'system')?.content || '')
+    const user = JSON.parse(input.messages?.find(message => message.role === 'user')?.content || '{}')
+    assert.match(system, /不能自行创造或推算音标/)
+    assert.match(system, /用户主动触发/)
+    assert.deepEqual(user.priorDictionaryHints, {
+      zh: '栗子', ja: '栗', en: 'chestnut', partOfSpeech: '名词',
+      reading: '', pinyin: 'lì zi', ipa: '',
+    })
+    return { response: '栗子是名词；日语为栗，英语为 chestnut。' }
+  })
+  try {
+    const result = await post(env, '栗子', {
+      language: 'zh', known: {
+        zh: '栗子', ja: '栗', en: 'chestnut',
+        partOfSpeech: '名词', pinyin: 'lì zi',
+      },
+    })
+    assert.equal(result.status, 200)
+    assert.equal(result.data.remaining, 19)
+    assert.equal(env.calls, 1)
+  } finally { env.sqlite.close() }
+})
+
 test('explicit AI translation returns a trilingual dictionary card, shares the quota and caches repetitions', async () => {
   const env = environment(async (_model, input) => {
     assert.equal(_model, '@cf/meta/m2m100-1.2b')
