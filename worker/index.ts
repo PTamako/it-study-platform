@@ -27,6 +27,8 @@ export interface Env {
   APP_ENV?: string
   AUTH_PASSWORD?: string
   AUTH_SESSION_SECRET?: string
+  // Optional official DeepL API; server-only and only for authenticated dictionary requests.
+  DEEPL_API_KEY?: string
 }
 
 // 统一返回 JSON，并添加基础安全响应头。
@@ -395,12 +397,14 @@ function workersAiLanguageCode(language: string): string {
   return code
 }
 
-async function translateText(text: string, source: string, target: string, ai?: Ai): Promise<string> {
+async function translateText(text: string, source: string, target: string, ai?: Ai, deeplKey?: string): Promise<string> {
   const valid = (value: string) =>
     Boolean(value && value.trim() && !/MYMEMORY WARNING|QUERY LENGTH LIMIT|translation unavailable/i.test(value))
     && value.trim().toLocaleLowerCase() !== text.trim().toLocaleLowerCase()
 
-  const cacheKey = new URL('https://translation-cache.it-study-platform.invalid/v1')
+  const cacheKey = new URL('https://translation-cache.it-study-platform.invalid/v2')
+  // Do not return an old anonymous translation when an official DeepL key is configured.
+  cacheKey.searchParams.set('tier', deeplKey ? 'official' : 'public')
   cacheKey.searchParams.set('q', text)
   cacheKey.searchParams.set('sl', source)
   cacheKey.searchParams.set('tl', target)
@@ -412,6 +416,35 @@ async function translateText(text: string, source: string, target: string, ai?: 
     }
   } catch {
     // 缓存不是翻译请求的必要条件；缓存不可用时继续访问在线服务。
+  }
+
+  // Official service is opt-in via a Worker Secret. Never expose the key to the client;
+  // anonymous dictionary traffic is not allowed to spend the user's DeepL quota.
+  const deepl = async (): Promise<string> => {
+    if (!deeplKey) return ''
+    try {
+      const hostname = deeplKey.endsWith(':fx') ? 'api-free.deepl.com' : 'api.deepl.com'
+      const lang = (code: string) => providerLanguageCode(code).slice(0, 2).toUpperCase()
+      const response = await fetch('https://' + hostname + '/v2/translate', {
+        method: 'POST',
+        headers: { authorization: 'DeepL-Auth-Key ' + deeplKey,
+          'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ text: [text], source_lang: lang(source), target_lang: lang(target) }),
+        signal: AbortSignal.timeout(4500),
+      })
+      if (!response.ok) {
+        console.warn('[translation] official provider failed', { source, target, status: response.status })
+        return ''
+      }
+      const payload = await response.json() as { translations?: Array<{ text?: string }> }
+      const candidate = String(payload.translations?.[0]?.text || '').trim()
+      return valid(candidate) ? candidate : ''
+    } catch (error) {
+      console.warn('[translation] official provider unavailable', {
+        source, target, message: error instanceof Error ? error.message : String(error),
+      })
+      return ''
+    }
   }
 
   const myMemory = async (): Promise<string> => {
@@ -472,8 +505,11 @@ async function translateText(text: string, source: string, target: string, ai?: 
     return ''
   }
 
-  const results = await Promise.all([myMemory(), googleFallback()])
-  let translated = results.find(valid) || ''
+  let translated = await deepl()
+  if (!translated) {
+    const results = await Promise.all([myMemory(), googleFallback()])
+    translated = results.find(valid) || ''
+  }
 
   // MyMemory has a small anonymous daily quota, and the public Google endpoint is best-effort.
   // Use Cloudflare-hosted M2M100 as a final fallback so explanation translation does not depend
@@ -775,7 +811,7 @@ function detectDictionaryLanguage(query: string): 'ja' | 'zh' | 'en' {
   if (/[\u3400-\u9fff]/.test(text)) return 'ja'
   return 'en'
 }
-async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' | 'it' = 'auto', db?: D1Database): Promise<DictionaryApiEntry[]> {
+async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' | 'it' = 'auto', db?: D1Database, deeplKey?: string): Promise<DictionaryApiEntry[]> {
   let technicalItems: DictionaryApiEntry[] = []
   if (db) {    try {
       technicalItems = await searchTechnicalVocabulary(db, query, requestedLanguage)
@@ -801,22 +837,22 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
     const offline = curatedJapaneseTranslation(query)
     curated = Boolean(offline)
     ;[en, zh] = await Promise.all([
-      offline?.en ? Promise.resolve(offline.en) : translateText(query, 'ja-JP', 'en-US'),
-      offline?.zh ? Promise.resolve(offline.zh) : translateText(query, 'ja-JP', 'zh-CN'),
+      offline?.en ? Promise.resolve(offline.en) : translateText(query, 'ja-JP', 'en-US', undefined, deeplKey),
+      offline?.zh ? Promise.resolve(offline.zh) : translateText(query, 'ja-JP', 'zh-CN', undefined, deeplKey),
     ])
   } else if (language === 'en') {
     const offline = curatedEnglishTranslation(query)
     curated = Boolean(offline)
     ;[ja, zh] = await Promise.all([
-      offline?.ja ? Promise.resolve(offline.ja) : translateText(query, 'en-US', 'ja-JP'),
-      offline?.zh ? Promise.resolve(offline.zh) : translateText(query, 'en-US', 'zh-CN'),
+      offline?.ja ? Promise.resolve(offline.ja) : translateText(query, 'en-US', 'ja-JP', undefined, deeplKey),
+      offline?.zh ? Promise.resolve(offline.zh) : translateText(query, 'en-US', 'zh-CN', undefined, deeplKey),
     ])
   } else {
     const offline = commonChineseTranslations[query.trim()]
     curated = Boolean(offline)
     ;[ja, en] = await Promise.all([
-      offline?.ja ? Promise.resolve(offline.ja) : translateText(query, 'zh-CN', 'ja-JP'),
-      offline?.en ? Promise.resolve(offline.en) : translateText(query, 'zh-CN', 'en-US'),
+      offline?.ja ? Promise.resolve(offline.ja) : translateText(query, 'zh-CN', 'ja-JP', undefined, deeplKey),
+      offline?.en ? Promise.resolve(offline.en) : translateText(query, 'zh-CN', 'en-US', undefined, deeplKey),
     ])
     zh = query
   }
@@ -841,7 +877,7 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
       const firstDefinition = jishoItems.find(entry => entry.en && !entry.en.includes('暂未获得英语释义'))?.en || ''
       let japaneseAid = commonJapaneseExplanations[query.trim()] || ''
       if (!japaneseAid && firstDefinition) {
-        japaneseAid = await translateText(firstDefinition, 'en-US', 'ja-JP')
+        japaneseAid = await translateText(firstDefinition, 'en-US', 'ja-JP', undefined, deeplKey)
       }
       items.push(...jishoItems.map((entry, index) => ({
         ...entry,
@@ -1329,7 +1365,10 @@ export default {
         return json({ items: [], error: 'lang 参数只支持 auto、ja、en、zh、it。' }, 400)
       }
       try {
-        const items = await lookupDictionary(query, requestedLanguage as 'auto' | 'ja' | 'en' | 'zh' | 'it', env.DB)
+        // DeepL is permitted only for the authenticated owner; public GETs stay on free sources.
+        const authorizedForOfficial = env.DEEPL_API_KEY ? !(await requireAuth(request, env)) : false
+        const items = await lookupDictionary(query, requestedLanguage as 'auto' | 'ja' | 'en' | 'zh' | 'it', env.DB,
+          authorizedForOfficial ? env.DEEPL_API_KEY : undefined)
         return json({
           items,
           query,
