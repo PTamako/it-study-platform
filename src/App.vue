@@ -2898,9 +2898,12 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
               <article v-for="entry in displayedEntries" :key="entry.term + (entry.tag || '') + (entry.en || '')" class="dictionary-card lexicon-entry" :class="{ 'lexicon-entry-with-senses': Boolean(entry.senses?.length) }">
                 <div class="dict-main">
                   <header class="lexicon-header">
-                    <div class="lexicon-title-row">
+                    <div class="lexicon-headword-line">
+                      <div class="lexicon-title-row">
                       <h3 :lang="entry.language === 'en' ? 'en' : entry.language === 'ja' ? 'ja' : 'zh'">{{ entry.language === 'en' && entry.englishTerm ? entry.englishTerm : entry.term }}</h3>
                       <span v-if="entry.technical" class="lexicon-tech-mark">IT</span>
+                      </div>
+                <div class="dict-actions"><button class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + (entry.englishTerm || entry.term)" title="播放英语发音"><Volume2 :size="14" /><span>EN</span></button><button class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语辅助读音：' + (entry.englishTerm || entry.term)" title="播放日语辅助读音"><Languages :size="14" /><span>日</span></button><button class="round-action pronunciation-button" @click="speakDictionaryChinese(entry)" :aria-label="'播放中文发音：' + entry.term" title="播放中文发音"><Volume2 :size="14" /><span>中</span></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" :disabled="vocabularyHydrating || !vocabularySyncReady" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
                     </div>
                     <div v-if="entry.phonetic || entry.reading || entry.japaneseTerm" class="lexicon-pronunciation">
                       <span v-if="entry.phonetic" class="lexicon-ipa" lang="en">{{ entry.phonetic }}</span>
@@ -2964,7 +2967,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   </div>
                   <div v-if="speechStatus && speechStatusTarget === entry.term" class="dictionary-speech-controls"><p class="dictionary-status" role="status" aria-live="polite">{{ speechStatus }}</p><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="toggleSpeechPause">{{ speechPaused ? '继续播放' : '暂停' }}</button><button v-if="speechPlaying || speechPaused" type="button" class="text-link" @click="stopSpeech">停止</button></div>
                 </div>
-                <div class="dict-actions"><button class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + (entry.englishTerm || entry.term)" title="播放英语发音"><Volume2 :size="14" /><span>EN</span></button><button class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语辅助读音：' + (entry.englishTerm || entry.term)" title="播放日语辅助读音"><Languages :size="14" /><span>日</span></button><button class="round-action pronunciation-button" @click="speakDictionaryChinese(entry)" :aria-label="'播放中文发音：' + entry.term" title="播放中文发音"><Volume2 :size="14" /><span>中</span></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" :disabled="vocabularyHydrating || !vocabularySyncReady" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
+
               </article>
               <div v-if="lastSearchedTerm.trim().toLowerCase() === searchText.trim().toLowerCase() && displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>{{ dictionaryError ? '暂未获得可靠译文' : '没有找到匹配词条' }}</strong><p>可尝试其他语言；在线翻译不可用时，可主动选择 AI 补译。IT 模式仅查本地术语库。</p></div>
               <div v-if="searchText.trim() && !dictionaryLoading && (dictionaryError || (lastSearchedTerm && displayedEntries.length === 0))" class="dictionary-ai-section dictionary-ai-fallback">
