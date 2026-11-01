@@ -1581,6 +1581,31 @@ type DictionaryEntry = {
   englishTerm?: string
   japaneseTerm?: string
   technical?: boolean
+  senses?: Array<{ partOfSpeech: string; definitions: string[]; example?: string }>
+}
+// POS labels use source-backed Free Dictionary / Jisho metadata only.
+const dictionaryPartLabels: Record<string, string> = {
+  noun: 'n. 名词', verb: 'v. 动词', adjective: 'adj. 形容词',
+  adverb: 'adv. 副词', pronoun: 'pron. 代词',
+  preposition: 'prep. 介词', conjunction: 'conj. 连词',
+  interjection: 'int. 感叹词', determiner: 'det. 限定词',
+  article: 'art. 冠词', numeral: 'num. 数词',
+  auxiliary: 'aux. 助动词', exclamation: 'int. 感叹词',
+  'proper noun': 'n. 专有名词', 'phrasal verb': 'phr. v. 短语动词',
+}
+function dictionaryPartOfSpeechLabel(raw: string): string {
+  const part = raw.trim()
+  const key = part.toLowerCase()
+  if (dictionaryPartLabels[key]) return dictionaryPartLabels[key]
+  if (/ichidan verb|godan verb|suru verb|intransitive verb|transitive verb/i.test(part)) return 'v. 动词'
+  if (/^noun(\s|$)/i.test(part)) return 'n. 名词'
+  if (/^adjective(\s|$)|^i-adjective|^na-adjective/i.test(part)) return 'adj. 形容词'
+  if (/^adverb(\s|$)/i.test(part)) return 'adv. 副词'
+  return part.slice(0, 60)
+}
+function dictionaryDistinctParts(entry: DictionaryEntry): string[] {
+  return [...new Set((entry.senses || []).map(sense => dictionaryPartOfSpeechLabel(sense.partOfSpeech))
+    .filter(Boolean))].slice(0, 6)
 }
 const dictionaryEntries: DictionaryEntry[] = []
 const onlineEntries = ref<DictionaryEntry[]>([])
@@ -2870,15 +2895,56 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
           <section class="section-block">
             <div class="section-heading"><div><h2>查询结果</h2></div></div>
             <div class="dictionary-list">
-              <article v-for="entry in displayedEntries" :key="entry.term + (entry.tag || '') + (entry.en || '')" class="dictionary-card">
+              <article v-for="entry in displayedEntries" :key="entry.term + (entry.tag || '') + (entry.en || '')" class="dictionary-card lexicon-entry">
                 <div class="dict-main">
-                  <div class="dict-term-row"><h3>{{ entry.language === 'en' && entry.englishTerm ? entry.englishTerm : entry.term }}</h3><span v-if="entry.japaneseTerm && entry.japaneseTerm !== entry.term" class="reading">日语术语：{{ entry.japaneseTerm }}</span><span v-else-if="entry.language === 'en' && entry.englishTerm && entry.englishTerm.toLowerCase() !== entry.term.toLowerCase()" class="reading">日语术语：{{ entry.term }}</span><span v-if="entry.reading" class="reading">{{ entry.language === 'en' ? '日语辅助读音（近似）' : '日语读音' }}：{{ entry.reading }}</span><span v-if="entry.phonetic" class="reading">IPA：{{ entry.phonetic }}</span><span class="dict-tag">{{ entry.tag }}</span><span v-if="entry.source" class="dict-source">{{ entry.source }}</span></div>
-                  <div v-if="entry.englishTerm && entry.englishTerm.toLowerCase() !== entry.term.toLowerCase()" class="dict-en">英语对应词：{{ entry.englishTerm }}</div>
-                  <div v-if="entry.en && entry.en !== entry.englishTerm" class="dict-en">{{ entry.language === 'en' ? '英语释义' : '英文释义' }}：{{ entry.en }}</div>
-                  <p v-if="entry.translationJa" class="dictionary-translation-ja">{{ entry.language === 'ja' ? '日语释义' : '日语翻译／释义' }}：{{ entry.translationJa }}</p>
-                  <p v-if="entry.zh" class="dictionary-translation-ja">{{ entry.language === 'zh' ? '中文原文' : '中文翻译／释义' }}：{{ entry.zh }}</p>
-                  <p v-if="entry.example" class="dict-example">例句：{{ entry.example }}</p>
-                  <p v-if="entry.technical" class="dictionary-tech-note">离线 IT 词库</p>
+                  <header class="lexicon-header">
+                    <div class="lexicon-title-row">
+                      <h3 :lang="entry.language === 'en' ? 'en' : entry.language === 'ja' ? 'ja' : 'zh'">{{ entry.language === 'en' && entry.englishTerm ? entry.englishTerm : entry.term }}</h3>
+                      <span v-if="entry.technical" class="lexicon-tech-mark">IT</span>
+                    </div>
+                    <div v-if="entry.phonetic || entry.reading || entry.japaneseTerm" class="lexicon-pronunciation">
+                      <span v-if="entry.phonetic" class="lexicon-ipa" lang="en">{{ entry.phonetic }}</span>
+                      <span v-if="entry.reading">{{ entry.language === 'en' ? '日语近似读音' : '读音' }}：{{ entry.reading }}</span>
+                      <span v-if="entry.japaneseTerm && entry.japaneseTerm !== entry.term">日语术语：{{ entry.japaneseTerm }}</span>
+                    </div>
+                    <div v-if="dictionaryDistinctParts(entry).length" class="lexicon-parts" aria-label="词性">
+                      <span v-for="part in dictionaryDistinctParts(entry)" :key="part" class="lexicon-part">{{ part }}</span>
+                    </div>
+                  </header>
+                  <div v-if="(entry.zh && !(entry.language === 'zh' && entry.zh === entry.term)) || entry.translationJa || entry.englishTerm || (entry.en && !(entry.senses?.length))" class="lexicon-translations" aria-label="中日英对应译文">
+                    <div v-if="entry.zh && !(entry.language === 'zh' && entry.zh === entry.term)" class="lexicon-translation">
+                      <span class="lexicon-lang">中</span><p lang="zh">{{ entry.zh }}</p>
+                    </div>
+                    <div v-if="entry.translationJa && !(entry.language === 'ja' && entry.translationJa === entry.term)" class="lexicon-translation">
+                      <span class="lexicon-lang">日</span><p lang="ja">{{ entry.translationJa }}</p>
+                    </div>
+                    <div v-if="entry.englishTerm && entry.language !== 'en' && entry.englishTerm.toLowerCase() !== entry.term.toLowerCase()" class="lexicon-translation">
+                      <span class="lexicon-lang">EN</span><p lang="en">{{ entry.englishTerm }}</p>
+                    </div>
+                    <div v-else-if="entry.language !== 'en' && entry.en && !entry.senses?.length && entry.en !== entry.englishTerm" class="lexicon-translation">
+                      <span class="lexicon-lang">EN</span><p lang="en">{{ entry.en }}</p>
+                    </div>
+                  </div>
+                  <section v-if="entry.senses?.length" class="lexicon-senses" aria-label="词典释义">
+                    <h4>词典释义</h4>
+                    <div v-for="(sense, senseIndex) in entry.senses" :key="senseIndex" class="lexicon-sense">
+                      <div class="lexicon-sense-heading">
+                        <span class="lexicon-sense-pos">{{ sense.partOfSpeech ? dictionaryPartOfSpeechLabel(sense.partOfSpeech) : '释义' }}</span>
+                      </div>
+                      <ol class="lexicon-definitions">
+                        <li v-for="(definition, definitionIndex) in sense.definitions" :key="definitionIndex" lang="en">{{ definition }}</li>
+                      </ol>
+                      <p v-if="sense.example" class="lexicon-example" lang="en"><span>例句</span>{{ sense.example }}</p>
+                    </div>
+                  </section>
+                  <div v-else-if="entry.language === 'en' && entry.en && entry.en !== entry.englishTerm" class="lexicon-single-definition">
+                    <span class="lexicon-field-label">英语释义</span><p lang="en">{{ entry.en }}</p>
+                  </div>
+                  <p v-if="entry.example && !entry.senses?.some(sense => sense.example)" class="lexicon-example"><span>例句</span>{{ entry.example }}</p>
+                  <div class="lexicon-source-line">
+                    <span>{{ entry.tag }}</span>
+                    <span v-if="entry.source">{{ entry.source }}</span>
+                  </div>
                   <div class="dictionary-ai-section">
                     <div v-if="!dictionaryAiAnswers[dictionaryAiKey(entry)]" class="dictionary-ai-action-row">
                       <button type="button" class="secondary-button dictionary-ai-button"
