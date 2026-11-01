@@ -43,6 +43,15 @@ export function pitchLabel(index: number, reading: string): string {
 // Small hand-checked Chinese pronunciation list for common everyday words.
 // Other Chinese headwords deliberately omit pinyin/POS instead of guessing.
 const chineseWordGuide: Record<string, { pinyin: string; partOfSpeech: string }> = {
+  '栗子': { pinyin: 'lì zi', partOfSpeech: '名词' },
+  '栗': { pinyin: 'lì', partOfSpeech: '名词' },
+  '苹果': { pinyin: 'píng guǒ', partOfSpeech: '名词' },
+  '西瓜': { pinyin: 'xī guā', partOfSpeech: '名词' },
+  '橘子': { pinyin: 'jú zi', partOfSpeech: '名词' },
+  '水果': { pinyin: 'shuǐ guǒ', partOfSpeech: '名词' },
+  '雨': { pinyin: 'yǔ', partOfSpeech: '名词' },
+  '晴天': { pinyin: 'qíng tiān', partOfSpeech: '名词' },
+  '高兴': { pinyin: 'gāo xìng', partOfSpeech: '形容词' },
   '晚上': { pinyin: 'wǎnshang', partOfSpeech: '时间名词' },
   '早上': { pinyin: 'zǎoshang', partOfSpeech: '时间名词' },
   '上午': { pinyin: 'shàngwǔ', partOfSpeech: '时间名词' },
