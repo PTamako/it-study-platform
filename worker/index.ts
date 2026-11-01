@@ -403,7 +403,7 @@ function isTrustedAppsScriptUrl(value: string): boolean {
     const url = new URL(value)
     // No query strings, fragments, embedded credentials, or preview /dev deployments.
     return url.protocol === 'https:' && url.hostname === 'script.google.com'
-      && /^\\/macros\\/s\\/[A-Za-z0-9_-]+\\/exec$/.test(url.pathname)
+      && /^\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(url.pathname)
       && !url.username && !url.password && !url.search && !url.hash
   } catch {
     return false
