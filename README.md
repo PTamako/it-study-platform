@@ -7,7 +7,7 @@ Vue 3 / TypeScript / Vite + Cloudflare Workers (静态网站和 API 共用一个
 - **SG 信息安全管理考试**：官方已核实的过去问和原创预测题分开显示；练习、错题、掌握状态、A/B 48+12 限时模拟和实战训练。
 - **FE 基本情報技術者**：2023～2026 年 IPA 公开题 104 道（A 80、B 24），另有 2019 年旧制度上午原题 12 道；原创和改编题分别标记来源。科目 A 为 60 题／90 分钟，科目 B 为 20 题／100 分钟（算法 16、安全 4）。图示题的人工移动端验收仍待完成。
 - **语言学习**：日语和英语各 5,000 张带中文翻译的 Tatoeba 来源句子卡；日常／职场分类、词汇与语法高亮、发音、复习计划和云端掌握状态。数据经构建生成，不能把上游语料的变更误认为人工审核内容。
-- **三语词典**：中日英查询、D1 离线 IT 术语、Jisho、Free Dictionary、MyMemory 与 Google 免费翻译备用；普通查词不调用生成式 AI。用户主动点击时可用 Workers AI 生成辅助解析，每个日本日历日最多 20 次新推理（命中缓存不扣次数）。
+- **三语词典**：优先使用本地常见词、D1 IT 术语、Jisho 和 Free Dictionary。登录后可选用 **DeepL 官方 API（Worker Secret：`DEEPL_API_KEY`）**，不可用时才尝试 MyMemory/Google 非官方备用接口；未配置 DeepL 时不会调用它。普通查词不调用 Workers AI。未获得译文时，可手动点「AI 补译为中日英」或「AI 辅助解释」，共用日本时间每日 20 次 AI 额度，30 天内相同请求命中缓存不再扣次数。
 - **生词本、进度、每日计划和历史记录**：单用户登录后使用 D1 同步；离线待同步记录优先保全，已同步词条以最新云端快照为准。
 - **PWA 和浏览器发音**：提供 iPhone Safari 添加到主屏幕的入口；不缓存个人 API 响应。实际语音由浏览器和系统语音决定，CI 无法替代真机试听。
 
@@ -38,6 +38,7 @@ npx wrangler deploy
 ```
 
 - Worker：`it-study-platform`；生产 D1：`it-study-platform-db`；API 前缀 `/api/*`。
+- **可选翻译增强**：先在 DeepL Developer 平台生成 API key，然后通过 Cloudflare Workers Secrets 为 `it-study-platform` 设置 `DEEPL_API_KEY`（不要放入 GitHub、前端或 wrangler `[vars]`）。无密钥时自动沿用免费翻译链及 AI 手动补译。DeepL Developer 目前为累计 100 万字符试用额度，用尽后不会按月重置；如改用付费方案，务必在 DeepL 账户设置用量上限。仅登录会话可触发官方 API，未登录公开查词不能消耗配额。
 - GitHub PR 由 `validate-pr.yml` 验证；合并后 `deploy-cloudflare.yml` 运行同样的数据生成、测试、本地迁移、远程增量迁移、部署及线上检查。
 - `ci.yml` 仅保留手动复验，避免 PR 和主分支重复计费运行。PR 验证和生产部署的检查应设置为分支保护的必要条件（在 GitHub Settings 中配置）。
 - 必须在 GitHub Actions 中配置 `CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`；在 Cloudflare Worker Secrets 中配置 **`AUTH_PASSWORD`（≥16 字符）**和**`AUTH_SESSION_SECRET`（≥32 字符）**。不得提交真实密钥。
