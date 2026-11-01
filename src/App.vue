@@ -1590,8 +1590,6 @@ const dictionaryLoading = ref(false)
 const dictionaryError = ref('')
 const dictionaryDetectedLanguage = ref<'ja' | 'en' | 'zh' | 'it' | ''>('')
 const dictionaryAiRemaining = ref<number | null>(null)
-const dictionaryConnectionChecking = ref(false)
-const dictionaryConnectionMessage = ref('')
 const dictionaryAiBusy = ref(false)
 const dictionaryAiActiveKey = ref('')
 const dictionaryAiAnswers = ref<Record<string, string>>({})
@@ -1857,45 +1855,8 @@ watch([activeModule, authenticated], () => {
   if (activeModule.value === 'dictionary' && authenticated.value) void loadDictionaryAiQuota()
 })
 
-const dictionaryConnectionMessages: Record<string, string> = {
-  ok: 'Google Apps Script 连接正常，请重新查词。如果仍然失败，请检查该词的翻译结果。',
-  not_configured: 'Cloudflare 尚未读取到 GAS_TRANSLATOR_URL 与 GAS_TRANSLATOR_TOKEN，请检查两个 Secret 并部署设置。',
-  invalid_url: 'GAS_TRANSLATOR_URL 格式不正确。请输入以 https://script.google.com/macros/s/.../exec 结尾的网址。',
-  unauthorized: 'Google 脚本拒绝了密钥。请核对 TRANSLATOR_SHARED_SECRET 与 GAS_TRANSLATOR_TOKEN 是否完全相同。',
-  google_signin_required: 'Google 要求登录。请检查 Web App 的「以本人身份执行」和「所有人均可访问」设置，并重新部署。',
-  redirect_blocked: 'Google 返回了意外的跳转。请检查 Web App 部署权限与 /exec 地址。',
-  http_error: 'Google 脚本返回了 HTTP 错误。请检查 Google Apps Script 的部署和运行记录。',
-  unexpected_response: 'Google 没有返回预期的 JSON。请确认已复制最新 Code.gs 并重新部署 Web App。',
-  invalid_input: 'Google 脚本拒绝了测试参数。请确认部署的 Code.gs 是仓库最新版。',
-  provider_unavailable: 'Google 翻译服务运行失败。请在 Apps Script 的「执行数」检查授权状态或每日免费额度。',
-  empty_translation: 'Google 脚本未返回有效译文。请到 Apps Script「执行数」检查运行记录。',
-  network_error: 'Cloudflare 未能连接 Google Apps Script。请检查部署地址、Google 授权及网络状态。',
-}
-async function checkDictionaryConnection() {
-  if (dictionaryConnectionChecking.value || !authenticated.value) return
-  dictionaryConnectionChecking.value = true
-  dictionaryConnectionMessage.value = ''
-  try {
-    const response = await fetch('/api/dictionary/connection-test', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: '{}',
-      signal: AbortSignal.timeout(25000),
-    })
-    const data = await response.json() as { status?: string; error?: string }
-    if (!response.ok) throw new Error(data.error || '连接诊断暂不可用，请稍后重试。')
-    dictionaryConnectionMessage.value = dictionaryConnectionMessages[data.status || '']
-      || '连接诊断返回了未知状态，请检查 Cloudflare Worker 日志。'
-  } catch (error) {
-    dictionaryConnectionMessage.value = error instanceof Error ? error.message : '连接诊断失败。'
-  } finally {
-    dictionaryConnectionChecking.value = false
-  }
-}
-
 async function lookupDictionary() {
   resetDictionaryAiDisplay()
-  dictionaryConnectionMessage.value = ''
   const q = searchText.value.normalize('NFKC').trim().replace(/\s+/g, ' ')
   const requestedLanguage = dictSourceLang.value
   const requestId = ++dictionaryRequestId
@@ -2015,11 +1976,6 @@ function setDictionaryLanguage(language: 'auto' | 'ja' | 'en' | 'zh' | 'it') {
   dictionaryError.value = ''
   speechStatus.value = ''
   speechStatusTarget.value = ''
-}
-function quickDictionarySearch(term: string, language: 'ja' | 'en' | 'zh' | 'it') {
-  searchText.value = term
-  dictSourceLang.value = language
-  void lookupDictionary()
 }
 watch(savedWords, value => localStorage.setItem('zhixue:saved-words', JSON.stringify(value)), { deep: true })
 
@@ -2910,13 +2866,6 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
             <p v-if="lastSearchedTerm && dictionaryDetectedLanguage && dictSourceLang === 'auto' && !dictionaryLoading" class="dictionary-status" role="status">识别为 {{ dictionaryDetectedLanguage === 'zh' ? '中文' : dictionaryDetectedLanguage === 'ja' ? '日语' : dictionaryDetectedLanguage === 'en' ? '英语' : 'IT 术语' }} · 可手动切换</p>
             <p v-if="dictionaryLoading" class="dictionary-status">正在查词…</p>
             <p v-else-if="dictionaryError" class="dictionary-status dictionary-error">{{ dictionaryError }} <button type="button" class="text-link" @click="lookupDictionary">重试</button></p>
-            <div v-if="!searchText.trim() && !dictionaryLoading" class="dictionary-quick-start" aria-label="快捷查词示例">
-              <span>试试</span>
-              <button type="button" @click="quickDictionarySearch('你好', 'zh')">你好</button>
-              <button type="button" @click="quickDictionarySearch('hello', 'en')">hello</button>
-              <button type="button" @click="quickDictionarySearch('こんにちは', 'ja')">こんにちは</button>
-              <button type="button" @click="quickDictionarySearch('API', 'it')">API</button>
-            </div>
           </section>
           <section class="section-block">
             <div class="section-heading"><div><h2>查询结果</h2></div></div>
@@ -2953,13 +2902,6 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
               </article>
               <div v-if="lastSearchedTerm.trim().toLowerCase() === searchText.trim().toLowerCase() && displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>{{ dictionaryError ? '暂未获得可靠译文' : '没有找到匹配词条' }}</strong><p>可尝试其他语言；在线翻译不可用时，可主动选择 AI 补译。IT 模式仅查本地术语库。</p></div>
               <div v-if="searchText.trim() && !dictionaryLoading && (dictionaryError || (lastSearchedTerm && displayedEntries.length === 0))" class="dictionary-ai-section dictionary-ai-fallback">
-                <button v-if="dictSourceLang !== 'it' && authenticated" type="button"
-                  class="secondary-button dictionary-ai-button" :disabled="dictionaryConnectionChecking"
-                  @click="checkDictionaryConnection">
-                  {{ dictionaryConnectionChecking ? '检查连接中…' : '检查翻译连接' }}
-                </button>
-                <p v-if="dictionaryConnectionMessage" class="dictionary-status" role="status">{{ dictionaryConnectionMessage }}</p>
-                <small>连接检查使用一次 Google 免费翻译调用，不消耗 AI 每日 20 次额度。</small>
                 <button v-if="dictSourceLang !== 'it' && authenticated" type="button" class="secondary-button dictionary-ai-button"
                   :disabled="dictionaryAiBusy || dictionaryAiRemaining === 0" @click="translateMissingDictionaryWithAi">
                   {{ dictionaryAiBusy && dictionaryAiActiveKey === dictionaryAiKey(null) ? 'AI 补译中…' : 'AI 补译为中日英' }}

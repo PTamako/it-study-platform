@@ -18,7 +18,6 @@ const protectedPersonalPaths = new Set([
   '/api/translate-explanation',
   '/api/dictionary/ai',
   '/api/dictionary/ai/status',
-  '/api/dictionary/connection-test',
 ])
 
 export interface Env {
@@ -1076,7 +1075,7 @@ export default {
         if (rateLimitFailure) return rateLimitFailure
       }
     }
-    const isWriteEndpoint = ['/api/mock-exam/submit', '/api/fe-question-bank/install', '/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history', '/api/translate-explanation', '/api/dictionary/ai', '/api/dictionary/connection-test'].includes(url.pathname)
+    const isWriteEndpoint = ['/api/mock-exam/submit', '/api/fe-question-bank/install', '/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history', '/api/translate-explanation', '/api/dictionary/ai'].includes(url.pathname)
     const isExamHistoryDelete = request.method === 'DELETE' && url.pathname === '/api/exam-history'
     if (request.method !== 'GET' && !(request.method === 'POST' && isWriteEndpoint) && !isExamHistoryDelete) {
       return json({ error: '不支持此请求方法' }, 405)
@@ -1478,22 +1477,6 @@ export default {
         return json({ error: 'AI 补充暂时不可用；本次尝试已计入今日上限。原词典仍可使用。',
           remaining: DICTIONARY_AI_DAILY_LIMIT - used, limit: DICTIONARY_AI_DAILY_LIMIT, date }, 503)
       }
-    }
-
-    // Opt-in diagnostic, never automatic during ordinary dictionary searches.
-    // Protected by session, same-origin and write rate limit at the top of fetch().
-    if (url.pathname === '/api/dictionary/connection-test' && request.method === 'POST') {
-      if (!env.GAS_TRANSLATOR_URL || !env.GAS_TRANSLATOR_TOKEN) {
-        return json({ status: 'not_configured' })
-      }
-      if (!isTrustedAppsScriptUrl(env.GAS_TRANSLATOR_URL)) {
-        return json({ status: 'invalid_url' })
-      }
-      // Fixed harmless probe: 1 of Google's free LanguageApp calls if configured.
-      const result = await requestAppsScriptTranslation(
-        '你好', 'zh-CN', 'ja-JP', env.GAS_TRANSLATOR_URL, env.GAS_TRANSLATOR_TOKEN,
-      )
-      return json({ status: result.status })
     }
 
     // 中日英互译词典：IT 词条先查本地 D1；普通词使用在线词典和翻译。

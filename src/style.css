@@ -257,16 +257,8 @@
 .saved-vocabulary-row .saved-remove-button,.saved-vocabulary-row .saved-sync-button{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:38px;padding:7px 10px;border:1px solid #e5e8f1;border-radius:9px;background:#fff;color:#777e92;font-size:12px;white-space:nowrap}
 .saved-vocabulary-row .saved-sync-button{border-color:#cfd7ff;color:#5867c0;background:#f2f4ff}
 .saved-vocabulary-row .saved-remove-button:hover{background:#f7f8fb}
-.dictionary-quick-start{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:10px 0 0;color:#9296a8;font-size:10px;line-height:1.5}
-.dictionary-quick-start>span{margin-right:2px;color:#777d92;font-weight:600}
-.dictionary-quick-start button{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border:1px solid #e8eaf3;border-radius:8px;background:#fff;color:#555d7a;font-size:11px;line-height:1.3;transition:background .15s,border-color .15s}
-.dictionary-quick-start button:hover{border-color:#cdd2fb;background:#f7f7ff}
-.dictionary-quick-start button small{font-size:9px;color:#969bb0}
 @media(max-width:560px){
   .dictionary-view-tabs button{padding:9px 7px;font-size:13px}
-  .dictionary-quick-start{gap:6px}
-  .dictionary-quick-start>span{width:100%;margin-bottom:1px}
-  .dictionary-quick-start button{padding:6px 8px}
   .saved-vocabulary-row{padding:16px 15px}
   .saved-vocabulary-footer{align-items:stretch}
   .saved-vocabulary-pronunciations{flex:1 1 auto}
@@ -607,7 +599,6 @@ button[aria-disabled="true"] {
 .language-mastery-filter,
 .question-actions,
 .question-category-filters,
-.dictionary-quick-start,
 .dict-actions {
   min-width: 0;
   flex-wrap: wrap;
@@ -886,7 +877,7 @@ button[aria-disabled="true"] {
 .question-category-heading{margin-bottom:8px;gap:4px}
 .question-category-heading strong{font-size:13px}
 .question-source-filters,.question-category-filters,.language-category-filter,
-.language-mastery-filter,.dictionary-quick-start{gap:8px}
+.language-mastery-filter{gap:8px}
 :is(.primary-button,.auth-submit,.dictionary-search-button){
   min-height:var(--ui-control-height);border-radius:var(--ui-control-radius);
   font-size:13px;font-weight:700;line-height:1.35;
@@ -902,7 +893,7 @@ button[aria-disabled="true"] {
 }
 :is(.source-filter-button,.question-category-button,.language-category-filter button,
 .language-mastery-filter button,.dictionary-language-picker button,
-.dictionary-view-tabs button,.dictionary-quick-start button){
+.dictionary-view-tabs button){
   display:inline-flex;align-items:center;justify-content:center;gap:5px;
   min-height:40px;padding:9px 12px;border-radius:var(--ui-control-radius);
   border:1px solid var(--line-strong);background:var(--surface);
@@ -1023,35 +1014,12 @@ button[aria-disabled="true"] {
 .fe-bank-inline-status-idle{visibility:hidden}
 
 
-/* Dictionary examples: four quiet inline shortcuts instead of a multi-row tag cloud. */
-.dictionary-quick-start{
-  display:flex;align-items:center;flex-wrap:nowrap;gap:5px;
-  width:100%;min-width:0;max-width:100%;overflow-x:auto;overflow-y:hidden;
-  margin:5px 0 0;padding:0;white-space:nowrap;
-  scrollbar-width:none;-webkit-overflow-scrolling:touch;
-}
-.dictionary-quick-start::-webkit-scrollbar{display:none}
-.dictionary-quick-start>span{
-  flex:0 0 auto;width:auto;margin:0 4px 0 0;
-  color:#a0a6b6;font-size:11px;font-weight:400;line-height:1.3;
-}
-.dictionary-quick-start button{
-  display:inline-flex;flex:0 0 auto;align-items:center;justify-content:center;
-  min-height:34px;min-width:0;padding:4px 7px;
-  border:0;border-radius:7px;background:transparent;box-shadow:none;
-  color:#80899f;font-size:12px;font-weight:500;line-height:1.3;
-  transition:color .15s ease,background-color .15s ease;
-}
-.dictionary-quick-start button:hover{border-color:transparent;background:#f2f4fa;color:#5867bd}
-.dictionary-quick-start button:focus-visible{outline:2px solid #a9b1ff;outline-offset:0}
-
 /* Audit follow-up: keep primary touch targets accessible on narrow phones.
    Older 9–11px captions remain desktop-only where they do not carry actions. */
 @media(max-width:760px){
   .saved-vocabulary-row .saved-remove-button,
   .saved-vocabulary-row .saved-sync-button,
   .vocabulary-speak-button,
-  .dictionary-quick-start button,
   .dictionary-view-tabs button,
   .dictionary-language-picker button,
   .source-filter-button,
@@ -1061,7 +1029,7 @@ button[aria-disabled="true"] {
   .saved-vocabulary-pronunciations,.saved-vocabulary-manage{flex-wrap:wrap;max-width:100%}
   .saved-vocabulary-definition p,.saved-vocabulary-reading,.saved-vocabulary-missing{font-size:13px}
   .question-option strong,.question-topic,.question-hint,.practice-start-card p,
-  .language-source,.dictionary-quick-start>span,.question-topline{font-size:12px}
+  .language-source,.question-topline{font-size:12px}
 }
 
 /* Large-screen exam calculator and pencil canvas stay in document flow,
