@@ -52,6 +52,48 @@ test('Chinese is recognized automatically and returns authentic Japanese and Eng
     assert.ok(data.items[0].translationJa, term)
   }
 })
+test('everyday Chinese headwords are resolved locally even when every online translation provider is unavailable', async () => {
+  const terms = ['晚上', '早上', '中午', '下午', '昨天', '明天', '现在', '星期一',
+    '早餐', '晚餐', '工作', '公司', '同事', '请假', '吃饭', '睡觉', '起床',
+    '喝水', '天气', '下雨', '车站', '医院', '朋友', '开心', '单词']
+  for (const term of terms) {
+    for (const lang of ['zh', 'auto']) {
+      const { status, data } = await query(term, lang)
+      assert.equal(status, 200, term + '/' + lang)
+      assert.equal(data.detected_language, 'zh', term + '/' + lang)
+      assert.equal(data.items.length, 1, term + '/' + lang)
+      assert.ok(data.items[0].translationJa, term + ' Japanese missing')
+      assert.ok(data.items[0].englishTerm, term + ' English missing')
+      assert.equal(data.items[0].zh, term)
+    }
+  }
+  const evening = (await query('晚上', 'zh')).data.items[0]
+  assert.match(evening.translationJa, /夜/)
+  assert.match(evening.englishTerm, /evening/)
+  assert.notEqual(evening.translationJa, 'こんばんは', '晚上 is not the greeting 晚上好')
+})
+
+test('common Japanese and English equivalents also work without translation providers', async () => {
+  const inputs = [
+    ['夜', 'ja', '晚上'], ['朝', 'ja', '早上'], ['コーヒー', 'ja', '咖啡'],
+    ['evening', 'en', '晚上'], ['at night', 'en', '晚上'],
+    ['coffee', 'en', '咖啡'], ['station', 'en', '车站'],
+  ]
+  for (const [term, lang, expectedChinese] of inputs) {
+    const { status, data } = await query(term, lang)
+    assert.equal(status, 200)
+    assert.ok(data.items.length > 0, term + ' missing')
+    assert.ok(data.items[0].zh.includes(expectedChinese), term + ' Chinese missing')
+  }
+})
+
+test('an unlisted word distinguishes unavailable translations from a definitive dictionary miss', async () => {
+  const { status, data } = await query('稀有造词示例', 'zh')
+  assert.equal(status, 200)
+  assert.equal(data.items.length, 0)
+  assert.match(data.error, /在线翻译也未返回有效结果/)
+})
+
 test('English input returns both Chinese and Japanese, without duplicate or invented definitions', async () => {
   const { data } = await query('hello')
   assert.equal(data.detected_language, 'en')
