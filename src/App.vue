@@ -5,7 +5,7 @@ import { tokyoDate, mergeDailyTaskStates } from './daily-tasks'
 import { utcReviewMillis } from './review-time'
 import { fetchVocabularySnapshot } from './vocabulary-sync'
 import { getLanguageExpansions, getSentenceParts } from './language-annotations'
-import { isDictionaryHeadword, loadJapanesePitchDataset, matchingJapaneseAccents, pitchLabel, partOfSpeechDisplay, type PitchDataset } from './dictionary-word-metadata'
+import { isDictionaryHeadword, loadJapanesePitchDataset, matchingJapaneseAccents, pitchLabel, partOfSpeechDisplay, getChineseWordGuide, type PitchDataset } from './dictionary-word-metadata'
 import { fetchLanguageCorpus } from './language-corpus'
 import { parseMockSnapshot, type MockSnapshot } from './mock-recovery'
 import ExamScratchTools from './ExamScratchTools.vue'
@@ -1600,7 +1600,10 @@ function dictionaryPitchLabels(entry: DictionaryEntry): string[] {
 }
 function dictionaryPosLabels(entry: DictionaryEntry): string[] {
   if (!isDictionaryWord(entry)) return []
-  return (entry.partsOfSpeech || []).map(partOfSpeechDisplay).filter(Boolean).slice(0, 7)
+  const sourceParts = (entry.partsOfSpeech || []).map(partOfSpeechDisplay).filter(Boolean).slice(0, 7)
+  if (sourceParts.length) return sourceParts
+  const guide = entry.language === 'zh' ? getChineseWordGuide(entry.term) : undefined
+  return guide ? [guide.partOfSpeech] : []
 }
 
 const recentDictionaryEntries = ref<DictionaryEntry[]>(readStored('zhixue:recent-dictionary', []))
@@ -2904,6 +2907,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                       </div>
                       <div v-if="isDictionaryWord(entry)" class="lexical-pronunciation">
                         <span v-if="entry.language === 'ja' && entry.reading" class="lexical-reading">{{ entry.reading }}</span>
+                        <span v-if="entry.language === 'zh' && getChineseWordGuide(entry.term)" class="lexical-reading">{{ getChineseWordGuide(entry.term)?.pinyin }}</span>
                         <span v-if="entry.language === 'en' && entry.phonetic" class="lexical-ipa">{{ entry.phonetic }}</span>
                         <span v-if="entry.language === 'en' && entry.reading && !entry.phonetic" class="lexical-reading">日语近似读音：{{ entry.reading }}</span>
                         <span v-if="entry.language === 'ja' && dictionaryPitchLabels(entry).length" class="lexical-pitch">
