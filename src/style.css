@@ -1217,3 +1217,27 @@ button[aria-disabled="true"] {
     -webkit-user-select:text;user-select:text
   }
 }
+
+/* Tablet dictionary input and tabs align with the reading column. */
+@media (min-width: 768px) and (max-width: 1366px) {
+  .dictionary-view-switch,.dictionary-search{width:100%;max-width:920px;margin-inline:auto}
+  .dictionary-search .search-box{
+    min-height:60px;gap:12px;padding:7px 12px;border-radius:13px
+  }
+  .dictionary-search .search-box input{
+    flex:1 1 auto;min-width:0;font-size:17px;line-height:1.6
+  }
+  .dictionary-search .clear-search{min-height:44px;min-width:44px}
+  .dictionary-search .dictionary-search-button{
+    min-height:48px;min-width:88px;padding:11px 19px;
+    font-size:14px;border-radius:10px
+  }
+  .dictionary-language-picker{gap:7px 9px;font-size:13px}
+  .dictionary-language-picker button{min-height:44px;padding:10px 13px;font-size:13px}
+  .dictionary-view-tabs button{min-height:48px;font-size:15px}
+  .dictionary-card .lexical-definitions,
+  .dictionary-card .lexical-heading{max-width:100%}
+}
+@media (min-width: 1024px) and (max-width: 1366px) and (orientation: landscape) {
+  .dictionary-view-switch,.dictionary-search{max-width:960px}
+}
