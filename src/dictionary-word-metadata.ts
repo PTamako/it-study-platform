@@ -40,6 +40,54 @@ export function pitchLabel(index: number, reading: string): string {
   return mark + (index === mora ? ' 尾高' : ' 中高')
 }
 
+// Small hand-checked Chinese pronunciation list for common everyday words.
+// Other Chinese headwords deliberately omit pinyin/POS instead of guessing.
+const chineseWordGuide: Record<string, { pinyin: string; partOfSpeech: string }> = {
+  '晚上': { pinyin: 'wǎnshang', partOfSpeech: '时间名词' },
+  '早上': { pinyin: 'zǎoshang', partOfSpeech: '时间名词' },
+  '上午': { pinyin: 'shàngwǔ', partOfSpeech: '时间名词' },
+  '下午': { pinyin: 'xiàwǔ', partOfSpeech: '时间名词' },
+  '中午': { pinyin: 'zhōngwǔ', partOfSpeech: '时间名词' },
+  '今天': { pinyin: 'jīntiān', partOfSpeech: '时间名词' },
+  '明天': { pinyin: 'míngtiān', partOfSpeech: '时间名词' },
+  '昨天': { pinyin: 'zuótiān', partOfSpeech: '时间名词' },
+  '现在': { pinyin: 'xiànzài', partOfSpeech: '时间名词／副词' },
+  '马上': { pinyin: 'mǎshàng', partOfSpeech: '副词' },
+  '天气': { pinyin: 'tiānqì', partOfSpeech: '名词' },
+  '下雨': { pinyin: 'xiàyǔ', partOfSpeech: '动词' },
+  '下雪': { pinyin: 'xiàxuě', partOfSpeech: '动词' },
+  '工作': { pinyin: 'gōngzuò', partOfSpeech: '动词／名词' },
+  '学习': { pinyin: 'xuéxí', partOfSpeech: '动词' },
+  '考试': { pinyin: 'kǎoshì', partOfSpeech: '名词／动词' },
+  '上班': { pinyin: 'shàngbān', partOfSpeech: '动词' },
+  '下班': { pinyin: 'xiàbān', partOfSpeech: '动词' },
+  '朋友': { pinyin: 'péngyou', partOfSpeech: '名词' },
+  '家人': { pinyin: 'jiārén', partOfSpeech: '名词' },
+  '猫': { pinyin: 'māo', partOfSpeech: '名词' },
+  '电脑': { pinyin: 'diànnǎo', partOfSpeech: '名词' },
+  '手机': { pinyin: 'shǒujī', partOfSpeech: '名词' },
+  '网络': { pinyin: 'wǎngluò', partOfSpeech: '名词' },
+  '密码': { pinyin: 'mìmǎ', partOfSpeech: '名词' },
+  '银行': { pinyin: 'yínháng', partOfSpeech: '名词' },
+  '火车': { pinyin: 'huǒchē', partOfSpeech: '名词' },
+  '飞机': { pinyin: 'fēijī', partOfSpeech: '名词' },
+  '地铁': { pinyin: 'dìtiě', partOfSpeech: '名词' },
+  '吃饭': { pinyin: 'chīfàn', partOfSpeech: '动词' },
+  '喜欢': { pinyin: 'xǐhuan', partOfSpeech: '动词' },
+  '漂亮': { pinyin: 'piàoliang', partOfSpeech: '形容词' },
+  '好吃': { pinyin: 'hǎochī', partOfSpeech: '形容词' },
+  '跑步': { pinyin: 'pǎobù', partOfSpeech: '动词' },
+  '可以': { pinyin: 'kěyǐ', partOfSpeech: '能愿动词' },
+  '因为': { pinyin: 'yīnwèi', partOfSpeech: '连词' },
+  '但是': { pinyin: 'dànshì', partOfSpeech: '连词' },
+  '如果': { pinyin: 'rúguǒ', partOfSpeech: '连词' },
+  '谢谢': { pinyin: 'xièxie', partOfSpeech: '感叹词' },
+}
+
+export function getChineseWordGuide(word: string): { pinyin: string; partOfSpeech: string } | undefined {
+  return chineseWordGuide[word.normalize('NFKC').trim()]
+}
+
 const posLabels: Record<string,string> = {
   noun:'名词',verb:'动词',adjective:'形容词',adverb:'副词',
   pronoun:'代词',preposition:'介词',conjunction:'连词',
