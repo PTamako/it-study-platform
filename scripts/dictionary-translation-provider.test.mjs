@@ -1,3 +1,4 @@
+import { inlineChineseDictionary } from './inline-chinese-dictionary.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import vm from 'node:vm'
@@ -10,6 +11,7 @@ source = source.replace("import { checkWriteRateLimit, handleAuthRequest, requir
   "const checkWriteRateLimit=async()=>null; const handleAuthRequest=async()=>null; const requireAuth=async(request)=>request.headers.get('x-test-auth')==='yes'?null:new Response('unauthorized',{status:401});")
 source = source.replace("import { feSeeds, seedUrl } from './fe-question-bank'",
   "const feSeeds=[]; const seedUrl=()=>'';")
+source = inlineChineseDictionary(source)
 const worker = (await import('data:text/javascript;base64,' + Buffer.from(ts.transpile(source, {
   target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext,
 })).toString('base64'))).default

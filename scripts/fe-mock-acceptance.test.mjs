@@ -1,10 +1,11 @@
+import { inlineChineseDictionary } from './inline-chinese-dictionary.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import ts from 'typescript'
 const source = (await readFile(new URL('../worker/index.ts', import.meta.url), 'utf8')).replace("import { checkWriteRateLimit, handleAuthRequest, requireAuth } from './auth'", 'const checkWriteRateLimit = async () => null; const handleAuthRequest = async () => null; const requireAuth = async () => null')
 const normalized = source.replace("import { feSeeds, seedUrl } from './fe-question-bank'", 'const feSeeds = []; const seedUrl = () => ""')
-const js = ts.transpile(normalized, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext })
+const js = ts.transpile(inlineChineseDictionary(normalized), { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext })
 const worker = (await import('data:text/javascript;base64,' + Buffer.from(js).toString('base64'))).default
 function rows(n, section, topic) { return Array.from({ length: n }, (_, i) => ({ id: `${section}-${topic}-${i}`, exam_section: section, exam_section_method: 'explicit', topic, options_json: '[]', answer_json: '"a"' })) }
 async function run(query, records = []) {

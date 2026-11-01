@@ -6,6 +6,7 @@ import { utcReviewMillis } from './review-time'
 import { fetchVocabularySnapshot } from './vocabulary-sync'
 import { getLanguageExpansions, getSentenceParts } from './language-annotations'
 import { isDictionaryHeadword, loadJapanesePitchDataset, matchingJapaneseAccents, pitchLabel, partOfSpeechDisplay, getChineseWordGuide, type PitchDataset } from './dictionary-word-metadata'
+import { dictionaryTranslationRows, chinesePinyinToneLabels } from './dictionary-presentation'
 import { fetchLanguageCorpus } from './language-corpus'
 import { parseMockSnapshot, type MockSnapshot } from './mock-recovery'
 import ExamScratchTools from './ExamScratchTools.vue'
@@ -1572,6 +1573,8 @@ type DictionaryEntry = {
   term: string
   reading?: string
   phonetic?: string
+  pinyin?: string
+  lexicalSource?: string
   partsOfSpeech?: string[]
   senses?: Array<{ partOfSpeech: string; definitions: string[] }>
   en: string
@@ -1592,6 +1595,13 @@ function isDictionaryWord(entry: DictionaryEntry): boolean {
   if (!entry.language) return false
   const headword = entry.language === 'en' ? (entry.englishTerm || entry.term) : entry.term
   return isDictionaryHeadword(searchText.value, headword, entry.language)
+}
+function dictionaryWordPinyin(entry: DictionaryEntry): string {
+  if (!isDictionaryWord(entry) || entry.language !== 'zh') return ''
+  return entry.pinyin || getChineseWordGuide(entry.term)?.pinyin || ''
+}
+function dictionaryWordTones(entry: DictionaryEntry): string[] {
+  return chinesePinyinToneLabels(dictionaryWordPinyin(entry))
 }
 function dictionaryPitchLabels(entry: DictionaryEntry): string[] {
   if (!isDictionaryWord(entry) || entry.language !== 'ja' || !entry.reading) return []
@@ -1805,8 +1815,16 @@ async function supplementDictionaryWithAi(entry: DictionaryEntry | null) {
       body: JSON.stringify({
         term,
         language: dictSourceLang.value === 'auto' ? (entry?.language || 'auto') : dictSourceLang.value,
-        known: { zh: entry?.zh || '', ja: entry?.translationJa || entry?.japaneseTerm || '',
-          en: entry?.en || entry?.englishTerm || '' },
+        // Only explicitly provided dictionary evidence is sent to optional AI analysis.
+        // AI must not invent pronunciations or Japanese pitch accents.
+        known: {
+          zh: entry?.zh || '', ja: entry?.translationJa || entry?.japaneseTerm || '',
+          en: entry?.en || entry?.englishTerm || '',
+          partOfSpeech: entry ? dictionaryPosLabels(entry).join('；') : '',
+          reading: entry?.language === 'ja' ? (entry.reading || '') : '',
+          pinyin: entry ? dictionaryWordPinyin(entry) : '',
+          ipa: entry?.language === 'en' ? (entry.phonetic || '') : '',
+        },
       }),
       signal: AbortSignal.timeout(25000),
     })
@@ -2907,7 +2925,11 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                       </div>
                       <div v-if="isDictionaryWord(entry)" class="lexical-pronunciation">
                         <span v-if="entry.language === 'ja' && entry.reading" class="lexical-reading">{{ entry.reading }}</span>
-                        <span v-if="entry.language === 'zh' && getChineseWordGuide(entry.term)" class="lexical-reading">{{ getChineseWordGuide(entry.term)?.pinyin }}</span>
+                        <span v-if="entry.language === 'zh' && dictionaryWordPinyin(entry)" class="lexical-reading"><span class="lexical-pronunciation-label">拼音</span>{{ dictionaryWordPinyin(entry) }}</span>
+                        <span v-if="entry.language === 'zh' && dictionaryWordTones(entry).length" class="lexical-pitch">
+                          <span class="lexical-pitch-caption">普通话声调</span>
+                          <span v-for="(tone, index) in dictionaryWordTones(entry)" :key="index" class="lexical-pitch-chip">{{ tone }}</span>
+                        </span>
                         <span v-if="entry.language === 'en' && entry.phonetic" class="lexical-ipa">{{ entry.phonetic }}</span>
                         <span v-if="entry.language === 'en' && entry.reading && !entry.phonetic" class="lexical-reading">日语近似读音：{{ entry.reading }}</span>
                         <span v-if="entry.language === 'ja' && dictionaryPitchLabels(entry).length" class="lexical-pitch">
@@ -2930,20 +2952,11 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                         <p v-for="(definition, definitionIndex) in sense.definitions" :key="definitionIndex" class="lexical-definition-text">{{ definition }}</p>
                       </div>
                     </section>
-                    <div v-else-if="entry.en && entry.en !== entry.englishTerm" class="lexical-translation-row">
-                      <span class="lexical-translation-lang">EN</span><p>{{ entry.en }}</p>
+                    <div v-if="entry.language === 'en' && !entry.senses?.length && entry.en && entry.en.toLowerCase() !== entry.term.toLowerCase()" class="lexical-single-definition">
+                      <span class="lexical-translation-lang">释义</span><p>{{ entry.en }}</p>
                     </div>
-                    <div v-if="entry.zh" class="lexical-translation-row">
-                      <span class="lexical-translation-lang">中</span><p>{{ entry.zh }}</p>
-                    </div>
-                    <div v-if="entry.translationJa" class="lexical-translation-row">
-                      <span class="lexical-translation-lang">日</span><p>{{ entry.translationJa }}</p>
-                    </div>
-                    <div v-if="entry.englishTerm && entry.englishTerm.toLowerCase() !== entry.term.toLowerCase()" class="lexical-translation-row">
-                      <span class="lexical-translation-lang">英</span><p>{{ entry.englishTerm }}</p>
-                    </div>
-                    <div v-if="entry.japaneseTerm && entry.japaneseTerm !== entry.term" class="lexical-translation-row">
-                      <span class="lexical-translation-lang">日</span><p>{{ entry.japaneseTerm }}</p>
+                    <div v-for="row in dictionaryTranslationRows(entry)" :key="row.language" class="lexical-translation-row" :lang="row.language">
+                      <span class="lexical-translation-lang">{{ row.label }}</span><p>{{ row.value }}</p>
                     </div>
                     <div v-if="entry.example" class="lexical-example"><span>例句</span><p>{{ entry.example }}</p></div>
                   </div>
@@ -2951,6 +2964,8 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                     <span v-if="entry.source">{{ entry.source }}</span>
                     <span v-else>{{ entry.tag }}</span>
                     <span v-if="entry.language === 'ja' && dictionaryPitchLabels(entry).length" class="lexical-pitch-source">音调 Kanjium · CC BY-SA 4.0</span>
+                    <span v-if="entry.language === 'zh' && entry.lexicalSource && isDictionaryWord(entry)" class="lexical-pitch-source">读音与词性 {{ entry.lexicalSource }}</span>
+                    <span v-else-if="entry.language === 'zh' && dictionaryWordPinyin(entry)" class="lexical-pitch-source">读音 · 内置常用词表</span>
                     <span v-if="entry.technical">离线词库</span>
                   </div>
                   <div class="dictionary-ai-section">

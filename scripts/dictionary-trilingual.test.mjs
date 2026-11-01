@@ -1,3 +1,4 @@
+import { inlineChineseDictionary } from './inline-chinese-dictionary.mjs'
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import ts from 'typescript'
@@ -9,6 +10,7 @@ workerSource = workerSource.replace("import { checkWriteRateLimit, handleAuthReq
   "const checkWriteRateLimit=async()=>null; const handleAuthRequest=async()=>null; const requireAuth=async()=>null;")
 workerSource = workerSource.replace("import { feSeeds, seedUrl } from './fe-question-bank'",
   "const feSeeds=[]; const seedUrl=()=>'';")
+workerSource = inlineChineseDictionary(workerSource)
 const worker = (await import('data:text/javascript;base64,' + Buffer.from(ts.transpile(workerSource, {
   target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext,
 })).toString('base64'))).default
