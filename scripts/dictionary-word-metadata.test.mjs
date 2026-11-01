@@ -38,7 +38,7 @@ test('standalone words can display labels but sentence inputs cannot', () => {
   assert.equal(meta.isDictionaryHeadword('ふさがる', 'ふさがる', 'ja'), true)
   assert.equal(meta.isDictionaryHeadword('学校', '学校', 'ja'), true)
   assert.equal(meta.isDictionaryHeadword('晚上', '晚上', 'zh'), true)
-  assert.equal(meta.isDictionaryHeadword('今晚可能会下小雨', '今晚可能会下小雨', 'zh'), true) // Chinese contiguous text needs sentence detection in UI
+  assert.equal(meta.isDictionaryHeadword('今晚可能会下小雨', '今晚可能会下小雨', 'zh'), false)
   assert.equal(meta.isDictionaryHeadword('It might rain tonight.', 'It might rain tonight.', 'en'), false)
   assert.equal(meta.isDictionaryHeadword('今日は雨です。', '今日は雨です。', 'ja'), false)
   assert.equal(meta.isDictionaryHeadword('run fast', 'run fast', 'en'), false)
