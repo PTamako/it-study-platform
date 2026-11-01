@@ -40,7 +40,7 @@ test('logged-in dictionary uses protected Apps Script for Japanese and English; 
     }
     assert.ok(u.startsWith(redirection))
     assert.equal(init.method, 'GET')
-    assert.equal(init.redirect, 'error')
+    assert.equal(init.redirect, 'manual')
     assert.ok(!('body' in init), 'shared secret is never sent after redirects')
     const dest = new URL(u).searchParams.get('to')
     followups.push(dest)
@@ -57,6 +57,50 @@ test('logged-in dictionary uses protected Apps Script for Japanese and English; 
     assert.equal(posts.length, 2)
     assert.deepEqual(new Set(followups), new Set(['ja', 'en']))
     assert.ok(!JSON.stringify(body).includes(token))
+  } finally { globalThis.fetch = oldFetch }
+})
+
+test('Cloudflare-compatible ContentService second hop rejects any new redirect', async () => {
+  const oldFetch = globalThis.fetch
+  const calls = []
+  globalThis.fetch = async (input, init = {}) => {
+    const requestUrl = String(input)
+    calls.push({ url: requestUrl, redirect: init.redirect })
+    // Cloudflare Workers throws a TypeError for redirect:'error'. This mock makes
+    // that runtime limitation part of the regression test.
+    if (init.redirect === 'error') throw new TypeError('Unsupported redirect mode: error')
+    if (requestUrl === deployment) {
+      return new Response('', { status: 302, headers: { location: redirection } })
+    }
+    if (requestUrl.startsWith('https://script.googleusercontent.com/')) {
+      return new Response('', { status: 302, headers: {
+        location: 'https://accounts.google.com/ServiceLogin',
+      } })
+    }
+    throw new Error('untrusted redirect must never be fetched: ' + requestUrl)
+  }
+  try {
+    const result = await probe()
+    assert.deepEqual(await result.json(), { status: 'redirect_blocked' })
+    assert.equal(calls.length, 2)
+    assert.deepEqual(calls.map(call => call.redirect), ['manual', 'manual'])
+  } finally { globalThis.fetch = oldFetch }
+})
+
+test('successful probe works even when Cloudflare runtime rejects redirect:error', async () => {
+  const oldFetch = globalThis.fetch
+  globalThis.fetch = async (input, init = {}) => {
+    if (init.redirect === 'error') throw new TypeError('Cloudflare does not support redirect:error')
+    if (String(input) === deployment) {
+      return new Response('', { status: 302, headers: { location: redirection } })
+    }
+    assert.ok(String(input).startsWith(redirection))
+    assert.equal(init.redirect, 'manual')
+    return new Response(JSON.stringify({ ok: true, translation: 'こんにちは' }), { status: 200 })
+  }
+  try {
+    const response = await probe()
+    assert.deepEqual(await response.json(), { status: 'ok' })
   } finally { globalThis.fetch = oldFetch }
 })
 
