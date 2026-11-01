@@ -1283,13 +1283,16 @@ export default {
         return json({ error: '请输入 1～100 字的词句，并选择有效语言。' }, 400)
       }
       const language = chosen === 'auto' || chosen === 'it' ? detectDictionaryLanguage(term) : chosen
+      const mode = body.mode === 'translation' ? 'translation' : 'explanation'
       const inputKnown = body.known
       const knownRecord = inputKnown && typeof inputKnown === 'object' && !Array.isArray(inputKnown)
         ? inputKnown as Record<string, unknown> : {}
       const normalizeHint = (key: string) => typeof knownRecord[key] === 'string'
         ? String(knownRecord[key]).slice(0, 160).replace(/[\r\n]+/g, ' ').trim() : ''
       const known = { zh: normalizeHint('zh'), ja: normalizeHint('ja'), en: normalizeHint('en') }
-      const hash = await dictionaryAiHash(JSON.stringify({ version: 1, term, language, known }))
+      const hash = await dictionaryAiHash(mode === 'translation'
+        ? JSON.stringify({ version: 2, term, language, mode })
+        : JSON.stringify({ version: 1, term, language, known }))
       const date = dictionaryAiJapanDay()
       const now = Math.floor(Date.now() / 1000)
       try {
@@ -1298,8 +1301,18 @@ export default {
         ).bind(hash, now - DICTIONARY_AI_CACHE_SECONDS).first<{ explanation: string }>()
         if (cached?.explanation) {
           const used = await dictionaryAiUsage(env.DB, date)
-          return json({ explanation: cached.explanation, cached: true,
-            remaining: DICTIONARY_AI_DAILY_LIMIT - used, limit: DICTIONARY_AI_DAILY_LIMIT, date })
+          if (mode === 'translation') {
+            try {
+              const entry = JSON.parse(cached.explanation) as DictionaryApiEntry
+              if (entry.term === term && entry.source === 'Workers AI（按需翻译）') {
+                return json({ items: [entry], cached: true,
+                  remaining: DICTIONARY_AI_DAILY_LIMIT - used, limit: DICTIONARY_AI_DAILY_LIMIT, date })
+              }
+            } catch { /* Invalid cache payload never becomes a fabricated dictionary entry. */ }
+          } else {
+            return json({ explanation: cached.explanation, cached: true,
+              remaining: DICTIONARY_AI_DAILY_LIMIT - used, limit: DICTIONARY_AI_DAILY_LIMIT, date })
+          }
         }
       } catch { return json({ error: 'AI 缓存检查暂不可用，未调用 AI。' }, 503) }
       if (!env.AI) return json({ error: 'Workers AI 尚未配置，原有词典查询不受影响。' }, 503)
@@ -1315,6 +1328,49 @@ export default {
         }
         used = Number(row.used)
       } catch { return json({ error: 'AI 次数限制暂不可用，未调用 AI。' }, 503) }
+      // Deliberate user action: one quota reservation covers the two translation
+      // directions for a single word. Ordinary GET /api/dictionary never runs this model.
+      if (mode === 'translation') {
+        try {
+          const targets = (['zh', 'ja', 'en'] as const).filter(code => code !== language)
+          const translated = await Promise.all(targets.map(async target => {
+            const response = await env.AI!.run('@cf/meta/m2m100-1.2b', {
+              text: term, source_lang: language, target_lang: target,
+            }) as { translated_text?: string }
+            const value = String(response?.translated_text || '').replace(/\s+/g, ' ').trim()
+            if (!value || value.length > 300 || /MYMEMORY WARNING|translation unavailable/i.test(value)) {
+              throw new Error('Translation model returned no usable text')
+            }
+            return { target, value }
+          }))
+          const targetMap = Object.fromEntries(translated.map(row => [row.target, row.value]))
+          const entry: DictionaryApiEntry = {
+            term,
+            language,
+            zh: language === 'zh' ? term : String(targetMap.zh || ''),
+            translationJa: language === 'ja' ? term : String(targetMap.ja || ''),
+            en: language === 'en' ? term : String(targetMap.en || ''),
+            englishTerm: language === 'en' ? term : String(targetMap.en || ''),
+            tag: '中日英互译 · AI 补译',
+            source: 'Workers AI（按需翻译）',
+          }
+          try {
+            await env.DB.prepare(
+              'INSERT INTO dictionary_ai_explanation_cache (request_hash, explanation, created_at) '
+              + 'VALUES (?, ?, ?) ON CONFLICT(request_hash) DO UPDATE SET '
+              + 'explanation = excluded.explanation, created_at = excluded.created_at'
+            ).bind(hash, JSON.stringify(entry), now).run()
+          } catch { /* Do not hide successful translations if cache storage fails. */ }
+          return json({ items: [entry], cached: false,
+            remaining: DICTIONARY_AI_DAILY_LIMIT - used, limit: DICTIONARY_AI_DAILY_LIMIT, date })
+        } catch (error) {
+          console.warn('[dictionary-ai] translation failed', {
+            message: error instanceof Error ? error.message : String(error),
+          })
+          return json({ error: 'AI 补译暂不可用，本次尝试已计入今日上限。可尝试其他语言或稍后再试。',
+            remaining: DICTIONARY_AI_DAILY_LIMIT - used, limit: DICTIONARY_AI_DAILY_LIMIT, date }, 503)
+        }
+      }
       // Input text and dictionary hints are untrusted data, not instructions.
       const messages = [
         { role: 'system', content:
