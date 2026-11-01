@@ -43,6 +43,12 @@ test('standalone words can display labels but sentence inputs cannot', () => {
   assert.equal(meta.isDictionaryHeadword('今日は雨です。', '今日は雨です。', 'ja'), false)
   assert.equal(meta.isDictionaryHeadword('run fast', 'run fast', 'en'), false)
 })
+test('Chinese pinyin and POS are sourced only from curated word entries', () => {
+  assert.deepEqual(meta.getChineseWordGuide('晚上'), { pinyin: 'wǎnshang', partOfSpeech: '时间名词' })
+  assert.deepEqual(meta.getChineseWordGuide('工作'), { pinyin: 'gōngzuò', partOfSpeech: '动词／名词' })
+  assert.equal(meta.getChineseWordGuide('今晚可能会下小雨'), undefined)
+  assert.equal(meta.getChineseWordGuide('陌生的词'), undefined)
+})
 test('english and japanese speech parts have human-readable bilingual labels', () => {
   assert.equal(meta.partOfSpeechDisplay('verb'), 'verb · 动词')
   assert.equal(meta.partOfSpeechDisplay('noun'), 'noun · 名词')
