@@ -208,3 +208,82 @@ test('Google script fails closed when no secret configured or Google quota is ex
   assert.deepEqual(result, { ok: false, error: 'provider_unavailable' })
   assert.ok(!JSON.stringify(result).includes(token))
 })
+
+const probeUrl = 'https://study.test/api/dictionary/connection-test'
+const probe = (headers = {}, env = conf) => worker.fetch(
+  new Request(probeUrl, {
+    method: 'POST',
+    headers: { origin: 'https://study.test', 'x-test-auth': 'yes', ...headers },
+    body: '{}',
+  }), env,
+)
+
+test('GAS diagnostic returns safe status without exposing server secrets, URL or probe text', async () => {
+  const oldFetch = globalThis.fetch
+  let scriptCalls = 0
+  globalThis.fetch = async (input, init) => {
+    assert.equal(String(input), deployment)
+    assert.equal(init.method, 'POST')
+    assert.equal(JSON.parse(init.body).text, '你好')
+    scriptCalls++
+    return new Response(JSON.stringify({ ok: true, translation: 'こんにちは' }))
+  }
+  try {
+    const resp = await probe()
+    assert.equal(resp.status, 200)
+    assert.deepEqual(await resp.json(), { status: 'ok' })
+    assert.equal(scriptCalls, 1)
+    const missing = await probe({}, {})
+    assert.deepEqual(await missing.json(), { status: 'not_configured' })
+    const invalid = await probe({}, {
+      GAS_TRANSLATOR_URL: 'https://evil.example/test', GAS_TRANSLATOR_TOKEN: token,
+    })
+    assert.deepEqual(await invalid.json(), { status: 'invalid_url' })
+    assert.equal(scriptCalls, 1)
+  } finally { globalThis.fetch = oldFetch }
+})
+
+test('GAS diagnostic classifies token mismatch, Google sign-in redirect, and invalid replies', async () => {
+  const oldFetch = globalThis.fetch
+  try {
+    globalThis.fetch = async () => new Response(JSON.stringify({ ok: false, error: 'unauthorized' }))
+    assert.deepEqual(await (await probe()).json(), { status: 'unauthorized' })
+    globalThis.fetch = async () => new Response('', { status: 302, headers: {
+      location: 'https://accounts.google.com/ServiceLogin',
+    } })
+    assert.deepEqual(await (await probe()).json(), { status: 'google_signin_required' })
+    globalThis.fetch = async () => new Response('<html>login required</html>', {
+      headers: { 'content-type': 'text/html' },
+    })
+    assert.deepEqual(await (await probe()).json(), { status: 'unexpected_response' })
+    globalThis.fetch = async () => new Response(JSON.stringify({
+      ok: false, error: 'provider_unavailable',
+    }))
+    assert.deepEqual(await (await probe()).json(), { status: 'provider_unavailable' })
+  } finally { globalThis.fetch = oldFetch }
+})
+
+test('GAS diagnostic is restricted to owner session and same-origin POST', async () => {
+  const oldFetch = globalThis.fetch
+  let upstream = 0
+  globalThis.fetch = async () => { upstream++; throw Error('should never call upstream') }
+  try {
+    const anon = await worker.fetch(new Request(probeUrl, {
+      method: 'POST', headers: { origin: 'https://study.test' },
+    }), conf)
+    assert.equal(anon.status, 401)
+    const cross = await probe({ origin: 'https://different.example' })
+    assert.equal(cross.status, 403)
+    assert.equal(upstream, 0)
+  } finally { globalThis.fetch = oldFetch }
+})
+
+test('UI offers an explicit safe connection check when translation fails', async () => {
+  const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
+  assert.match(app, /async function checkDictionaryConnection\(\)/)
+  assert.match(app, /@click="checkDictionaryConnection"/)
+  assert.match(app, /dictionaryConnectionMessages\[data.status/)
+  assert.match(app, /Google Apps Script 连接正常/)
+  assert.match(source, /dictionary\/connection-test/)
+  assert.match(source, /translatedByAppsScript/)
+})
