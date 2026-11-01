@@ -8,6 +8,10 @@ export function isDictionaryHeadword(query: string, term: string, language: Word
   if (!q || !w || q.toLocaleLowerCase() !== w.toLocaleLowerCase()) return false
   if ([...q].length > 24 || /[\s。！？!?，、,.;；：:（）()[\]{}…]/.test(q)) return false
   if (language === 'en') return /^[A-Za-z]+(?:['’-][A-Za-z]+)*$/.test(q)
+  // A continuous Chinese sentence has no spaces. Prefer omitting unverified
+  // word-level labels over presenting a whole sentence as a vocabulary entry.
+  if (language === 'zh' && [...q].length > 4) return false
+  if (language === 'ja' && /(?:です|でした|ます|ました|ません|ください|かもしれない|でしょう)$/.test(q)) return false
   return /^[\u3040-\u30ff\u3400-\u9fffー々]+$/.test(q)
 }
 
