@@ -796,20 +796,24 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
   let zh = ''
   let ja = ''
   let en = ''
+  let curated = false
   if (language === 'ja') {
     const offline = curatedJapaneseTranslation(query)
+    curated = Boolean(offline)
     ;[en, zh] = await Promise.all([
       offline?.en ? Promise.resolve(offline.en) : translateText(query, 'ja-JP', 'en-US'),
       offline?.zh ? Promise.resolve(offline.zh) : translateText(query, 'ja-JP', 'zh-CN'),
     ])
   } else if (language === 'en') {
     const offline = curatedEnglishTranslation(query)
+    curated = Boolean(offline)
     ;[ja, zh] = await Promise.all([
       offline?.ja ? Promise.resolve(offline.ja) : translateText(query, 'en-US', 'ja-JP'),
       offline?.zh ? Promise.resolve(offline.zh) : translateText(query, 'en-US', 'zh-CN'),
     ])
   } else {
     const offline = commonChineseTranslations[query.trim()]
+    curated = Boolean(offline)
     ;[ja, en] = await Promise.all([
       offline?.ja ? Promise.resolve(offline.ja) : translateText(query, 'zh-CN', 'ja-JP'),
       offline?.en ? Promise.resolve(offline.en) : translateText(query, 'zh-CN', 'en-US'),
@@ -854,7 +858,7 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
         translationJa: commonJapaneseExplanations[query.trim()] || '',
         tag: '日中英互译',
         language: 'ja',
-        source: '在线词典/翻译',
+        source: curated ? '本地常用词典' : '在线词典/翻译',
       })
     }
   } else if (language === 'en') {
@@ -867,7 +871,7 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
       translationJa: ja || '',
       tag: '英日中互译',
       language: 'en',
-      source: '在线词典/翻译',
+      source: curated ? '本地常用词典' : '在线词典/翻译',
     })
   } else if (en || ja) {
     items.push({
@@ -878,7 +882,7 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
       translationJa: ja,
       tag: '中日英互译',
       language: 'zh',
-      source: '在线词典/翻译',
+      source: curated ? '本地常用词典' : '在线词典/翻译',
     })
   }
 
