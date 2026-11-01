@@ -7,7 +7,7 @@ Vue 3 / TypeScript / Vite + Cloudflare Workers (静态网站和 API 共用一个
 - **SG 信息安全管理考试**：官方已核实的过去问和原创预测题分开显示；练习、错题、掌握状态、A/B 48+12 限时模拟和实战训练。
 - **FE 基本情報技術者**：2023～2026 年 IPA 公开题 104 道（A 80、B 24），另有 2019 年旧制度上午原题 12 道；原创和改编题分别标记来源。科目 A 为 60 题／90 分钟，科目 B 为 20 题／100 分钟（算法 16、安全 4）。图示题的人工移动端验收仍待完成。
 - **语言学习**：日语和英语各 5,000 张带中文翻译的 Tatoeba 来源句子卡；日常／职场分类、词汇与语法高亮、发音、复习计划和云端掌握状态。数据经构建生成，不能把上游语料的变更误认为人工审核内容。
-- **三语词典**：优先使用本地常见词、D1 IT 术语、Jisho 和 Free Dictionary。已登录用户如配置了 **Azure Translator 官方 API（`AZURE_TRANSLATOR_KEY`）**，可优先在线翻译，失败后才尝试 MyMemory/Google 非官方备用接口；未配置 Azure 时继续使用免费备用服务。普通查词不调用 Workers AI。未获得译文时，可手动点「AI 补译为中日英」或「AI 辅助解释」，共用日本时间每日 20 次 AI 额度，30 天内相同请求命中缓存不再扣次数。
+- **三语词典**：优先使用本地常见词、D1 IT 术语、Jisho 和 Free Dictionary。已登录用户配置 **Google Apps Script + LanguageApp** 私人翻译接口（`GAS_TRANSLATOR_URL`、`GAS_TRANSLATOR_TOKEN`）后优先调用它；接口失败再尝试 MyMemory/Google 非正式备用接口。**无需信用卡或收费 Google Cloud Translation API**。普通查词不调用 Workers AI。未获得译文时，可主动点「AI 补译为中日英」或「AI 辅助解释」，共用日本时间每日 20 次 AI 额度，30 天内相同请求命中缓存不扣次数。
 - **生词本、进度、每日计划和历史记录**：单用户登录后使用 D1 同步；离线待同步记录优先保全，已同步词条以最新云端快照为准。
 - **PWA 和浏览器发音**：提供 iPhone Safari 添加到主屏幕的入口；不缓存个人 API 响应。实际语音由浏览器和系统语音决定，CI 无法替代真机试听。
 
@@ -38,9 +38,11 @@ npx wrangler deploy
 ```
 
 - Worker：`it-study-platform`；生产 D1：`it-study-platform-db`；API 前缀 `/api/*`。
-- **Azure 免费翻译配置**：在 [Azure Portal](https://portal.azure.com/) 创建单独的 **Translator** 资源并选择 **F0（免费）**，官方标示每月可翻译 **200 万字符**（每个目标语言的文本计入字符额度），无需 DeepL 账号。请核实创建页面的定价层确实是 F0；不要误选 Azure AI 多服务付费资源或 S1。F0 资源用尽额度后可能返回限额错误，应用会回退到免费备用源。不要依赖费用预警等同于自动停用付费服务。
-- 在 Cloudflare Worker `it-study-platform` 的 **Settings → Variables and Secrets** 创建 `AZURE_TRANSLATOR_KEY`（Secret），粘贴 Azure Translator 资源 **Keys and Endpoint** 中的 Key 1 或 Key 2。若 Azure 资源属于 regional / multi-service，还须创建 `AZURE_TRANSLATOR_REGION`（可以作为普通环境变量，填写 **Keys and Endpoint** 中的 region，如 `japaneast`）；单独的 global Translator 资源可以不配置 region。应用默认使用 Azure 官方 `https://api.cognitive.microsofttranslator.com/translate?api-version=3.0`。
-- **安全**：不要把密钥放入 GitHub、前端、`wrangler.toml` 的 `[vars]`、聊天记录或测试日志。Azure API 仅允许已登录的用户调用；公开词典查询继续走免费提供方。Azure Key 未设置时不影响原有词典、IT 术语与手动 AI 补译，无需额外数据库迁移。先验证 PR、合并部署，再测试中文/日语/英文三语查询。
+- **Google Apps Script 免费翻译配置**：用户使用自己的普通 Google 账号访问 [script.google.com](https://script.google.com/)，新建一个**独立**的 Apps Script 项目，将仓库的 [`apps-script/Code.gs`](apps-script/Code.gs) 全部复制到编辑器 `Code.gs`。脚本使用内置 `LanguageApp.translate`，**不要额外启用 Google Cloud Translation API、收费结算或绑定银行卡**。
+- 在项目 **Project Settings（项目设置）→ Script Properties（脚本属性）** 中新增 `TRANSLATOR_SHARED_SECRET`，值为自己生成的**至少 32 字符高强度随机字符串**。请保存；值不得写入仓库和对话记录。脚本明确拒绝空密钥、错误密钥、过长输入与不支持的语言对。Google Apps Script 个人账号的官方 Translate quota 当前为 **每天 5,000 次调用**，在首次调用后约 24 小时重置（不是 5,000 个完整三语词条）；超额时自动停止并回退免费备用接口。
+- 点击 **Deploy → New deployment → Web app**，选择 **Execute as: Me（以本人身份执行）**，**Who has access: Anyone**（任何人均可访问部署 URL），完成 Google 授权后复制以 `https://script.google.com/macros/s/.../exec` 结尾的 Web App URL；**不要使用开发测试专用 `/dev` URL**。Anyone 的公开入口仍被脚本共享密钥保护，建议只把部署 URL 保存在 Cloudflare Worker Secret 中。
+- 在 Cloudflare Worker `it-study-platform` 的 **Settings → Variables and Secrets** 配置两个 Secret：`GAS_TRANSLATOR_URL`（Web App `/exec` URL）与 `GAS_TRANSLATOR_TOKEN`（必须与 Apps Script `TRANSLATOR_SHARED_SECRET` 完全一致）。不能把密钥放进 GitHub、前端或 `wrangler.toml` 的 `[vars]`。**两个 Secret 缺一不可**；若脚本未部署、授权失效、密钥不符或 Google 配额耗尽，词典自动切换 MyMemory/Google 免费备用，用户仍可手动点击 Cloudflare AI 补译。
+- **隐私与安全边界**：仅已登录查询会请求受密钥保护的脚本；Cloudflare 不向浏览器返回脚本 Secret。Apps Script Web App 地址本身是公开入口，需持续保护密钥。词典查询文本会发送给 Google 翻译服务，不要使用它翻译密码、敏感材料。脚本只调用 `LanguageApp.translate`，不调用任何付费云 API。本变更不需要新的 D1 SQL 迁移，不会清除生词本或学习进度。
 - GitHub PR 由 `validate-pr.yml` 验证；合并后 `deploy-cloudflare.yml` 运行同样的数据生成、测试、本地迁移、远程增量迁移、部署及线上检查。
 - `ci.yml` 仅保留手动复验，避免 PR 和主分支重复计费运行。PR 验证和生产部署的检查应设置为分支保护的必要条件（在 GitHub Settings 中配置）。
 - 必须在 GitHub Actions 中配置 `CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`；在 Cloudflare Worker Secrets 中配置 **`AUTH_PASSWORD`（≥16 字符）**和**`AUTH_SESSION_SECRET`（≥32 字符）**。不得提交真实密钥。
