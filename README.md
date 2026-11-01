@@ -43,6 +43,7 @@ npx wrangler deploy
 - 点击 **Deploy → New deployment → Web app**，选择 **Execute as: Me（以本人身份执行）**，**Who has access: Anyone**（任何人均可访问部署 URL），完成 Google 授权后复制以 `https://script.google.com/macros/s/.../exec` 结尾的 Web App URL；**不要使用开发测试专用 `/dev` URL**。Anyone 的公开入口仍被脚本共享密钥保护，建议只把部署 URL 保存在 Cloudflare Worker Secret 中。
 - 在 Cloudflare Worker `it-study-platform` 的 **Settings → Variables and Secrets** 配置两个 Secret：`GAS_TRANSLATOR_URL`（Web App `/exec` URL）与 `GAS_TRANSLATOR_TOKEN`（必须与 Apps Script `TRANSLATOR_SHARED_SECRET` 完全一致）。不能把密钥放进 GitHub、前端或 `wrangler.toml` 的 `[vars]`。**两个 Secret 缺一不可**；若脚本未部署、授权失效、密钥不符或 Google 配额耗尽，词典自动切换 MyMemory/Google 免费备用，用户仍可手动点击 Cloudflare AI 补译。
 - **隐私与安全边界**：仅已登录查询会请求受密钥保护的脚本；Cloudflare 不向浏览器返回脚本 Secret。Apps Script Web App 地址本身是公开入口，需持续保护密钥。词典查询文本会发送给 Google 翻译服务，不要使用它翻译密码、敏感材料。脚本只调用 `LanguageApp.translate`，不调用任何付费云 API。本变更不需要新的 D1 SQL 迁移，不会清除生词本或学习进度。
+- **翻译连接诊断**：登录后在「词典」查询失败的区域点击「检查翻译连接」。前端会请求受登录、同源校验和限流保护的 `POST /api/dictionary/connection-test`，以固定词「你好」做**一次**日语翻译请求，按状态提示未配置两个 Secrets、部署 URL 不合法、Google 要求登录、密钥不一致、Google 执行/额度异常、网络故障或正常。接口只返回状态代号，不回传密钥、URL 或任何 Google 原始响应；检查不会使用 Cloudflare AI 的每天 20 次额度。没有正式授权 Google Web App 之前不要认为翻译已经连通。
 - GitHub PR 由 `validate-pr.yml` 验证；合并后 `deploy-cloudflare.yml` 运行同样的数据生成、测试、本地迁移、远程增量迁移、部署及线上检查。
 - `ci.yml` 仅保留手动复验，避免 PR 和主分支重复计费运行。PR 验证和生产部署的检查应设置为分支保护的必要条件（在 GitHub Settings 中配置）。
 - 必须在 GitHub Actions 中配置 `CLOUDFLARE_API_TOKEN`、`CLOUDFLARE_ACCOUNT_ID`；在 Cloudflare Worker Secrets 中配置 **`AUTH_PASSWORD`（≥16 字符）**和**`AUTH_SESSION_SECRET`（≥32 字符）**。不得提交真实密钥。

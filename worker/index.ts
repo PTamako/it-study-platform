@@ -18,6 +18,7 @@ const protectedPersonalPaths = new Set([
   '/api/translate-explanation',
   '/api/dictionary/ai',
   '/api/dictionary/ai/status',
+  '/api/dictionary/connection-test',
 ])
 
 export interface Env {
@@ -410,13 +411,79 @@ function isTrustedAppsScriptUrl(value: string): boolean {
   }
 }
 
+type AppsScriptTranslationStatus =
+  | 'ok' | 'not_configured' | 'invalid_url' | 'google_signin_required'
+  | 'redirect_blocked' | 'http_error' | 'unexpected_response'
+  | 'unauthorized' | 'invalid_input' | 'provider_unavailable'
+  | 'empty_translation' | 'network_error'
+
+async function requestAppsScriptTranslation(
+  text: string, source: string, target: string,
+  gasUrl?: string, gasToken?: string,
+): Promise<{ translation: string; status: AppsScriptTranslationStatus }> {
+  if (!gasUrl || !gasToken) return { translation: '', status: 'not_configured' }
+  if (!isTrustedAppsScriptUrl(gasUrl)) return { translation: '', status: 'invalid_url' }
+  try {
+    const response = await fetch(gasUrl, {
+      method: 'POST', redirect: 'manual',
+      headers: { 'content-type': 'application/json; charset=utf-8', accept: 'application/json' },
+      body: JSON.stringify({
+        token: gasToken, text,
+        source: workersAiLanguageCode(source), target: workersAiLanguageCode(target),
+      }),
+      signal: AbortSignal.timeout(10000),
+    })
+    let output = response
+    // Google ContentService redirects to script.googleusercontent.com. Follow only
+    // that trusted host with GET and without resending the shared token.
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+      const location = response.headers.get('location')
+      if (!location) return { translation: '', status: 'redirect_blocked' }
+      const redirect = new URL(location, gasUrl)
+      if (redirect.hostname === 'accounts.google.com') {
+        return { translation: '', status: 'google_signin_required' }
+      }
+      if (redirect.protocol !== 'https:' || redirect.hostname !== 'script.googleusercontent.com') {
+        return { translation: '', status: 'redirect_blocked' }
+      }
+      output = await fetch(redirect.toString(), {
+        method: 'GET', redirect: 'error',
+        headers: { accept: 'application/json' },
+        signal: AbortSignal.timeout(10000),
+      })
+    }
+    if (!output.ok) return { translation: '', status: 'http_error' }
+    let payload: { ok?: boolean; translation?: string; error?: string }
+    try {
+      payload = await output.json() as typeof payload
+    } catch {
+      return { translation: '', status: 'unexpected_response' }
+    }
+    if (payload?.ok !== true) {
+      const status = payload?.error
+      if (status === 'unauthorized' || status === 'invalid_input'
+        || status === 'provider_unavailable' || status === 'empty_translation') {
+        return { translation: '', status }
+      }
+      return { translation: '', status: 'unexpected_response' }
+    }
+    const translation = typeof payload.translation === 'string' ? payload.translation.trim() : ''
+    return translation
+      ? { translation, status: 'ok' }
+      : { translation: '', status: 'empty_translation' }
+  } catch {
+    // No token, URL, request text, Google response body, or stack trace is logged.
+    return { translation: '', status: 'network_error' }
+  }
+}
+
 async function translateText(text: string, source: string, target: string, ai?: Ai,
   gasUrl?: string, gasToken?: string): Promise<string> {
   const valid = (value: string) =>
     Boolean(value && value.trim() && !/MYMEMORY WARNING|QUERY LENGTH LIMIT|translation unavailable/i.test(value))
     && value.trim().toLocaleLowerCase() !== text.trim().toLocaleLowerCase()
 
-  const cacheKey = new URL('https://translation-cache.it-study-platform.invalid/v4')
+  const cacheKey = new URL('https://translation-cache.it-study-platform.invalid/v5')
   // Do not return public-provider results in place of the configured owner's Apps Script.
   cacheKey.searchParams.set('tier', gasUrl && gasToken ? 'gas' : 'public')
   cacheKey.searchParams.set('q', text)
@@ -432,58 +499,14 @@ async function translateText(text: string, source: string, target: string, ai?: 
     // 缓存不是翻译请求的必要条件；缓存不可用时继续访问在线服务。
   }
 
-  // The deployment URL must be a genuine Apps Script execution URL. Never fetch
-  // arbitrary URLs from env configuration (SSRF) or forward the shared token to another host.
   const appsScript = async (): Promise<string> => {
-    if (!gasUrl || !gasToken || !isTrustedAppsScriptUrl(gasUrl)) return ''
-    try {
-      const response = await fetch(gasUrl, {
-        method: 'POST', redirect: 'manual',
-        headers: { 'content-type': 'application/json; charset=utf-8', accept: 'application/json' },
-        body: JSON.stringify({
-          token: gasToken,
-          text,
-          source: workersAiLanguageCode(source),
-          target: workersAiLanguageCode(target),
-        }),
-        signal: AbortSignal.timeout(10000),
-      })
-      let output = response
-      // Google ContentService uses a one-time redirect. Follow only its documented
-      // googleusercontent.com destination with GET, never retransmitting the secret.
-      if ([301, 302, 303, 307, 308].includes(response.status)) {
-        const location = response.headers.get('location')
-        if (!location) return ''
-        const redirect = new URL(location, gasUrl)
-        if (redirect.protocol !== 'https:' || redirect.hostname !== 'script.googleusercontent.com') {
-          console.warn('[translation] unexpected Apps Script redirect host')
-          return ''
-        }
-        output = await fetch(redirect.toString(), {
-          method: 'GET', redirect: 'error',
-          headers: { accept: 'application/json' },
-          signal: AbortSignal.timeout(10000),
-        })
-      }
-      if (!output.ok) {
-        console.warn('[translation] Apps Script HTTP error', { status: output.status })
-        return ''
-      }
-      const payload = await output.json() as { ok?: boolean; translation?: string; error?: string }
-      if (payload?.ok !== true) {
-        console.warn('[translation] Apps Script returned no translation', {
-          reason: String(payload?.error || 'invalid response').slice(0, 80),
-        })
-        return ''
-      }
-      const candidate = String(payload.translation || '').trim()
-      return valid(candidate) ? candidate : ''
-    } catch (error) {
+    const result = await requestAppsScriptTranslation(text, source, target, gasUrl, gasToken)
+    if (result.status !== 'ok' && result.status !== 'not_configured') {
       console.warn('[translation] Apps Script unavailable', {
-        message: error instanceof Error ? error.message : String(error),
+        source, target, status: result.status,
       })
-      return ''
     }
+    return result.translation
   }
 
   const myMemory = async (): Promise<string> => {
@@ -545,6 +568,7 @@ async function translateText(text: string, source: string, target: string, ai?: 
   }
 
   let translated = await appsScript()
+  const translatedByAppsScript = Boolean(translated)
   if (!translated) {
     const results = await Promise.all([myMemory(), googleFallback()])
     translated = results.find(valid) || ''
@@ -573,6 +597,8 @@ async function translateText(text: string, source: string, target: string, ai?: 
 
   if (translated) {
     try {
+      // Never cache a public fallback translation as a successful Apps Script hit.
+      if (gasUrl && gasToken && !translatedByAppsScript) cacheKey.searchParams.set('tier', 'public')
       await caches.default.put(
         new Request(cacheKey.toString()),
         new Response(JSON.stringify({ translation: translated }), {
@@ -1045,7 +1071,7 @@ export default {
         if (rateLimitFailure) return rateLimitFailure
       }
     }
-    const isWriteEndpoint = ['/api/mock-exam/submit', '/api/fe-question-bank/install', '/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history', '/api/translate-explanation', '/api/dictionary/ai'].includes(url.pathname)
+    const isWriteEndpoint = ['/api/mock-exam/submit', '/api/fe-question-bank/install', '/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history', '/api/translate-explanation', '/api/dictionary/ai', '/api/dictionary/connection-test'].includes(url.pathname)
     const isExamHistoryDelete = request.method === 'DELETE' && url.pathname === '/api/exam-history'
     if (request.method !== 'GET' && !(request.method === 'POST' && isWriteEndpoint) && !isExamHistoryDelete) {
       return json({ error: '不支持此请求方法' }, 405)
@@ -1447,6 +1473,22 @@ export default {
         return json({ error: 'AI 补充暂时不可用；本次尝试已计入今日上限。原词典仍可使用。',
           remaining: DICTIONARY_AI_DAILY_LIMIT - used, limit: DICTIONARY_AI_DAILY_LIMIT, date }, 503)
       }
+    }
+
+    // Opt-in diagnostic, never automatic during ordinary dictionary searches.
+    // Protected by session, same-origin and write rate limit at the top of fetch().
+    if (url.pathname === '/api/dictionary/connection-test' && request.method === 'POST') {
+      if (!env.GAS_TRANSLATOR_URL || !env.GAS_TRANSLATOR_TOKEN) {
+        return json({ status: 'not_configured' })
+      }
+      if (!isTrustedAppsScriptUrl(env.GAS_TRANSLATOR_URL)) {
+        return json({ status: 'invalid_url' })
+      }
+      // Fixed harmless probe: 1 of Google's free LanguageApp calls if configured.
+      const result = await requestAppsScriptTranslation(
+        '你好', 'zh-CN', 'ja-JP', env.GAS_TRANSLATOR_URL, env.GAS_TRANSLATOR_TOKEN,
+      )
+      return json({ status: result.status })
     }
 
     // 中日英互译词典：IT 词条先查本地 D1；普通词使用在线词典和翻译。
