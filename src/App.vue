@@ -2895,7 +2895,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
           <section class="section-block">
             <div class="section-heading"><div><h2>查询结果</h2></div></div>
             <div class="dictionary-list">
-              <article v-for="entry in displayedEntries" :key="entry.term + (entry.tag || '') + (entry.en || '')" class="dictionary-card lexicon-entry">
+              <article v-for="entry in displayedEntries" :key="entry.term + (entry.tag || '') + (entry.en || '')" class="dictionary-card lexicon-entry" :class="{ 'lexicon-entry-with-senses': Boolean(entry.senses?.length) }">
                 <div class="dict-main">
                   <header class="lexicon-header">
                     <div class="lexicon-title-row">
