@@ -21,6 +21,16 @@ const conf = { GAS_TRANSLATOR_URL: deployment, GAS_TRANSLATOR_TOKEN: token }
 const url = term => 'https://study.test/api/dictionary?q=' + encodeURIComponent(term) + '&lang=zh'
 const authorized = term => new Request(url(term), { headers: { 'x-test-auth': 'yes' } })
 
+const probeUrl = 'https://study.test/api/dictionary/connection-test'
+const probe = (headers = {}, env = conf) => worker.fetch(
+  new Request(probeUrl, {
+    method: 'POST',
+    headers: { origin: 'https://study.test', 'x-test-auth': 'yes', ...headers },
+    body: '{}',
+  }), env,
+)
+
+
 test('logged-in dictionary uses protected Apps Script for Japanese and English; verifies redirect host', async () => {
   const oldFetch = globalThis.fetch
   const posts = []
@@ -252,15 +262,6 @@ test('Google script fails closed when no secret configured or Google quota is ex
   assert.deepEqual(result, { ok: false, error: 'provider_unavailable' })
   assert.ok(!JSON.stringify(result).includes(token))
 })
-
-const probeUrl = 'https://study.test/api/dictionary/connection-test'
-const probe = (headers = {}, env = conf) => worker.fetch(
-  new Request(probeUrl, {
-    method: 'POST',
-    headers: { origin: 'https://study.test', 'x-test-auth': 'yes', ...headers },
-    body: '{}',
-  }), env,
-)
 
 test('GAS diagnostic returns safe status without exposing server secrets, URL or probe text', async () => {
   const oldFetch = globalThis.fetch
