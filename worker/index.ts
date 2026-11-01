@@ -66,6 +66,186 @@ const commonChineseTranslations: Record<string, { ja: string; en: string }> = {
   '大家好': { ja: '皆さん、こんにちは', en: 'Hello everyone' },
   '早上好': { ja: 'おはようございます', en: 'Good morning' },
   '晚上好': { ja: 'こんばんは', en: 'Good evening' },
+  // Everyday vocabulary is intentionally local: simple words must work even when
+  // anonymous translation endpoints are rate-limited or temporarily unavailable.
+  // Keep single words separate from greetings (晚上 != 晚上好).
+  // Times and calendar
+  '早上': { ja: '朝', en: 'morning' },
+  '上午': { ja: '午前', en: 'morning; a.m.' },
+  '中午': { ja: '昼／正午', en: 'noon' },
+  '下午': { ja: '午後', en: 'afternoon' },
+  '傍晚': { ja: '夕方', en: 'early evening' },
+  '晚上': { ja: '夜／夜に', en: 'evening; at night' },
+  '夜里': { ja: '夜中／夜に', en: 'at night' },
+  '半夜': { ja: '真夜中', en: 'midnight' },
+  '凌晨': { ja: '未明／明け方', en: 'early morning' },
+  '今天': { ja: '今日', en: 'today' },
+  '昨天': { ja: '昨日', en: 'yesterday' },
+  '前天': { ja: '一昨日', en: 'the day before yesterday' },
+  '明天': { ja: '明日', en: 'tomorrow' },
+  '后天': { ja: '明後日', en: 'the day after tomorrow' },
+  '现在': { ja: '今', en: 'now' },
+  '刚才': { ja: 'さっき', en: 'just now' },
+  '马上': { ja: 'すぐに', en: 'right away' },
+  '以后': { ja: 'これから／今後', en: 'later; in the future' },
+  '以前': { ja: '以前', en: 'before; formerly' },
+  '最近': { ja: '最近', en: 'recently' },
+  '每天': { ja: '毎日', en: 'every day' },
+  '每周': { ja: '毎週', en: 'every week' },
+  '每月': { ja: '毎月', en: 'every month' },
+  '今年': { ja: '今年', en: 'this year' },
+  '去年': { ja: '去年', en: 'last year' },
+  '明年': { ja: '来年', en: 'next year' },
+  '周末': { ja: '週末', en: 'weekend' },
+  '星期一': { ja: '月曜日', en: 'Monday' },
+  '星期二': { ja: '火曜日', en: 'Tuesday' },
+  '星期三': { ja: '水曜日', en: 'Wednesday' },
+  '星期四': { ja: '木曜日', en: 'Thursday' },
+  '星期五': { ja: '金曜日', en: 'Friday' },
+  '星期六': { ja: '土曜日', en: 'Saturday' },
+  '星期日': { ja: '日曜日', en: 'Sunday' },
+  '星期天': { ja: '日曜日', en: 'Sunday' },
+  '时间': { ja: '時間', en: 'time' },
+  '日期': { ja: '日付', en: 'date' },
+  '生日': { ja: '誕生日', en: 'birthday' },
+  // People and home
+  '我': { ja: '私', en: 'I; me' },
+  '你': { ja: 'あなた', en: 'you' },
+  '我们': { ja: '私たち', en: 'we; us' },
+  '朋友': { ja: '友達', en: 'friend' },
+  '家人': { ja: '家族', en: 'family' },
+  '家': { ja: '家', en: 'home; house' },
+  '家庭': { ja: '家庭', en: 'family; household' },
+  '丈夫': { ja: '夫', en: 'husband' },
+  '妻子': { ja: '妻', en: 'wife' },
+  '孩子': { ja: '子ども', en: 'child' },
+  '父亲': { ja: '父', en: 'father' },
+  '母亲': { ja: '母', en: 'mother' },
+  '哥哥': { ja: '兄', en: 'older brother' },
+  '姐姐': { ja: '姉', en: 'older sister' },
+  '弟弟': { ja: '弟', en: 'younger brother' },
+  '妹妹': { ja: '妹', en: 'younger sister' },
+  '猫': { ja: '猫', en: 'cat' },
+  '狗': { ja: '犬', en: 'dog' },
+  '房间': { ja: '部屋', en: 'room' },
+  '厨房': { ja: '台所', en: 'kitchen' },
+  '浴室': { ja: '浴室', en: 'bathroom' },
+  '钥匙': { ja: '鍵', en: 'key' },
+  '手机': { ja: 'スマートフォン', en: 'smartphone' },
+  '电脑': { ja: 'パソコン', en: 'computer' },
+  '衣服': { ja: '服', en: 'clothes' },
+  '鞋子': { ja: '靴', en: 'shoes' },
+  '钱包': { ja: '財布', en: 'wallet' },
+  // Actions, language and work
+  '吃饭': { ja: '食事をする', en: 'have a meal' },
+  '喝水': { ja: '水を飲む', en: 'drink water' },
+  '睡觉': { ja: '寝る', en: 'sleep' },
+  '起床': { ja: '起きる', en: 'get up' },
+  '洗澡': { ja: 'お風呂に入る', en: 'take a bath' },
+  '走路': { ja: '歩く', en: 'walk' },
+  '跑步': { ja: '走る', en: 'run' },
+  '购物': { ja: '買い物', en: 'shopping' },
+  '买': { ja: '買う', en: 'buy' },
+  '卖': { ja: '売る', en: 'sell' },
+  '支付': { ja: '支払う', en: 'pay' },
+  '工作': { ja: '仕事', en: 'work; job' },
+  '上班': { ja: '出勤する', en: 'go to work' },
+  '下班': { ja: '退勤する', en: 'leave work' },
+  '加班': { ja: '残業する', en: 'work overtime' },
+  '休息': { ja: '休む', en: 'rest' },
+  '休假': { ja: '休暇', en: 'vacation; leave' },
+  '请假': { ja: '休みを取る', en: 'ask for leave' },
+  '公司': { ja: '会社', en: 'company' },
+  '同事': { ja: '同僚', en: 'colleague' },
+  '老板': { ja: '上司／社長', en: 'boss' },
+  '会议': { ja: '会議', en: 'meeting' },
+  '邮件': { ja: 'メール', en: 'email' },
+  '电话': { ja: '電話', en: 'telephone' },
+  '回答': { ja: '回答', en: 'answer' },
+  '问题': { ja: '問題／質問', en: 'problem; question' },
+  '原因': { ja: '原因', en: 'cause; reason' },
+  '结果': { ja: '結果', en: 'result' },
+  '成功': { ja: '成功', en: 'success' },
+  '失败': { ja: '失敗', en: 'failure' },
+  '开始': { ja: '始める', en: 'start' },
+  '结束': { ja: '終わる', en: 'finish' },
+  '完成': { ja: '完了', en: 'completion' },
+  '准备': { ja: '準備する', en: 'prepare' },
+  '等待': { ja: '待つ', en: 'wait' },
+  '明白': { ja: '分かる', en: 'understand' },
+  '知道': { ja: '知っている', en: 'know' },
+  '不知道': { ja: '分からない', en: "don't know" },
+  '喜欢': { ja: '好き', en: 'like' },
+  '讨厌': { ja: '嫌い', en: 'dislike' },
+  '可以': { ja: 'できる／よい', en: 'can; may' },
+  '需要': { ja: '必要', en: 'need' },
+  '希望': { ja: '希望', en: 'hope' },
+  '学习日语': { ja: '日本語を勉強する', en: 'study Japanese' },
+  '日语': { ja: '日本語', en: 'Japanese language' },
+  '英语': { ja: '英語', en: 'English language' },
+  '中文': { ja: '中国語', en: 'Chinese language' },
+  '单词': { ja: '単語', en: 'word' },
+  '句子': { ja: '文', en: 'sentence' },
+  '意思': { ja: '意味', en: 'meaning' },
+  '发音': { ja: '発音', en: 'pronunciation' },
+  '语法': { ja: '文法', en: 'grammar' },
+  '考试': { ja: '試験', en: 'exam' },
+  '老师': { ja: '先生', en: 'teacher' },
+  '学生': { ja: '学生', en: 'student' },
+  // Food, transport, weather and health
+  '早餐': { ja: '朝食', en: 'breakfast' },
+  '午餐': { ja: '昼食', en: 'lunch' },
+  '晚餐': { ja: '夕食', en: 'dinner' },
+  '饭': { ja: 'ご飯', en: 'rice; meal' },
+  '水': { ja: '水', en: 'water' },
+  '咖啡': { ja: 'コーヒー', en: 'coffee' },
+  '茶': { ja: 'お茶', en: 'tea' },
+  '牛奶': { ja: '牛乳', en: 'milk' },
+  '面包': { ja: 'パン', en: 'bread' },
+  '鸡蛋': { ja: '卵', en: 'egg' },
+  '蔬菜': { ja: '野菜', en: 'vegetables' },
+  '水果': { ja: '果物', en: 'fruit' },
+  '米饭': { ja: 'ご飯', en: 'cooked rice' },
+  '拉面': { ja: 'ラーメン', en: 'ramen' },
+  '餐厅': { ja: 'レストラン', en: 'restaurant' },
+  '便利店': { ja: 'コンビニ', en: 'convenience store' },
+  '超市': { ja: 'スーパー', en: 'supermarket' },
+  '车站': { ja: '駅', en: 'station' },
+  '地铁': { ja: '地下鉄', en: 'subway' },
+  '电车': { ja: '電車', en: 'train' },
+  '公交车': { ja: 'バス', en: 'bus' },
+  '出租车': { ja: 'タクシー', en: 'taxi' },
+  '机场': { ja: '空港', en: 'airport' },
+  '医院': { ja: '病院', en: 'hospital' },
+  '药店': { ja: '薬局', en: 'pharmacy' },
+  '医生': { ja: '医師', en: 'doctor' },
+  '天气': { ja: '天気', en: 'weather' },
+  '晴天': { ja: '晴れ', en: 'sunny weather' },
+  '下雨': { ja: '雨が降る', en: 'rain' },
+  '下雪': { ja: '雪が降る', en: 'snow' },
+  '很热': { ja: '暑い', en: 'hot (weather)' },
+  '很冷': { ja: '寒い', en: 'cold (weather)' },
+  '感冒': { ja: '風邪', en: 'cold (illness)' },
+  '发烧': { ja: '発熱', en: 'fever' },
+  '头疼': { ja: '頭が痛い', en: 'headache' },
+  '肚子疼': { ja: 'お腹が痛い', en: 'stomachache' },
+  '开心': { ja: 'うれしい', en: 'happy' },
+  '难过': { ja: '悲しい', en: 'sad' },
+  '累': { ja: '疲れた', en: 'tired' },
+  '忙': { ja: '忙しい', en: 'busy' },
+  '方便': { ja: '便利', en: 'convenient' },
+  '重要': { ja: '重要', en: 'important' },
+  '简单': { ja: '簡単', en: 'simple' },
+  '困难': { ja: '難しい', en: 'difficult' },
+  '漂亮': { ja: 'きれい', en: 'beautiful' },
+  '好吃': { ja: 'おいしい', en: 'delicious' },
+  '便宜': { ja: '安い', en: 'cheap' },
+  '贵': { ja: '高い', en: 'expensive' },
+  '多少': { ja: 'いくつ／どれくらい', en: 'how many; how much' },
+  '哪里': { ja: 'どこ', en: 'where' },
+  '什么时候': { ja: 'いつ', en: 'when' },
+  '为什么': { ja: 'なぜ', en: 'why' },
+  '怎么': { ja: 'どうやって', en: 'how' },
   '晚安': { ja: 'おやすみなさい', en: 'Good night' },
   '谢谢': { ja: 'ありがとうございます', en: 'Thank you' },
   '非常感谢': { ja: 'どうもありがとうございます', en: 'Thank you very much' },
@@ -115,6 +295,16 @@ const commonChineseTranslations: Record<string, { ja: string; en: string }> = {
 // Small offline fallback for common Japanese and English lookups. Online providers remain
 // the primary source; these entries prevent frequent everyday terms from losing translations.
 const commonJapaneseTranslations: Record<string, { zh: string; en: string }> = {
+  '朝': { zh: '早上', en: 'morning' },
+  '昼': { zh: '中午；白天', en: 'daytime; noon' },
+  '夕方': { zh: '傍晚', en: 'early evening' },
+  '夜': { zh: '晚上；夜', en: 'night; evening' },
+  '夜に': { zh: '晚上；夜里', en: 'at night' },
+  '昨日': { zh: '昨天', en: 'yesterday' },
+  '明日': { zh: '明天', en: 'tomorrow' },
+  '今日': { zh: '今天', en: 'today' },
+  '午前': { zh: '上午', en: 'morning; a.m.' },
+  '午後': { zh: '下午', en: 'afternoon' },
   'こんにちは': { zh: '你好', en: 'Hello' },
   'おはようございます': { zh: '早上好', en: 'Good morning' },
   'こんばんは': { zh: '晚上好', en: 'Good evening' },
@@ -136,6 +326,18 @@ const commonJapaneseTranslations: Record<string, { zh: string; en: string }> = {
 }
 
 const commonEnglishTranslations: Record<string, { zh: string; ja: string }> = {
+  'morning': { zh: '早上', ja: '朝' },
+  'noon': { zh: '中午', ja: '昼／正午' },
+  'afternoon': { zh: '下午', ja: '午後' },
+  'evening': { zh: '晚上；傍晚', ja: '夕方／夜' },
+  'at night': { zh: '在晚上；夜里', ja: '夜に' },
+  'night': { zh: '夜晚', ja: '夜' },
+  'today': { zh: '今天', ja: '今日' },
+  'yesterday': { zh: '昨天', ja: '昨日' },
+  'tomorrow': { zh: '明天', ja: '明日' },
+  'breakfast': { zh: '早餐', ja: '朝食' },
+  'lunch': { zh: '午餐', ja: '昼食' },
+  'dinner': { zh: '晚餐', ja: '夕食' },
   'hello': { zh: '你好', ja: 'こんにちは' },
   'good morning': { zh: '早上好', ja: 'おはようございます' },
   'good evening': { zh: '晚上好', ja: 'こんばんは' },
@@ -362,6 +564,27 @@ function jishoEntries(rows: LooseRecord[], zh: string): DictionaryApiEntry[] {
 // Conservative, curated katakana guides for common English/IT terms.
  // These are pronunciation aids, not phonetic transcriptions; IPA from the dictionary API
  // is shown separately when available.
+// Exact reverse matches offer the same dependable offline coverage for
+// one-word Japanese/English headwords, without guessing from partial phrases.
+// Explicit entries above take priority when wording has multiple senses.
+function curatedJapaneseTranslation(query: string): { zh: string; en: string } | undefined {
+  const headword = query.trim()
+  const direct = commonJapaneseTranslations[headword]
+  if (direct) return direct
+  const match = Object.entries(commonChineseTranslations)
+    .find(([, value]) => value.ja === headword)
+  return match ? { zh: match[0], en: match[1].en } : undefined
+}
+
+function curatedEnglishTranslation(query: string): { zh: string; ja: string } | undefined {
+  const headword = query.trim().toLowerCase()
+  const direct = commonEnglishTranslations[headword]
+  if (direct) return direct
+  const match = Object.entries(commonChineseTranslations)
+    .find(([, value]) => value.en.toLowerCase() === headword)
+  return match ? { zh: match[0], ja: match[1].ja } : undefined
+}
+
 const englishKatakanaReadings: Record<string, string> = {
   hello: 'ハロー', world: 'ワールド', computer: 'コンピューター', programming: 'プログラミング',
   developer: 'デベロッパー', software: 'ソフトウェア', hardware: 'ハードウェア', security: 'セキュリティ',
@@ -574,13 +797,13 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
   let ja = ''
   let en = ''
   if (language === 'ja') {
-    const offline = commonJapaneseTranslations[query.trim()]
+    const offline = curatedJapaneseTranslation(query)
     ;[en, zh] = await Promise.all([
       offline?.en ? Promise.resolve(offline.en) : translateText(query, 'ja-JP', 'en-US'),
       offline?.zh ? Promise.resolve(offline.zh) : translateText(query, 'ja-JP', 'zh-CN'),
     ])
   } else if (language === 'en') {
-    const offline = commonEnglishTranslations[query.trim().toLowerCase()]
+    const offline = curatedEnglishTranslation(query)
     ;[ja, zh] = await Promise.all([
       offline?.ja ? Promise.resolve(offline.ja) : translateText(query, 'en-US', 'ja-JP'),
       offline?.zh ? Promise.resolve(offline.zh) : translateText(query, 'en-US', 'zh-CN'),
@@ -1106,6 +1329,9 @@ export default {
         return json({
           items,
           query,
+          error: items.length ? undefined : requestedLanguage === 'it'
+            ? '本地 IT 术语库尚未收录该词。'
+            : '本地词典尚未收录该词，在线翻译也未返回有效结果。可尝试「AI 辅助解释」。',
           detected_language: requestedLanguage === 'it' ? 'it' : requestedLanguage === 'auto' ? detectDictionaryLanguage(query) : requestedLanguage,
           providers: items.some(item => item.technical)
             ? ['知学 IT 术语库（D1）']
@@ -1134,9 +1360,9 @@ export default {
         // verified local translations for common phrases instead of failing the whole API.
         const language = requestedLanguage === 'auto' ? detectDictionaryLanguage(query) : requestedLanguage
         const offline = language === 'ja'
-          ? (() => { const value = commonJapaneseTranslations[query]; return value ? { zh: value.zh, ja: query, en: value.en } : undefined })()
+          ? (() => { const value = curatedJapaneseTranslation(query); return value ? { zh: value.zh, ja: query, en: value.en } : undefined })()
           : language === 'en'
-            ? (() => { const value = commonEnglishTranslations[query.toLowerCase()]; return value ? { zh: value.zh, ja: value.ja, en: query } : undefined })()
+            ? (() => { const value = curatedEnglishTranslation(query); return value ? { zh: value.zh, ja: value.ja, en: query } : undefined })()
             : (() => { const value = commonChineseTranslations[query]; return value ? { zh: query, ja: value.ja, en: value.en } : undefined })()
         if (offline) {
           const item: DictionaryApiEntry = {
