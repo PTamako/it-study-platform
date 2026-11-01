@@ -10,7 +10,8 @@
     "typecheck": "vue-tsc -b",
     "check:local": "bash scripts/check-local.sh",
     "pretest": "node scripts/pretest.mjs",
-    "test": "node --test scripts/*.test.mjs"
+    "test": "node --test scripts/*.test.mjs",
+    "prebuild": "node scripts/build-japanese-pitch.mjs"
   },
   "dependencies": {
     "lucide-vue-next": "^0.468.0",

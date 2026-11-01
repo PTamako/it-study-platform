@@ -47,6 +47,8 @@ type DictionaryApiEntry = {
   term: string
   reading?: string
   phonetic?: string
+  partsOfSpeech?: string[]
+  senses?: Array<{ partOfSpeech: string; definitions: string[] }>
   en: string
   zh: string
   tag: string
@@ -657,6 +659,15 @@ function jishoEntries(rows: LooseRecord[], zh: string): DictionaryApiEntry[] {
     return {
       term,
       reading: String(jp.reading || ''),
+      partsOfSpeech: [...new Set(parts.filter((part): part is string => typeof part === 'string' && Boolean(part.trim())))].slice(0, 5),
+      senses: senses.slice(0, 5).map(sense => ({
+        partOfSpeech: Array.isArray(sense.parts_of_speech)
+          ? String(sense.parts_of_speech.find((part: unknown) => typeof part === 'string') || '')
+          : '',
+        definitions: Array.isArray(sense.english_definitions)
+          ? sense.english_definitions.filter((definition: unknown): definition is string => typeof definition === 'string').slice(0, 3)
+          : [],
+      })).filter(sense => sense.definitions.length > 0),
       en: definitions.join('；') || '暂未获得英语释义',
       zh: zh || '',
       tag: parts[0] ? '日英词典 · ' + String(parts[0]) : '日英词典',
@@ -751,10 +762,21 @@ function englishDictionaryEntries(rows: LooseRecord[], _zh: string, ja: string):
     const meanings = (Array.isArray(row.meanings) ? row.meanings : []) as LooseRecord[]
     const definitions: string[] = []
     let partOfSpeech = ''
+    const partsOfSpeech: string[] = []
+    const senses: Array<{ partOfSpeech: string; definitions: string[] }> = []
     let example = ''
     for (const meaning of meanings) {
       if (!partOfSpeech) partOfSpeech = String(meaning.partOfSpeech || '')
+      if (typeof meaning.partOfSpeech === 'string' && meaning.partOfSpeech.trim()
+        && !partsOfSpeech.includes(meaning.partOfSpeech.trim())) partsOfSpeech.push(meaning.partOfSpeech.trim())
       const definitionRows = (Array.isArray(meaning.definitions) ? meaning.definitions : []) as LooseRecord[]
+      const partDefinitions = definitionRows
+        .map(definition => typeof definition.definition === 'string' ? definition.definition : '')
+        .filter(Boolean).slice(0, 3)
+      if (partDefinitions.length) senses.push({
+        partOfSpeech: typeof meaning.partOfSpeech === 'string' ? meaning.partOfSpeech : '',
+        definitions: partDefinitions,
+      })
       for (const definition of definitionRows) {
         if (definitions.length < 4 && typeof definition.definition === 'string') definitions.push(definition.definition)
         if (!example && typeof definition.example === 'string') example = definition.example
@@ -768,6 +790,8 @@ function englishDictionaryEntries(rows: LooseRecord[], _zh: string, ja: string):
       englishTerm: term,
       reading: englishKatakanaReadings[term.toLowerCase()] || '',
       phonetic,
+      partsOfSpeech: partsOfSpeech.slice(0, 8),
+      senses: senses.slice(0, 6),
       en: definitions.join('；') || '暂未获得详细英语释义',
       zh: _zh || '',
       translationJa: ja || '',

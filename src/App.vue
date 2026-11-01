@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
 import { hydrateMastery, mergeExamHistory, restoreMasteredCard } from './progress-sync'
 import { tokyoDate, mergeDailyTaskStates } from './daily-tasks'
 import { utcReviewMillis } from './review-time'
 import { fetchVocabularySnapshot } from './vocabulary-sync'
 import { getLanguageExpansions, getSentenceParts } from './language-annotations'
+import { isDictionaryHeadword, loadJapanesePitchDataset, matchingJapaneseAccents, pitchLabel, partOfSpeechDisplay, getChineseWordGuide, type PitchDataset } from './dictionary-word-metadata'
 import { fetchLanguageCorpus } from './language-corpus'
 import { parseMockSnapshot, type MockSnapshot } from './mock-recovery'
 import ExamScratchTools from './ExamScratchTools.vue'
@@ -1571,6 +1572,8 @@ type DictionaryEntry = {
   term: string
   reading?: string
   phonetic?: string
+  partsOfSpeech?: string[]
+  senses?: Array<{ partOfSpeech: string; definitions: string[] }>
   en: string
   zh?: string
   tag: string
@@ -1584,6 +1587,25 @@ type DictionaryEntry = {
 }
 const dictionaryEntries: DictionaryEntry[] = []
 const onlineEntries = ref<DictionaryEntry[]>([])
+const dictionaryPitchData = shallowRef<PitchDataset | null>(null)
+function isDictionaryWord(entry: DictionaryEntry): boolean {
+  if (!entry.language) return false
+  const headword = entry.language === 'en' ? (entry.englishTerm || entry.term) : entry.term
+  return isDictionaryHeadword(searchText.value, headword, entry.language)
+}
+function dictionaryPitchLabels(entry: DictionaryEntry): string[] {
+  if (!isDictionaryWord(entry) || entry.language !== 'ja' || !entry.reading) return []
+  return matchingJapaneseAccents(dictionaryPitchData.value, entry.term, entry.reading)
+    .map(index => pitchLabel(index, entry.reading || ''))
+}
+function dictionaryPosLabels(entry: DictionaryEntry): string[] {
+  if (!isDictionaryWord(entry)) return []
+  const sourceParts = (entry.partsOfSpeech || []).map(partOfSpeechDisplay).filter(Boolean).slice(0, 7)
+  if (sourceParts.length) return sourceParts
+  const guide = entry.language === 'zh' ? getChineseWordGuide(entry.term) : undefined
+  return guide ? [guide.partOfSpeech] : []
+}
+
 const recentDictionaryEntries = ref<DictionaryEntry[]>(readStored('zhixue:recent-dictionary', []))
 const savedDictionaryEntries = ref<DictionaryEntry[]>(readStored('zhixue:saved-dictionary-entries', []))
 const dictionaryLoading = ref(false)
@@ -1933,6 +1955,10 @@ async function lookupDictionary() {
     if (requestId !== dictionaryRequestId) return
     if (!response.ok) throw new Error(data.error || '在线词典暂时不可用，请稍后再试。')
     onlineEntries.value = data.items || []
+    // On demand, use a versioned static pitch source; never read D1 or infer pitch from translations.
+    if (onlineEntries.value.some(entry => entry.language === 'ja' && entry.reading)) {
+      void loadJapanesePitchDataset().then(data => { dictionaryPitchData.value = data })
+    }
     dictionaryDetectedLanguage.value = data.detected_language || ''
     lastSearchedTerm.value = q
     if (onlineEntries.value.length) {
@@ -2872,13 +2898,61 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
             <div class="dictionary-list">
               <article v-for="entry in displayedEntries" :key="entry.term + (entry.tag || '') + (entry.en || '')" class="dictionary-card">
                 <div class="dict-main">
-                  <div class="dict-term-row"><h3>{{ entry.language === 'en' && entry.englishTerm ? entry.englishTerm : entry.term }}</h3><span v-if="entry.japaneseTerm && entry.japaneseTerm !== entry.term" class="reading">日语术语：{{ entry.japaneseTerm }}</span><span v-else-if="entry.language === 'en' && entry.englishTerm && entry.englishTerm.toLowerCase() !== entry.term.toLowerCase()" class="reading">日语术语：{{ entry.term }}</span><span v-if="entry.reading" class="reading">{{ entry.language === 'en' ? '日语辅助读音（近似）' : '日语读音' }}：{{ entry.reading }}</span><span v-if="entry.phonetic" class="reading">IPA：{{ entry.phonetic }}</span><span class="dict-tag">{{ entry.tag }}</span><span v-if="entry.source" class="dict-source">{{ entry.source }}</span></div>
-                  <div v-if="entry.englishTerm && entry.englishTerm.toLowerCase() !== entry.term.toLowerCase()" class="dict-en">英语对应词：{{ entry.englishTerm }}</div>
-                  <div v-if="entry.en && entry.en !== entry.englishTerm" class="dict-en">{{ entry.language === 'en' ? '英语释义' : '英文释义' }}：{{ entry.en }}</div>
-                  <p v-if="entry.translationJa" class="dictionary-translation-ja">{{ entry.language === 'ja' ? '日语释义' : '日语翻译／释义' }}：{{ entry.translationJa }}</p>
-                  <p v-if="entry.zh" class="dictionary-translation-ja">{{ entry.language === 'zh' ? '中文原文' : '中文翻译／释义' }}：{{ entry.zh }}</p>
-                  <p v-if="entry.example" class="dict-example">例句：{{ entry.example }}</p>
-                  <p v-if="entry.technical" class="dictionary-tech-note">离线 IT 词库</p>
+                  <header class="lexical-heading">
+                    <div class="lexical-heading-main">
+                      <div class="lexical-headword-row">
+                        <h3 :lang="entry.language === 'ja' ? 'ja' : entry.language === 'en' ? 'en' : 'zh-CN'">{{ entry.language === 'en' && entry.englishTerm ? entry.englishTerm : entry.term }}</h3>
+                        <span v-if="isDictionaryWord(entry)" class="lexical-language">{{ entry.language === 'ja' ? '日语' : entry.language === 'en' ? '英语' : '中文' }}</span>
+                        <span v-else class="lexical-language lexical-sentence-label">{{ entry.technical ? 'IT 术语' : '翻译' }}</span>
+                      </div>
+                      <div v-if="isDictionaryWord(entry)" class="lexical-pronunciation">
+                        <span v-if="entry.language === 'ja' && entry.reading" class="lexical-reading">{{ entry.reading }}</span>
+                        <span v-if="entry.language === 'zh' && getChineseWordGuide(entry.term)" class="lexical-reading">{{ getChineseWordGuide(entry.term)?.pinyin }}</span>
+                        <span v-if="entry.language === 'en' && entry.phonetic" class="lexical-ipa">{{ entry.phonetic }}</span>
+                        <span v-if="entry.language === 'en' && entry.reading && !entry.phonetic" class="lexical-reading">日语近似读音：{{ entry.reading }}</span>
+                        <span v-if="entry.language === 'ja' && dictionaryPitchLabels(entry).length" class="lexical-pitch">
+                          <span class="lexical-pitch-caption">东京式音调</span>
+                          <span v-for="label in dictionaryPitchLabels(entry)" :key="label" class="lexical-pitch-chip">{{ label }}</span>
+                        </span>
+                      </div>
+                      <div v-if="dictionaryPosLabels(entry).length" class="lexical-pos-list">
+                        <span v-for="part in dictionaryPosLabels(entry)" :key="part" class="lexical-pos">{{ part }}</span>
+                      </div>
+                    </div>
+                  </header>
+                  <div class="lexical-definitions">
+                    <section v-if="entry.senses?.length && isDictionaryWord(entry)" class="lexical-senses" aria-label="词性与释义">
+                      <div v-for="(sense, senseIndex) in entry.senses" :key="senseIndex" class="lexical-sense">
+                        <div class="lexical-sense-heading">
+                          <span class="lexical-sense-number">{{ senseIndex + 1 }}</span>
+                          <span v-if="sense.partOfSpeech" class="lexical-sense-pos">{{ partOfSpeechDisplay(sense.partOfSpeech) }}</span>
+                        </div>
+                        <p v-for="(definition, definitionIndex) in sense.definitions" :key="definitionIndex" class="lexical-definition-text">{{ definition }}</p>
+                      </div>
+                    </section>
+                    <div v-else-if="entry.en && entry.en !== entry.englishTerm" class="lexical-translation-row">
+                      <span class="lexical-translation-lang">EN</span><p>{{ entry.en }}</p>
+                    </div>
+                    <div v-if="entry.zh" class="lexical-translation-row">
+                      <span class="lexical-translation-lang">中</span><p>{{ entry.zh }}</p>
+                    </div>
+                    <div v-if="entry.translationJa" class="lexical-translation-row">
+                      <span class="lexical-translation-lang">日</span><p>{{ entry.translationJa }}</p>
+                    </div>
+                    <div v-if="entry.englishTerm && entry.englishTerm.toLowerCase() !== entry.term.toLowerCase()" class="lexical-translation-row">
+                      <span class="lexical-translation-lang">英</span><p>{{ entry.englishTerm }}</p>
+                    </div>
+                    <div v-if="entry.japaneseTerm && entry.japaneseTerm !== entry.term" class="lexical-translation-row">
+                      <span class="lexical-translation-lang">日</span><p>{{ entry.japaneseTerm }}</p>
+                    </div>
+                    <div v-if="entry.example" class="lexical-example"><span>例句</span><p>{{ entry.example }}</p></div>
+                  </div>
+                  <div class="lexical-source-row">
+                    <span v-if="entry.source">{{ entry.source }}</span>
+                    <span v-else>{{ entry.tag }}</span>
+                    <span v-if="entry.language === 'ja' && dictionaryPitchLabels(entry).length" class="lexical-pitch-source">音调 Kanjium · CC BY-SA 4.0</span>
+                    <span v-if="entry.technical">离线词库</span>
+                  </div>
                   <div class="dictionary-ai-section">
                     <div v-if="!dictionaryAiAnswers[dictionaryAiKey(entry)]" class="dictionary-ai-action-row">
                       <button type="button" class="secondary-button dictionary-ai-button"
