@@ -1092,3 +1092,125 @@ button[aria-disabled="true"] {
   .scratch-board{padding:10px}
   .scratch-drawing-canvas{height:330px}
 }
+
+
+/* Dictionary redesign: headword -> source-backed grammar -> multilingual meanings.
+   Tablet portrait uses a generous single reading column; landscape has an optional
+   two-pane definition/translation view. Nothing overlays the text or Apple Pencil. */
+.lexicon-entry.dictionary-card{
+  display:flex;flex-direction:column;gap:16px;
+  width:100%;min-width:0;padding:23px 24px;
+  background:var(--surface,#fff);
+  border:1px solid var(--line-strong,#e5e8f0);
+  border-radius:18px;box-shadow:0 2px 12px rgba(33,45,72,.035);
+}
+.lexicon-entry.dictionary-card:hover{transform:none;box-shadow:0 2px 12px rgba(33,45,72,.035)}
+.lexicon-entry .dict-main{width:100%;max-width:100%;min-width:0;display:flex;flex-direction:column;gap:17px}
+.lexicon-header{display:flex;flex-direction:column;gap:8px;min-width:0;padding-bottom:15px;border-bottom:1px solid #e9edf5}
+.lexicon-title-row{display:flex;flex-wrap:wrap;align-items:center;gap:11px;min-width:0}
+.lexicon-title-row h3{
+  max-width:100%;margin:0;color:var(--text-primary,#252b40);
+  font-size:clamp(25px,2.8vw,33px);font-weight:750;
+  letter-spacing:-.032em;line-height:1.24;overflow-wrap:anywhere
+}
+.lexicon-tech-mark{padding:3px 7px;border-radius:6px;background:#f2f4ff;color:#596bc2;font-size:11px;font-weight:700}
+.lexicon-pronunciation{display:flex;align-items:center;flex-wrap:wrap;gap:5px 15px;color:#6c7892;font-size:13px;line-height:1.65}
+.lexicon-pronunciation>span{max-width:100%;overflow-wrap:anywhere}
+.lexicon-ipa{font-family:ui-sans-serif,system-ui,"Noto Sans",sans-serif;color:#56647f;font-size:15px}
+.lexicon-parts{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:2px}
+.lexicon-part{
+  display:inline-flex;align-items:center;max-width:100%;min-height:26px;
+  padding:4px 9px;border-radius:7px;background:#eef2ff;color:#5264ae;
+  font-size:12px;font-weight:680;line-height:1.4;overflow-wrap:anywhere
+}
+.lexicon-translations{
+  display:grid;gap:0;min-width:0;padding:5px 15px;
+  border:1px solid #e8edf6;border-radius:12px;background:#f8faff
+}
+.lexicon-translation{display:grid;grid-template-columns:35px minmax(0,1fr);gap:10px;align-items:start;padding:9px 0;min-width:0}
+.lexicon-translation+.lexicon-translation{border-top:1px solid #e6ebf5}
+.lexicon-lang{display:inline-flex;align-items:center;justify-content:center;min-height:22px;border-radius:5px;background:#e9eefc;color:#6475a6;font-size:11px;font-weight:760}
+.lexicon-entry .lexicon-translation p,.lexicon-entry .lexicon-single-definition p{
+  margin:0;min-width:0;color:#333c55;font-size:14px;line-height:1.7;overflow-wrap:anywhere
+}
+.lexicon-senses{display:flex;flex-direction:column;gap:14px;min-width:0}
+.lexicon-senses h4{
+  margin:0 0 1px;padding-bottom:8px;border-bottom:1px solid #edf0f5;
+  color:#39445c;font-size:13px;font-weight:760;letter-spacing:.02em
+}
+.lexicon-sense{min-width:0}
+.lexicon-sense-heading{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+.lexicon-sense-pos{color:#4e609f;font-size:13px;font-weight:780}
+.lexicon-definitions{display:grid;gap:8px;min-width:0;margin:0;padding:0 0 0 24px}
+.lexicon-definitions li{
+  min-width:0;max-width:77ch;padding-left:2px;color:var(--text-primary,#30374c);
+  font-size:14px;line-height:1.75;overflow-wrap:break-word
+}
+.lexicon-definitions li::marker{color:#8c99b7;font-weight:660}
+.lexicon-single-definition{display:grid;gap:6px}
+.lexicon-field-label{font-size:12px;color:#607196;font-weight:720}
+.lexicon-entry .lexicon-example{
+  display:flex;flex-wrap:wrap;gap:8px;min-width:0;margin:10px 0 0;
+  padding:10px 12px;border-left:3px solid #b6c2ec;border-radius:0 9px 9px 0;
+  background:#f6f7fc;color:#606b83;font-size:13px;line-height:1.65;overflow-wrap:anywhere
+}
+.lexicon-example>span{flex:0 0 auto;font-size:11px;font-weight:800;color:#6577a9}
+.lexicon-source-line{
+  display:flex;align-items:center;flex-wrap:wrap;gap:7px 14px;
+  min-width:0;padding-top:10px;border-top:1px solid #edf0f5;
+  color:#8992a4;font-size:11px;line-height:1.55
+}
+.lexicon-source-line>span{overflow-wrap:anywhere}
+.lexicon-entry .dictionary-ai-section{margin-top:0}
+.lexicon-entry .dict-actions{
+  display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;
+  gap:9px;width:100%;min-width:0;padding-top:12px;
+  border-top:1px solid #edf0f5
+}
+.lexicon-entry .dict-actions button{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:44px;min-width:44px;flex:0 0 auto
+}
+.lexicon-entry .dict-actions button:focus-visible{
+  outline:3px solid #b3c1f2;outline-offset:2px
+}
+@media (min-width:700px) and (max-width:1199px){
+  .lexicon-entry.dictionary-card{padding:27px 30px;gap:19px}
+  .lexicon-entry .dict-main{gap:19px}
+  .lexicon-title-row h3{font-size:33px}
+  .lexicon-pronunciation{font-size:14px}
+  .lexicon-entry .lexicon-translation p,.lexicon-entry .lexicon-single-definition p{font-size:15px}
+  .lexicon-definitions li{font-size:15px;line-height:1.82}
+  .lexicon-senses h4,.lexicon-sense-pos{font-size:14px}
+  .lexicon-entry .lexicon-example{font-size:14px}
+  .lexicon-entry .dict-actions{gap:11px}
+  .lexicon-entry .dict-actions button{min-height:48px;min-width:48px}
+}
+@media (min-width:1100px) and (orientation:landscape){
+  .lexicon-entry-with-senses .dict-main{
+    display:grid;align-items:start;gap:18px 24px;
+    grid-template-columns:minmax(0,1.25fr) minmax(240px,.75fr);
+    grid-template-areas:"head head" "senses translations" "example example" "source source" "ai ai" "speech speech"
+  }
+  .lexicon-entry-with-senses .lexicon-header{grid-area:head}
+  .lexicon-entry-with-senses .lexicon-translations{grid-area:translations}
+  .lexicon-entry-with-senses .lexicon-senses{grid-area:senses}
+  .lexicon-entry-with-senses .lexicon-example:not(.lexicon-sense .lexicon-example){grid-area:example}
+  .lexicon-entry-with-senses .lexicon-source-line{grid-area:source}
+  .lexicon-entry-with-senses .dictionary-ai-section{grid-area:ai}
+  .lexicon-entry-with-senses .dictionary-speech-controls{grid-area:speech}
+}
+@media (max-width:699px){
+  .lexicon-entry.dictionary-card{padding:16px 15px;border-radius:14px;gap:13px}
+  .lexicon-entry .dict-main{gap:14px}
+  .lexicon-header{padding-bottom:12px}
+  .lexicon-title-row h3{font-size:26px}
+  .lexicon-pronunciation{gap:4px 10px;font-size:12px}
+  .lexicon-ipa{font-size:14px}
+  .lexicon-part{font-size:11px;padding:4px 8px}
+  .lexicon-translations{padding:4px 11px}
+  .lexicon-entry .lexicon-translation p{font-size:13px}
+  .lexicon-definitions li{font-size:13px}
+  .lexicon-entry .lexicon-example{font-size:12px}
+  .lexicon-entry .dict-actions{gap:8px}
+}
