@@ -2997,6 +2997,9 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                 <header class="saved-vocabulary-header">
                   <div class="saved-vocabulary-title"><h3>{{ entry.term }}</h3><span v-if="entry.tag && entry.tag !== '生词本'" class="saved-vocabulary-tag">{{ entry.tag }}</span></div>
                   <p v-if="entry.reading || entry.phonetic" class="saved-vocabulary-reading">{{ entry.reading || entry.phonetic }}</p>
+                  <div v-if="dictionaryDistinctParts(entry).length" class="saved-vocabulary-parts" aria-label="已保存词条的词性">
+                    <span v-for="part in dictionaryDistinctParts(entry)" :key="part" class="lexicon-part">{{ part }}</span>
+                  </div>
                 </header>
                 <div class="saved-vocabulary-definitions">
                   <div v-if="entry.en" class="saved-vocabulary-definition"><span class="saved-vocabulary-lang" lang="en">EN</span><p>{{ entry.en }}</p></div>
