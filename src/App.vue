@@ -1815,8 +1815,16 @@ async function supplementDictionaryWithAi(entry: DictionaryEntry | null) {
       body: JSON.stringify({
         term,
         language: dictSourceLang.value === 'auto' ? (entry?.language || 'auto') : dictSourceLang.value,
-        known: { zh: entry?.zh || '', ja: entry?.translationJa || entry?.japaneseTerm || '',
-          en: entry?.en || entry?.englishTerm || '' },
+        // Only explicitly provided dictionary evidence is sent to optional AI analysis.
+        // AI must not invent pronunciations or Japanese pitch accents.
+        known: {
+          zh: entry?.zh || '', ja: entry?.translationJa || entry?.japaneseTerm || '',
+          en: entry?.en || entry?.englishTerm || '',
+          partOfSpeech: entry ? dictionaryPosLabels(entry).join('；') : '',
+          reading: entry?.language === 'ja' ? (entry.reading || '') : '',
+          pinyin: entry ? dictionaryWordPinyin(entry) : '',
+          ipa: entry?.language === 'en' ? (entry.phonetic || '') : '',
+        },
       }),
       signal: AbortSignal.timeout(25000),
     })
