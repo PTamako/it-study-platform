@@ -1107,7 +1107,8 @@ button[aria-disabled="true"] {
 .lexicon-entry.dictionary-card:hover{transform:none;box-shadow:0 2px 12px rgba(33,45,72,.035)}
 .lexicon-entry .dict-main{width:100%;max-width:100%;min-width:0;display:flex;flex-direction:column;gap:17px}
 .lexicon-header{display:flex;flex-direction:column;gap:8px;min-width:0;padding-bottom:15px;border-bottom:1px solid #e9edf5}
-.lexicon-title-row{display:flex;flex-wrap:wrap;align-items:center;gap:11px;min-width:0}
+.lexicon-headword-line{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px 15px;min-width:0}
+.lexicon-title-row{display:flex;flex:1 1 150px;flex-wrap:wrap;align-items:center;gap:11px;min-width:0}
 .lexicon-title-row h3{
   max-width:100%;margin:0;color:var(--text-primary,#252b40);
   font-size:clamp(25px,2.8vw,33px);font-weight:750;
@@ -1166,6 +1167,10 @@ button[aria-disabled="true"] {
   display:flex;flex-direction:row;flex-wrap:wrap;align-items:center;
   gap:9px;width:100%;min-width:0;padding-top:12px;
   border-top:1px solid #edf0f5
+}
+.lexicon-header .dict-actions{
+  width:auto;max-width:100%;min-width:0;padding:0;border:0;
+  flex:0 0 auto;gap:5px;margin-left:auto;justify-content:flex-end
 }
 .lexicon-entry .dict-actions button{
   display:inline-flex;align-items:center;justify-content:center;
