@@ -1807,6 +1807,50 @@ async function supplementDictionaryWithAi(entry: DictionaryEntry | null) {
     }
   }
 }
+// AI translation is deliberately opt-in, and shares the existing daily allowance
+// with AI explanations. Regular dictionary queries never call Workers AI.
+async function translateMissingDictionaryWithAi() {
+  if (dictionaryAiBusy.value || !authenticated.value || dictSourceLang.value === 'it') return
+  const term = searchText.value.normalize('NFKC').trim().replace(/\s+/g, ' ')
+  if (!term || term.length > 100) return
+  const key = dictionaryAiKey(null)
+  const requestId = ++dictionaryAiRequestId
+  const lookupId = dictionaryRequestId
+  dictionaryAiBusy.value = true
+  dictionaryAiActiveKey.value = key
+  const errors = { ...dictionaryAiErrors.value }; delete errors[key]; dictionaryAiErrors.value = errors
+  try {
+    const response = await fetch('/api/dictionary/ai', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ term, language: dictSourceLang.value, mode: 'translation' }),
+      signal: AbortSignal.timeout(25000),
+    })
+    const data = await response.json() as { items?: DictionaryEntry[]; error?: string; remaining?: number }
+    if (requestId !== dictionaryAiRequestId || lookupId !== dictionaryRequestId) return
+    if (typeof data.remaining === 'number') dictionaryAiRemaining.value = data.remaining
+    if (!response.ok || !data.items?.length) throw new Error(data.error || 'AI 补译失败，请稍后重试。')
+    onlineEntries.value = data.items
+    lastSearchedTerm.value = term
+    dictionaryError.value = ''
+    recentDictionaryEntries.value = [
+      ...data.items,
+      ...recentDictionaryEntries.value.filter(old => !data.items!.some(entry => old.term === entry.term)),
+    ].slice(0, 12)
+  } catch (error) {
+    if (requestId !== dictionaryAiRequestId || lookupId !== dictionaryRequestId) return
+    dictionaryAiErrors.value = { ...dictionaryAiErrors.value, [key]:
+      error instanceof Error && error.name === 'TimeoutError'
+        ? 'AI 补译超时，请查看今日剩余次数后再试。'
+        : error instanceof Error ? error.message : 'AI 补译失败。' }
+    void loadDictionaryAiQuota()
+  } finally {
+    if (requestId === dictionaryAiRequestId) {
+      dictionaryAiBusy.value = false
+      dictionaryAiActiveKey.value = ''
+    }
+  }
+}
 watch([activeModule, authenticated], () => {
   if (activeModule.value === 'dictionary' && authenticated.value) void loadDictionaryAiQuota()
 })
@@ -2868,8 +2912,12 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                 </div>
                 <div class="dict-actions"><button class="round-action pronunciation-button" @click="speakDictionaryEnglish(entry)" :aria-label="'播放英语发音：' + (entry.englishTerm || entry.term)" title="播放英语发音"><Volume2 :size="14" /><span>EN</span></button><button class="round-action pronunciation-button" @click="speakDictionaryJapanese(entry)" :aria-label="'播放日语辅助读音：' + (entry.englishTerm || entry.term)" title="播放日语辅助读音"><Languages :size="14" /><span>日</span></button><button class="round-action pronunciation-button" @click="speakDictionaryChinese(entry)" :aria-label="'播放中文发音：' + entry.term" title="播放中文发音"><Volume2 :size="14" /><span>中</span></button><button class="round-action" :class="{ saved: savedWords.includes(entry.term) }" :disabled="vocabularyHydrating || !vocabularySyncReady" @click="toggleSaved(entry.term)" :aria-label="(savedWords.includes(entry.term) ? '取消收藏' : '收藏') + entry.term"><Bookmark :size="17" /></button></div>
               </article>
-              <div v-if="lastSearchedTerm.trim().toLowerCase() === searchText.trim().toLowerCase() && displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>没有找到匹配词条</strong><p>换个关键词或语言试试；IT 模式仅查离线词库。</p></div>
+              <div v-if="lastSearchedTerm.trim().toLowerCase() === searchText.trim().toLowerCase() && displayedEntries.length === 0 && !dictionaryLoading" class="empty-state"><Search :size="25" /><strong>{{ dictionaryError ? '暂未获得可靠译文' : '没有找到匹配词条' }}</strong><p>可尝试其他语言；在线翻译不可用时，可主动选择 AI 补译。IT 模式仅查本地术语库。</p></div>
               <div v-if="searchText.trim() && !dictionaryLoading && (dictionaryError || (lastSearchedTerm && displayedEntries.length === 0))" class="dictionary-ai-section dictionary-ai-fallback">
+                <button v-if="dictSourceLang !== 'it' && authenticated" type="button" class="secondary-button dictionary-ai-button"
+                  :disabled="dictionaryAiBusy || dictionaryAiRemaining === 0" @click="translateMissingDictionaryWithAi">
+                  {{ dictionaryAiBusy && dictionaryAiActiveKey === dictionaryAiKey(null) ? 'AI 补译中…' : 'AI 补译为中日英' }}
+                </button>
                 <button v-if="!dictionaryAiAnswers[dictionaryAiKey(null)]" type="button" class="secondary-button dictionary-ai-button"
                   :disabled="dictionaryAiBusy" @click="supplementDictionaryWithAi(null)">
                   {{ dictionaryAiBusy && dictionaryAiActiveKey === dictionaryAiKey(null) ? 'AI 解释中…' : 'AI 辅助解释' }}

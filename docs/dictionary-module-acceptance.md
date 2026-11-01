@@ -40,3 +40,15 @@
 - `GET /api/dictionary/ai/status` 显示剩余调用次数；接口与个人状态均受认证保护。模型不可用或用量已满时，**原词典及生词本仍可正常使用**。
 - AI 响应属于参考资料，可能不准确。不会覆盖用户保存的词条、原有专业术语、学习进度或答题记录。
 - 自动测试覆盖常规查词零 AI 调用、缓存命中免费、并发超额阻断、未配置模型、模型失败、恶意输入长度、前端状态与保护性认证检查。真实设备点击和实际模型效果仍需手动体验。
+
+## Google Apps Script 翻译优先方案（2026-11-01）
+
+- 词典顺序：本地精选译文／D1 IT 术语 → **Google Apps Script LanguageApp.translate**（仅已登录、脚本已配置）→ MyMemory/Google 非正式备用接口 → 用户主动点击 Workers AI 补译。
+- Apps Script 源代码：`apps-script/Code.gs`。脚本必须由用户复制到其私有 Apps Script 项目，设置 Script Property `TRANSLATOR_SHARED_SECRET`（≥32 字符）并将 Web App 部署为 Execute as **Me**, access **Anyone**。`doPost` 对 POST JSON 进行严格密钥、文本长度和语言对校验；`doGet` 不翻译；配额耗尽、安全校验失败、调用异常返回 `{ok:false}`，不得冒充成功译文。
+- Cloudflare Worker 使用两个私密环境变量 `GAS_TRANSLATOR_URL`、`GAS_TRANSLATOR_TOKEN`；服务器不接受其他主机、非 HTTPS、带 query 的 URL 或 `/dev`。Google ContentService 返回的重定向只允许 `https://script.googleusercontent.com/`，通过 GET 请求获取结果，**不再转发密钥**。
+- 只有真实有效会话才能调用自建脚本消耗所有者配额，匿名 GET 不触发；无脚本配置时不影响原有免费翻译，且不需要创建 Google Cloud Billing。用户可在 Apps Script 执行记录中查看用量；Google 官方普通账号配额为 **5,000 次 Translate 调用/日**，从首次请求起约 24 小时重置，可能更改。
+- `LanguageApp.translate(text, source, target)` 支持本应用的中文 `zh-CN`、日语 `ja`、英语 `en`；跨语言翻译每个目标语言分别计费 1 次免费调用。与已有 Worker 缓存一起减少重复翻译；句子过长、网络不可用或 Script 权限/额度问题回退免费提供商，不直接视作 D1 数据损坏。
+- 自动测试：`node --test scripts/dictionary-translation-provider.test.mjs`，检查合法授权、语言对、拒绝匿名、错误 Host/跳转、服务端失败回退、缺失 Secret、Apps Script 拒绝错误密钥、配额耗尽 fail-closed。部署后还须真实测试 Google 授权、ContentService 跳转、中文 `晚上`／日语 `夜`／英语 `evening` 的实际译文和 Cloudflare Worker 连接。
+- 官方资料：[Apps Script LanguageApp](https://developers.google.com/apps-script/reference/language/language-app)、[Apps Script Web Apps](https://developers.google.com/apps-script/guides/web)、[Apps Script quotas](https://developers.google.com/apps-script/guides/services/quotas)、[ContentService redirects](https://developers.google.com/apps-script/guides/content)、[Script Properties](https://developers.google.com/apps-script/guides/properties)。
+
+**注意**：仓库 PR 不会自动在用户 Google 账号里创建脚本或完成 Google 授权。真实 API 的密钥配置与部署 URL 必须由账号持有人操作。
