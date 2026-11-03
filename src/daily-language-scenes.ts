@@ -31,3 +31,24 @@ export function selectDailyScenes<T extends DailySceneCard>(
     return { category, card: candidates[index] }
   })
 }
+
+// Hand-picked workplace/TOEIC-style headwords. Only the *headwords* are curated:
+// definitions, parts of speech and pronunciations must come from the licensed
+// static ECDICT lookup. Never pretend this is an official ETS/TOEIC vocabulary list.
+const BUSINESS_HEADWORDS = [
+  'confirm', 'schedule', 'project', 'report', 'employee', 'customer',
+  'purchase', 'payment', 'budget', 'meeting', 'department', 'contract',
+  'request', 'provide', 'receive', 'submit', 'approve', 'available',
+  'update', 'review', 'deadline', 'shipment', 'invoice', 'agreement',
+  'appointment', 'policy', 'procedure', 'facility', 'training', 'equipment',
+  'management', 'information', 'document', 'application', 'service', 'account',
+  'order', 'delivery', 'contact', 'support', 'business', 'manager',
+  'office', 'team', 'notice', 'required', 'supply', 'quality', 'issue',
+  'result', 'plan', 'conference', 'reservation', 'reception', 'position',
+] as const
+
+export function dailyBusinessWordCandidates(studyDate: string): string[] {
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(studyDate) ? studyDate : '1970-01-01'
+  const offset = stableHash('business-words|' + day) % BUSINESS_HEADWORDS.length
+  return [...BUSINESS_HEADWORDS.slice(offset), ...BUSINESS_HEADWORDS.slice(0, offset)]
+}
