@@ -410,11 +410,11 @@ let practiceLoadRequestId = 0
 let practiceAnswerRequestId = 0
 type PracticeQuestion = {
   id: string; track_id: string; topic: string; difficulty: string; prompt: string;
-  options: PracticeOption[]; answer: string; explanation: string; source_type: string; source_reference?: string; language: string; exam_section?: 'A' | 'B' | null; exam_section_method?: 'explicit' | 'case_pattern' | 'default_a' | 'unclassified' | null
+  options: PracticeOption[]; answer: string; explanation: string; source_type: string; source_reference?: string; question_kind?: 'standard' | 'official_sample'; language: string; exam_section?: 'A' | 'B' | null; exam_section_method?: 'explicit' | 'case_pattern' | 'default_a' | 'unclassified' | null
 }
 // IPA FE questions use Japanese answer labels ア～コ; internal answer IDs remain a～j.
 function practiceOptionLabel(question: PracticeQuestion, optionId: string): string {
-  if (question.track_id === 'exam-fe' && question.source_type === 'official') {
+  if (question.track_id === 'exam-fe' && (question.source_type === 'official' || question.question_kind === 'official_sample')) {
     const index = 'abcdefghij'.indexOf(optionId.toLowerCase())
     if (index >= 0) return 'アイウエオカキクケコ'[index]
   }
@@ -443,20 +443,21 @@ const practiceTopicOptions = ref<{ topic: string; question_count: number }[]>([]
 let practiceTopicLoadId = 0
 const practiceYearOptions = computed(() => selectedTrackId.value === 'exam-sg'
   ? [2026, 2025, 2024, 2023, 2019, 2018, 2017, 2016]
-  : [2026, 2025, 2024, 2023, 2019])
+  : [2026, 2025, 2024, 2023, 2022, 2019])
 const practiceHasDetailedFilters = computed(() => selectedTrackId.value === 'exam-fe' || selectedTrackId.value === 'exam-sg')
-type ExamTrack = { id: string; kind: string; title: string; subtitle: string; question_count: number; official_question_count?: number; prediction_question_count?: number; adapted_question_count?: number }
+type ExamTrack = { id: string; kind: string; title: string; subtitle: string; question_count: number; official_question_count?: number; prediction_question_count?: number; adapted_question_count?: number; sample_question_count?: number }
 const examTracks = ref<ExamTrack[]>([])
 const selectedTrackId = ref('exam-sg')
 const tracksLoading = ref(false)
 const tracksError = ref('')
-const questionSourceFilter = ref<'all' | 'official' | 'generated' | 'licensed'>('all')
+const questionSourceFilter = ref<'all' | 'official' | 'generated' | 'licensed' | 'sample'>('all')
 const activeReviewMode = ref<'all' | 'unlearned' | 'mastered' | 'due' | 'wrong'>('all')
 const questionSourceFilters = [
   { id: 'all', label: '全部题目' },
   { id: 'official', label: '历年真题' },
   { id: 'generated', label: '预测题库' },
   { id: 'licensed', label: '真题改编' },
+  { id: 'sample', label: '公式サンプル問題' },
 ] as const
 const selectedTrack = computed(() => examTracks.value.find(track => track.id === selectedTrackId.value) || null)
 const quizStartedAt = ref(0)
@@ -1003,13 +1004,18 @@ function selectExam(track: ExamTrack) {
   quizError.value = ''
 }
 
-async function selectQuestionSource(source: 'all' | 'official' | 'generated' | 'licensed') {
+async function selectQuestionSource(source: 'all' | 'official' | 'generated' | 'licensed' | 'sample') {
   if (selectedTrackId.value === 'exam-fe' && feBankLoading.value) return
   stopSpeech()
   practiceAnswerRequestId += 1
   practiceLoadRequestId += 1
   questionProgressRequestId += 1
+  const previousSource = questionSourceFilter.value
   questionSourceFilter.value = source
+  if (selectedTrackId.value === 'exam-fe') {
+    if (source === 'sample') practiceYear.value = '2022'
+    else if (previousSource === 'sample' && practiceYear.value === '2022') practiceYear.value = ''
+  }
   if (practiceHasDetailedFilters.value) {
     // SG years only apply to official papers; do not leave an impossible
     // generated + legacy-year combination after switching question sources.
@@ -1113,7 +1119,7 @@ async function startPractice() {
     if (!response.ok) throw new Error(data.error || '题库加载失败')
     if (!data.items?.length) {
       const messages = {
-        all: questionSourceFilter.value === 'official' ? '当前筛选下暂无官方历年真题。' : questionSourceFilter.value === 'licensed' ? '当前没有可作答的真题改编。' : questionSourceFilter.value === 'generated' ? '当前没有可用的预测题，请稍后重试。' : '当前筛选下暂无题目。',
+        all: questionSourceFilter.value === 'official' ? '当前筛选下暂无官方历年真题。' : questionSourceFilter.value === 'licensed' ? '当前没有可作答的真题改编。' : questionSourceFilter.value === 'sample' ? '该条件下没有已核验的 IPA 公式サンプル問題。' : questionSourceFilter.value === 'generated' ? '当前没有可用的预测题，请稍后重试。' : '当前筛选下暂无题目。',
         unlearned: '当前题库中没有尚未作答的题目。',
         wrong: '当前筛选下没有错题。答错题目后会自动进入错题集。',
         due: '当前没有到期的复习题。答错题会先安排短间隔复习。',
@@ -2602,8 +2608,9 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                 <button type="button" class="text-link" :disabled="practiceSaving" @click="syncPendingPracticeAttempt">{{ practiceSaving ? '同步中…' : '重试同步' }}</button>
               </p>
               <div class="question-source-filters" role="group" aria-label="题目来源筛选">
-                <button v-for="filter in questionSourceFilters.filter(item => item.id !== 'licensed' || selectedTrackId === 'exam-fe')" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" :disabled="selectedTrackId === 'exam-fe' && feBankLoading" @click="selectQuestionSource(filter.id)">{{ filter.label }}（{{ filter.id === 'all' ? (selectedTrack?.question_count || 0) : filter.id === 'official' ? (selectedTrack?.official_question_count || 0) : filter.id === 'licensed' ? (selectedTrack?.adapted_question_count || 0) : (selectedTrack?.prediction_question_count || 0) }}）</button>
+                <button v-for="filter in questionSourceFilters.filter(item => (item.id !== 'licensed' && item.id !== 'sample') || selectedTrackId === 'exam-fe')" :key="filter.id" type="button" class="source-filter-button" :class="{ active: questionSourceFilter === filter.id }" :aria-pressed="questionSourceFilter === filter.id" :disabled="selectedTrackId === 'exam-fe' && feBankLoading" @click="selectQuestionSource(filter.id)">{{ filter.label }}（{{ filter.id === 'all' ? (selectedTrack?.question_count || 0) : filter.id === 'official' ? (selectedTrack?.official_question_count || 0) : filter.id === 'licensed' ? (selectedTrack?.adapted_question_count || 0) : filter.id === 'sample' ? (selectedTrack?.sample_question_count || 0) : (selectedTrack?.prediction_question_count || 0) }}）</button>
               </div>
+              <p v-if="selectedTrackId === 'exam-fe' && (questionSourceFilter === 'sample' || practiceYear === '2022')" class="language-source">2022 年公开的 IPA 官方样题可直接练习；2020～2022 年正式 CBT 考题没有公开，不计入历年真题。</p>
               <div v-if="practiceHasDetailedFilters" class="question-category-section">
                 <div class="question-category-heading"><strong>筛选题目</strong></div>
                 <div class="fe-filter-controls">
@@ -2661,7 +2668,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                 </template>
               </div>
               <div v-else-if="currentQuestion" class="panel question-card">
-                <div class="question-topline"><span>{{ selectedTrack?.title || '考试练习' }} · 第 {{ quizIndex + 1 }} / {{ quizQuestions.length }} 题 · {{ currentQuestion.exam_section ? '科目' + currentQuestion.exam_section : '题型待复核' }}<template v-if="currentQuestion.exam_section && currentQuestion.exam_section_method !== 'explicit'"></template></span><span class="source-pill">{{ currentQuestion?.source_type === 'generated' ? '预测题库 · 原创' : currentQuestion?.source_type === 'official' ? '历年真题' : currentQuestion?.source_type === 'licensed' ? '真题改编' : '其他题目' }}</span></div>
+                <div class="question-topline"><span>{{ selectedTrack?.title || '考试练习' }} · 第 {{ quizIndex + 1 }} / {{ quizQuestions.length }} 题 · {{ currentQuestion.exam_section ? '科目' + currentQuestion.exam_section : '题型待复核' }}<template v-if="currentQuestion.exam_section && currentQuestion.exam_section_method !== 'explicit'"></template></span><span class="source-pill">{{ currentQuestion?.question_kind === 'official_sample' ? '公式サンプル問題' : currentQuestion?.source_type === 'generated' ? '预测题库 · 原创' : currentQuestion?.source_type === 'official' ? '历年真题' : currentQuestion?.source_type === 'licensed' ? '真题改编' : '其他题目' }}</span></div>
                 <div class="question-progress"><span :style="{ width: ((quizIndex + 1) / quizQuestions.length * 100) + '%' }"></span></div>
                 <div class="question-topic">{{ currentQuestion.topic }}</div>
                 <div class="question-mastery-row">
@@ -2753,7 +2760,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <button class="primary-button" @click="finishMockExam(false)">交卷并查看结果</button>
                 </div>
                 <article v-for="(question, index) in mockQuestions" :key="question.id" class="panel question-card mock-question-card">
-                  <div class="question-topline"><span>第 {{ index + 1 }} / {{ mockQuestions.length }} 题 · 科目{{ question.exam_section }} · {{ question.topic }}</span><span class="source-pill">{{ question.source_type === 'generated' ? '预测题库 · 原创' : question.source_type === 'official' ? '历年真题' : question.source_type === 'licensed' ? '真题改编' : '其他题目' }}</span></div>
+                  <div class="question-topline"><span>第 {{ index + 1 }} / {{ mockQuestions.length }} 题 · 科目{{ question.exam_section }} · {{ question.topic }}</span><span class="source-pill">{{ question.question_kind === 'official_sample' ? '公式サンプル問題' : question.source_type === 'generated' ? '预测题库 · 原创' : question.source_type === 'official' ? '历年真题' : question.source_type === 'licensed' ? '真题改编' : '其他题目' }}</span></div>
                   <a v-if="(question.source_type === 'official' || question.source_type === 'licensed') && question.source_reference" class="language-source" :href="question.source_reference" target="_blank" rel="noreferrer">查看 IPA 原题 ↗</a>
                   <p v-if="question.id === 'fe-ipa-official-2026-a-06'" class="dictionary-status">波形图以 0、1 表示；可查看 IPA 原图。</p>
                   <div class="question-prompt-row">
