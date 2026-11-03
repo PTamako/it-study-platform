@@ -62,6 +62,11 @@ type DictionaryApiEntry = {
   japaneseTerm?: string
   englishTerm?: string
   technical?: boolean
+  // Source-backed enrichment from the existing learning-card word catalog.
+  usageNote?: string
+  exampleTranslationZh?: string
+  transcription?: string // ECDICT notation; deliberately not labeled IPA.
+  sourceUrl?: string
 }
 
 type LooseRecord = Record<string, any>
@@ -806,6 +811,70 @@ function englishDictionaryEntries(rows: LooseRecord[], _zh: string, ja: string):
   }).filter((entry) => Boolean(entry.term && entry.en))
 }
 
+
+// Exact word lookup reuses the 6,000+ entries already stored in language_cards.
+// A partial index on (language, term) for content_type='word' avoids scanning
+// the 10,000 sentence cards, and neither personal progress nor AI is touched.
+async function searchLearnerWord(db: D1Database, query: string, language: 'ja' | 'en' | 'zh'): Promise<DictionaryApiEntry | null> {
+  if (language === 'zh' || !query || query.length > 80) return null
+  const row = await db.prepare(
+    "SELECT id, term, language, reading, meaning_zh, explanation, example, example_meaning_zh, source_type " +
+    "FROM language_cards WHERE content_type = 'word' AND language = ? AND term = ? COLLATE NOCASE " +
+    "ORDER BY CASE WHEN source_type = 'licensed' THEN 0 ELSE 1 END LIMIT 1"
+  ).bind(language, query).first<Record<string, unknown>>()
+  if (!row) return null
+  const term = String(row.term || '')
+  const isLicensed = row.source_type === 'licensed'
+  const japanese = language === 'ja'
+  const explanation = String(row.explanation || '').replace(/\\n/g, '\n').trim()
+  const zh = String(row.meaning_zh || '').replace(/\\n/g, '\n').trim().slice(0, 1500)
+  if (!term || !zh) return null
+
+  const senses: Array<{ partOfSpeech: string; definitions: string[] }> = []
+  if (!japanese && isLicensed) {
+    const labels: Record<string, string> = {
+      n: 'noun', v: 'verb', vi: 'verb', vt: 'verb', a: 'adjective', adj: 'adjective',
+      ad: 'adverb', adv: 'adverb', prep: 'preposition', pron: 'pronoun',
+      conj: 'conjunction', int: 'interjection', interj: 'interjection',
+    }
+    for (const line of explanation.split(/\n+/).map(item => item.trim()).filter(Boolean).slice(0, 18)) {
+      const parsed = /^([a-z]{1,6})\.\s+(.+)$/i.exec(line)
+      const pos = parsed ? labels[parsed[1].toLowerCase()] || '' : ''
+      const definition = (parsed ? parsed[2] : line).trim().slice(0, 320)
+      if (!definition) continue
+      let sense = senses.find(item => item.partOfSpeech === pos)
+      if (!sense) {
+        if (senses.length >= 6) break
+        sense = { partOfSpeech: pos, definitions: [] }
+        senses.push(sense)
+      }
+      if (sense.definitions.length < 3 && !sense.definitions.includes(definition)) sense.definitions.push(definition)
+    }
+  }
+  return {
+    term,
+    language,
+    englishTerm: japanese ? undefined : term,
+    reading: japanese ? String(row.reading || '') : (englishKatakanaReadings[term.toLowerCase()] || ''),
+    // ECDICT's phonetic spelling is not guaranteed to be IPA.
+    transcription: !japanese && isLicensed ? String(row.reading || '').slice(0, 90) : undefined,
+    en: !japanese ? explanation.slice(0, 1600) : '',
+    zh,
+    partsOfSpeech: senses.map(sense => sense.partOfSpeech).filter(Boolean),
+    senses: senses.length ? senses : undefined,
+    usageNote: !isLicensed ? explanation.slice(0, 550) : undefined,
+    example: String(row.example || '').slice(0, 450),
+    exampleTranslationZh: String(row.example_meaning_zh || '').slice(0, 550),
+    source: isLicensed
+      ? japanese ? '知学学习词典 · OpenJLPT / JMdict (CC BY-SA 4.0)' : '知学学习词典 · ECDICT (MIT)'
+      : '知学自编词库（D1）',
+    sourceUrl: isLicensed
+      ? japanese ? 'https://github.com/evanclan/OpenJLPT' : 'https://github.com/skywind3000/ECDICT'
+      : undefined,
+    tag: '学习词典 · ' + (japanese ? '日语' : '英语'),
+  }
+}
+
 async function searchTechnicalVocabulary(db: D1Database, rawQuery: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' | 'it' = 'auto'): Promise<DictionaryApiEntry[]> {
   const query = rawQuery.normalize('NFKC').trim().replace(/\s+/g, ' ')
   if (!query) return []
@@ -925,6 +994,29 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
   if (requestedLanguage === 'it') return []
 
   const language: 'ja' | 'en' | 'zh' = requestedLanguage === 'auto' ? detectDictionaryLanguage(query) : requestedLanguage
+  // Search our pre-existing licensed learning word cards first. Only one exact,
+  // indexed D1 read; preserve network fallback for unknown words or old schemas.
+  if (db && (language === 'ja' || language === 'en')) {
+    try {
+      const word = await searchLearnerWord(db, query.normalize('NFKC').trim(), language)
+      if (word) {
+        if (language === 'ja') {
+          const english = curatedJapaneseTranslation(query)?.en ||
+            await translateText(query, 'ja-JP', 'en-US', undefined, gasUrl, gasToken)
+          word.en = english || ''
+          word.englishTerm = english || undefined
+        } else {
+          const japanese = curatedEnglishTranslation(query)?.ja ||
+            await translateText(query, 'en-US', 'ja-JP', undefined, gasUrl, gasToken)
+          word.translationJa = japanese || ''
+        }
+        return [word]
+      }
+    } catch {
+      // Legacy preview fixtures and temporary D1 errors must not break
+      // traditional dictionary providers, or IT-only glossary behavior.
+    }
+  }
   // Start the source-backed Mandarin headword request in parallel with translations.
   // Only short Chinese words qualify; sentences do not incur another network request.
   const chineseMetadataPromise = language === 'zh' && eligibleChineseWord(query)
