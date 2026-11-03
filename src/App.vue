@@ -3103,7 +3103,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                 </article>
               </div>
             </section>
-            <DailyGrammarLesson :language="studyLanguage" :study-date="todayKey"
+            <DailyGrammarLesson :language="studyLanguage" :study-date="todayKey" :authenticated="authenticated"
               @speak="(text, language) => speak(text, language, 'daily-grammar:' + studyLanguage)" />
             <section class="language-filter-panel" aria-label="句子联动筛选">
               <div class="language-filter-top">

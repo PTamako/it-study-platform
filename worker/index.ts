@@ -12,6 +12,7 @@ const protectedPersonalPaths = new Set([
   '/api/scenario-attempts',
   '/api/language-progress',
   '/api/language-review',
+  '/api/grammar-progress',
   '/api/vocabulary/saved',
   '/api/daily-tasks',
   '/api/question-progress',
@@ -1205,7 +1206,7 @@ export default {
         if (rateLimitFailure) return rateLimitFailure
       }
     }
-    const isWriteEndpoint = ['/api/mock-exam/submit', '/api/fe-question-bank/install', '/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history', '/api/translate-explanation', '/api/dictionary/ai'].includes(url.pathname)
+    const isWriteEndpoint = ['/api/mock-exam/submit', '/api/fe-question-bank/install', '/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/grammar-progress', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history', '/api/translate-explanation', '/api/dictionary/ai'].includes(url.pathname)
     const isExamHistoryDelete = request.method === 'DELETE' && url.pathname === '/api/exam-history'
     if (request.method !== 'GET' && !(request.method === 'POST' && isWriteEndpoint) && !isExamHistoryDelete) {
       return json({ error: '不支持此请求方法' }, 405)
@@ -1819,6 +1820,62 @@ export default {
         return json({ ok: true, card_id: cardId, mastered })
       } catch {
         return json({ error: '课程进度保存失败，请确认已应用最新 D1 迁移。' }, 503)
+      }
+    }
+
+    // Indexed, three-answers-per-day personal grammar progress.
+    // One batched INSERT with first-write-wins semantics; GET is read-only.
+    if (url.pathname === '/api/grammar-progress') {
+      const validDate = (value: unknown): value is string => {
+        if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+        const parsed = Date.parse(value + 'T00:00:00Z')
+        return Number.isFinite(parsed) && new Date(parsed).toISOString().slice(0, 10) === value
+      }
+      if (request.method === 'GET') {
+        const date = url.searchParams.get('date')
+        const language = url.searchParams.get('language')
+        if (!validDate(date) || (language !== 'ja' && language !== 'en')) return json({ error: '日期或语言参数无效。' }, 400)
+        try {
+          const { results } = await env.DB.prepare(
+            'SELECT question_id, answer_index FROM daily_grammar_answers WHERE study_date = ? AND language = ? ORDER BY question_id LIMIT 3',
+          ).bind(date, language).all()
+          return json({ items: results })
+        } catch {
+          return json({ error: '语法练习记录暂不可用，请检查 D1 迁移。' }, 503)
+        }
+      }
+      let body: Record<string, unknown>
+      try {
+        const raw = await request.text()
+        if (raw.length > 2000) return json({ error: '答题数据过大。' }, 413)
+        body = JSON.parse(raw) as Record<string, unknown>
+        if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: '无效的请求体。' }, 400)
+      } catch { return json({ error: '答题数据必须是 JSON。' }, 400) }
+      const date = body.date
+      const language = body.language
+      const answers = body.answers
+      if (!validDate(date) || (language !== 'ja' && language !== 'en') ||
+        !Array.isArray(answers) || answers.length < 1 || answers.length > 3 ||
+        answers.some(item => !item || typeof item !== 'object' || Array.isArray(item) ||
+          typeof item.question_id !== 'string' ||
+          !new RegExp('^' + language + '-[0-9]{2}:(?:today|review):[01]$').test(item.question_id) ||
+          !Number.isInteger(item.answer_index) || item.answer_index < 0 || item.answer_index > 3) ||
+        new Set(answers.map(item => item.question_id)).size !== answers.length) {
+        return json({ error: '答题记录格式无效或超过每日 3 题上限。' }, 400)
+      }
+      try {
+        const params = answers.flatMap(item => [date, language, item.question_id, item.answer_index])
+        await env.DB.prepare(
+          'INSERT INTO daily_grammar_answers (study_date, language, question_id, answer_index) VALUES ' +
+          answers.map(() => '(?, ?, ?, ?)').join(', ') +
+          ' ON CONFLICT(study_date, language, question_id) DO NOTHING',
+        ).bind(...params).run()
+        const { results } = await env.DB.prepare(
+          'SELECT question_id, answer_index FROM daily_grammar_answers WHERE study_date = ? AND language = ? ORDER BY question_id LIMIT 3',
+        ).bind(date, language).all()
+        return json({ ok: true, items: results })
+      } catch {
+        return json({ error: '云端记录暂无法保存，本地答案仍会保留。' }, 503)
       }
     }
 
