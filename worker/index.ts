@@ -2517,7 +2517,7 @@ export default {
           `SELECT id, track_id, topic, difficulty, question_type, prompt,
                   options_json, answer_json, explanation, source_type, source_reference, language, question_kind, exam_origin,
                   exam_section, exam_section_method,
-                  (SELECT MIN(e.original_question) FROM fe_exemption_occurrences e WHERE e.sitting_date = ? AND e.canonical_question_id = questions.id) AS original_question
+                  (CASE WHEN ? <> '' THEN (SELECT MIN(e.original_question) FROM fe_exemption_occurrences e WHERE e.sitting_date = ? AND e.canonical_question_id = questions.id) ELSE NULL END) AS original_question
            FROM questions
            WHERE track_id = ? AND (? = '' OR topic = ?)
              AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'exemption' THEN exam_origin = 'fe_exemption' WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' AND exam_origin = 'general' ELSE source_type = ? END)
@@ -2534,7 +2534,7 @@ export default {
                        + length(id) * 991 + ? * 10007) % 104729
                     ) END, id
            LIMIT ? OFFSET ?`,
-        ).bind(sitting, trackId, topic, topic, source, source, year, year, yearPattern, sitting, sitting, section, section, mode, sitting, mode, mode, seed, limit, offset).all()
+        ).bind(sitting, sitting, trackId, topic, topic, source, source, year, year, yearPattern, sitting, sitting, section, section, mode, sitting, mode, mode, seed, limit, offset).all()
         const total = Number(totalRow?.total || 0)
         return json({
           items: results.map((row: Record<string, unknown>) => ({
