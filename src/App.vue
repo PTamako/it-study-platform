@@ -1495,15 +1495,27 @@ const paginatedLanguageCards = computed(() => visibleLanguageCards.value.slice(
   (languagePage.value - 1) * languagePageSize,
   languagePage.value * languagePageSize,
 ))
-const dueLanguageReviewCount = computed(() => visibleLanguageCards.value.filter(card => {
-  const review = languageReviewByCardId.value.get(card.id)
-  return Boolean(review && review.review_count > 0 && reviewDueByCardId.value.get(card.id))
-}).length)
+const dueLanguageReviewCount = computed(() => dueLanguageCards.value.length)
 const languagePracticeIndex = ref(0)
 const languagePracticeRevealed = ref(false)
-const languagePracticeCard = computed(() => visibleLanguageCards.value.length
-  ? visibleLanguageCards.value[languagePracticeIndex.value % visibleLanguageCards.value.length]
+// A dedicated due-only queue avoids accidentally practicing unseen or future
+// cards while reviewing. Everything is derived from cached local review state.
+const languagePracticeMode = ref<'all' | 'due'>('all')
+const dueLanguageCards = computed(() => visibleLanguageCards.value.filter(card => {
+  const review = languageReviewByCardId.value.get(card.id)
+  return Boolean(review?.review_count && reviewDueByCardId.value.get(card.id))
+}))
+const languagePracticeDeck = computed(() =>
+  languagePracticeMode.value === 'due' ? dueLanguageCards.value : visibleLanguageCards.value,
+)
+const languagePracticeCard = computed(() => languagePracticeDeck.value.length
+  ? languagePracticeDeck.value[languagePracticeIndex.value % languagePracticeDeck.value.length]
   : null)
+watch(languagePracticeMode, () => {
+  stopSpeech()
+  languagePracticeIndex.value = 0
+  languagePracticeRevealed.value = false
+})
 function languageExpansions(card: LanguageCard | null, type: 'vocabulary' | 'grammar') {
   return getLanguageExpansions(card, type)
 }
@@ -1518,8 +1530,8 @@ function speakLanguageCard(card: LanguageCard | null, example = false, practice 
 }
 function nextLanguagePractice() {
   stopSpeech()
-  if (!visibleLanguageCards.value.length) return
-  languagePracticeIndex.value = (languagePracticeIndex.value + 1) % visibleLanguageCards.value.length
+  if (!languagePracticeDeck.value.length) return
+  languagePracticeIndex.value = (languagePracticeIndex.value + 1) % languagePracticeDeck.value.length
   languagePracticeRevealed.value = false
 }
 watch([studyLanguage, selectedLanguageCategory, selectedLanguageMastery, selectedSentenceLength], () => {
@@ -3159,6 +3171,10 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                 <div><span class="banner-tag">主动回忆</span><h3>先回忆，再看答案</h3></div>
                 <span class="language-practice-count">待复习 {{ dueLanguageReviewCount }} · {{ visibleLanguageCards.length }} 张</span>
               </div>
+              <div class="language-review-mode" role="group" aria-label="复习队列选择">
+                <button type="button" :aria-pressed="languagePracticeMode === 'all'" :class="{ active: languagePracticeMode === 'all' }" @click="languagePracticeMode = 'all'">全部学习</button>
+                <button type="button" :aria-pressed="languagePracticeMode === 'due'" :class="{ active: languagePracticeMode === 'due' }" @click="languagePracticeMode = 'due'">只复习到期 {{ dueLanguageReviewCount }}</button>
+              </div>
               <div v-if="languagePracticeCard" class="language-practice-content">
                 <span class="dict-tag">{{ languagePracticeCard.category }}</span>
                 <div v-if="languagePracticeRevealed" class="language-practice-revealed-sentence">
@@ -3204,7 +3220,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <button class="language-done-button" :disabled="languageProgressHydrating || !languageProgressReady || languageCardSaving.has(languagePracticeCard.id)" @click="toggleLanguageCard(languagePracticeCard.id)">{{ completedLanguageCards.includes(languagePracticeCard.id) ? '取消掌握' : '标记掌握' }}</button>
                 </div>
               </div>
-              <p v-else class="language-practice-prompt">当前筛选条件下没有卡片，切换分类或掌握状态后就能开始。</p>
+              <p v-else class="language-practice-prompt">{{ languagePracticeMode === 'due' ? '当前没有到期复习的卡片，可以切换到全部学习。' : '当前筛选条件下没有卡片，切换分类或掌握状态后就能开始。' }}</p>
             </section>
             <p class="language-source">例句来源：<a href="https://tatoeba.org" target="_blank" rel="noopener noreferrer">Tatoeba</a>，原句可查看来源链接。</p>
             <p v-if="languageProgressHydrating" class="dictionary-status" role="status">正在同步语言进度…</p>
