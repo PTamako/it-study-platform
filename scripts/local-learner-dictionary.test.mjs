@@ -93,13 +93,13 @@ test('IT lookup remains independent and never switches to general learner word c
   sql.close()
 })
 
-test('24 original advanced cards are well annotated and additive to progress', async () => {
+test('44 original advanced cards are well annotated and additive to progress', async () => {
   const js = ts.transpile(advancedFile, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext })
   const { advancedLanguageCards: cards } = await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
-  assert.equal(cards.length,24)
+  assert.equal(cards.length,44)
   assert.equal(new Set(cards.map(card=>card.id)).size,24)
-  assert.equal(cards.filter(card=>card.language==='ja').length,12)
-  assert.equal(cards.filter(card=>card.language==='en').length,12)
+  assert.equal(cards.filter(card=>card.language==='ja').length,22)
+  assert.equal(cards.filter(card=>card.language==='en').length,22)
   for (const card of cards) {
     assert.ok(advancedSql.includes("'"+card.id+"'"), card.id)
     assert.ok(card.meaning_zh.length >= 8)
@@ -113,12 +113,12 @@ test('24 original advanced cards are well annotated and additive to progress', a
   }
   const { sql } = memoryDb()
   sql.exec(advancedSql)
-  assert.equal(sql.prepare("SELECT COUNT(*) n FROM language_cards WHERE content_type='sentence'").get().n,24)
+  assert.equal(sql.prepare("SELECT COUNT(*) n FROM language_cards WHERE content_type='sentence'").get().n,44)
   sql.exec("CREATE TABLE language_card_progress(card_id TEXT PRIMARY KEY,mastered INTEGER)")
   sql.exec("INSERT INTO language_card_progress VALUES ('ja-sentence-advanced-001',1)")
   sql.exec(advancedSql)
   assert.equal(sql.prepare('SELECT COUNT(*) n FROM language_card_progress').get().n,1)
-  assert.equal(sql.prepare('SELECT COUNT(*) n FROM language_cards').get().n,24)
+  assert.equal(sql.prepare('SELECT COUNT(*) n FROM language_cards').get().n,44)
   sql.close()
 })
 
@@ -128,7 +128,7 @@ test('course default avoids beginner one-liners, while all cards and legacy 5k s
   assert.match(frontend,/selectedSentenceLength === 'all'/)
   assert.match(frontend,/advancedLanguageCards\.filter\(card => card\.language === language\)/)
   assert.match(frontend,/fetchLanguageCorpus<LanguageCard>/)
-  assert.match(source,/SELECT 10024 AS total/)
+  assert.match(source,/SELECT 10044 AS total/)
   assert.match(frontend,/词库读音标记/)
   assert.match(frontend,/entry\.exampleTranslationZh/)
 })
