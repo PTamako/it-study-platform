@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 
-// Source-reviewed IPA FY2019 spring legacy FE morning questions #28–40.
+// Source-reviewed IPA FY2019 spring legacy FE morning questions #41–50.
 // Rewritten for bilingual study, never represented as released CBT items.
 const data = JSON.parse(readFileSync(new URL('./data/fe-ipa-2019-spring-41-50-reviewed.json', import.meta.url), 'utf8'))
 const key = { 41:'b',42:'a',43:'a',44:'c',45:'b',46:'a',47:'b',48:'c',49:'a',50:'a' }
@@ -13,7 +13,7 @@ const columns=['id','track_id','topic','difficulty','question_type','prompt','op
 if(data.version!==1 || data.items?.length!==10)throw Error('Expected 10 reviewed IPA questions (#41-50)')
 const seen = new Set(), prompts = new Set()
 const sql=[
-  '-- IPA FY2019 spring FE legacy morning #28-40: adapted bilingual study content.',
+  '-- IPA FY2019 spring FE legacy morning #41-50: adapted bilingual study content.',
   '-- Original question and official answer PDFs confirmed before writing this batch.',
   '-- No fabricated CBT releases; never rewrite previous questions or progress.',
   '-- INSERT OR IGNORE is idempotent; original source and number are retained.'
