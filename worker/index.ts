@@ -2408,7 +2408,9 @@ export default {
       }
     }
 
-    // SG 模拟考试只按数据库持久化的 A/B 分类组卷，不在请求时临时猜题型。
+    // FE/SG timed mock exams use indexed random-seek windows. D1 only materializes
+    // 60/20 selected questions, never the entire exam track or pre-submit answer keys.
+    // Draw tickets are kept synchronized by the additive 0128 migration.
     if (url.pathname === '/api/mock-exam-questions' && request.method === 'GET') {
       const trackId = (url.searchParams.get('track') || 'exam-sg').trim().slice(0, 80)
       const feSection = (url.searchParams.get('section') || '').trim().toUpperCase()
@@ -2416,66 +2418,103 @@ export default {
       if (trackId === 'exam-fe' && !['A', 'B'].includes(feSection)) return json({ error: '请选择 FE 科目 A 或科目 B。' }, 400)
       const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
       const source = ['all', 'official', 'generated', 'licensed', 'sample', 'exemption'].includes(requestedSource) ? requestedSource : 'all'
+
+      // Use only the compact pool metadata for filtering; detail rows are read
+      // by primary key only after a candidate is selected. Exact counts are
+      // requested only when a pool has too few questions to build an exam.
+      const sourceClause = `(CASE ? WHEN 'all' THEN 1
+        WHEN 'sample' THEN p.question_kind = 'official_sample'
+        WHEN 'exemption' THEN p.exam_origin = 'fe_exemption'
+        WHEN 'licensed' THEN p.source_type = 'licensed' AND p.question_kind = 'standard' AND p.exam_origin = 'general'
+        ELSE p.source_type = ? END)`
+      type MockPool = { section: 'A' | 'B'; count: number; explicit?: boolean; topic?: string }
+      const poolConditions = (pool: MockPool) =>
+        `p.track_id = ? AND p.exam_section = ?` +
+        (pool.explicit ? ` AND p.exam_section_method = 'explicit'` : '') +
+        (pool.topic ? ` AND p.topic = ?` : '') +
+        ` AND ${sourceClause}`
+      const poolBindings = (pool: MockPool) =>
+        [trackId, pool.section, ...(pool.topic ? [pool.topic] : []), source, source]
+      const draw = async (pool: MockPool): Promise<Record<string, unknown>[]> => {
+        const pivot = Math.floor(Math.random() * 2147483648)
+        const where = poolConditions(pool)
+        const base = `SELECT q.id, q.track_id, q.topic, q.difficulty, q.question_type, q.prompt,
+                    q.options_json, q.source_type, q.source_reference, q.language,
+                    q.question_kind, q.exam_origin, q.exam_section, q.exam_section_method
+             FROM mock_question_pool p
+             JOIN questions q ON q.id = p.question_id
+             WHERE ${where} AND p.draw_key`
+        const fetchRange = async (operator: '>=' | '<', limit: number) => {
+          const { results } = await env.DB.prepare(
+            `${base} ${operator} ? ORDER BY p.draw_key, p.question_id LIMIT ?`,
+          ).bind(...poolBindings(pool), pivot, limit).all()
+          return results as Record<string, unknown>[]
+        }
+        const first = await fetchRange('>=', pool.count)
+        if (first.length >= pool.count) return first
+        const rest = await fetchRange('<', pool.count - first.length)
+        return [...first, ...rest]
+      }
+      const exactCount = async (pool: MockPool): Promise<number> => {
+        const item = await env.DB.prepare(
+          `SELECT COUNT(*) AS n FROM mock_question_pool p WHERE ${poolConditions(pool)}`,
+        ).bind(...poolBindings(pool)).first<{ n: number }>()
+        return Number(item?.n || 0)
+      }
+      const shuffle = <T,>(values: T[]): T[] => {
+        const items = [...values]
+        for (let i = items.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1))
+          ;[items[i], items[j]] = [items[j], items[i]]
+        }
+        return items
+      }
+      const decode = (row: Record<string, unknown>) => ({
+        ...row,
+        options: JSON.parse(String(row.options_json || '[]')),
+        options_json: undefined,
+        // No answers or explanations are fetched before grading.
+      })
       try {
-        const { results } = await env.DB.prepare(
-          `SELECT id, track_id, topic, difficulty, question_type, prompt,
-                  options_json, answer_json, explanation, source_type, source_reference, language, question_kind, exam_origin,
-                  exam_section, exam_section_method
-           FROM questions
-           WHERE track_id = ? AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'exemption' THEN exam_origin = 'fe_exemption' WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' AND exam_origin = 'general' ELSE source_type = ? END)`,
-        ).bind(trackId, source, source).all()
-        const rows = results as Record<string, unknown>[]
-        const sectionA = rows.filter(row => row.exam_section === 'A')
-        const sectionB = rows.filter(row => row.exam_section === 'B')
-        const unclassified = rows.filter(row => row.exam_section !== 'A' && row.exam_section !== 'B').length
-        const decode = (row: Record<string, unknown>) => ({
-          ...row,
-          options: JSON.parse(String(row.options_json || '[]')),
-          // Timed exam requests expose neither answers nor solutions before submission.
-          answer: undefined,
-          explanation: undefined,
-          options_json: undefined,
-          answer_json: undefined,
-        })
-        const shuffle = <T,>(rows: T[]) => {
-          const shuffled = [...rows]
-          for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1))
-            ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+        if (trackId === 'exam-fe' && feSection === 'A') {
+          const pool: MockPool = { section: 'A', count: 60, explicit: true }
+          const items = await draw(pool)
+          if (items.length !== 60) {
+            const available = await exactCount(pool)
+            return json({ error: `FE 科目 A 需要 60 道已明确分类的题目，当前 ${available} 道。`,
+              section_counts: { A: available, B: 0 } }, 409)
           }
-          return shuffled
+          return json({ items: shuffle(items.map(decode)), section: 'A', total: 60, duration_minutes: 90 })
         }
         if (trackId === 'exam-fe') {
-          // 科目 B 的领域标签必须由题库明确提供，避免将 A 类知识题当作伪代码题。
-          const algorithm = sectionB.filter(row => row.exam_section_method === 'explicit' && row.topic === 'FE算法与程序设计')
-          const security = sectionB.filter(row => row.exam_section_method === 'explicit' && row.topic === 'FE信息安全')
-          const a = sectionA.filter(row => row.exam_section_method === 'explicit')
-          const pool = feSection === 'A' ? a : [...algorithm, ...security]
-          const available = feSection === 'A' ? a.length >= 60 : algorithm.length >= 16 && security.length >= 4
-          if (!available) return json({ error: feSection === 'A'
-            ? `FE 科目 A 需要 60 道已明确分类的题目，当前 ${a.length} 道。`
-            : `FE 科目 B 需要算法与程序设计 16 题、信息安全 4 题，当前分别为 ${algorithm.length} 与 ${security.length} 题。`, section_counts: { A: a.length, B: pool.length } }, 409)
-          const items = (feSection === 'A' ? shuffle(a).slice(0, 60) : [...shuffle(algorithm).slice(0, 16), ...shuffle(security).slice(0, 4)]).map(decode)
-          return json({ items: shuffle(items), section: feSection, total: items.length, duration_minutes: feSection === 'A' ? 90 : 100, distribution: feSection === 'B' ? { algorithm: 16, security: 4, approximate: true } : undefined })
+          const algorithm: MockPool = { section: 'B', count: 16, explicit: true, topic: 'FE算法与程序设计' }
+          const security: MockPool = { section: 'B', count: 4, explicit: true, topic: 'FE信息安全' }
+          const [a, b] = await Promise.all([draw(algorithm), draw(security)])
+          if (a.length !== 16 || b.length !== 4) {
+            const [algorithmCount, securityCount] = await Promise.all([exactCount(algorithm), exactCount(security)])
+            return json({ error: `FE 科目 B 需要算法与程序设计 16 题、信息安全 4 题，当前分别为 ${algorithmCount} 与 ${securityCount} 题。`,
+              section_counts: { A: 0, B: algorithmCount + securityCount } }, 409)
+          }
+          return json({ items: shuffle([...a, ...b].map(decode)), section: 'B', total: 20,
+            duration_minutes: 100, distribution: { algorithm: 16, security: 4, approximate: true } })
         }
-        if (sectionA.length < 48 || sectionB.length < 12) {
+        const poolA: MockPool = { section: 'A', count: 48 }
+        const poolB: MockPool = { section: 'B', count: 12 }
+        const [a, b] = await Promise.all([draw(poolA), draw(poolB)])
+        if (a.length !== 48 || b.length !== 12) {
+          const [countA, countB] = await Promise.all([exactCount(poolA), exactCount(poolB)])
+          const unclassified = await env.DB.prepare(
+            `SELECT COUNT(*) AS n FROM mock_question_pool WHERE track_id = ? AND exam_section NOT IN ('A','B')`,
+          ).bind(trackId).first<{ n: number }>()
           return json({
-            error: `A/B 分类题量不足：科目 A ${sectionA.length} 题、科目 B ${sectionB.length} 题、待复核 ${unclassified} 题；组卷需要至少 48 道 A 类和 12 道 B 类题。请先核对分类统计并补齐标签。`,
-            section_counts: { A: sectionA.length, B: sectionB.length, unclassified },
+            error: `A/B 分类题量不足：科目 A ${countA} 题、科目 B ${countB} 题、待复核 ${Number(unclassified?.n || 0)} 题；组卷需要至少 48 道 A 类和 12 道 B 类题。请先核对分类统计并补齐标签。`,
+            section_counts: { A: countA, B: countB, unclassified: Number(unclassified?.n || 0) },
           }, 409)
         }
-        const items = [
-          ...shuffle(sectionA).slice(0, 48).map(decode),
-          ...shuffle(sectionB).slice(0, 12).map(decode),
-        ]
-        return json({
-          items: shuffle(items),
-          section_counts: { A: 48, B: 12 },
-          total: 60,
-          duration_minutes: 120,
-        })
+        return json({ items: shuffle([...a, ...b].map(decode)),
+          section_counts: { A: 48, B: 12 }, total: 60, duration_minutes: 120 })
       } catch {
-        return json({ error: '模拟考试组卷失败，请确认题型分类迁移已应用。' }, 503)
+        return json({ error: '模拟考试组卷失败，请确认 D1 迁移 0128 已应用。' }, 503)
       }
     }
 
