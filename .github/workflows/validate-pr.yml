@@ -65,6 +65,12 @@ jobs:
       - name: Validate exam-origin isolation, official answer keys and one-to-many occurrences
         run: node --test scripts/fe-exemption-official-first23.test.mjs
 
+      - name: Build 2020-06-14 IPA exemption tree and flowchart adaptations
+        run: node scripts/generate_fe_exemption_20200614_q07_q10.mjs
+
+      - name: Verify 2020 Q7/Q10 official keys, visual semantics and data safety
+        run: node --test scripts/fe-exemption-20200614-q07-q10.test.mjs
+
       - name: Generate all remaining 2022 IPA sample questions, including April B6
         run: node scripts/generate_fe_2022_official_samples_completion.mjs
 
