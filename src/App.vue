@@ -4,6 +4,7 @@ import { hydrateMastery, mergeExamHistory, restoreMasteredCard } from './progres
 import { tokyoDate, mergeDailyTaskStates } from './daily-tasks'
 import { utcReviewMillis } from './review-time'
 import { fetchVocabularySnapshot } from './vocabulary-sync'
+import { selectDailyScenes, dailyBusinessWordCandidates } from './daily-language-scenes'
 import { getLanguageExpansions, getSentenceParts } from './language-annotations'
 import { isDictionaryHeadword, loadJapanesePitchDataset, matchingJapaneseAccents, pitchLabel, partOfSpeechDisplay, getChineseWordGuide, type PitchDataset } from './dictionary-word-metadata'
 import { dictionaryTranslationRows, chinesePinyinToneLabels } from './dictionary-presentation'
@@ -1353,6 +1354,29 @@ type LanguageCard = {
   highlight_json?: string; vocabulary_expansion_json?: string; grammar_expansion_json?: string
 }
 const languageCards = ref<LanguageCard[]>([])
+const dailyEnglishWords = ref<DictionaryEntry[]>([])
+const dailyEnglishWordsError = ref('')
+let dailyEnglishWordRun = 0
+async function loadDailyBusinessWords() {
+  const run = ++dailyEnglishWordRun
+  dailyEnglishWords.value = []
+  dailyEnglishWordsError.value = ''
+  if (studyLanguage.value !== 'en') return
+  try {
+    // Static ECDICT manifest is cached once; lookups do not touch Workers/D1.
+    const terms = dailyBusinessWordCandidates(todayKey.value)
+    const rows = await Promise.all(terms.map(term => findStaticLearnerEntry(term, 'en')))
+    if (run !== dailyEnglishWordRun || studyLanguage.value !== 'en') return
+    dailyEnglishWords.value = rows.filter((word): word is NonNullable<typeof word> => Boolean(word)).slice(0, 5)
+    if (dailyEnglishWords.value.length < 5)
+      dailyEnglishWordsError.value = '词库中可验证的当日词条不足 5 个，请稍后重试。'
+  } catch {
+    if (run === dailyEnglishWordRun) dailyEnglishWordsError.value = '本地英语词库暂不可用，请检查网络或缓存。'
+  }
+}
+watch([studyLanguage, todayKey], () => { void loadDailyBusinessWords() }, { immediate: true })
+// Reuse existing licensed sentence cards, study progress and review IDs.
+const dailyLanguageScenes = computed(() => selectDailyScenes(languageCards.value, todayKey.value, studyLanguage.value))
 const languageCategories = computed(() => [
   { title: '全部', desc: '全部句子', icon: BookOpen },
   { title: '日常句子', desc: '日常生活中自然会说的话', icon: BookMarked },
@@ -1888,6 +1912,17 @@ function adjustVocabularyDashboard(delta: number) {
     ...cloudDashboard.value,
     vocabulary: { saved_terms: Math.max(0, cloudDashboard.value.vocabulary.saved_terms + delta) },
   }
+}
+function toggleDailyEnglishWord(word: DictionaryEntry) {
+  // Daily words are sourced from the same static dictionary, so save the real
+  // entry snapshot via the existing vocabulary API instead of creating a
+  // second TOEIC-specific collection table or storing an empty placeholder.
+  if (vocabularyHydrating.value || !vocabularySyncReady.value || savedWordRequests.has(word.term)) return
+  recentDictionaryEntries.value = [
+    word,
+    ...recentDictionaryEntries.value.filter(entry => entry.term !== word.term),
+  ].slice(0, 12)
+  void toggleSaved(word.term)
 }
 async function toggleSaved(term: string) {
   // Serialize changes for the same term and update the UI only after the cloud write succeeds.
@@ -3016,6 +3051,58 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
               <div class="language-progress-number">{{ languageProgress.percent }}%</div>
               <div class="language-progress-track"><span :style="{ width: languageProgress.percent + '%' }"></span></div>
             </div>
+            <section class="section-block" aria-label="每日双场景学习">
+              <div class="section-heading">
+                <div><h2>今日双场景</h2><p>每天同时练习日常会话与职场沟通 · 沿用已有句子卡和复习记录</p></div>
+              </div>
+              <div class="language-card-list">
+                <article v-for="scene in dailyLanguageScenes" :key="scene.category" class="language-study-card">
+                  <div class="language-card-top"><span class="dict-tag">{{ scene.category }}</span><small class="language-source">今日精选</small></div>
+                  <div v-if="scene.card">
+                    <h3 class="language-sentence"><span v-for="(part, index) in sentenceParts(scene.card)" :key="index" :class="part.type ? 'sentence-highlight-' + part.type : ''" :title="part.detail">{{ part.text }}</span></h3>
+                    <p class="language-meaning language-sentence-translation">{{ scene.card.meaning_zh }}</p>
+                    <p v-if="scene.card.explanation" class="language-explanation">{{ scene.card.explanation }}</p>
+                    <section v-if="languageExpansions(scene.card, 'vocabulary').length" class="language-expansion">
+                      <strong>重点词汇</strong>
+                      <div v-for="(item, index) in languageExpansions(scene.card, 'vocabulary').slice(0, 3)" :key="index">
+                        <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
+                      </div>
+                    </section>
+                    <section v-if="languageExpansions(scene.card, 'grammar').length" class="language-expansion grammar">
+                      <strong>语法与表达</strong>
+                      <div v-for="(item, index) in languageExpansions(scene.card, 'grammar').slice(0, 2)" :key="index">
+                        <b>{{ item.term }}</b><span>{{ item.meaning }}</span><small>{{ item.explanation }}</small>
+                      </div>
+                    </section>
+                    <div class="language-speech-actions">
+                      <button type="button" class="play-button" @click="speakLanguageCard(scene.card)"><Volume2 :size="16" /> 播放原文</button>
+                      <button type="button" class="language-done-button" :disabled="languageProgressHydrating || !languageProgressReady || languageCardSaving.has(scene.card.id)" @click="toggleLanguageCard(scene.card.id)">{{ completedLanguageCards.includes(scene.card.id) ? '取消掌握' : '标记掌握' }}</button>
+                    </div>
+                    <a v-if="scene.card.source_url" class="language-source-link" :href="scene.card.source_url" target="_blank" rel="noopener noreferrer">查看原句来源</a>
+                  </div>
+                  <p v-else class="language-practice-prompt">当前类别暂无合适的学习句子。</p>
+                </article>
+              </div>
+            </section>
+            <section v-if="studyLanguage === 'en'" class="section-block" aria-label="每日 TOEIC 商务词汇">
+              <div class="section-heading"><div><h2>每日 5 个商务英语词汇</h2><p>词义来自已有 ECDICT 静态词库 · 非官方 TOEIC 词表</p></div></div>
+              <p v-if="dailyEnglishWordsError" class="dictionary-status dictionary-error">{{ dailyEnglishWordsError }}</p>
+              <p v-else-if="!dailyEnglishWords.length" class="dictionary-status">正在读取本地英语词库…</p>
+              <div v-else class="language-card-list">
+                <article v-for="word in dailyEnglishWords" :key="word.term" class="language-study-card">
+                  <div class="language-card-top"><span class="dict-tag">商务词汇</span><small class="language-source">ECDICT · MIT</small></div>
+                  <h3 class="language-sentence">{{ word.term }}</h3>
+                  <p v-if="word.partsOfSpeech?.length" class="language-reading">{{ word.partsOfSpeech.join(' / ') }}</p>
+                  <p class="language-meaning">{{ word.zh }}</p>
+                  <p v-if="word.senses?.length" class="language-explanation">{{ word.senses.slice(0, 2).map(sense => sense.definitions.join('；')).join('；') }}</p>
+                  <p v-if="word.transcription" class="language-source">词库读音标记：{{ word.transcription }}（未验证为 IPA）</p>
+                  <div class="language-speech-actions">
+                    <button type="button" class="play-button" @click="speak(word.term, 'en-US', 'business:' + word.term)"><Volume2 :size="16" /> 听发音</button>
+                    <button type="button" class="language-done-button" :disabled="!vocabularySyncReady || vocabularyHydrating || savedWordRequests.has(word.term)" @click="toggleDailyEnglishWord(word)">{{ savedWords.includes(word.term) ? '取消收藏' : '收藏到生词本' }}</button>
+                  </div>
+                </article>
+              </div>
+            </section>
             <section class="language-filter-panel" aria-label="句子联动筛选">
               <div class="language-filter-top">
                 <div class="language-filter-total"><strong>筛选课程</strong><span>当前 {{ visibleLanguageCards.length.toLocaleString() }} 句</span></div>
