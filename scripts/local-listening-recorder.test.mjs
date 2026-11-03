@@ -19,6 +19,8 @@ test('self-playback stays local and is cleaned up after session change or unmoun
   assert.match(component,/onUnmounted\(clearLocalRecording\)/)
   assert.match(component,/:src="recordingUrl" controls preload="none"/)
   assert.match(component,/recordingRun\+\+/)
+  assert.match(component,/recordingSceneId\.value = sceneId/)
+  assert.match(component,/URL\.createObjectURL\(blob\)/)
   assert.match(component,/30 秒/)
   assert.match(component,/不上传、不进行自动评分/)
   assert.doesNotMatch(component,/fetch\(|\.prepare\(|AI\.run\(|FormData|upload.*audio|\\/api\\/record/)
