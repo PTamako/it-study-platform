@@ -23,7 +23,7 @@ test('self-playback stays local and is cleaned up after session change or unmoun
   assert.match(component,/URL\.createObjectURL\(blob\)/)
   assert.match(component,/30 秒/)
   assert.match(component,/不上传、不进行自动评分/)
-  assert.doesNotMatch(component,/fetch\(|\.prepare\(|AI\.run\(|FormData|upload.*audio|\\/api\\/record/)
+  assert.doesNotMatch(component,/fetch\(|\.prepare\(|AI\.run\(|FormData|upload.*audio|\/api\/record/)
 })
 test('mic permission denial never masquerades as speech evaluation',()=>{
   assert.match(component,/当前浏览器不支持录音/)
