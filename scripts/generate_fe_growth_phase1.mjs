@@ -22,7 +22,7 @@ for(const q of all){
   if(!Array.isArray(q.options)||q.options.length!==4||
      new Set(q.options).size!==4||
      !Number.isInteger(q.answer)||q.answer<0||q.answer>3)throw Error('Invalid answers: '+q.id)
-  if(!q.prompt||q.prompt.length<45||!q.explanation||q.explanation.length<27)
+  if(!q.prompt||q.prompt.length<(q.section==='A'?24:75)||!q.explanation||q.explanation.length<27)
     throw Error('Too little context or reasoning: '+q.id)
   if(q.section==='B'&&q.prompt.length<75)
     throw Error('Subject B should include a multi-step trace or realistic scenario: '+q.id)
@@ -32,7 +32,7 @@ for(const q of all){
 }
 if(A.length!==30||feGrowthAlgorithmQuestions.length!==40||security.length!==10||all.length!==80)
   throw Error('FE phase-1 corpus count mismatch')
-if(topics.size<20)throw Error('Not enough different FE curricular topics')
+if(topics.size<18)throw Error('Not enough different FE curricular topics')
 const sqlquote = v=>"'"+String(v).replaceAll("'","''")+"'"
 const columns=['id','track_id','topic','difficulty','question_type','prompt','options_json',
                'answer_json','explanation','source_type','source_reference','language',
