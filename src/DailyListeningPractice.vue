@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { dailyListeningScenes, type ListeningLanguage, type ListeningScene } from './daily-dialogue-listening'
 
 const props = defineProps<{
@@ -48,6 +48,84 @@ function play(scene: ListeningScene, turnIndex?: number) {
   if (!content) return
   emit('speak', content, props.language === 'ja' ? 'ja-JP' : 'en-US', 'daily-listening:' + scene.id)
 }
+// Voice practice never uploads audio. Keep only a temporary Blob URL that is
+// revoked on scene/date changes and unmount. Start ONLY on a user gesture.
+const recordingSceneId = ref('')
+const recordingUrl = ref('')
+const recordingBusy = ref(false)
+const recordingActive = ref(false)
+const recordingError = ref('')
+let microphone: MediaStream | null = null
+let recorder: MediaRecorder | null = null
+let autoStopTimer: ReturnType<typeof setTimeout> | undefined
+let recordingRun = 0
+function stopLocalRecording() {
+  if (autoStopTimer) { clearTimeout(autoStopTimer); autoStopTimer = undefined }
+  try { if (recorder?.state === 'recording') recorder.stop() } catch { /* already stopped */ }
+  microphone?.getTracks().forEach(track => track.stop())
+  microphone = null
+  recordingBusy.value = false
+  recordingActive.value = false
+}
+function clearLocalRecording() {
+  recordingRun++
+  stopLocalRecording()
+  recorder = null
+  recordingSceneId.value = ''
+  if (recordingUrl.value) URL.revokeObjectURL(recordingUrl.value)
+  recordingUrl.value = ''
+  recordingError.value = ''
+}
+async function startLocalRecording(sceneId: string) {
+  if (recordingBusy.value || recorder?.state === 'recording') return
+  clearLocalRecording()
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    recordingError.value = '当前浏览器不支持录音。请在 HTTPS 下使用较新的 Safari 或 Chrome。'
+    return
+  }
+  const run = ++recordingRun
+  recordingSceneId.value = sceneId
+  recordingBusy.value = true
+  recordingError.value = ''
+  emit('stop')
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    if (run !== recordingRun) { stream.getTracks().forEach(track => track.stop()); return }
+    microphone = stream
+    const media = new MediaRecorder(stream)
+    const chunks: BlobPart[] = []
+    recorder = media
+    recordingSceneId.value = sceneId
+    media.ondataavailable = event => { if (event.data?.size) chunks.push(event.data) }
+    media.onerror = () => { if (run === recordingRun) recordingError.value = '录音中断，请重试。' }
+    media.onstop = () => {
+      stream.getTracks().forEach(track => track.stop())
+      if (microphone === stream) microphone = null
+      if (autoStopTimer) { clearTimeout(autoStopTimer); autoStopTimer = undefined }
+      if (run !== recordingRun) return
+      recordingBusy.value = false
+      recordingActive.value = false
+      if (!chunks.length) { recordingError.value = '没有录到声音，请检查麦克风权限。'; return }
+      const blobType = media.mimeType || (chunks[0] instanceof Blob ? (chunks[0] as Blob).type : '') || 'audio/mp4'
+      const blob = new Blob(chunks, { type: blobType })
+      if (blob.size > 8 * 1024 * 1024) { recordingError.value = '录音过大，请缩短跟读时间。'; return }
+      if (recordingUrl.value) URL.revokeObjectURL(recordingUrl.value)
+      recordingUrl.value = URL.createObjectURL(blob)
+    }
+    media.start()
+    recordingActive.value = true
+    recordingBusy.value = false
+    autoStopTimer = setTimeout(stopLocalRecording, 30000)
+  } catch {
+    if (run === recordingRun) recordingError.value = '未取得麦克风权限，或此设备不支持录音。'
+    microphone?.getTracks().forEach(track => track.stop())
+    microphone = null
+    recordingBusy.value = false
+  }
+}
+watch(storageKey, clearLocalRecording)
+onUnmounted(clearLocalRecording)
+
 const finished = computed(() => scenes.value.filter(scene => isAnswered(scene.id)).length)
 const correct = computed(() => scenes.value.filter(scene => isAnswered(scene.id) && answers.value[scene.id] === scene.correct).length)
 </script>
@@ -91,6 +169,18 @@ const correct = computed(() => scenes.value.filter(scene => isAnswered(scene.id)
             <button type="button" class="text-link" @click="play(scene,index)">听这一句并跟读</button>
           </div>
           <p class="daily-listening-focus">重点：{{ scene.focusZh }}</p>
+          <div class="daily-voice-practice">
+            <strong>自己跟读 · 录音回听</strong>
+            <p>只在当前设备内存中临时保存，不上传、不进行自动评分，最长 30 秒。</p>
+            <div class="daily-listening-audio">
+              <button type="button" class="secondary-button" :disabled="recordingBusy || recordingActive" @click="startLocalRecording(scene.id)">开始录音</button>
+              <button v-if="recordingSceneId === scene.id && recordingActive" type="button" class="secondary-button" @click="stopLocalRecording">结束录音</button>
+              <button v-if="recordingSceneId === scene.id && recordingUrl" type="button" class="text-link" @click="clearLocalRecording">清除录音</button>
+            </div>
+            <p v-if="recordingSceneId === scene.id && recordingActive" class="language-source">录音开始后会自动在 30 秒内停止。</p>
+            <audio v-if="recordingSceneId === scene.id && recordingUrl" :src="recordingUrl" controls preload="none" aria-label="回听自己的跟读录音"></audio>
+            <p v-if="recordingSceneId === scene.id && recordingError" class="dictionary-status dictionary-error" role="alert">{{ recordingError }}</p>
+          </div>
         </div>
       </article>
     </div>
