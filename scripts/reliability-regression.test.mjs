@@ -42,7 +42,7 @@ function setup() {
     (?,'exam-sg','セキュリティ','standard','single_choice','test','[{"id":"a","text":"yes"},{"id":"b","text":"no"}]',
       '"a"','test explanation','generated','', 'ja','A','explicit')`)
   for (let i=0; i<65; i++) stmt.run('sg-reliability-' + String(i).padStart(3,'0'))
-  sql.exec("ALTER TABLE questions ADD COLUMN question_kind TEXT NOT NULL DEFAULT 'standard' CHECK(question_kind IN ('standard','official_sample'))")
+  sql.exec("ALTER TABLE questions ADD COLUMN question_kind TEXT NOT NULL DEFAULT 'standard' CHECK(question_kind IN ('standard','official_sample')); ALTER TABLE questions ADD COLUMN exam_origin TEXT NOT NULL DEFAULT 'general' CHECK(exam_origin IN ('general','fe_exemption'))")
   let crash = false
   const DB = {
     prepare(query) { return { bind(...args) { return {
