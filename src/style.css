@@ -1147,11 +1147,12 @@ button[aria-disabled="true"] {
 }
 .dictionary-card .lexical-translation-row p{
   min-width:0;margin:0;color:var(--text-primary);font-size:13px;line-height:1.8;
-  overflow-wrap:anywhere
+  white-space:pre-line;overflow-wrap:anywhere
 }
 .lexical-example{padding:10px 12px;border-radius:9px;background:var(--surface-alt);min-width:0}
 .lexical-example>span{font-size:10px;font-weight:700;color:var(--text-secondary)}
 .dictionary-card .lexical-example p{font-size:12px;line-height:1.7;margin:4px 0 0;color:var(--text-primary)}
+.dictionary-card .lexical-example .lexical-example-translation{color:var(--text-secondary);border-top:1px solid var(--border-subtle,#e6e8ef);padding-top:6px;white-space:pre-line}
 .lexical-source-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;color:var(--text-secondary);font-size:10px;line-height:1.5}
 .lexical-pitch-source{color:#718199}
 .dictionary-card .dict-actions{

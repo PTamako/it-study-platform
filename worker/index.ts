@@ -62,6 +62,11 @@ type DictionaryApiEntry = {
   japaneseTerm?: string
   englishTerm?: string
   technical?: boolean
+  // Source-backed enrichment from the existing learning-card word catalog.
+  usageNote?: string
+  exampleTranslationZh?: string
+  transcription?: string // ECDICT notation; deliberately not labeled IPA.
+  sourceUrl?: string
 }
 
 type LooseRecord = Record<string, any>
@@ -806,12 +811,79 @@ function englishDictionaryEntries(rows: LooseRecord[], _zh: string, ja: string):
   }).filter((entry) => Boolean(entry.term && entry.en))
 }
 
+
+// Exact word lookup reuses the 6,000+ entries already stored in language_cards.
+// A partial index on (language, term) for content_type='word' avoids scanning
+// the 10,000 sentence cards, and neither personal progress nor AI is touched.
+async function searchLearnerWord(db: D1Database, query: string, language: 'ja' | 'en' | 'zh'): Promise<DictionaryApiEntry | null> {
+  if (language === 'zh' || !query || query.length > 80) return null
+  const row = await db.prepare(
+    "SELECT id, term, language, reading, meaning_zh, explanation, example, example_meaning_zh, source_type " +
+    "FROM language_cards WHERE content_type = 'word' AND language = ? AND term = ? COLLATE NOCASE " +
+    "ORDER BY CASE WHEN source_type = 'licensed' THEN 0 ELSE 1 END LIMIT 1"
+  ).bind(language, query).first<Record<string, unknown>>()
+  if (!row) return null
+  const term = String(row.term || '')
+  const isLicensed = row.source_type === 'licensed'
+  const japanese = language === 'ja'
+  const explanation = String(row.explanation || '').replace(/\\n/g, '\n').trim()
+  const zh = String(row.meaning_zh || '').replace(/\\n/g, '\n').trim().slice(0, 1500)
+  if (!term || !zh) return null
+
+  const senses: Array<{ partOfSpeech: string; definitions: string[] }> = []
+  if (!japanese && isLicensed) {
+    const labels: Record<string, string> = {
+      n: 'noun', v: 'verb', vi: 'verb', vt: 'verb', a: 'adjective', adj: 'adjective',
+      ad: 'adverb', adv: 'adverb', prep: 'preposition', pron: 'pronoun',
+      conj: 'conjunction', int: 'interjection', interj: 'interjection',
+    }
+    for (const line of explanation.split(/\n+/).map(item => item.trim()).filter(Boolean).slice(0, 18)) {
+      const parsed = /^([a-z]{1,6})\.\s+(.+)$/i.exec(line)
+      const pos = parsed ? labels[parsed[1].toLowerCase()] || '' : ''
+      const definition = (parsed ? parsed[2] : line).trim().slice(0, 320)
+      if (!definition) continue
+      let sense = senses.find(item => item.partOfSpeech === pos)
+      if (!sense) {
+        if (senses.length >= 6) break
+        sense = { partOfSpeech: pos, definitions: [] }
+        senses.push(sense)
+      }
+      if (sense.definitions.length < 3 && !sense.definitions.includes(definition)) sense.definitions.push(definition)
+    }
+  }
+  return {
+    term,
+    language,
+    englishTerm: japanese ? undefined : term,
+    reading: japanese ? String(row.reading || '') : (englishKatakanaReadings[term.toLowerCase()] || ''),
+    // ECDICT's phonetic spelling is not guaranteed to be IPA.
+    transcription: !japanese && isLicensed ? String(row.reading || '').slice(0, 90) : undefined,
+    en: !japanese ? explanation.slice(0, 1600) : '',
+    zh,
+    partsOfSpeech: senses.map(sense => sense.partOfSpeech).filter(Boolean),
+    senses: senses.length ? senses : undefined,
+    usageNote: !isLicensed ? explanation.slice(0, 550) : undefined,
+    example: String(row.example || '').slice(0, 450),
+    exampleTranslationZh: String(row.example_meaning_zh || '').slice(0, 550),
+    source: isLicensed
+      ? japanese ? '知学学习词典 · OpenJLPT / JMdict (CC BY-SA 4.0)' : '知学学习词典 · ECDICT (MIT)'
+      : '知学自编词库（D1）',
+    sourceUrl: isLicensed
+      ? japanese ? 'https://github.com/evanclan/OpenJLPT' : 'https://github.com/skywind3000/ECDICT'
+      : undefined,
+    tag: '学习词典 · ' + (japanese ? '日语' : '英语'),
+  }
+}
+
 async function searchTechnicalVocabulary(db: D1Database, rawQuery: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' | 'it' = 'auto'): Promise<DictionaryApiEntry[]> {
   const query = rawQuery.normalize('NFKC').trim().replace(/\s+/g, ' ')
   if (!query) return []
   const select = `SELECT term, language, reading, meaning_zh, meaning_ja, meaning_en, example, source_module, aliases
     FROM vocabulary`
-  const exactResult = await db.prepare(
+  // Most IT lookups are exact headwords; use a small indexed lookup first.
+  // Only aliases and translated search terms require the costlier fallback scan.
+  const indexedExact = await db.prepare(`${select} WHERE term = ? COLLATE NOCASE LIMIT 8`).bind(query).all()
+  const exactResult = indexedExact.results.length ? indexedExact : await db.prepare(
     `${select}
      WHERE lower(term) = lower(?)
         OR lower(COALESCE(reading, '')) = lower(?)
@@ -907,7 +979,7 @@ function detectDictionaryLanguage(query: string): 'ja' | 'zh' | 'en' {
   if (/[\u3400-\u9fff]/.test(text)) return 'ja'
   return 'en'
 }
-async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' | 'it' = 'auto', db?: D1Database, gasUrl?: string, gasToken?: string): Promise<DictionaryApiEntry[]> {
+async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' | 'it' = 'auto', db?: D1Database, gasUrl?: string, gasToken?: string, staticWordChecked = false): Promise<DictionaryApiEntry[]> {
   let technicalItems: DictionaryApiEntry[] = []
   if (db) {    try {
       technicalItems = await searchTechnicalVocabulary(db, query, requestedLanguage)
@@ -925,6 +997,29 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
   if (requestedLanguage === 'it') return []
 
   const language: 'ja' | 'en' | 'zh' = requestedLanguage === 'auto' ? detectDictionaryLanguage(query) : requestedLanguage
+  // Search our pre-existing licensed learning word cards first. Only one exact,
+  // indexed D1 read; preserve network fallback for unknown words or old schemas.
+  if (db && !staticWordChecked && (language === 'ja' || language === 'en')) {
+    try {
+      const word = await searchLearnerWord(db, query.normalize('NFKC').trim(), language)
+      if (word) {
+        if (language === 'ja') {
+          const english = curatedJapaneseTranslation(query)?.en ||
+            await translateText(query, 'ja-JP', 'en-US', undefined, gasUrl, gasToken)
+          word.en = english || ''
+          word.englishTerm = english || undefined
+        } else {
+          const japanese = curatedEnglishTranslation(query)?.ja ||
+            await translateText(query, 'en-US', 'ja-JP', undefined, gasUrl, gasToken)
+          word.translationJa = japanese || ''
+        }
+        return [word]
+      }
+    } catch {
+      // Legacy preview fixtures and temporary D1 errors must not break
+      // traditional dictionary providers, or IT-only glossary behavior.
+    }
+  }
   // Start the source-backed Mandarin headword request in parallel with translations.
   // Only short Chinese words qualify; sentences do not incur another network request.
   const chineseMetadataPromise = language === 'zh' && eligibleChineseWord(query)
@@ -1539,7 +1634,8 @@ export default {
           ? !(await requireAuth(request, env)) : false
         const items = await lookupDictionary(query, requestedLanguage as 'auto' | 'ja' | 'en' | 'zh' | 'it', env.DB,
           authorizedForAppsScript ? env.GAS_TRANSLATOR_URL : undefined,
-          authorizedForAppsScript ? env.GAS_TRANSLATOR_TOKEN : undefined)
+          authorizedForAppsScript ? env.GAS_TRANSLATOR_TOKEN : undefined,
+          url.searchParams.get('static_word_checked') === '1')
         return json({
           items,
           query,
@@ -1549,6 +1645,8 @@ export default {
           detected_language: requestedLanguage === 'it' ? 'it' : requestedLanguage === 'auto' ? detectDictionaryLanguage(query) : requestedLanguage,
           providers: items.some(item => item.technical)
             ? ['知学 IT 术语库（D1）']
+            : items.some(item => item.source?.startsWith('知学学习词典') || item.source?.startsWith('知学自编词库'))
+              ? ['知学学习词典（D1）']
             : (() => {
                 const sourceLanguage = requestedLanguage === 'auto' ? detectDictionaryLanguage(query) : requestedLanguage
                 const baseProviders = sourceLanguage === 'en'
@@ -1560,7 +1658,9 @@ export default {
               })(),
           note: items.some(item => item.technical)
             ? '本地 IT 术语库提供中日英释义与读音，命中时不调用在线翻译。'
-            : '支持中日英互译，免费翻译源可能限流，结果仅供参考。',
+            : items.some(item => item.source?.startsWith('知学学习词典') || item.source?.startsWith('知学自编词库'))
+              ? '先使用已收录的学习词条；缺少的目标语言译文可能调用传统翻译服务，不触发 AI。'
+              : '支持中日英互译，免费翻译源可能限流，结果仅供参考。',
         })
       } catch (error) {
         console.error('[dictionary] lookup failed', {
@@ -1638,7 +1738,7 @@ export default {
         const [attempts, scenarios, language, saved, tasks] = await Promise.all([
           env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(is_correct), 0) AS correct FROM study_attempts').first() as Promise<Record<string, unknown>>,
           env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(AVG(score), 0) AS average_score FROM scenario_attempts').first() as Promise<Record<string, unknown>>,
-          env.DB.prepare(`SELECT 10000 AS total, COALESCE((SELECT SUM(p.mastered) FROM language_card_progress p WHERE p.card_id LIKE 'ja-sentence-%' OR p.card_id LIKE 'en-sentence-%'), 0) AS mastered`).first() as Promise<Record<string, unknown>>,
+          env.DB.prepare(`SELECT 10044 AS total, COALESCE((SELECT SUM(p.mastered) FROM language_card_progress p WHERE p.card_id LIKE 'ja-sentence-%' OR p.card_id LIKE 'en-sentence-%'), 0) AS mastered`).first() as Promise<Record<string, unknown>>,
           env.DB.prepare(`SELECT COUNT(*) AS total FROM saved_vocabulary_entries WHERE CASE WHEN json_valid(entry_json) THEN COALESCE(json_extract(entry_json, '$._zhixue_deleted_v1'), 0) ELSE 0 END != 1`).first() as Promise<Record<string, unknown>>,
           env.DB.prepare("SELECT COUNT(*) AS total, COALESCE(SUM(completed), 0) AS completed FROM daily_task_completions WHERE study_date = date('now', '+9 hours')").first() as Promise<Record<string, unknown>>,
         ])

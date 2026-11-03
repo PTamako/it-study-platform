@@ -8,6 +8,8 @@ import { getLanguageExpansions, getSentenceParts } from './language-annotations'
 import { isDictionaryHeadword, loadJapanesePitchDataset, matchingJapaneseAccents, pitchLabel, partOfSpeechDisplay, getChineseWordGuide, type PitchDataset } from './dictionary-word-metadata'
 import { dictionaryTranslationRows, chinesePinyinToneLabels } from './dictionary-presentation'
 import { fetchLanguageCorpus } from './language-corpus'
+import { advancedLanguageCards } from './advanced-language-cards'
+import { findStaticLearnerEntry, localLexiconLanguage } from './static-learner-dictionary'
 import { parseMockSnapshot, type MockSnapshot } from './mock-recovery'
 import ExamScratchTools from './ExamScratchTools.vue'
 import {
@@ -1313,6 +1315,16 @@ type LanguageReview = { card_id: string; review_count: number; correct_streak: n
 const languageReviews = ref<LanguageReview[]>(readStored('zhixue:language-reviews', []))
 const languageReviewBusy = ref('')
 const selectedLanguageMastery = ref<'all' | 'unlearned' | 'unmastered' | 'mastered'>('all')
+// A corpus difficulty proxy, not an invented JLPT/TOEIC classification.
+// The default removes very short beginner phrases without deleting any lessons.
+const selectedSentenceLength = ref<'all' | 'practice' | 'challenge'>('practice')
+function matchesSentenceLength(card: LanguageCard): boolean {
+  if (selectedSentenceLength.value === 'all') return true
+  const length = [...card.term].length
+  return card.language === 'ja'
+    ? length >= (selectedSentenceLength.value === 'challenge' ? 24 : 18)
+    : length >= (selectedSentenceLength.value === 'challenge' ? 65 : 40)
+}
 const languageReviewByCardId = computed(() => new Map<string, LanguageReview>(languageReviews.value.map(review => [review.card_id, review] as const)))
 const masteredLanguageIds = computed(() => new Set(completedLanguageCards.value))
 const reviewClockNow = ref(Date.now())
@@ -1323,7 +1335,7 @@ const isLanguageCardUnlearned = (card: LanguageCard) => {
   const review = languageReviewByCardId.value.get(card.id)
   return !masteredLanguageIds.value.has(card.id) && (!review || review.review_count === 0)
 }
-const unlearnedLanguageCount = computed(() => languageCards.value.filter(isLanguageCardUnlearned).length)
+const unlearnedLanguageCount = computed(() => languageCards.value.filter(card => matchesSentenceLength(card) && isLanguageCardUnlearned(card)).length)
 const visibleLanguageCards = computed(() => languageCards.value.filter(card => {
   const matchesCategory = selectedLanguageCategory.value === '全部' || card.category === selectedLanguageCategory.value
   const isMastered = masteredLanguageIds.value.has(card.id)
@@ -1332,7 +1344,7 @@ const visibleLanguageCards = computed(() => languageCards.value.filter(card => {
     || (selectedLanguageMastery.value === 'unlearned' && isUnlearned)
     || (selectedLanguageMastery.value === 'mastered' && isMastered)
     || (selectedLanguageMastery.value === 'unmastered' && !isMastered && !isUnlearned)
-  return matchesCategory && matchesMastery
+  return matchesCategory && matchesMastery && matchesSentenceLength(card)
 }).sort((a, b) => {
   const aReview = languageReviewByCardId.value.get(a.id)
   const bReview = languageReviewByCardId.value.get(b.id)
@@ -1374,7 +1386,7 @@ function nextLanguagePractice() {
   languagePracticeIndex.value = (languagePracticeIndex.value + 1) % visibleLanguageCards.value.length
   languagePracticeRevealed.value = false
 }
-watch([studyLanguage, selectedLanguageCategory, selectedLanguageMastery], () => {
+watch([studyLanguage, selectedLanguageCategory, selectedLanguageMastery, selectedSentenceLength], () => {
   stopSpeech()
   languagePage.value = 1
   languagePracticeIndex.value = 0
@@ -1410,8 +1422,11 @@ async function loadLanguageCards() {
   try {
     const items = await fetchLanguageCorpus<LanguageCard>(language, controller.signal)
     if (generation !== languageCardsLoadGeneration || language !== studyLanguage.value) return
-    languageDeckCache.set(language, items)
-    languageCards.value = items
+    // The original 5,000 licensed cards stay immutable; original advanced
+    // lessons have separately migrated D1 rows for cloud review/progress.
+    const lessons: LanguageCard[] = [...advancedLanguageCards.filter(card => card.language === language), ...items]
+    languageDeckCache.set(language, lessons)
+    languageCards.value = lessons
   } catch (error) {
     if (generation !== languageCardsLoadGeneration || controller.signal.aborted) return
     languageCards.value = []
@@ -1587,6 +1602,11 @@ type DictionaryEntry = {
   englishTerm?: string
   japaneseTerm?: string
   technical?: boolean
+  usageNote?: string
+  exampleTranslationZh?: string
+  exampleSourceUrl?: string
+  transcription?: string
+  sourceUrl?: string
 }
 const dictionaryEntries: DictionaryEntry[] = []
 const onlineEntries = ref<DictionaryEntry[]>([])
@@ -1619,6 +1639,10 @@ function dictionaryPosLabels(entry: DictionaryEntry): string[] {
 const recentDictionaryEntries = ref<DictionaryEntry[]>(readStored('zhixue:recent-dictionary', []))
 const savedDictionaryEntries = ref<DictionaryEntry[]>(readStored('zhixue:saved-dictionary-entries', []))
 const dictionaryLoading = ref(false)
+const dictionaryLocalHit = ref(false)
+const dictionaryNeedsOnlineTranslation = computed(() => dictionaryLocalHit.value && onlineEntries.value.some(entry =>
+  entry.language === 'ja' ? !entry.englishTerm : entry.language === 'en' && !entry.translationJa))
+let forceOnlineNextDictionaryLookup = false
 const dictionaryError = ref('')
 const dictionaryDetectedLanguage = ref<'ja' | 'en' | 'zh' | 'it' | ''>('')
 const dictionaryAiRemaining = ref<number | null>(null)
@@ -1891,11 +1915,18 @@ async function translateMissingDictionaryWithAi() {
     }
   }
 }
-watch([activeModule, authenticated], () => {
-  if (activeModule.value === 'dictionary' && authenticated.value) void loadDictionaryAiQuota()
-})
+// Do not perform a D1-backed AI quota read every time the dictionary opens.
+// The AI endpoint returns updated usage only when the owner asks for analysis.
 
+function enrichDictionaryTranslation() {
+  forceOnlineNextDictionaryLookup = true
+  void lookupDictionary()
+}
 async function lookupDictionary() {
+  const forceOnline = forceOnlineNextDictionaryLookup
+  const previouslyFoundLocally = dictionaryLocalHit.value
+  forceOnlineNextDictionaryLookup = false
+  dictionaryLocalHit.value = false
   resetDictionaryAiDisplay()
   const q = searchText.value.normalize('NFKC').trim().replace(/\s+/g, ' ')
   const requestedLanguage = dictSourceLang.value
@@ -1964,8 +1995,36 @@ async function lookupDictionary() {
   dictionaryError.value = ''
   onlineEntries.value = []
   lastSearchedTerm.value = ''
+  let staticWordChecked = forceOnline && previouslyFoundLocally && Boolean(localLexiconLanguage(q, requestedLanguage))
   try {
-    const response = await fetch('/api/dictionary?q=' + encodeURIComponent(q) + '&lang=' + encodeURIComponent(requestedLanguage), {
+    // Normal known-word lookups are resolved by static assets and browser cache.
+    // No Worker request, D1 row read, D1 quota write or Workers AI call.
+    if (!forceOnline) {
+      try {
+        const local = await findStaticLearnerEntry(q, requestedLanguage)
+        if (requestId !== dictionaryRequestId) return
+        staticWordChecked = q.length <= 80 && Boolean(localLexiconLanguage(q, requestedLanguage))
+        if (local) {
+          onlineEntries.value = [local]
+          dictionaryLocalHit.value = true
+          dictionaryDetectedLanguage.value = local.language
+          lastSearchedTerm.value = q
+          recentDictionaryEntries.value = [
+            local,
+            ...recentDictionaryEntries.value.filter(entry => entry.term.toLowerCase() !== local.term.toLowerCase()),
+          ].slice(0, 12)
+          if (local.language === 'ja' && local.reading) {
+            void loadJapanesePitchDataset().then(data => { dictionaryPitchData.value = data })
+          }
+          return
+        }
+      } catch (error) {
+        // Missing static assets are recoverable; retain the online dictionary.
+        console.warn('[dictionary] static lookup unavailable', error instanceof Error ? error.message : String(error))
+      }
+    }
+    const response = await fetch('/api/dictionary?q=' + encodeURIComponent(q) + '&lang=' + encodeURIComponent(requestedLanguage)
+      + (staticWordChecked ? '&static_word_checked=1' : ''), {
       signal: AbortSignal.timeout(18000),
     })
     const data = await response.json() as { items?: DictionaryEntry[]; error?: string; detected_language?: 'ja' | 'en' | 'zh' | 'it' }
@@ -1997,6 +2056,7 @@ async function lookupDictionary() {
   }
 }
 function clearDictionarySearch() {
+  dictionaryLocalHit.value = false
   resetDictionaryAiDisplay()
   dictionaryRequestId += 1
   dictionaryLoading.value = false
@@ -2010,6 +2070,7 @@ function clearDictionarySearch() {
 }
 function setDictionaryLanguage(language: 'auto' | 'ja' | 'en' | 'zh' | 'it') {
   if (dictSourceLang.value === language) return
+  dictionaryLocalHit.value = false
   resetDictionaryAiDisplay()
   dictSourceLang.value = language
   dictionaryRequestId += 1
@@ -2025,6 +2086,7 @@ watch(savedWords, value => localStorage.setItem('zhixue:saved-words', JSON.strin
 
 function navigate(id: ModuleId) {
   stopSpeech()
+  dictionaryLocalHit.value = false
   resetDictionaryAiDisplay()
   activeModule.value = id
   showMobileMenu.value = false
@@ -2833,6 +2895,12 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
               </div>
               <p v-else class="language-practice-prompt">当前筛选条件下没有卡片，切换分类或掌握状态后就能开始。</p>
             </section>
+            <div class="language-mastery-filter" role="group" aria-label="按句子长度筛选">
+              <button :class="{ chosen: selectedSentenceLength === 'all' }" @click="selectedSentenceLength = 'all'">全部句子</button>
+              <button :class="{ chosen: selectedSentenceLength === 'practice' }" @click="selectedSentenceLength = 'practice'">实用长句</button>
+              <button :class="{ chosen: selectedSentenceLength === 'challenge' }" @click="selectedSentenceLength = 'challenge'">挑战长句</button>
+            </div>
+            <p class="language-source">按句子长度筛选，默认减少过短的入门句；这不是 JLPT 或 TOEIC 难度评级。</p>
             <div class="language-category-filter" role="group" aria-label="按学习类别筛选">
               <button v-for="category in languageCategories" :key="category.title" :class="{ chosen: selectedLanguageCategory === category.title }" @click="selectedLanguageCategory = category.title">{{ category.title }}</button>
             </div>
@@ -2908,6 +2976,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
             </div>
 
             <p v-if="lastSearchedTerm && dictionaryDetectedLanguage && dictSourceLang === 'auto' && !dictionaryLoading" class="dictionary-status" role="status">识别为 {{ dictionaryDetectedLanguage === 'zh' ? '中文' : dictionaryDetectedLanguage === 'ja' ? '日语' : dictionaryDetectedLanguage === 'en' ? '英语' : 'IT 术语' }} · 可手动切换</p>
+            <p v-if="dictionaryLocalHit && !dictionaryLoading" class="dictionary-status" role="status">来自知学本地学习词典 · 不使用 D1 查询。<button v-if="dictionaryNeedsOnlineTranslation" type="button" class="text-link" @click="enrichDictionaryTranslation">按需补全另一种语言译文</button></p>
             <p v-if="dictionaryLoading" class="dictionary-status">正在查词…</p>
             <p v-else-if="dictionaryError" class="dictionary-status dictionary-error">{{ dictionaryError }} <button type="button" class="text-link" @click="lookupDictionary">重试</button></p>
           </section>
@@ -2931,6 +3000,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                           <span v-for="(tone, index) in dictionaryWordTones(entry)" :key="index" class="lexical-pitch-chip">{{ tone }}</span>
                         </span>
                         <span v-if="entry.language === 'en' && entry.phonetic" class="lexical-ipa">{{ entry.phonetic }}</span>
+                        <span v-else-if="entry.language === 'en' && entry.transcription" class="lexical-reading">词库读音标记：{{ entry.transcription }}</span>
                         <span v-if="entry.language === 'en' && entry.reading && !entry.phonetic" class="lexical-reading">日语近似读音：{{ entry.reading }}</span>
                         <span v-if="entry.language === 'ja' && dictionaryPitchLabels(entry).length" class="lexical-pitch">
                           <span class="lexical-pitch-caption">东京式音调</span>
@@ -2958,10 +3028,12 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                     <div v-for="row in dictionaryTranslationRows(entry)" :key="row.language" class="lexical-translation-row" :lang="row.language">
                       <span class="lexical-translation-lang">{{ row.label }}</span><p>{{ row.value }}</p>
                     </div>
-                    <div v-if="entry.example" class="lexical-example"><span>例句</span><p>{{ entry.example }}</p></div>
+                    <div v-if="entry.usageNote" class="lexical-example"><span>用法说明</span><p>{{ entry.usageNote }}</p></div>
+                    <div v-if="entry.example" class="lexical-example"><span>例句</span><p>{{ entry.example }}</p><p v-if="entry.exampleTranslationZh" class="lexical-example-translation">{{ entry.exampleTranslationZh }}</p><a v-if="entry.exampleSourceUrl" :href="entry.exampleSourceUrl" target="_blank" rel="noopener noreferrer">查看原始例句来源</a></div>
                   </div>
                   <div class="lexical-source-row">
-                    <span v-if="entry.source">{{ entry.source }}</span>
+                    <a v-if="entry.sourceUrl && entry.source" :href="entry.sourceUrl" target="_blank" rel="noopener noreferrer">{{ entry.source }}</a>
+                    <span v-else-if="entry.source">{{ entry.source }}</span>
                     <span v-else>{{ entry.tag }}</span>
                     <span v-if="entry.language === 'ja' && dictionaryPitchLabels(entry).length" class="lexical-pitch-source">音调 Kanjium · CC BY-SA 4.0</span>
                     <span v-if="entry.language === 'zh' && entry.lexicalSource && isDictionaryWord(entry)" class="lexical-pitch-source">读音与词性 {{ entry.lexicalSource }}</span>
@@ -2976,7 +3048,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                         {{ dictionaryAiBusy && dictionaryAiActiveKey === dictionaryAiKey(entry) ? 'AI 解释中…'
                           : (!entry.zh || (!entry.en && !entry.englishTerm) || !entry.translationJa) ? 'AI 补充释义' : 'AI 语境解析' }}
                       </button>
-                      <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次' : 'AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small>
+                      <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次' : 'AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small><button v-if="authenticated && dictionaryAiRemaining === null" type="button" class="text-link" @click="loadDictionaryAiQuota">查看剩余</button>
                     </div>
                     <div v-if="dictionaryAiAnswers[dictionaryAiKey(entry)]" class="dictionary-ai-result">
                       <strong>AI 辅助解析</strong>
@@ -2999,7 +3071,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   :disabled="dictionaryAiBusy" @click="supplementDictionaryWithAi(null)">
                   {{ dictionaryAiBusy && dictionaryAiActiveKey === dictionaryAiKey(null) ? 'AI 解释中…' : 'AI 辅助解释' }}
                 </button>
-                <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次' : 'AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small>
+                <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次' : 'AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small><button v-if="authenticated && dictionaryAiRemaining === null" type="button" class="text-link" @click="loadDictionaryAiQuota">查看剩余</button>
                 <div v-if="dictionaryAiAnswers[dictionaryAiKey(null)]" class="dictionary-ai-result">
                   <strong>AI 辅助解析</strong><p>{{ dictionaryAiAnswers[dictionaryAiKey(null)] }}</p>
                   <small>AI 仅供参考，并非权威词典释义。</small>
