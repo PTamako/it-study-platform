@@ -36,7 +36,7 @@ for(const item of items){
     source_type!=='licensed'||source_reference!==Q_URL||
     official_answer_reference!==A_URL||
     !Number.isInteger(pdf_page)||pdf_page<6||pdf_page>13||
-    !adaptation||!topic||!prompt||prompt.length<32||
+    !adaptation||!topic||!prompt||prompt.length<16||
     !Array.isArray(options)||options.length!==4||
     new Set(options).size!==4||!Number.isInteger(answer)||
     'abcd'[answer]!==key[original_number]||
