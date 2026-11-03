@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "description": "IPA FY2020 June 14 FE 修了認定試験 Q7 + Q10. Official PDF diagram and flowchart rewritten exactly as complete text expressions.",
+  "items": [
+    {
+      "original_question": 7,
+      "topic": "二分探索木",
+      "prompt": "次の4つの二分木のうち、全ての節について「左部分木の値はその節より小さく、右部分木の値はその節より大きい」という二分探索木の条件を満たすものはどれか。各候補は「節(左部分木,右部分木)」の記法で表し、括弧のない数値は葉とする。",
+      "options": [
+        "1(2(4,5),3(6(8,9),7))",
+        "4(2(1,3),8(6(5,7),9))",
+        "7(6(4,5),8(3(1,2),9))",
+        "9(7(1,2),8(5(3,4),6))"
+      ],
+      "answer": 1,
+      "explanation_ja": "二分探索木は全ての節で左部分木の全値が親より小さく、右部分木の全値が親より大きい必要がある。イは根4に対して左が1,2,3、右が5,6,7,8,9となり、下位でも条件が成立する。アは根1の左2が大きい。ウは右部分木8の配下に親7より小さい3が入り、エは根9の右8が小さい。原図の四つの二分木を文字構造へ一対一で変換した。",
+      "explanation_zh": "二叉搜索树要求每个节点的所有左子孙都比它小、右子孙都比它大。选项B以4为根，左侧1、2、3，右侧5～9，且各层满足条件；A根1左侧为2，C根7右子树含3，D根9右侧为8，均违反规则。用括号树状结构完整保留原图。",
+      "visual_equivalent": "Node(left,right) notation, all four node arrangements transcribed from printed page 5",
+      "id": "fe-exempt-2020-20200614-q07",
+      "fiscal_year": 2020,
+      "sitting_date": "2020-06-14",
+      "exam_origin": "fe_exemption",
+      "source_type": "licensed",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20200614_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20200614_FE.pdf",
+      "question_pdf_page": 5
+    },
+    {
+      "original_question": 10,
+      "topic": "配列とループ",
+      "prompt": "文字配列X[1..m]とY[1..n]の全要素を順に連結し、配列ZにXの内容の直後にYの内容を格納する。最初のループはk=1..mで処理aを行い、次のループはk=1..nで処理bを行う。aとbの組として適切なものはどれか（添字は1から始まり、1要素に1文字を格納する）。",
+      "options": [
+        "a: Z[k]←X[k]、b: Z[m+k]←Y[k]",
+        "a: Z[k]←X[k]、b: Z[n+k]←Y[k]",
+        "a: Z[k]←Y[k]、b: Z[m+k]←X[k]",
+        "a: Z[k]←Y[k]、b: Z[n+k]←X[k]"
+      ],
+      "answer": 0,
+      "explanation_ja": "第一ループはXのm文字をZ[1]からZ[m]へ同じ添字で格納する。第二ループはY[1]からY[n]をZ[m+1]からZ[m+n]へ続けて格納するので、Z[m+k]←Y[k]が必要である。n+kではXの長さmと連結位置が一致せず、XとYの代入を逆にすると文字列順が逆転する。原フローチャートと選択表を二つのループと式へ正確に文字化した。",
+      "explanation_zh": "先将X的m个字符复制到Z[1..m]，再将Y的n个字符放入Z[m+1..m+n]，因此第一段Z[k]=X[k]、第二段Z[m+k]=Y[k]。偏移量必须是X长度m，而非Y长度n。原卷流程图转换成两个循环和四组选项，保留全部条件。",
+      "visual_equivalent": "Flowchart loops k=1..m and k=1..n plus four a,b assignments fully textualized",
+      "id": "fe-exempt-2020-20200614-q10",
+      "fiscal_year": 2020,
+      "sitting_date": "2020-06-14",
+      "exam_origin": "fe_exemption",
+      "source_type": "licensed",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20200614_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20200614_FE.pdf",
+      "question_pdf_page": 7
+    }
+  ]
+}
