@@ -1828,6 +1828,7 @@ export default {
         try {
           const { results } = await env.DB.prepare(
             `SELECT card_id, review_count, correct_streak, next_review_at, last_reviewed_at, last_result,
+                    COALESCE(last_grade, last_result) AS last_grade,
                     CASE WHEN next_review_at <= CURRENT_TIMESTAMP THEN 1 ELSE 0 END AS is_due
              FROM language_card_reviews ORDER BY next_review_at ASC`,
           ).all()
@@ -1840,30 +1841,35 @@ export default {
       try { body = await request.json() as Record<string, unknown> }
       catch { return json({ error: '请求体必须是 JSON。' }, 400) }
       const cardId = String(body.card_id || '').trim()
-      const result = body.result === 'remembered' ? 'remembered' : body.result === 'again' ? 'again' : ''
+      const result = body.result === 'remembered' ? 'remembered' : body.result === 'hard' ? 'hard' : body.result === 'again' ? 'again' : ''
+      // Existing last_result CHECK permits only two values; preserve old clients.
+      const legacyResult = result === 'hard' ? 'again' : result
       if (!cardId || !result) return json({ error: '需要 card_id 和有效的 result。' }, 400)
       try {
         const card = await env.DB.prepare("SELECT id FROM language_cards WHERE id = ? AND content_type = 'sentence'").bind(cardId).first()
         if (!card) return json({ error: '句子课程卡片不存在。' }, 404)
-        const modifier = result === 'again' ? '+10 minutes' : '+1 day'
+        const modifier = result === 'again' ? '+10 minutes' : result === 'hard' ? '+6 hours' : '+1 day'
         // RETURNING supplies the single changed row. The client must not
         // fetch every saved review again after each spaced-repetition answer.
         const { results } = await env.DB.prepare(
           `INSERT INTO language_card_reviews
-             (card_id, review_count, correct_streak, next_review_at, last_reviewed_at, last_result, updated_at)
-           VALUES (?, 1, ?, datetime(CURRENT_TIMESTAMP, ?), CURRENT_TIMESTAMP, ?, CURRENT_TIMESTAMP)
+             (card_id, review_count, correct_streak, next_review_at, last_reviewed_at, last_result, last_grade, updated_at)
+           VALUES (?, 1, ?, datetime(CURRENT_TIMESTAMP, ?), CURRENT_TIMESTAMP, ?, ?, CURRENT_TIMESTAMP)
            ON CONFLICT(card_id) DO UPDATE SET
              review_count = language_card_reviews.review_count + 1,
              correct_streak = CASE WHEN excluded.last_result = 'remembered' THEN language_card_reviews.correct_streak + 1 ELSE 0 END,
+             last_grade = excluded.last_grade,
              next_review_at = datetime(CURRENT_TIMESTAMP, CASE
+               WHEN excluded.last_grade = 'hard' THEN '+6 hours'
                WHEN excluded.last_result = 'again' THEN '+10 minutes'
                ELSE CASE MIN(language_card_reviews.correct_streak + 1, 4)
                  WHEN 1 THEN '+1 day' WHEN 2 THEN '+3 days' WHEN 3 THEN '+7 days' ELSE '+14 days' END
              END),
              last_reviewed_at = CURRENT_TIMESTAMP, last_result = excluded.last_result, updated_at = CURRENT_TIMESTAMP
            RETURNING card_id, review_count, correct_streak, next_review_at, last_reviewed_at, last_result,
+                    COALESCE(last_grade, last_result) AS last_grade,
                     CASE WHEN next_review_at <= CURRENT_TIMESTAMP THEN 1 ELSE 0 END AS is_due`,
-        ).bind(cardId, result === 'remembered' ? 1 : 0, modifier, result).all()
+        ).bind(cardId, result === 'remembered' ? 1 : 0, modifier, legacyResult, result).all()
         return json({ ok: true, card_id: cardId, result, review: results[0] })
       } catch {
         return json({ error: '复习记录保存失败，请确认已应用最新的 D1 迁移。' }, 503)
