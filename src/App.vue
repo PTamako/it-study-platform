@@ -9,7 +9,7 @@ import { isDictionaryHeadword, loadJapanesePitchDataset, matchingJapaneseAccents
 import { dictionaryTranslationRows, chinesePinyinToneLabels } from './dictionary-presentation'
 import { fetchLanguageCorpus } from './language-corpus'
 import { advancedLanguageCards } from './advanced-language-cards'
-import { findStaticLearnerEntry } from './static-learner-dictionary'
+import { findStaticLearnerEntry, localLexiconLanguage } from './static-learner-dictionary'
 import { parseMockSnapshot, type MockSnapshot } from './mock-recovery'
 import ExamScratchTools from './ExamScratchTools.vue'
 import {
@@ -1925,6 +1925,7 @@ function enrichDictionaryTranslation() {
 }
 async function lookupDictionary() {
   const forceOnline = forceOnlineNextDictionaryLookup
+  const previouslyFoundLocally = dictionaryLocalHit.value
   forceOnlineNextDictionaryLookup = false
   dictionaryLocalHit.value = false
   resetDictionaryAiDisplay()
@@ -1995,6 +1996,7 @@ async function lookupDictionary() {
   dictionaryError.value = ''
   onlineEntries.value = []
   lastSearchedTerm.value = ''
+  let staticWordChecked = forceOnline && previouslyFoundLocally && Boolean(localLexiconLanguage(q, requestedLanguage))
   try {
     // Normal known-word lookups are resolved by static assets and browser cache.
     // No Worker request, D1 row read, D1 quota write or Workers AI call.
@@ -2002,6 +2004,7 @@ async function lookupDictionary() {
       try {
         const local = await findStaticLearnerEntry(q, requestedLanguage)
         if (requestId !== dictionaryRequestId) return
+        staticWordChecked = q.length <= 80 && Boolean(localLexiconLanguage(q, requestedLanguage))
         if (local) {
           onlineEntries.value = [local]
           dictionaryLocalHit.value = true
@@ -2021,7 +2024,8 @@ async function lookupDictionary() {
         console.warn('[dictionary] static lookup unavailable', error instanceof Error ? error.message : String(error))
       }
     }
-    const response = await fetch('/api/dictionary?q=' + encodeURIComponent(q) + '&lang=' + encodeURIComponent(requestedLanguage), {
+    const response = await fetch('/api/dictionary?q=' + encodeURIComponent(q) + '&lang=' + encodeURIComponent(requestedLanguage)
+      + (staticWordChecked ? '&static_word_checked=1' : ''), {
       signal: AbortSignal.timeout(18000),
     })
     const data = await response.json() as { items?: DictionaryEntry[]; error?: string; detected_language?: 'ja' | 'en' | 'zh' | 'it' }
