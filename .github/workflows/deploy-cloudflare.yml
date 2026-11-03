@@ -35,6 +35,12 @@ jobs:
       - name: Smoke-test new FE practice corpus and migration immediately
         run: node --test scripts/fe-growth-phase1.test.mjs
 
+      - name: Compile source-reviewed IPA 2019 spring FE morning questions
+        run: node scripts/generate_fe_2019_spring_source_review.mjs
+
+      - name: Validate IPA official answers and safe import before large dataset generation
+        run: node --test scripts/fe-ipa-2019-reviewed.test.mjs
+
       - name: Set up Python for licensed sentence dataset generation
         uses: actions/setup-python@v5
         with:
