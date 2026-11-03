@@ -15,6 +15,7 @@ import { findStaticLearnerEntry, localLexiconLanguage } from './static-learner-d
 import { DictionaryRequestCache } from './dictionary-request-cache'
 import { parseMockSnapshot, type MockSnapshot } from './mock-recovery'
 import ExamScratchTools from './ExamScratchTools.vue'
+import DailyGrammarLesson from './DailyGrammarLesson.vue'
 import {
   BookOpen, Languages, Search, GraduationCap,
   ChevronRight, ChevronDown, Sparkles, Clock3, Flame, Bookmark, Volume2, ArrowRight,
@@ -3102,6 +3103,8 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                 </article>
               </div>
             </section>
+            <DailyGrammarLesson :language="studyLanguage" :study-date="todayKey"
+              @speak="(text, language) => speak(text, language, 'daily-grammar:' + studyLanguage)" />
             <section class="language-filter-panel" aria-label="句子联动筛选">
               <div class="language-filter-top">
                 <div class="language-filter-total"><strong>筛选课程</strong><span>当前 {{ visibleLanguageCards.length.toLocaleString() }} 句</span></div>
