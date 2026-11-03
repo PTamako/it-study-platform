@@ -411,6 +411,7 @@ let practiceAnswerRequestId = 0
 type PracticeQuestion = {
   id: string; track_id: string; topic: string; difficulty: string; prompt: string;
   options: PracticeOption[]; answer: string; explanation: string; source_type: string; source_reference?: string; question_kind?: 'standard' | 'official_sample'; exam_origin?: 'general' | 'fe_exemption'; language: string; exam_section?: 'A' | 'B' | null; exam_section_method?: 'explicit' | 'case_pattern' | 'default_a' | 'unclassified' | null
+  original_question?: number | null
 }
 // IPA FE questions use Japanese answer labels ア～コ; internal answer IDs remain a～j.
 function practiceOptionLabel(question: PracticeQuestion, optionId: string): string {
@@ -437,6 +438,8 @@ const questionBatchOffset = ref(0)
 const questionBatchSize = 10
 const questionBankHasMore = ref(false)
 const practiceYear = ref('')
+const practiceSitting = ref('')
+const feExemptionSittings = ref<{ sitting_date: string; fiscal_year: number; available_positions: number }[]>([])
 const practiceSection = ref<'all' | 'A' | 'B'>('all')
 const practiceTopic = ref('')
 const practiceTopicOptions = ref<{ topic: string; question_count: number }[]>([])
@@ -928,6 +931,31 @@ async function loadExamTracks(silent = false) {
 const feBankLoading = ref(false)
 const feBankPrepared = ref(false)
 const feBankError = ref('')
+async function loadFeExemptionSittings() {
+  if (selectedTrackId.value !== 'exam-fe' || questionSourceFilter.value !== 'exemption') {
+    practiceSitting.value = ''
+    feExemptionSittings.value = []
+    return
+  }
+  const requestedYear = practiceYear.value
+  try {
+    const params = new URLSearchParams()
+    if (requestedYear) params.set('year', requestedYear)
+    const response = await fetch('/api/fe-exemption-sittings?' + params.toString())
+    if (!response.ok) throw new Error('修了試験场次加载失败')
+    const data = await response.json() as { items?: { sitting_date: string; fiscal_year: number; available_positions: number }[] }
+    if (requestedYear !== practiceYear.value || questionSourceFilter.value !== 'exemption') return
+    feExemptionSittings.value = data.items || []
+    if (practiceSitting.value && !feExemptionSittings.value.some(item => item.sitting_date === practiceSitting.value)) practiceSitting.value = ''
+  } catch {
+    if (requestedYear === practiceYear.value) feExemptionSittings.value = []
+  }
+}
+function selectPracticeSitting() {
+  practiceTopic.value = ''
+  void loadPracticeTopics()
+  selectReviewMode('all')
+}
 async function loadPracticeTopics() {
   const requestId = ++practiceTopicLoadId
   if (!practiceHasDetailedFilters.value) return
@@ -936,6 +964,7 @@ async function loadPracticeTopics() {
       track: selectedTrackId.value,
       source: questionSourceFilter.value,
       year: practiceYear.value,
+      sitting: questionSourceFilter.value === 'exemption' ? practiceSitting.value : '',
       section: practiceSection.value === 'all' ? '' : practiceSection.value,
     })
     const response = await fetch('/api/question-categories?' + params)
@@ -954,6 +983,10 @@ function applyPracticeFilter(changed: 'year' | 'section' | 'topic') {
   // SG's legacy and CBT year filters represent IPA official questions only.
   if (changed === 'year' && selectedTrackId.value === 'exam-sg' && practiceYear.value) {
     questionSourceFilter.value = 'official'
+  }
+  if (changed === 'year' && selectedTrackId.value === 'exam-fe' && questionSourceFilter.value === 'exemption') {
+    practiceSitting.value = ''
+    void loadFeExemptionSittings()
   }
   if (changed !== 'topic') {
     practiceTopic.value = ''
@@ -991,6 +1024,8 @@ function selectExam(track: ExamTrack) {
   // Reset all filters on exam switch so SG is not affected by the previous FE selection.
   questionSourceFilter.value = 'all'
   practiceYear.value = ''
+  practiceSitting.value = ''
+  feExemptionSittings.value = []
   practiceSection.value = 'all'
   practiceTopic.value = ''
   practiceTopicOptions.value = []
@@ -1013,6 +1048,8 @@ async function selectQuestionSource(source: 'all' | 'official' | 'generated' | '
   questionProgressRequestId += 1
   const previousSource = questionSourceFilter.value
   questionSourceFilter.value = source
+  practiceSitting.value = ''
+  feExemptionSittings.value = []
   if (selectedTrackId.value === 'exam-fe') {
     if (source === 'sample') practiceYear.value = '2022'
     else if (previousSource === 'sample' && practiceYear.value === '2022') practiceYear.value = ''
@@ -1022,6 +1059,7 @@ async function selectQuestionSource(source: 'all' | 'official' | 'generated' | '
     // generated + legacy-year combination after switching question sources.
     if (selectedTrackId.value === 'exam-sg' && source !== 'official') practiceYear.value = ''
     practiceTopic.value = ''
+    if (source === 'exemption') await loadFeExemptionSittings()
     await loadPracticeTopics()
   }
   questionBatchOffset.value = 0
@@ -1091,6 +1129,7 @@ async function startPractice() {
       })
       if (trackId === 'exam-fe' || trackId === 'exam-sg') {
         if (practiceYear.value) params.set('year', practiceYear.value)
+        if (questionSourceFilter.value === 'exemption' && practiceSitting.value) params.set('sitting', practiceSitting.value)
         if (practiceSection.value !== 'all') params.set('section', practiceSection.value)
         if (practiceTopic.value) params.set('topic', practiceTopic.value)
       }
@@ -1110,6 +1149,7 @@ async function startPractice() {
       })
       if (trackId === 'exam-fe' || trackId === 'exam-sg') {
         if (practiceYear.value) params.set('year', practiceYear.value)
+        if (questionSourceFilter.value === 'exemption' && practiceSitting.value) params.set('sitting', practiceSitting.value)
         if (practiceSection.value !== 'all') params.set('section', practiceSection.value)
         if (practiceTopic.value) params.set('topic', practiceTopic.value)
       }
@@ -2614,11 +2654,17 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
               <p v-if="selectedTrackId === 'exam-fe' && (questionSourceFilter === 'sample' || practiceYear === '2022')" class="language-source">2022 年 IPA 官方样题可以直接练习；2020～2022 年普通 FE CBT 正式题未公开，但这三年另有官方修了試験资料，可选择「修了試験」练习。</p>
               <div v-if="practiceHasDetailedFilters" class="question-category-section">
                 <div class="question-category-heading"><strong>筛选题目</strong></div>
-                <div class="fe-filter-controls">
+                <div class="fe-filter-controls" :class="{ 'has-sitting': selectedTrackId === 'exam-fe' && questionSourceFilter === 'exemption' }">
                   <label>年度
                     <select v-model="practiceYear" :aria-label="selectedTrackId === 'exam-sg' ? 'SG 年度' : 'FE 年度'" @change="applyPracticeFilter('year')">
                       <option value="">全部</option>
                       <option v-for="year in practiceYearOptions" :key="year" :value="String(year)">{{ year }} 年</option>
+                    </select>
+                  </label>
+                  <label v-if="selectedTrackId === 'exam-fe' && questionSourceFilter === 'exemption'">修了試験场次
+                    <select v-model="practiceSitting" aria-label="FE 修了試験场次" @change="selectPracticeSitting">
+                      <option value="">全部场次（去重）</option>
+                      <option v-for="item in feExemptionSittings" :key="item.sitting_date" :value="item.sitting_date">{{ item.sitting_date }}（已核验 {{ item.available_positions }} 题）</option>
                     </select>
                   </label>
                   <label>科目
@@ -2669,7 +2715,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                 </template>
               </div>
               <div v-else-if="currentQuestion" class="panel question-card">
-                <div class="question-topline"><span>{{ selectedTrack?.title || '考试练习' }} · 第 {{ quizIndex + 1 }} / {{ quizQuestions.length }} 题 · {{ currentQuestion.exam_section ? '科目' + currentQuestion.exam_section : '题型待复核' }}<template v-if="currentQuestion.exam_section && currentQuestion.exam_section_method !== 'explicit'"></template></span><span class="source-pill">{{ currentQuestion?.exam_origin === 'fe_exemption' ? '修了試験' : currentQuestion?.question_kind === 'official_sample' ? '公式サンプル問題' : currentQuestion?.source_type === 'generated' ? '预测题库 · 原创' : currentQuestion?.source_type === 'official' ? '历年真题' : currentQuestion?.source_type === 'licensed' ? '真题改编' : '其他题目' }}</span></div>
+                <div class="question-topline"><span>{{ selectedTrack?.title || '考试练习' }} · 第 {{ quizIndex + 1 }} / {{ quizQuestions.length }} 题 · {{ currentQuestion.exam_section ? '科目' + currentQuestion.exam_section : '题型待复核' }}<template v-if="practiceSitting && currentQuestion.original_question"> · 原卷问{{ currentQuestion.original_question }}</template><template v-if="currentQuestion.exam_section && currentQuestion.exam_section_method !== 'explicit'"></template></span><span class="source-pill">{{ currentQuestion?.exam_origin === 'fe_exemption' ? '修了試験' : currentQuestion?.question_kind === 'official_sample' ? '公式サンプル問題' : currentQuestion?.source_type === 'generated' ? '预测题库 · 原创' : currentQuestion?.source_type === 'official' ? '历年真题' : currentQuestion?.source_type === 'licensed' ? '真题改编' : '其他题目' }}</span></div>
                 <div class="question-progress"><span :style="{ width: ((quizIndex + 1) / quizQuestions.length * 100) + '%' }"></span></div>
                 <div class="question-topic">{{ currentQuestion.topic }}</div>
                 <div class="question-mastery-row">
