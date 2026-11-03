@@ -1604,6 +1604,7 @@ type DictionaryEntry = {
   technical?: boolean
   usageNote?: string
   exampleTranslationZh?: string
+  exampleSourceUrl?: string
   transcription?: string
   sourceUrl?: string
 }
@@ -3022,7 +3023,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                       <span class="lexical-translation-lang">{{ row.label }}</span><p>{{ row.value }}</p>
                     </div>
                     <div v-if="entry.usageNote" class="lexical-example"><span>用法说明</span><p>{{ entry.usageNote }}</p></div>
-                    <div v-if="entry.example" class="lexical-example"><span>例句</span><p>{{ entry.example }}</p><p v-if="entry.exampleTranslationZh" class="lexical-example-translation">{{ entry.exampleTranslationZh }}</p></div>
+                    <div v-if="entry.example" class="lexical-example"><span>例句</span><p>{{ entry.example }}</p><p v-if="entry.exampleTranslationZh" class="lexical-example-translation">{{ entry.exampleTranslationZh }}</p><a v-if="entry.exampleSourceUrl" :href="entry.exampleSourceUrl" target="_blank" rel="noopener noreferrer">查看原始例句来源</a></div>
                   </div>
                   <div class="lexical-source-row">
                     <a v-if="entry.sourceUrl && entry.source" :href="entry.sourceUrl" target="_blank" rel="noopener noreferrer">{{ entry.source }}</a>
