@@ -2056,6 +2056,7 @@ async function lookupDictionary() {
   }
 }
 function clearDictionarySearch() {
+  dictionaryLocalHit.value = false
   resetDictionaryAiDisplay()
   dictionaryRequestId += 1
   dictionaryLoading.value = false
@@ -2069,6 +2070,7 @@ function clearDictionarySearch() {
 }
 function setDictionaryLanguage(language: 'auto' | 'ja' | 'en' | 'zh' | 'it') {
   if (dictSourceLang.value === language) return
+  dictionaryLocalHit.value = false
   resetDictionaryAiDisplay()
   dictSourceLang.value = language
   dictionaryRequestId += 1
@@ -2083,6 +2085,7 @@ function setDictionaryLanguage(language: 'auto' | 'ja' | 'en' | 'zh' | 'it') {
 watch(savedWords, value => localStorage.setItem('zhixue:saved-words', JSON.stringify(value)), { deep: true })
 
 function navigate(id: ModuleId) {
+  dictionaryLocalHit.value = false
   stopSpeech()
   resetDictionaryAiDisplay()
   activeModule.value = id
