@@ -165,6 +165,10 @@ test('FY2020–22 FE 修了試験 shows only audited exemption items in the dedi
   insert.run('fe-exempt-2020-20200614-q01','基数変換')
   insert.run('fe-exempt-2021-20210613-q01','基数変換')
   insert.run('fe-exempt-2022-20220612-q01','論理演算')
+  const occurrence=sql.prepare("INSERT INTO fe_exemption_occurrences (sitting_date,original_question,fiscal_year,canonical_question_id,official_answer) VALUES (?,?,?,?,?)")
+  occurrence.run('2020-06-14',1,2020,'fe-exempt-2020-20200614-q01','b')
+  occurrence.run('2021-06-13',1,2021,'fe-exempt-2021-20210613-q01','b')
+  occurrence.run('2022-06-12',1,2022,'fe-exempt-2022-20220612-q01','b')
   for(const y of ['2020','2021','2022']){
     const result=await get(env,'/api/questions?track=exam-fe&source=exemption&year='+y+'&section=A')
     assert.equal(result.status,200)
