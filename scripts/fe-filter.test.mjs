@@ -39,6 +39,7 @@ function setup() {
   insert.run('sg-official-h29a-2017-q01','exam-sg','リスク管理','sg-2017','official','A')
   insert.run('sg-b-case-001','exam-sg','情報資産管理','sg-case','generated','B')
   insert.run('sg-prediction-2026-001','exam-sg','情報セキュリティ','sg-pred','generated','A')
+  sql.exec("ALTER TABLE questions ADD COLUMN question_kind TEXT NOT NULL DEFAULT 'standard' CHECK(question_kind IN ('standard','official_sample'))")
   return { sql, env: { DB: { prepare(query) { return { bind(...args) { return {
     all: async () => ({ results: sql.prepare(query).all(...args) }),
     first: async () => sql.prepare(query).get(...args),
