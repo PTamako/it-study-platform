@@ -60,6 +60,7 @@ printf '\n[3/7] Generate reproducible local migration/test fixtures\n'
 "$python_bin" scripts/generate_language_sentence_seed.py
 "$python_bin" scripts/build_static_learner_dictionary.py
 node scripts/generate_fe_practice_bank.mjs
+node scripts/generate_fe_growth_phase1.mjs
 printf '\n[4/7] Typecheck\n'
 npm run typecheck
 printf '\n[5/7] Unit/integration regression tests\n'

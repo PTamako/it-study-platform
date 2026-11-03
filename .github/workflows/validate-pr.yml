@@ -29,6 +29,12 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Generate reviewed FE A/B phase-one practice bank
+        run: node scripts/generate_fe_growth_phase1.mjs
+
+      - name: Smoke-test new FE practice corpus and migration immediately
+        run: node --test scripts/fe-growth-phase1.test.mjs
+
       - name: Set up Python for licensed sentence dataset generation
         uses: actions/setup-python@v5
         with:
@@ -48,6 +54,7 @@ jobs:
 
       - name: Generate FE practice question migration
         run: node scripts/generate_fe_practice_bank.mjs
+
 
       - name: Run automated regression tests
         run: npm test
