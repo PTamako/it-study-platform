@@ -181,7 +181,7 @@
       "section": "A",
       "question_number": 19,
       "topic": "主記憶",
-      "prompt": "DRAMの特徴として適切なのはどれか。",
+      "prompt": "DRAM（ダイナミックRAM）の一般的な特徴として正しい説明はどれか。",
       "options": [
         "消去が必ずブロック単位",
         "情報保持にリフレッシュが不要",
