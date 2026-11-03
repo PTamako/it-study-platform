@@ -2085,8 +2085,8 @@ function setDictionaryLanguage(language: 'auto' | 'ja' | 'en' | 'zh' | 'it') {
 watch(savedWords, value => localStorage.setItem('zhixue:saved-words', JSON.stringify(value)), { deep: true })
 
 function navigate(id: ModuleId) {
-  dictionaryLocalHit.value = false
   stopSpeech()
+  dictionaryLocalHit.value = false
   resetDictionaryAiDisplay()
   activeModule.value = id
   showMobileMenu.value = false
