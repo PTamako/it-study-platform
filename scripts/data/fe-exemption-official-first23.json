@@ -1,0 +1,506 @@
+{
+  "version": 1,
+  "license_note": "IPA 修了認定試験公開過去問題の学習用改編。CBT実試験の過去問題ではない。",
+  "verified_papers": [
+    "2020-06-14",
+    "2021-06-13",
+    "2022-06-12"
+  ],
+  "items": [
+    {
+      "id": "fe-exempt-2020-20200614-q01",
+      "fiscal_year": 2020,
+      "sitting_date": "2020-06-14",
+      "original_question": 1,
+      "topic": "二進シフト",
+      "prompt": "整数xをレジスタで2ビット左シフトし，元のxを加えると何倍か。オーバフローはない。",
+      "options": [
+        "3倍",
+        "4倍",
+        "5倍",
+        "6倍"
+      ],
+      "answer": 2,
+      "explanation_ja": "2ビット左シフトは4x。元のxを加えるので合計5x。",
+      "explanation_zh": "左移两位为4倍，再加原值，得到5倍。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20200614_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20200614_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2020-20200614-q02",
+      "fiscal_year": 2020,
+      "sitting_date": "2020-06-14",
+      "original_question": 2,
+      "topic": "集合演算",
+      "prompt": "任意の集合A,B,Cについて常に成立する等式はどれか（∪は和集合，∩は積集合）。",
+      "options": [
+        "(A∪B)∩(A∩C)=B∩(A∪C)",
+        "(A∪B)∩C=(A∪C)∩(B∪C)",
+        "(A∩C)∪(B∩A)=(A∩B)∪(B∩C)",
+        "(A∩C)∪(B∩C)=(A∪B)∩C"
+      ],
+      "answer": 3,
+      "explanation_ja": "集合の分配法則により，(A∩C)∪(B∩C)=(A∪B)∩C。",
+      "explanation_zh": "分配律：(A∩C)∪(B∩C)=(A∪B)∩C。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20200614_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20200614_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2020-20200614-q03",
+      "fiscal_year": 2020,
+      "sitting_date": "2020-06-14",
+      "original_question": 3,
+      "topic": "二項定理",
+      "prompt": "(1+α)^n を 1+nα で近似するとき，αの値に適した条件はどれか。",
+      "options": [
+        "|α|が1に比べ十分小さい",
+        "|α|がnに比べ十分大きい",
+        "|α/n|が1より大きい",
+        "|nα|が1より大きい"
+      ],
+      "answer": 0,
+      "explanation_ja": "αの絶対値が十分小さいとき，二項展開の高次項を無視できる。",
+      "explanation_zh": "α绝对值足够小，二项式展开的高次项可以忽略。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20200614_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20200614_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2020-20200614-q04",
+      "fiscal_year": 2020,
+      "sitting_date": "2020-06-14",
+      "original_question": 4,
+      "topic": "ユークリッド互除法",
+      "prompt": "175と77の最大公約数を剰余演算を繰り返すユークリッド互除法で求める。剰余演算は何回か。",
+      "options": [
+        "3回",
+        "4回",
+        "6回",
+        "7回"
+      ],
+      "answer": 1,
+      "explanation_ja": "175 mod77=21，77 mod21=14，21 mod14=7，14 mod7=0。計4回。",
+      "explanation_zh": "求余数依次为21、14、7、0，因此共4次。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20200614_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20200614_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2020-20200614-q05",
+      "fiscal_year": 2020,
+      "sitting_date": "2020-06-14",
+      "original_question": 5,
+      "topic": "PCM標本化",
+      "prompt": "8ビット/標本の非圧縮音声を毎秒64,000ビットで転送する。標本間隔は何µsか。",
+      "options": [
+        "15.6",
+        "46.8",
+        "125",
+        "128"
+      ],
+      "answer": 2,
+      "explanation_ja": "64,000÷8=8,000標本/秒。1,000,000÷8,000=125µs。",
+      "explanation_zh": "每秒8000次采样，间隔为125微秒。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20200614_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20200614_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2020-20200614-q06",
+      "fiscal_year": 2020,
+      "sitting_date": "2020-06-14",
+      "original_question": 6,
+      "topic": "ディジタル処理",
+      "prompt": "アナログ電圧をディジタル値へ変換して演算する利点はどれか。",
+      "options": [
+        "A/D変換では誤差が全く出ない",
+        "部品精度・温度・雑音の影響を受けにくい",
+        "数値計算の丸め誤差はゼロ",
+        "演算遅延が必ずゼロ"
+      ],
+      "answer": 1,
+      "explanation_ja": "デジタル演算は雑音や温度変化の影響を減らせるが，量子化誤差などは生じ得る。",
+      "explanation_zh": "数字运算减轻噪声和温度变化影响，但可能有量化误差。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20200614_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20200614_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2020-20200614-q08",
+      "fiscal_year": 2020,
+      "sitting_date": "2020-06-14",
+      "original_question": 8,
+      "topic": "キュー・FIFO",
+      "prompt": "空のキューにENQ1,ENQ2,ENQ3,DEQ,ENQ4,ENQ5,DEQ,ENQ6,DEQ,DEQを実行した。次のDEQで取り出す値は？",
+      "options": [
+        "1",
+        "2",
+        "5",
+        "6"
+      ],
+      "answer": 2,
+      "explanation_ja": "4回のDEQで1,2,3,4が取り出され，次は5となる。",
+      "explanation_zh": "前四次出队为1、2、3、4，第五次是5。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20200614_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20200614_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2020-20200614-q09",
+      "fiscal_year": 2020,
+      "sitting_date": "2020-06-14",
+      "original_question": 9,
+      "topic": "再帰",
+      "prompt": "プログラミングにおける関数の再帰呼出しを正しく説明したものはどれか。",
+      "options": [
+        "イベント駆動処理を行う",
+        "関数の内部で同じ関数を呼ぶ",
+        "終了した関数を削除しない",
+        "失敗直前に状態を戻す"
+      ],
+      "answer": 1,
+      "explanation_ja": "再帰は関数が自身を再び呼び出す方式で，通常は停止条件を設ける。",
+      "explanation_zh": "递归指函数内部调用自身，通常需要终止条件。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20200614_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20200614_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2021-20210613-q01",
+      "fiscal_year": 2021,
+      "sitting_date": "2021-06-13",
+      "original_question": 1,
+      "topic": "二進小数",
+      "prompt": "0.05，0.125，0.375，0.5のうち有限桁の二進小数にならないのは？",
+      "options": [
+        "0.05",
+        "0.125",
+        "0.375",
+        "0.5"
+      ],
+      "answer": 0,
+      "explanation_ja": "0.05=1/20は分母に5を含む。有限二進小数は分母が2の累乗に限る。",
+      "explanation_zh": "0.05=1/20分母含5，不能表示成有限二进制小数。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20210613_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20210613_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2021-20210613-q02",
+      "fiscal_year": 2021,
+      "sitting_date": "2021-06-13",
+      "original_question": 2,
+      "topic": "関数の極限",
+      "prompt": "f(t)=a/(t+1)，g(t)=b/(t²−t)（a,b≠0,t>1）とする。t→∞のg(t)/f(t)は？",
+      "options": [
+        "0",
+        "1",
+        "b/a",
+        "∞"
+      ],
+      "answer": 0,
+      "explanation_ja": "g/f=(b/a)(t+1)/(t(t−1))。tが大きくなると0へ収束する。",
+      "explanation_zh": "比值中分母增长更快，极限是0。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20210613_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20210613_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2021-20210613-q03",
+      "fiscal_year": 2021,
+      "sitting_date": "2021-06-13",
+      "original_question": 3,
+      "topic": "反復・不動点",
+      "prompt": "x←aからy←f(x),x←yを繰り返すとyが変化しなくなった。成立する式は？",
+      "options": [
+        "f(a)=y",
+        "f(y)=0",
+        "f(y)=a",
+        "f(y)=y"
+      ],
+      "answer": 3,
+      "explanation_ja": "変化しない状態ではyにfを作用させても同じ値となり，f(y)=y。",
+      "explanation_zh": "达到不动点后再次应用f仍得到y。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20210613_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20210613_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2021-20210613-q04",
+      "fiscal_year": 2021,
+      "sitting_date": "2021-06-13",
+      "original_question": 4,
+      "topic": "正規分布",
+      "prompt": "連続値を扱う正規分布の確率密度曲線として適切な形状はどれか。",
+      "options": [
+        "バスタブ状の故障率",
+        "全結果が等確率",
+        "平均を中心に左右対称の釣鐘形",
+        "離散的な一定確率"
+      ],
+      "answer": 2,
+      "explanation_ja": "正規分布は平均を中心として左右対称の釣鐘形を持つ。",
+      "explanation_zh": "正态分布以均值为中心，左右对称，呈钟形。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20210613_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20210613_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2021-20210613-q06",
+      "fiscal_year": 2021,
+      "sitting_date": "2021-06-13",
+      "original_question": 6,
+      "topic": "正規表現",
+      "prompt": "文字列全体が正規表現[A-Z]+[0-9]*に一致するものはどれか。",
+      "options": [
+        "456789",
+        "ABC+99",
+        "ABC99*",
+        "ABCDEF"
+      ],
+      "answer": 3,
+      "explanation_ja": "大文字が1文字以上，その後に数字が0文字以上。ABCDEFは一致する。",
+      "explanation_zh": "至少一个大写字母，后接零个以上数字，ABCDEF符合。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20210613_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20210613_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2021-20210613-q07",
+      "fiscal_year": 2021,
+      "sitting_date": "2021-06-13",
+      "original_question": 7,
+      "topic": "スタック",
+      "prompt": "A,B,C,Dの順に到着したデータをスタック一つで処理する。可能な出力順は？",
+      "options": [
+        "A,D,B,C",
+        "B,D,A,C",
+        "C,B,D,A",
+        "D,C,A,B"
+      ],
+      "answer": 2,
+      "explanation_ja": "A,B,Cを積みC,Bを出し，Dを積んでD,Aを出せばよい。",
+      "explanation_zh": "先压A、B、C，弹C、B，再压D，弹D、A。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20210613_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20210613_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2021-20210613-q08",
+      "fiscal_year": 2021,
+      "sitting_date": "2021-06-13",
+      "original_question": 8,
+      "topic": "ハッシュ関数",
+      "prompt": "h(x)=x mod n としたとき，異なるキーaとbが衝突する条件はどれか。",
+      "options": [
+        "a+bがnの倍数",
+        "a−bがnの倍数",
+        "nがa+bの倍数",
+        "nがa−bの倍数"
+      ],
+      "answer": 1,
+      "explanation_ja": "剰余が一致する条件は，a−bがnの倍数になること。",
+      "explanation_zh": "两数除以n的余数相同，当且仅当差值为n的倍数。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20210613_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20210613_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2021-20210613-q09",
+      "fiscal_year": 2021,
+      "sitting_date": "2021-06-13",
+      "original_question": 9,
+      "topic": "最大公約数",
+      "prompt": "f(x,y)はy=0ならx，それ以外はf(y,x mod y)を返す。f(775,527)は？",
+      "options": [
+        "0",
+        "31",
+        "248",
+        "527"
+      ],
+      "answer": 1,
+      "explanation_ja": "775 mod527=248，527 mod248=31，248 mod31=0。結果31。",
+      "explanation_zh": "欧几里得算法余数为248、31、0，最大公约数31。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20210613_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20210613_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2022-20220612-q01",
+      "fiscal_year": 2022,
+      "sitting_date": "2022-06-12",
+      "original_question": 1,
+      "topic": "XOR・XNOR",
+      "prompt": "二つのビットが異なるときに1となる排他的論理和（XOR）を否定する演算は？",
+      "options": [
+        "XNOR（一致）",
+        "NAND（否定論理積）",
+        "OR（論理和）",
+        "AND（論理積）"
+      ],
+      "answer": 0,
+      "explanation_ja": "XORを反転したXNORは入力が等しいとき1となる。原卷图形选项在此以名称替代。",
+      "explanation_zh": "XOR取反是XNOR，输入相同时为1，原卷图形改为文字。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20220612_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20220612_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2022-20220612-q02",
+      "fiscal_year": 2022,
+      "sitting_date": "2022-06-12",
+      "original_question": 2,
+      "topic": "情報落ち",
+      "prompt": "浮動小数点で大きな数と小さな数を加減算し，小さい数の有効桁が消える現象は？",
+      "options": [
+        "打切り誤差",
+        "桁落ち",
+        "情報落ち",
+        "絶対誤差"
+      ],
+      "answer": 2,
+      "explanation_ja": "値の大きさが極端に異なり，小さい側の有効桁が表現されない情報落ち。",
+      "explanation_zh": "大小悬殊的浮点数相加，小数有效位丢失称为信息丢失。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20220612_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20220612_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2022-20220612-q03",
+      "fiscal_year": 2022,
+      "sitting_date": "2022-06-12",
+      "original_question": 3,
+      "topic": "二の補数",
+      "prompt": "負数を8ビットの二の補数10101110で表す。その絶対値の2進表現は？",
+      "options": [
+        "01010000",
+        "01010001",
+        "01010010",
+        "01010011"
+      ],
+      "answer": 2,
+      "explanation_ja": "ビット反転すると01010001。1加えて01010010。",
+      "explanation_zh": "按位取反得到01010001，加1得到01010010。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20220612_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20220612_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2022-20220612-q06",
+      "fiscal_year": 2022,
+      "sitting_date": "2022-06-12",
+      "original_question": 6,
+      "topic": "深層学習",
+      "prompt": "ディープラーニングの特徴として最も適切なのはどれか。",
+      "options": [
+        "多層ニューラルネットで特徴を学ぶ",
+        "外れ値を除去することだけ",
+        "固定の論理規則を演繹する",
+        "固定専門家ルールを実行する"
+      ],
+      "answer": 0,
+      "explanation_ja": "深層学習は多層のニューラルネットワークで複雑な特徴を学習する。",
+      "explanation_zh": "深度学习通过多层神经网络学习复杂特征。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20220612_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20220612_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2022-20220612-q09",
+      "fiscal_year": 2022,
+      "sitting_date": "2022-06-12",
+      "original_question": 9,
+      "topic": "バブルソート",
+      "prompt": "配列の末尾から先頭方向へ隣接要素を比較し小さい方を左へ移す。最初の外側ループ後に保証されるのは？",
+      "options": [
+        "先頭が最小値",
+        "先頭が最大値",
+        "末尾が最小値",
+        "末尾が最大値"
+      ],
+      "answer": 0,
+      "explanation_ja": "右から左への隣接交換では最小要素が先頭まで運ばれる。",
+      "explanation_zh": "从右到左交换，第一次外层遍历后最小值到达首位。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20220612_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20220612_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2022-20220612-q11",
+      "fiscal_year": 2022,
+      "sitting_date": "2022-06-12",
+      "original_question": 11,
+      "topic": "MIPS性能",
+      "prompt": "CPUは200MIPS，利用率80%，1取引に800,000命令必要。1秒の取引件数は？",
+      "options": [
+        "20",
+        "200",
+        "250",
+        "313"
+      ],
+      "answer": 1,
+      "explanation_ja": "200,000,000×0.8÷800,000=200件/秒。",
+      "explanation_zh": "有效每秒执行1.6亿指令，每笔80万指令，因此200笔。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20220612_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20220612_FE.pdf"
+    },
+    {
+      "id": "fe-exempt-2022-20220612-q12",
+      "fiscal_year": 2022,
+      "sitting_date": "2022-06-12",
+      "original_question": 12,
+      "topic": "ECCメモリ",
+      "prompt": "1ビットの訂正と2ビットの検出を同時に実現する符号化方式はどれか。",
+      "options": [
+        "奇数パリティ",
+        "水平パリティ",
+        "チェックサム",
+        "拡張ハミング符号（SECDED）"
+      ],
+      "answer": 3,
+      "explanation_ja": "全体パリティを持つ拡張ハミング符号はSECDEDを実現する。",
+      "explanation_zh": "扩展汉明码SECDED可纠正一位错误并检测两位错误。",
+      "source_type": "licensed",
+      "exam_origin": "fe_exemption",
+      "source_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20220612_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20220612_FE.pdf"
+    }
+  ],
+  "additional_occurrences": [
+    {
+      "fiscal_year": 2022,
+      "sitting_date": "2022-06-12",
+      "original_question": 5,
+      "canonical_question_id": "fe-exempt-2020-20200614-q04",
+      "official_answer": "b",
+      "question_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20220612_FE.pdf",
+      "answer_url": "https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20220612_FE.pdf",
+      "note": "同じ175と77のユークリッド互除法を出題。2020年6月問4と2022年6月問5を1つの正規化された学習問題へ対応付ける"
+    }
+  ]
+}

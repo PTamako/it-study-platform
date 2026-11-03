@@ -53,6 +53,12 @@ jobs:
       - name: Verify IPA 2020-2022 exemption catalog and all 86 samples
         run: node --test scripts/fe-2022-official-samples-completion.test.mjs scripts/fe-2020-2022-exemption-catalog.test.mjs
 
+      - name: Generate FY2020–22 IPA FE exemption question bank with dedup links
+        run: node scripts/generate_fe_2020_2022_exemption_first_batch.mjs
+
+      - name: Validate exam-origin isolation, official answer keys and one-to-many occurrences
+        run: node --test scripts/fe-exemption-official-first23.test.mjs
+
       - name: Set up Python for licensed sentence dataset generation
         uses: actions/setup-python@v5
         with:
