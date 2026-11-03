@@ -117,13 +117,13 @@ for(const [arr,k] of [[[3,1,7,2,6,4],3],[[2,8,1,5,4,9,3],2]]) {
   const sums=Array.from({length:arr.length-k+1},(_,i)=>arr.slice(i,i+k).reduce((a,b)=>a+b,0))
   const answer=Math.max(...sums)
   add('max-window','長さ '+k+' の連続する部分配列の和の最大値を求める。表示される値はどれか。\n\na ← '+fmt(arr)+'\nbest ← -∞\nfor i を 1 から '+(arr.length-k+1)+' まで増やす\n  s ← a[i] から a[i+'+(k-1)+'] までの合計\n  best ← max(best,s)\nendfor\nreturn best',
-    answer,[Math.min(...sums),sums[0],answer+2],'各窓の和は '+fmt(sums)+'。最大は '+answer+'。')
+    answer,[Math.min(...sums),sums[0],answer+2],'各開始位置の連続窓を順に調べる。各窓の和は '+fmt(sums)+' で，最大は '+answer+'。')
 }
 // 14. Recurrence.
 for(const n of [4,6]){
   let f=1,trace=[1];for(let i=1;i<=n;i++){f=2*f+1;trace.push(f)}
   add('recurrence','次の再帰関数 f に整数 '+n+' を渡す。返り値はどれか。\n\nf(0) = 1\nf(k) = 2 × f(k-1) + 1 （k ≥ 1）\nreturn f('+n+')',
-    f,[f-2,f+2,2**n],'f(0) から順に '+fmt(trace)+'。f('+n+')='+f+'。')
+    f,[f-2,f+2,2**n],'初期値から漸化式を順に計算する。f(0) から順に '+fmt(trace)+' となり，f('+n+')='+f+'。')
 }
 // 15. Hash insertion collisions using linear probing.
 for(const [keys,size] of [[[10,17,24,31],7],[[9,13,17,21,25],8]]){
@@ -136,7 +136,7 @@ for(const [keys,size] of [[[10,17,24,31],7],[[9,13,17,21,25],8]]){
 for(const arr of [[2,2,3,5,3,8,2],[4,6,4,7,7,9,10,6]]){
   const answer=new Set(arr).size
   add('distinct-set','集合 seen に要素を追加し，同じ値は一つにまとめる。次の処理の戻り値はどれか。\n\nseen ← 空集合\nfor x in '+fmt(arr)+'\n  seen に x を追加\nendfor\nreturn seen の要素数',
-    answer,[arr.length,answer+1,answer-1],'重複を除いた値は '+fmt([...new Set(arr)])+' の '+answer+' 種類。')
+    answer,[arr.length,answer+1,answer-1],'集合は重複を保持しないため，重複を除いた値は '+fmt([...new Set(arr)])+' の '+answer+' 種類となる。')
 }
 // 17. Longest increasing contiguous run.
 for(const arr of [[1,3,5,2,4,6,7,1],[8,9,2,3,4,1,5,6,7,8]]){
