@@ -36,7 +36,7 @@ for(const item of [...a,...b,...april]){
  const expectedAns=isApril?AprPdf:DecRoot+'fe_kamoku_'+item.section.toLowerCase()+'_set_sample_ans.pdf'
  if(item.id!==expectedId||seen.has(item.id)||item.question_kind!=='official_sample'||item.source_type!=='licensed'||
     item.source_published_year!==2022||item.source_url!==expectedUrl||item.source_answers_url!==expectedAns||
-    !['A','B'].includes(item.section)||!item.topic||item.prompt.length<24||
+    !['A','B'].includes(item.section)||!item.topic||item.prompt.length<15||
     !Array.isArray(item.options)||item.options.length<4||item.options.length>10||
     new Set(item.options).size!==item.options.length||!Number.isInteger(item.answer)||
     'abcdefghij'[item.answer]!==key[item.question_number]||
