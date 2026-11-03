@@ -83,6 +83,12 @@ jobs:
       - name: Verify 2020 Q7/Q10 official keys, visual semantics and data safety
         run: node --test scripts/fe-exemption-20200614-q07-q10.test.mjs
 
+      - name: Generate IPA 2019 spring FE legacy AM 71-80 verified final batch
+        run: node scripts/generate_fe_2019_spring_am_71_80.mjs
+
+      - name: Verify official 2019 Q71-80 answers, fishbone and original opportunity-loss table
+        run: node --test scripts/fe-ipa-2019-am-71-80.test.mjs
+
       - name: Set up Python for licensed sentence dataset generation
         uses: actions/setup-python@v5
         with:
