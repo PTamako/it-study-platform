@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
 import { hydrateMastery, mergeExamHistory, restoreMasteredCard } from './progress-sync'
-import { tokyoDate, mergeDailyTaskStates } from './daily-tasks'
+import { tokyoDate, mergeDailyTaskStates, mergeDailyTaskTemplates } from './daily-tasks'
 import { utcReviewMillis } from './review-time'
 import { fetchVocabularySnapshot } from './vocabulary-sync'
 import { selectDailyScenes, dailyBusinessWordCandidates } from './daily-language-scenes'
@@ -112,7 +112,8 @@ const todayKey = ref(tokyoDate())
 const defaultTasks: StudyTask[] = [
   { id: 'sg-review', title: '复习 SG 日语关键词', detail: '法律 / 技术 / 管理术语', minutes: 15, done: false },
   { id: 'sg-questions', title: '完成一组考试练习', detail: '建议 5 道题，逐题看解析', minutes: 15, done: false },
-  { id: 'language', title: '语言轻量练习', detail: '日语或英语任选一个方向', minutes: 10, done: false },
+  { id: 'japanese-daily', title: '日语 · 日常＋职场', detail: '新词与语法、双场景对话、听力跟读、复习', minutes: 20, done: false },
+  { id: 'english-daily', title: '英语 TOEIC · 日常＋职场', detail: '商务词汇、语法练习、听力跟读、复习', minutes: 20, done: false },
 ]
 function readStored<T>(key: string, fallback: T): T {
   try {
@@ -122,7 +123,9 @@ function readStored<T>(key: string, fallback: T): T {
     return fallback
   }
 }
-const tasks = ref<StudyTask[]>(readStored('zhixue:tasks:' + todayKey.value, defaultTasks.map(task => ({ ...task }))))
+const tasks = ref<StudyTask[]>(mergeDailyTaskTemplates(
+  readStored('zhixue:tasks:' + todayKey.value, null), defaultTasks,
+))
 type CloudDashboard = {
   generated_from: string
   exam: { attempted_questions: number; correct_answers: number; accuracy_percent: number | null }
@@ -216,7 +219,7 @@ function rolloverDailyTasks() {
   if (next === todayKey.value) return
   // The synchronous watcher has already persisted the prior day's latest value.
   todayKey.value = next
-  tasks.value = readStored('zhixue:tasks:' + next, defaultTasks.map(task => ({ ...task })))
+  tasks.value = mergeDailyTaskTemplates(readStored('zhixue:tasks:' + next, null), defaultTasks)
   applyPendingDailyTasks(next)
   if (authenticated.value) { void refreshDailyTasks(next); void reconcilePriorDailyTasks() }
 }
