@@ -49,7 +49,7 @@ for(const [arr,target] of [[[2,5,7,11,14,18,21],14],[[3,6,9,12,15,18,21,24,27],6
 for(const arr of [[5,1,4,2,3],[4,3,1,5,2,6]]) {
   let a=[...arr],swaps=0
   for(let i=0;i<a.length-1;i++)for(let j=0;j<a.length-1-i;j++)if(a[j]>a[j+1]){[a[j],a[j+1]]=[a[j+1],a[j]];swaps++}
-  add('bubble-swaps','隣り合う要素が逆順なら交換する昇順バブルソートを行う。交換の総回数はどれか。\n\na ← '+fmt(arr)+'\nfor i を 1 から '+(arr.length-1)+' まで増やす\n  for j を 1 から '+(arr.length-i)+' まで増やす\n    if a[j] > a[j+1] なら a[j] と a[j+1] を交換し count を1増やす\n  endfor\nendfor\nreturn count',
+  add('bubble-swaps','隣り合う要素が逆順なら交換する昇順バブルソートを行う。交換の総回数はどれか。\n\na ← '+fmt(arr)+'\nfor i を 1 から '+(arr.length-1)+' まで増やす\n  for j を 1 から n - i まで増やす\n    if a[j] > a[j+1] なら a[j] と a[j+1] を交換し count を1増やす\n  endfor\nendfor\nreturn count',
     swaps,[swaps-2,swaps+1,swaps+2],'隣接交換1回で逆転対が1組解消する。元の配列の逆転対は '+swaps+' 組なので交換は '+swaps+' 回。')
 }
 // 5. Rotation.
