@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "set": "2022-april",
+  "section": "B",
+  "dedup_note": "April B6 and December B17 share PaaS division-of-responsibility theme but differ in the vulnerabilities and original answer ordering; both are distinct questions; IDs have distinct official sets.",
+  "items": [
+    {
+      "id": "fe-ipa-sample-2022-april-b-001",
+      "section": "B",
+      "question_number": 1,
+      "topic": "条件分岐・料金",
+      "prompt": "施設の入場料は0～3歳100円，4～9歳300円，10歳以上500円。if age≤3で100円を返した後，300円のelseif条件として正しいのは？",
+      "options": [
+        "age≥4 and age<9",
+        "age=4 or age=9",
+        "age>4 and age≤9",
+        "age≥4",
+        "age>4",
+        "age≤9",
+        "age<9"
+      ],
+      "answer": 5,
+      "explanation_ja": "先のif条件が偽の時点で年齢は4以上である。300円にするには9歳以下を検査するだけでよい。",
+      "explanation_zh": "前一条件已排除0到3岁，第二条件只需判断年龄≤9。",
+      "question_kind": "official_sample",
+      "source_type": "licensed",
+      "source_published_year": 2022,
+      "source_set": "2022-april",
+      "source_url": "https://www.ipa.go.jp/shiken/syllabus/ps6vr7000000oett-att/fe_kamoku_b_sample.pdf",
+      "source_answers_url": "https://www.ipa.go.jp/shiken/syllabus/ps6vr7000000oett-att/fe_kamoku_b_sample.pdf"
+    },
+    {
+      "id": "fe-ipa-sample-2022-april-b-002",
+      "section": "B",
+      "question_number": 2,
+      "topic": "配列・反転",
+      "prompt": "配列{1,2,3,4,5}を先頭left=1から半分まで入替えて逆順にする。rightを計算し，tmp←array[right]，array[right]←array[left]，最後に[空欄]←tmp。rightの式と空欄の組は？",
+      "options": [
+        "right=n−left；array[left]",
+        "right=n−left；array[right]",
+        "right=n−left+1；array[left]",
+        "right=n−left+1；array[right]"
+      ],
+      "answer": 2,
+      "explanation_ja": "1始まりの添字では左右の対応がn−left+1。退避した右要素を左へ置く。",
+      "explanation_zh": "从1开始计数时右侧对应位置n−left+1，最后把暂存值写回左侧。",
+      "question_kind": "official_sample",
+      "source_type": "licensed",
+      "source_published_year": 2022,
+      "source_set": "2022-april",
+      "source_url": "https://www.ipa.go.jp/shiken/syllabus/ps6vr7000000oett-att/fe_kamoku_b_sample.pdf",
+      "source_answers_url": "https://www.ipa.go.jp/shiken/syllabus/ps6vr7000000oett-att/fe_kamoku_b_sample.pdf"
+    },
+    {
+      "id": "fe-ipa-sample-2022-april-b-003",
+      "section": "B",
+      "question_number": 3,
+      "topic": "単方向リスト・追加",
+      "prompt": "listHeadが未定義なら新しい要素currを先頭にする。先頭があるならprev.nextが未定義になるまで進み，末尾にcurrを追加する。if(listHeadがa), prev.next←bの正しい組は？",
+      "options": [
+        "a=未定義；b=curr",
+        "a=未定義；b=curr.next",
+        "a=未定義；b=listHead",
+        "a=未定義でない；b=curr",
+        "a=未定義でない；b=curr.next",
+        "a=未定義でない；b=listHead"
+      ],
+      "answer": 0,
+      "explanation_ja": "空リストの条件はlistHeadが未定義。非空の末尾nextに新しい節currをつなぐ。",
+      "explanation_zh": "空链表时头指针未定义；非空时将新节点连接到最后一个节点。",
+      "question_kind": "official_sample",
+      "source_type": "licensed",
+      "source_published_year": 2022,
+      "source_set": "2022-april",
+      "source_url": "https://www.ipa.go.jp/shiken/syllabus/ps6vr7000000oett-att/fe_kamoku_b_sample.pdf",
+      "source_answers_url": "https://www.ipa.go.jp/shiken/syllabus/ps6vr7000000oett-att/fe_kamoku_b_sample.pdf"
+    },
+    {
+      "id": "fe-ipa-sample-2022-april-b-004",
+      "section": "B",
+      "question_number": 4,
+      "topic": "疎行列・データ表現",
+      "prompt": "5×5配列の非ゼロ位置は(1,1)=3,(2,2)=2,(2,3)=2,(3,4)=1,(3,5)=3,(4,4)=2,(5,5)=1。行・列・値の各配列へ行優先で保存すると正しい組は？",
+      "options": [
+        "行{1,2,2,3,3,4,5} 列{1,2,3,4,5,4,5} 値{3,2,2,1,2,3,1}",
+        "行{1,2,2,3,3,4,5} 列{1,2,3,4,5,4,5} 値{3,2,2,1,3,2,1}",
+        "行{1,2,3,4,5,4,5} 列{1,2,2,3,3,4,5} 値{3,2,2,1,2,3,1}",
+        "行{1,2,3,4,5,4,5} 列{1,2,2,3,3,4,5} 値{3,2,2,1,3,2,1}"
+      ],
+      "answer": 1,
+      "explanation_ja": "非ゼロを行番号・列番号・値の3列へ同じ順に記録するので2番目が正しい。",
+      "explanation_zh": "逐行遍历非零元素，分别记录行号、列号和对应值，第二项匹配。",
+      "question_kind": "official_sample",
+      "source_type": "licensed",
+      "source_published_year": 2022,
+      "source_set": "2022-april",
+      "source_url": "https://www.ipa.go.jp/shiken/syllabus/ps6vr7000000oett-att/fe_kamoku_b_sample.pdf",
+      "source_answers_url": "https://www.ipa.go.jp/shiken/syllabus/ps6vr7000000oett-att/fe_kamoku_b_sample.pdf"
+    },
+    {
+      "id": "fe-ipa-sample-2022-april-b-005",
+      "section": "B",
+      "question_number": 5,
+      "topic": "文字列処理・出現確率",
+      "prompt": "英単語群でc1の直後にc2が現れる割合を求める。freq(s)は文字列出現回数，freqE(s)はsで終わる単語の数。末尾のc1は分母から除外する。正しい式は？",
+      "options": [
+        "(freq(c1)−freqE(c1))/freq(c1+c2)",
+        "(freq(c2)−freqE(c2))/freq(c1+c2)",
+        "freq(c1+c2)/(freq(c1)−freqE(c1))",
+        "freq(c1+c2)/(freq(c2)−freqE(c2))"
+      ],
+      "answer": 2,
+      "explanation_ja": "分子はc1c2の出現回数，分母は最後の文字を除いたc1の出現回数。",
+      "explanation_zh": "分子是连续字符c1c2出现次数，分母是非单词末尾位置的c1出现次数。",
+      "question_kind": "official_sample",
+      "source_type": "licensed",
+      "source_published_year": 2022,
+      "source_set": "2022-april",
+      "source_url": "https://www.ipa.go.jp/shiken/syllabus/ps6vr7000000oett-att/fe_kamoku_b_sample.pdf",
+      "source_answers_url": "https://www.ipa.go.jp/shiken/syllabus/ps6vr7000000oett-att/fe_kamoku_b_sample.pdf"
+    },
+    {
+      "id": "fe-ipa-sample-2022-april-b-006",
+      "section": "B",
+      "question_number": 6,
+      "topic": "PaaS・脆弱性責任",
+      "prompt": "A社ECサイトはB社のPaaSで動作し，アプリ開発・脆弱性対応をC社へ委託。検出された(一)DBMS脆弱性，(二)サーバOS脆弱性，(三)アプリのログイン処理の脆弱性。対処主体の組合せは？",
+      "options": [
+        "A,A,A",
+        "A,A,C",
+        "A,B,B",
+        "B,B,B",
+        "B,B,C",
+        "B,C,B",
+        "B,C,C",
+        "C,B,B",
+        "C,B,C",
+        "C,C,B"
+      ],
+      "answer": 4,
+      "explanation_ja": "DBMSとOSはPaaS基盤の提供元B社，委託契約上のアプリのログイン脆弱性はC社が対処する。",
+      "explanation_zh": "数据库与操作系统由PaaS提供商B处理，登录程序漏洞由开发委托方C处理。",
+      "question_kind": "official_sample",
+      "source_type": "licensed",
+      "source_published_year": 2022,
+      "source_set": "2022-april",
+      "source_url": "https://www.ipa.go.jp/shiken/syllabus/ps6vr7000000oett-att/fe_kamoku_b_sample.pdf",
+      "source_answers_url": "https://www.ipa.go.jp/shiken/syllabus/ps6vr7000000oett-att/fe_kamoku_b_sample.pdf",
+      "notes": "12月の科目B問17と同題材だが設問・脆弱性・正答は異なる独立問題"
+    }
+  ]
+}
