@@ -13,6 +13,7 @@ for (const relative of [
   '../migrations/0119_fe_growth_phase1_original_80.sql',
   '../migrations/0120_fe_ipa_2019_spring_morning_07_27.sql',
   '../migrations/0122_fe_ipa_2022_sample_training_batch1.sql',
+  '../migrations/0123_fe_ipa_2022_sample_completion.sql',
 ]) {
   if (!existsSync(new URL(relative, import.meta.url))) {
     issues.push(`Missing generated fixture: ${relative.slice(3)}`)
