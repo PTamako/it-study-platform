@@ -1315,16 +1315,29 @@ const languageCardsError = ref('')
 type LanguageReview = { card_id: string; review_count: number; correct_streak: number; next_review_at: string; last_reviewed_at: string; last_result: 'again' | 'remembered'; is_due?: number }
 const languageReviews = ref<LanguageReview[]>(readStored('zhixue:language-reviews', []))
 const languageReviewBusy = ref('')
-const selectedLanguageMastery = ref<'all' | 'unlearned' | 'unmastered' | 'mastered'>('all')
+type LanguageMasteryFilter = 'all' | 'unlearned' | 'unmastered' | 'mastered'
+const selectedLanguageMastery = ref<LanguageMasteryFilter>('all')
 // A corpus difficulty proxy, not an invented JLPT/TOEIC classification.
 // The default removes very short beginner phrases without deleting any lessons.
-const selectedSentenceLength = ref<'all' | 'practice' | 'challenge'>('practice')
-function matchesSentenceLength(card: LanguageCard): boolean {
-  if (selectedSentenceLength.value === 'all') return true
+type SentenceLengthFilter = 'all' | 'practice' | 'challenge'
+const selectedSentenceLength = ref<SentenceLengthFilter>('practice')
+const languageLengthOptions: { id: SentenceLengthFilter; label: string }[] = [
+  { id: 'all', label: '全部句子' },
+  { id: 'practice', label: '实用长句' },
+  { id: 'challenge', label: '挑战长句' },
+]
+const languageMasteryOptions: { id: LanguageMasteryFilter; label: string }[] = [
+  { id: 'all', label: '全部' },
+  { id: 'unlearned', label: '未学习' },
+  { id: 'unmastered', label: '学习中 / 待复习' },
+  { id: 'mastered', label: '已掌握' },
+]
+function matchesSentenceLength(card: LanguageCard, filter: SentenceLengthFilter = selectedSentenceLength.value): boolean {
+  if (filter === 'all') return true
   const length = [...card.term].length
   return card.language === 'ja'
-    ? length >= (selectedSentenceLength.value === 'challenge' ? 24 : 18)
-    : length >= (selectedSentenceLength.value === 'challenge' ? 65 : 40)
+    ? length >= (filter === 'challenge' ? 24 : 18)
+    : length >= (filter === 'challenge' ? 65 : 40)
 }
 const languageReviewByCardId = computed(() => new Map<string, LanguageReview>(languageReviews.value.map(review => [review.card_id, review] as const)))
 const masteredLanguageIds = computed(() => new Set(completedLanguageCards.value))
@@ -1336,16 +1349,60 @@ const isLanguageCardUnlearned = (card: LanguageCard) => {
   const review = languageReviewByCardId.value.get(card.id)
   return !masteredLanguageIds.value.has(card.id) && (!review || review.review_count === 0)
 }
-const unlearnedLanguageCount = computed(() => languageCards.value.filter(card => matchesSentenceLength(card) && isLanguageCardUnlearned(card)).length)
-const visibleLanguageCards = computed(() => languageCards.value.filter(card => {
-  const matchesCategory = selectedLanguageCategory.value === '全部' || card.category === selectedLanguageCategory.value
+function matchesLanguageMastery(card: LanguageCard, filter: LanguageMasteryFilter = selectedLanguageMastery.value): boolean {
+  if (filter === 'all') return true
   const isMastered = masteredLanguageIds.value.has(card.id)
+  if (filter === 'mastered') return isMastered
   const isUnlearned = isLanguageCardUnlearned(card)
-  const matchesMastery = selectedLanguageMastery.value === 'all'
-    || (selectedLanguageMastery.value === 'unlearned' && isUnlearned)
-    || (selectedLanguageMastery.value === 'mastered' && isMastered)
-    || (selectedLanguageMastery.value === 'unmastered' && !isMastered && !isUnlearned)
-  return matchesCategory && matchesMastery && matchesSentenceLength(card)
+  return filter === 'unlearned' ? isUnlearned : !isMastered && !isUnlearned
+}
+function matchesLanguageCategory(card: LanguageCard, category = selectedLanguageCategory.value): boolean {
+  return category === '全部' || card.category === category
+}
+// Faceted counts use the OTHER two selections. All numbers update in memory,
+// without requests to Worker or the D1 database.
+const languageLengthCounts = computed<Record<SentenceLengthFilter, number>>(() => {
+  const counts = { all: 0, practice: 0, challenge: 0 }
+  for (const card of languageCards.value) {
+    if (!matchesLanguageCategory(card) || !matchesLanguageMastery(card)) continue
+    counts.all++
+    if (matchesSentenceLength(card, 'practice')) counts.practice++
+    if (matchesSentenceLength(card, 'challenge')) counts.challenge++
+  }
+  return counts
+})
+const languageCategoryCounts = computed<Record<string, number>>(() => {
+  const counts: Record<string, number> = { '全部': 0, '日常句子': 0, '职场语言': 0 }
+  for (const card of languageCards.value) {
+    if (!matchesSentenceLength(card) || !matchesLanguageMastery(card)) continue
+    counts['全部']++
+    counts[card.category] = (counts[card.category] || 0) + 1
+  }
+  return counts
+})
+const languageMasteryCounts = computed<Record<LanguageMasteryFilter, number>>(() => {
+  const counts = { all: 0, unlearned: 0, unmastered: 0, mastered: 0 }
+  for (const card of languageCards.value) {
+    if (!matchesSentenceLength(card) || !matchesLanguageCategory(card)) continue
+    counts.all++
+    if (masteredLanguageIds.value.has(card.id)) counts.mastered++
+    else if (isLanguageCardUnlearned(card)) counts.unlearned++
+    else counts.unmastered++
+  }
+  return counts
+})
+const languageFilterIsDefault = computed(() =>
+  selectedSentenceLength.value === 'practice'
+  && selectedLanguageCategory.value === '全部'
+  && selectedLanguageMastery.value === 'all'
+)
+function resetLanguageFilters() {
+  selectedSentenceLength.value = 'practice'
+  selectedLanguageCategory.value = '全部'
+  selectedLanguageMastery.value = 'all'
+}
+const visibleLanguageCards = computed(() => languageCards.value.filter(card => {
+  return matchesLanguageCategory(card) && matchesLanguageMastery(card) && matchesSentenceLength(card)
 }).sort((a, b) => {
   const aReview = languageReviewByCardId.value.get(a.id)
   const bReview = languageReviewByCardId.value.get(b.id)
@@ -2900,21 +2957,46 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
               </div>
               <p v-else class="language-practice-prompt">当前筛选条件下没有卡片，切换分类或掌握状态后就能开始。</p>
             </section>
-            <div class="language-mastery-filter" role="group" aria-label="按句子长度筛选">
-              <button :class="{ chosen: selectedSentenceLength === 'all' }" @click="selectedSentenceLength = 'all'">全部句子</button>
-              <button :class="{ chosen: selectedSentenceLength === 'practice' }" @click="selectedSentenceLength = 'practice'">实用长句</button>
-              <button :class="{ chosen: selectedSentenceLength === 'challenge' }" @click="selectedSentenceLength = 'challenge'">挑战长句</button>
-            </div>
-            <p class="language-source">按句子长度筛选，默认减少过短的入门句；这不是 JLPT 或 TOEIC 难度评级。</p>
-            <div class="language-category-filter" role="group" aria-label="按学习类别筛选">
-              <button v-for="category in languageCategories" :key="category.title" :class="{ chosen: selectedLanguageCategory === category.title }" @click="selectedLanguageCategory = category.title">{{ category.title }}</button>
-            </div>
-            <div class="language-mastery-filter" role="group" aria-label="按掌握状态筛选">
-              <button :class="{ chosen: selectedLanguageMastery === 'all' }" @click="selectedLanguageMastery = 'all'">全部卡片 {{ languageCards.length }}</button>
-              <button :class="{ chosen: selectedLanguageMastery === 'unlearned' }" @click="selectedLanguageMastery = 'unlearned'">未学习 {{ unlearnedLanguageCount }}</button>
-              <button :class="{ chosen: selectedLanguageMastery === 'unmastered' }" @click="selectedLanguageMastery = 'unmastered'">学习中 / 待复习 {{ languageCards.filter(card => !completedLanguageCards.includes(card.id) && !isLanguageCardUnlearned(card)).length }}</button>
-              <button :class="{ chosen: selectedLanguageMastery === 'mastered' }" @click="selectedLanguageMastery = 'mastered'">已掌握 {{ languageCards.filter(card => completedLanguageCards.includes(card.id)).length }}</button>
-            </div>
+            <section class="language-filter-panel" aria-label="句子联动筛选">
+              <div class="language-filter-top">
+                <div class="language-filter-total"><strong>筛选课程</strong><span>当前 {{ visibleLanguageCards.length.toLocaleString() }} 句</span></div>
+                <button v-if="!languageFilterIsDefault" type="button" class="language-filter-reset" @click="resetLanguageFilters">恢复默认</button>
+              </div>
+              <div class="language-filter-row">
+                <span class="language-filter-label">句子长度</span>
+                <div class="language-filter-options" role="group" aria-label="按句子长度筛选">
+                  <button v-for="option in languageLengthOptions" :key="option.id" type="button"
+                    :class="{ chosen: selectedSentenceLength === option.id }"
+                    :aria-pressed="selectedSentenceLength === option.id"
+                    @click="selectedSentenceLength = option.id">
+                    <span>{{ option.label }}</span><small>{{ languageLengthCounts[option.id] }}</small>
+                  </button>
+                </div>
+              </div>
+              <div class="language-filter-row">
+                <span class="language-filter-label">使用场景</span>
+                <div class="language-filter-options" role="group" aria-label="按学习类别筛选">
+                  <button v-for="category in languageCategories" :key="category.title" type="button"
+                    :class="{ chosen: selectedLanguageCategory === category.title }"
+                    :aria-pressed="selectedLanguageCategory === category.title"
+                    @click="selectedLanguageCategory = category.title">
+                    <span>{{ category.title }}</span><small>{{ languageCategoryCounts[category.title] || 0 }}</small>
+                  </button>
+                </div>
+              </div>
+              <div class="language-filter-row">
+                <span class="language-filter-label">学习状态</span>
+                <div class="language-filter-options language-filter-status" role="group" aria-label="按掌握状态筛选">
+                  <button v-for="option in languageMasteryOptions" :key="option.id" type="button"
+                    :class="{ chosen: selectedLanguageMastery === option.id }"
+                    :aria-pressed="selectedLanguageMastery === option.id"
+                    @click="selectedLanguageMastery = option.id">
+                    <span>{{ option.label }}</span><small>{{ languageMasteryCounts[option.id] }}</small>
+                  </button>
+                </div>
+              </div>
+              <p class="language-filter-hint">三项条件同时生效 · 长句按字数筛选，不代表考试难度</p>
+            </section>
             <p class="language-source">例句来源：<a href="https://tatoeba.org" target="_blank" rel="noopener noreferrer">Tatoeba</a>，原句可查看来源链接。</p>
             <p v-if="languageProgressHydrating" class="dictionary-status" role="status">正在同步语言进度…</p>
             <p v-else-if="languageSyncError" class="dictionary-status dictionary-error" role="alert">{{ languageSyncError }}</p>
