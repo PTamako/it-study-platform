@@ -1336,3 +1336,9 @@ button[aria-disabled="true"] {
   .language-filter-options button{padding:7px 3px;font-size:11px}
   .language-filter-options button small{font-size:10px}
 }
+
+/* Three equally readable review choices on phone and iPad; original buttons remain. */
+.language-review-hard{appearance:none;border:1px solid #c9d6ee;border-radius:11px;padding:10px 12px;font:inherit;font-size:.88rem;font-weight:600;background:#edf3ff;color:#355a96;cursor:pointer}
+.language-review-hard:disabled{opacity:.55;cursor:wait}
+.language-practice-actions .language-review-hard{grid-column:1 / -1;width:100%;min-height:44px}
+.language-practice-actions .language-review-hard:focus-visible{outline:3px solid #b9c8ec;outline-offset:2px}
