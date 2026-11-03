@@ -880,7 +880,10 @@ async function searchTechnicalVocabulary(db: D1Database, rawQuery: string, reque
   if (!query) return []
   const select = `SELECT term, language, reading, meaning_zh, meaning_ja, meaning_en, example, source_module, aliases
     FROM vocabulary`
-  const exactResult = await db.prepare(
+  // Most IT lookups are exact headwords; use a small indexed lookup first.
+  // Only aliases and translated search terms require the costlier fallback scan.
+  const indexedExact = await db.prepare(`${select} WHERE term = ? COLLATE NOCASE LIMIT 8`).bind(query).all()
+  const exactResult = indexedExact.results.length ? indexedExact : await db.prepare(
     `${select}
      WHERE lower(term) = lower(?)
         OR lower(COALESCE(reading, '')) = lower(?)
@@ -976,7 +979,7 @@ function detectDictionaryLanguage(query: string): 'ja' | 'zh' | 'en' {
   if (/[\u3400-\u9fff]/.test(text)) return 'ja'
   return 'en'
 }
-async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' | 'it' = 'auto', db?: D1Database, gasUrl?: string, gasToken?: string): Promise<DictionaryApiEntry[]> {
+async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' | 'en' | 'zh' | 'it' = 'auto', db?: D1Database, gasUrl?: string, gasToken?: string, staticWordChecked = false): Promise<DictionaryApiEntry[]> {
   let technicalItems: DictionaryApiEntry[] = []
   if (db) {    try {
       technicalItems = await searchTechnicalVocabulary(db, query, requestedLanguage)
@@ -996,7 +999,7 @@ async function lookupDictionary(query: string, requestedLanguage: 'auto' | 'ja' 
   const language: 'ja' | 'en' | 'zh' = requestedLanguage === 'auto' ? detectDictionaryLanguage(query) : requestedLanguage
   // Search our pre-existing licensed learning word cards first. Only one exact,
   // indexed D1 read; preserve network fallback for unknown words or old schemas.
-  if (db && (language === 'ja' || language === 'en')) {
+  if (db && !staticWordChecked && (language === 'ja' || language === 'en')) {
     try {
       const word = await searchLearnerWord(db, query.normalize('NFKC').trim(), language)
       if (word) {
@@ -1631,7 +1634,8 @@ export default {
           ? !(await requireAuth(request, env)) : false
         const items = await lookupDictionary(query, requestedLanguage as 'auto' | 'ja' | 'en' | 'zh' | 'it', env.DB,
           authorizedForAppsScript ? env.GAS_TRANSLATOR_URL : undefined,
-          authorizedForAppsScript ? env.GAS_TRANSLATOR_TOKEN : undefined)
+          authorizedForAppsScript ? env.GAS_TRANSLATOR_TOKEN : undefined,
+          url.searchParams.get('static_word_checked') === '1')
         return json({
           items,
           query,
