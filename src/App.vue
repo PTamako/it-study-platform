@@ -9,6 +9,7 @@ import { isDictionaryHeadword, loadJapanesePitchDataset, matchingJapaneseAccents
 import { dictionaryTranslationRows, chinesePinyinToneLabels } from './dictionary-presentation'
 import { fetchLanguageCorpus } from './language-corpus'
 import { advancedLanguageCards } from './advanced-language-cards'
+import { findStaticLearnerEntry } from './static-learner-dictionary'
 import { parseMockSnapshot, type MockSnapshot } from './mock-recovery'
 import ExamScratchTools from './ExamScratchTools.vue'
 import {
@@ -1637,6 +1638,10 @@ function dictionaryPosLabels(entry: DictionaryEntry): string[] {
 const recentDictionaryEntries = ref<DictionaryEntry[]>(readStored('zhixue:recent-dictionary', []))
 const savedDictionaryEntries = ref<DictionaryEntry[]>(readStored('zhixue:saved-dictionary-entries', []))
 const dictionaryLoading = ref(false)
+const dictionaryLocalHit = ref(false)
+const dictionaryNeedsOnlineTranslation = computed(() => dictionaryLocalHit.value && onlineEntries.value.some(entry =>
+  entry.language === 'ja' ? !entry.englishTerm : entry.language === 'en' && !entry.translationJa))
+let forceOnlineNextDictionaryLookup = false
 const dictionaryError = ref('')
 const dictionaryDetectedLanguage = ref<'ja' | 'en' | 'zh' | 'it' | ''>('')
 const dictionaryAiRemaining = ref<number | null>(null)
@@ -1913,7 +1918,14 @@ watch([activeModule, authenticated], () => {
   if (activeModule.value === 'dictionary' && authenticated.value) void loadDictionaryAiQuota()
 })
 
+function enrichDictionaryTranslation() {
+  forceOnlineNextDictionaryLookup = true
+  void lookupDictionary()
+}
 async function lookupDictionary() {
+  const forceOnline = forceOnlineNextDictionaryLookup
+  forceOnlineNextDictionaryLookup = false
+  dictionaryLocalHit.value = false
   resetDictionaryAiDisplay()
   const q = searchText.value.normalize('NFKC').trim().replace(/\s+/g, ' ')
   const requestedLanguage = dictSourceLang.value
@@ -1983,6 +1995,31 @@ async function lookupDictionary() {
   onlineEntries.value = []
   lastSearchedTerm.value = ''
   try {
+    // Normal known-word lookups are resolved by static assets and browser cache.
+    // No Worker request, D1 row read, D1 quota write or Workers AI call.
+    if (!forceOnline) {
+      try {
+        const local = await findStaticLearnerEntry(q, requestedLanguage)
+        if (requestId !== dictionaryRequestId) return
+        if (local) {
+          onlineEntries.value = [local]
+          dictionaryLocalHit.value = true
+          dictionaryDetectedLanguage.value = local.language
+          lastSearchedTerm.value = q
+          recentDictionaryEntries.value = [
+            local,
+            ...recentDictionaryEntries.value.filter(entry => entry.term.toLowerCase() !== local.term.toLowerCase()),
+          ].slice(0, 12)
+          if (local.language === 'ja' && local.reading) {
+            void loadJapanesePitchDataset().then(data => { dictionaryPitchData.value = data })
+          }
+          return
+        }
+      } catch (error) {
+        // Missing static assets are recoverable; retain the online dictionary.
+        console.warn('[dictionary] static lookup unavailable', error instanceof Error ? error.message : String(error))
+      }
+    }
     const response = await fetch('/api/dictionary?q=' + encodeURIComponent(q) + '&lang=' + encodeURIComponent(requestedLanguage), {
       signal: AbortSignal.timeout(18000),
     })
@@ -2932,6 +2969,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
             </div>
 
             <p v-if="lastSearchedTerm && dictionaryDetectedLanguage && dictSourceLang === 'auto' && !dictionaryLoading" class="dictionary-status" role="status">识别为 {{ dictionaryDetectedLanguage === 'zh' ? '中文' : dictionaryDetectedLanguage === 'ja' ? '日语' : dictionaryDetectedLanguage === 'en' ? '英语' : 'IT 术语' }} · 可手动切换</p>
+            <p v-if="dictionaryLocalHit && !dictionaryLoading" class="dictionary-status" role="status">来自知学本地学习词典 · 不使用 D1 查询。<button v-if="dictionaryNeedsOnlineTranslation" type="button" class="text-link" @click="enrichDictionaryTranslation">按需补全另一种语言译文</button></p>
             <p v-if="dictionaryLoading" class="dictionary-status">正在查词…</p>
             <p v-else-if="dictionaryError" class="dictionary-status dictionary-error">{{ dictionaryError }} <button type="button" class="text-link" @click="lookupDictionary">重试</button></p>
           </section>
