@@ -76,7 +76,9 @@ test('static known-word lookup avoids the Worker and D1, and only fetches one ca
 test('the application checks statically before calling dictionary Worker; missing translations remain opt-in', () => {
   assert.match(app,/await findStaticLearnerEntry\(q, requestedLanguage\)/)
   const lookup = app.slice(app.indexOf('async function lookupDictionary()'),app.indexOf('function clearDictionarySearch()'))
-  assert.ok(lookup.indexOf('await findStaticLearnerEntry') < lookup.indexOf("fetch('/api/dictionary?q="))
+  assert.ok(lookup.indexOf('await findStaticLearnerEntry') < lookup.indexOf('dictionaryOnlineCache.lookup('), 'local dictionary must be tried before online request cache')
+  assert.match(lookup, /const response = await fetch\(url, \{/)
+  assert.match(lookup, /dictionaryOnlineCache\.lookup\(/)
   assert.match(lookup,/if \(local\) \{[\s\S]*?return[\s\S]*?}\s*}\s*catch/)
   assert.match(app,/function enrichDictionaryTranslation\(\)/)
   assert.match(app,/dictionaryNeedsOnlineTranslation/)
