@@ -130,8 +130,19 @@ function normalize(card: AnnotatedSentence, value: unknown, boundaries: Set<numb
       const previous = tokens.find(token => token.index + token.segment.length === start)
       const next = tokens.find(token => token.index === end)
       if (previous && next) {
+        // 「食べるのが好き」: の nominalizes a clause, it is NOT a noun
+        // possessive linker. Intl.Segmenter yields token boundaries, not POS,
+        // so only label high-confidence predicate forms and otherwise abstain.
+        const followedByCaseParticle = /^(?:が|は|を|も)$/.test(next.segment)
+        const predicateLike = /(?:する|できる|して|した|なる|ない|かった|[うくぐすつぬぶむるた])$/.test(previous.segment)
+        if (followedByCaseParticle && predicateLike) {
+          return { start, end, term: hit.term, type: hit.type, meaning: '动作／状态名词化',
+            explanation: '「' + previous.segment + 'の' + next.segment + '」中，「の」把前面的动作或情况作为一个整体，再由「' + next.segment + '」提示后续描述对象。' }
+        }
+        if (followedByCaseParticle) return null
+        if (!next.isWordLike) return null
         return { start, end, term: hit.term, type: hit.type, meaning: note.meaning,
-          explanation: '「' + previous.segment + 'の' + next.segment + '」中，前面的名词限定后面的名词，表示所属、内容或性质。' }
+          explanation: '「' + previous.segment + 'の' + next.segment + '」中，前面的成分限定后面的词；这里不要仅靠表面字形断言前项词性。' }
       }
     }
     return { start, end, term: hit.term, type: hit.type, ...note }
