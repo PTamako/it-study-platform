@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 import ts from 'typescript'
 const source = await readFile(new URL('../src/daily-language-scenes.ts', import.meta.url), 'utf8')
 const js = ts.transpileModule(source, {compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText
-const {selectDailyScenes} = await import('data:text/javascript;base64,' + Buffer.from(js).toString('base64'))
+const {selectDailyScenes, dailyBusinessWordCandidates} = await import('data:text/javascript;base64,' + Buffer.from(js).toString('base64'))
 
 const cards = [
   {id:'ja-d1',language:'ja',category:'日常句子',term:'今日は仕事が終わったら一緒にご飯を食べませんか。'},
@@ -41,4 +41,19 @@ test('UI reuses existing TTS, saved mastery and context parsing', async () => {
   assert.match(app,/speakLanguageCard\(scene\.card\)/)
   assert.match(app,/sentenceParts\(scene\.card\)/)
   assert.match(app,/languageExpansions\(scene\.card, 'grammar'\)/)
+})
+
+test('daily business headwords rotate reproducibly and never assert official TOEIC provenance', async () => {
+  const today = dailyBusinessWordCandidates('2026-11-03')
+  assert.ok(today.length >= 40)
+  assert.equal(new Set(today).size, today.length)
+  assert.deepEqual(today, dailyBusinessWordCandidates('2026-11-03'))
+  assert.notDeepEqual(today, dailyBusinessWordCandidates('2026-11-04'))
+  const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
+  assert.match(app, /dailyBusinessWordCandidates\(todayKey\.value\)/)
+  assert.match(app, /findStaticLearnerEntry\(term, 'en'\)/)
+  assert.match(app, /\.slice\(0, 5\)/)
+  assert.match(app, /非官方 TOEIC 词表/)
+  assert.match(app, /未验证为 IPA/)
+  assert.match(app, /speak\(word\.term, 'en-US'/)
 })
