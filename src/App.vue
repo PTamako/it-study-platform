@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
 import { hydrateMastery, mergeExamHistory, restoreMasteredCard } from './progress-sync'
-import { tokyoDate, mergeDailyTaskStates } from './daily-tasks'
+import { tokyoDate, mergeDailyTaskStates, mergeDailyTaskTemplates } from './daily-tasks'
 import { utcReviewMillis } from './review-time'
 import { fetchVocabularySnapshot } from './vocabulary-sync'
-import { selectDailyScenes, dailyBusinessWordCandidates } from './daily-language-scenes'
+import { selectDailyScenes, dailyBusinessWordCandidates, dailyJapaneseWordCandidates } from './daily-language-scenes'
 import { getLanguageExpansions, getSentenceParts } from './language-annotations'
 import { isDictionaryHeadword, loadJapanesePitchDataset, matchingJapaneseAccents, pitchLabel, partOfSpeechDisplay, getChineseWordGuide, type PitchDataset } from './dictionary-word-metadata'
 import { dictionaryTranslationRows, chinesePinyinToneLabels } from './dictionary-presentation'
@@ -112,7 +112,8 @@ const todayKey = ref(tokyoDate())
 const defaultTasks: StudyTask[] = [
   { id: 'sg-review', title: '复习 SG 日语关键词', detail: '法律 / 技术 / 管理术语', minutes: 15, done: false },
   { id: 'sg-questions', title: '完成一组考试练习', detail: '建议 5 道题，逐题看解析', minutes: 15, done: false },
-  { id: 'language', title: '语言轻量练习', detail: '日语或英语任选一个方向', minutes: 10, done: false },
+  { id: 'japanese-daily', title: '日语 · 日常＋职场', detail: '新词与语法、双场景对话、听力跟读、复习', minutes: 20, done: false },
+  { id: 'english-daily', title: '英语 TOEIC · 日常＋职场', detail: '商务词汇、语法练习、听力跟读、复习', minutes: 20, done: false },
 ]
 function readStored<T>(key: string, fallback: T): T {
   try {
@@ -122,7 +123,9 @@ function readStored<T>(key: string, fallback: T): T {
     return fallback
   }
 }
-const tasks = ref<StudyTask[]>(readStored('zhixue:tasks:' + todayKey.value, defaultTasks.map(task => ({ ...task }))))
+const tasks = ref<StudyTask[]>(mergeDailyTaskTemplates(
+  readStored('zhixue:tasks:' + todayKey.value, null), defaultTasks,
+))
 type CloudDashboard = {
   generated_from: string
   exam: { attempted_questions: number; correct_answers: number; accuracy_percent: number | null }
@@ -216,7 +219,7 @@ function rolloverDailyTasks() {
   if (next === todayKey.value) return
   // The synchronous watcher has already persisted the prior day's latest value.
   todayKey.value = next
-  tasks.value = readStored('zhixue:tasks:' + next, defaultTasks.map(task => ({ ...task })))
+  tasks.value = mergeDailyTaskTemplates(readStored('zhixue:tasks:' + next, null), defaultTasks)
   applyPendingDailyTasks(next)
   if (authenticated.value) { void refreshDailyTasks(next); void reconcilePriorDailyTasks() }
 }
@@ -1377,6 +1380,32 @@ async function loadDailyBusinessWords() {
   }
 }
 watch([studyLanguage, todayKey], () => { void loadDailyBusinessWords() }, { immediate: true })
+
+const dailyJapaneseWords = ref<DictionaryEntry[]>([])
+const dailyJapaneseWordsError = ref('')
+let dailyJapaneseWordRun = 0
+async function loadDailyJapaneseWords() {
+  const run = ++dailyJapaneseWordRun
+  dailyJapaneseWords.value = []
+  dailyJapaneseWordsError.value = ''
+  if (studyLanguage.value !== 'ja') return
+  try {
+    // Source-backed Japanese reading and meanings from immutable static assets.
+    const terms = dailyJapaneseWordCandidates(todayKey.value)
+    const rows = await Promise.all(terms.map(term => findStaticLearnerEntry(term, 'ja')))
+    if (run !== dailyJapaneseWordRun || studyLanguage.value !== 'ja') return
+    dailyJapaneseWords.value = rows.filter((word): word is NonNullable<typeof word> => Boolean(word)).slice(0, 5)
+    if (dailyJapaneseWords.value.length < 5)
+      dailyJapaneseWordsError.value = '已验证的日语词条不足 5 个，请检查静态学习词库。'
+    // Pitch is optional and only displayed for exact readings present in
+    // the source-backed pitch asset. Missing accent must not be guessed.
+    void loadJapanesePitchDataset().then(data => { if (run === dailyJapaneseWordRun) dictionaryPitchData.value = data })
+  } catch {
+    if (run === dailyJapaneseWordRun) dailyJapaneseWordsError.value = '日语学习词库暂不可用，请检查网络或本地缓存。'
+  }
+}
+watch([studyLanguage, todayKey], () => { void loadDailyJapaneseWords() }, { immediate: true })
+
 // Reuse existing licensed sentence cards, study progress and review IDs.
 const dailyLanguageScenes = computed(() => selectDailyScenes(languageCards.value, todayKey.value, studyLanguage.value))
 const languageCategories = computed(() => [
@@ -1492,15 +1521,27 @@ const paginatedLanguageCards = computed(() => visibleLanguageCards.value.slice(
   (languagePage.value - 1) * languagePageSize,
   languagePage.value * languagePageSize,
 ))
-const dueLanguageReviewCount = computed(() => visibleLanguageCards.value.filter(card => {
-  const review = languageReviewByCardId.value.get(card.id)
-  return Boolean(review && review.review_count > 0 && reviewDueByCardId.value.get(card.id))
-}).length)
+const dueLanguageReviewCount = computed(() => dueLanguageCards.value.length)
 const languagePracticeIndex = ref(0)
 const languagePracticeRevealed = ref(false)
-const languagePracticeCard = computed(() => visibleLanguageCards.value.length
-  ? visibleLanguageCards.value[languagePracticeIndex.value % visibleLanguageCards.value.length]
+// A dedicated due-only queue avoids accidentally practicing unseen or future
+// cards while reviewing. Everything is derived from cached local review state.
+const languagePracticeMode = ref<'all' | 'due'>('all')
+const dueLanguageCards = computed(() => visibleLanguageCards.value.filter(card => {
+  const review = languageReviewByCardId.value.get(card.id)
+  return Boolean(review?.review_count && reviewDueByCardId.value.get(card.id))
+}))
+const languagePracticeDeck = computed(() =>
+  languagePracticeMode.value === 'due' ? dueLanguageCards.value : visibleLanguageCards.value,
+)
+const languagePracticeCard = computed(() => languagePracticeDeck.value.length
+  ? languagePracticeDeck.value[languagePracticeIndex.value % languagePracticeDeck.value.length]
   : null)
+watch(languagePracticeMode, () => {
+  stopSpeech()
+  languagePracticeIndex.value = 0
+  languagePracticeRevealed.value = false
+})
 function languageExpansions(card: LanguageCard | null, type: 'vocabulary' | 'grammar') {
   return getLanguageExpansions(card, type)
 }
@@ -1515,8 +1556,8 @@ function speakLanguageCard(card: LanguageCard | null, example = false, practice 
 }
 function nextLanguagePractice() {
   stopSpeech()
-  if (!visibleLanguageCards.value.length) return
-  languagePracticeIndex.value = (languagePracticeIndex.value + 1) % visibleLanguageCards.value.length
+  if (!languagePracticeDeck.value.length) return
+  languagePracticeIndex.value = (languagePracticeIndex.value + 1) % languagePracticeDeck.value.length
   languagePracticeRevealed.value = false
 }
 watch([studyLanguage, selectedLanguageCategory, selectedLanguageMastery, selectedSentenceLength], () => {
@@ -3085,6 +3126,26 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                 </article>
               </div>
             </section>
+            <section v-if="studyLanguage === 'ja'" class="section-block" aria-label="每日实用日语词汇">
+              <div class="section-heading"><div><h2>每日 5 个日语实用词汇</h2><p>读音与释义来自已有日语静态词库 · 仅在来源明确时显示声调</p></div></div>
+              <p v-if="dailyJapaneseWordsError" class="dictionary-status dictionary-error" role="alert">{{ dailyJapaneseWordsError }}</p>
+              <p v-else-if="!dailyJapaneseWords.length" class="dictionary-status">正在读取日语词库…</p>
+              <div v-else class="language-card-list">
+                <article v-for="word in dailyJapaneseWords" :key="word.term" class="language-study-card">
+                  <div class="language-card-top"><span class="dict-tag">日语词汇</span><small class="language-source">{{ word.source }}</small></div>
+                  <h3 class="language-sentence">{{ word.term }}</h3>
+                  <p v-if="word.reading" class="language-reading">{{ word.reading }}</p>
+                  <p class="language-meaning">{{ word.zh }}</p>
+                  <p v-if="word.example" class="language-explanation">{{ word.example }}</p>
+                  <p v-if="word.exampleTranslationZh" class="language-meaning">{{ word.exampleTranslationZh }}</p>
+                  <p v-if="word.reading && matchingJapaneseAccents(dictionaryPitchData, word.term, word.reading).length" class="language-source">声调：{{ matchingJapaneseAccents(dictionaryPitchData, word.term, word.reading).map(n => pitchLabel(n, word.reading || '')).join(' / ') }}</p>
+                  <div class="language-speech-actions">
+                    <button type="button" class="play-button" @click="speak(word.term, 'ja-JP', 'japanese-word:' + word.term)"><Volume2 :size="16" /> 听发音</button>
+                    <button type="button" class="language-done-button" :disabled="!vocabularySyncReady || vocabularyHydrating || savedWordRequests.has(word.term)" @click="toggleDailyEnglishWord(word)">{{ savedWords.includes(word.term) ? '取消收藏' : '收藏到生词本' }}</button>
+                  </div>
+                </article>
+              </div>
+            </section>
             <section v-if="studyLanguage === 'en'" class="section-block" aria-label="每日 TOEIC 商务词汇">
               <div class="section-heading"><div><h2>每日 5 个商务英语词汇</h2><p>词义来自已有 ECDICT 静态词库 · 非官方 TOEIC 词表</p></div></div>
               <p v-if="dailyEnglishWordsError" class="dictionary-status dictionary-error">{{ dailyEnglishWordsError }}</p>
@@ -3156,6 +3217,10 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                 <div><span class="banner-tag">主动回忆</span><h3>先回忆，再看答案</h3></div>
                 <span class="language-practice-count">待复习 {{ dueLanguageReviewCount }} · {{ visibleLanguageCards.length }} 张</span>
               </div>
+              <div class="language-review-mode" role="group" aria-label="复习队列选择">
+                <button type="button" :aria-pressed="languagePracticeMode === 'all'" :class="{ active: languagePracticeMode === 'all' }" @click="languagePracticeMode = 'all'">全部学习</button>
+                <button type="button" :aria-pressed="languagePracticeMode === 'due'" :class="{ active: languagePracticeMode === 'due' }" @click="languagePracticeMode = 'due'">只复习到期 {{ dueLanguageReviewCount }}</button>
+              </div>
               <div v-if="languagePracticeCard" class="language-practice-content">
                 <span class="dict-tag">{{ languagePracticeCard.category }}</span>
                 <div v-if="languagePracticeRevealed" class="language-practice-revealed-sentence">
@@ -3201,7 +3266,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <button class="language-done-button" :disabled="languageProgressHydrating || !languageProgressReady || languageCardSaving.has(languagePracticeCard.id)" @click="toggleLanguageCard(languagePracticeCard.id)">{{ completedLanguageCards.includes(languagePracticeCard.id) ? '取消掌握' : '标记掌握' }}</button>
                 </div>
               </div>
-              <p v-else class="language-practice-prompt">当前筛选条件下没有卡片，切换分类或掌握状态后就能开始。</p>
+              <p v-else class="language-practice-prompt">{{ languagePracticeMode === 'due' ? '当前没有到期复习的卡片，可以切换到全部学习。' : '当前筛选条件下没有卡片，切换分类或掌握状态后就能开始。' }}</p>
             </section>
             <p class="language-source">例句来源：<a href="https://tatoeba.org" target="_blank" rel="noopener noreferrer">Tatoeba</a>，原句可查看来源链接。</p>
             <p v-if="languageProgressHydrating" class="dictionary-status" role="status">正在同步语言进度…</p>

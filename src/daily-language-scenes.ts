@@ -52,3 +52,24 @@ export function dailyBusinessWordCandidates(studyDate: string): string[] {
   const offset = stableHash('business-words|' + day) % BUSINESS_HEADWORDS.length
   return [...BUSINESS_HEADWORDS.slice(offset), ...BUSINESS_HEADWORDS.slice(0, offset)]
 }
+
+/** Source candidates only: actual meanings/readings/examples are displayed
+ * from the licensed static Japanese learner lexicon, never invented here.
+ */
+const JAPANESE_HEADWORDS = [
+  '確認', '対応', '相談', '連絡', '準備', '予定', '仕事', '報告',
+  '説明', '状況', '問題', '原因', '修正', '変更', '改善', '提案',
+  '担当', '判断', '方法', '必要', '大切', '期限', '予約', '出発',
+  '到着', '交通', '支払', '費用', '時間', '開始', '終了', '参加',
+  '共有', '情報', '安全', '管理', '作業', '結果', '条件', '内容',
+  '確認する', '検討', '意見', '手続き', '申請', '提出', '依頼',
+  '承認', '予算', '失敗', '成功', '連休', '利用', '追加', '削除',
+  '更新', '昨日', '明日', '今日', '使用', '比較', '注意',
+  '到達', '影響', '納期', '調整', '報告する', '連絡する',
+] as const
+
+export function dailyJapaneseWordCandidates(studyDate: string): string[] {
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(studyDate) ? studyDate : '1970-01-01'
+  const offset = stableHash('japanese-headwords|' + day) % JAPANESE_HEADWORDS.length
+  return [...JAPANESE_HEADWORDS.slice(offset), ...JAPANESE_HEADWORDS.slice(0, offset)]
+}
