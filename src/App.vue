@@ -1880,6 +1880,15 @@ async function restoreVocabulary(term: string) {
   finally { savedWordRequests.delete(term) }
 }
 const savedWordRequests = new Set<string>()
+function adjustVocabularyDashboard(delta: number) {
+  // A confirmed save/remove already tells us the new total. Avoid the
+  // five-plus D1 aggregations of /api/dashboard after each vocabulary toggle.
+  if (!cloudDashboard.value) return
+  cloudDashboard.value = {
+    ...cloudDashboard.value,
+    vocabulary: { saved_terms: Math.max(0, cloudDashboard.value.vocabulary.saved_terms + delta) },
+  }
+}
 async function toggleSaved(term: string) {
   // Serialize changes for the same term and update the UI only after the cloud write succeeds.
   if (vocabularyHydrating.value || !vocabularySyncReady.value || savedWordRequests.has(term)) return
@@ -1905,7 +1914,7 @@ async function toggleSaved(term: string) {
       const pending = new Map(vocabularyPending.value); pending.delete(term); vocabularyPending.value = pending
       savedWords.value = savedWords.value.filter(word => word !== term)
       savedDictionaryEntries.value = savedDictionaryEntries.value.filter(entry => entry.term !== term)
-      void loadCloudDashboard()
+      adjustVocabularyDashboard(-1)
       return
     }
 
@@ -1929,7 +1938,7 @@ async function toggleSaved(term: string) {
     if (!savedDictionaryEntries.value.some(item => item.term === term)) {
       savedDictionaryEntries.value = [entry, ...savedDictionaryEntries.value]
     }
-    void loadCloudDashboard()
+    adjustVocabularyDashboard(1)
   } catch (error) {
     cloudDashboardError.value = error instanceof Error
       ? error.message
