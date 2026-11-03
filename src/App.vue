@@ -16,6 +16,7 @@ import { DictionaryRequestCache } from './dictionary-request-cache'
 import { parseMockSnapshot, type MockSnapshot } from './mock-recovery'
 import ExamScratchTools from './ExamScratchTools.vue'
 import DailyGrammarLesson from './DailyGrammarLesson.vue'
+import DailyListeningPractice from './DailyListeningPractice.vue'
 import {
   BookOpen, Languages, Search, GraduationCap,
   ChevronRight, ChevronDown, Sparkles, Clock3, Flame, Bookmark, Volume2, ArrowRight,
@@ -3105,6 +3106,11 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
             </section>
             <DailyGrammarLesson :language="studyLanguage" :study-date="todayKey" :authenticated="authenticated"
               @speak="(text, language) => speak(text, language, 'daily-grammar:' + studyLanguage)" />
+            <DailyListeningPractice :language="studyLanguage" :study-date="todayKey"
+              :audio-status="speechStatus" :audio-status-target="speechStatusTarget"
+              :audio-playing="speechPlaying" :audio-paused="speechPaused"
+              @speak="(text, language, target) => speak(text, language, target)"
+              @pause="toggleSpeechPause" @stop="stopSpeech" />
             <section class="language-filter-panel" aria-label="句子联动筛选">
               <div class="language-filter-top">
                 <div class="language-filter-total"><strong>筛选课程</strong><span>当前 {{ visibleLanguageCards.length.toLocaleString() }} 句</span></div>
