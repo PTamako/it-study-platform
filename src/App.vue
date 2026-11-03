@@ -4,7 +4,7 @@ import { hydrateMastery, mergeExamHistory, restoreMasteredCard } from './progres
 import { tokyoDate, mergeDailyTaskStates, mergeDailyTaskTemplates } from './daily-tasks'
 import { utcReviewMillis } from './review-time'
 import { fetchVocabularySnapshot } from './vocabulary-sync'
-import { selectDailyScenes, dailyBusinessWordCandidates } from './daily-language-scenes'
+import { selectDailyScenes, dailyBusinessWordCandidates, dailyJapaneseWordCandidates } from './daily-language-scenes'
 import { getLanguageExpansions, getSentenceParts } from './language-annotations'
 import { isDictionaryHeadword, loadJapanesePitchDataset, matchingJapaneseAccents, pitchLabel, partOfSpeechDisplay, getChineseWordGuide, type PitchDataset } from './dictionary-word-metadata'
 import { dictionaryTranslationRows, chinesePinyinToneLabels } from './dictionary-presentation'
@@ -1380,6 +1380,32 @@ async function loadDailyBusinessWords() {
   }
 }
 watch([studyLanguage, todayKey], () => { void loadDailyBusinessWords() }, { immediate: true })
+
+const dailyJapaneseWords = ref<DictionaryEntry[]>([])
+const dailyJapaneseWordsError = ref('')
+let dailyJapaneseWordRun = 0
+async function loadDailyJapaneseWords() {
+  const run = ++dailyJapaneseWordRun
+  dailyJapaneseWords.value = []
+  dailyJapaneseWordsError.value = ''
+  if (studyLanguage.value !== 'ja') return
+  try {
+    // Source-backed Japanese reading and meanings from immutable static assets.
+    const terms = dailyJapaneseWordCandidates(todayKey.value)
+    const rows = await Promise.all(terms.map(term => findStaticLearnerEntry(term, 'ja')))
+    if (run !== dailyJapaneseWordRun || studyLanguage.value !== 'ja') return
+    dailyJapaneseWords.value = rows.filter((word): word is NonNullable<typeof word> => Boolean(word)).slice(0, 5)
+    if (dailyJapaneseWords.value.length < 5)
+      dailyJapaneseWordsError.value = '已验证的日语词条不足 5 个，请检查静态学习词库。'
+    // Pitch is optional and only displayed for exact readings present in
+    // the source-backed pitch asset. Missing accent must not be guessed.
+    void loadJapanesePitchDataset().then(data => { if (run === dailyJapaneseWordRun) dictionaryPitchData.value = data })
+  } catch {
+    if (run === dailyJapaneseWordRun) dailyJapaneseWordsError.value = '日语学习词库暂不可用，请检查网络或本地缓存。'
+  }
+}
+watch([studyLanguage, todayKey], () => { void loadDailyJapaneseWords() }, { immediate: true })
+
 // Reuse existing licensed sentence cards, study progress and review IDs.
 const dailyLanguageScenes = computed(() => selectDailyScenes(languageCards.value, todayKey.value, studyLanguage.value))
 const languageCategories = computed(() => [
@@ -3097,6 +3123,26 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                     <a v-if="scene.card.source_url" class="language-source-link" :href="scene.card.source_url" target="_blank" rel="noopener noreferrer">查看原句来源</a>
                   </div>
                   <p v-else class="language-practice-prompt">当前类别暂无合适的学习句子。</p>
+                </article>
+              </div>
+            </section>
+            <section v-if="studyLanguage === 'ja'" class="section-block" aria-label="每日实用日语词汇">
+              <div class="section-heading"><div><h2>每日 5 个日语实用词汇</h2><p>读音与释义来自已有日语静态词库 · 仅在来源明确时显示声调</p></div></div>
+              <p v-if="dailyJapaneseWordsError" class="dictionary-status dictionary-error" role="alert">{{ dailyJapaneseWordsError }}</p>
+              <p v-else-if="!dailyJapaneseWords.length" class="dictionary-status">正在读取日语词库…</p>
+              <div v-else class="language-card-list">
+                <article v-for="word in dailyJapaneseWords" :key="word.term" class="language-study-card">
+                  <div class="language-card-top"><span class="dict-tag">日语词汇</span><small class="language-source">{{ word.source }}</small></div>
+                  <h3 class="language-sentence">{{ word.term }}</h3>
+                  <p v-if="word.reading" class="language-reading">{{ word.reading }}</p>
+                  <p class="language-meaning">{{ word.zh }}</p>
+                  <p v-if="word.example" class="language-explanation">{{ word.example }}</p>
+                  <p v-if="word.exampleTranslationZh" class="language-meaning">{{ word.exampleTranslationZh }}</p>
+                  <p v-if="word.reading && matchingJapaneseAccents(dictionaryPitchData, word.term, word.reading).length" class="language-source">声调：{{ matchingJapaneseAccents(dictionaryPitchData, word.term, word.reading).map(n => pitchLabel(n, word.reading || '')).join(' / ') }}</p>
+                  <div class="language-speech-actions">
+                    <button type="button" class="play-button" @click="speak(word.term, 'ja-JP', 'japanese-word:' + word.term)"><Volume2 :size="16" /> 听发音</button>
+                    <button type="button" class="language-done-button" :disabled="!vocabularySyncReady || vocabularyHydrating || savedWordRequests.has(word.term)" @click="toggleDailyEnglishWord(word)">{{ savedWords.includes(word.term) ? '取消收藏' : '收藏到生词本' }}</button>
+                  </div>
                 </article>
               </div>
             </section>
