@@ -128,7 +128,7 @@ test('course default avoids beginner one-liners, while all cards and legacy 5k s
   assert.match(frontend,/selectedSentenceLength === 'all'/)
   assert.match(frontend,/advancedLanguageCards\.filter\(card => card\.language === language\)/)
   assert.match(frontend,/fetchLanguageCorpus<LanguageCard>/)
-  assert.match(source,/SELECT 10044 AS total/)
+  assert.match(source,/SELECT 10144 AS total/)
   assert.match(frontend,/词库读音标记/)
   assert.match(frontend,/entry\.exampleTranslationZh/)
 })
