@@ -1987,6 +1987,10 @@ export default {
       const yearPattern = year ? (trackId === 'exam-sg' ? 'sg-official-%' + year + '%' : '%-' + year + '-%') : ''
       const section = (trackId === 'exam-fe' || trackId === 'exam-sg') && ['A', 'B'].includes(url.searchParams.get('section') || '') ? url.searchParams.get('section')! : ''
       const selectedTopic = (trackId === 'exam-fe' || trackId === 'exam-sg') ? (url.searchParams.get('topic') || '').trim().slice(0,100) : ''
+      const sitting = (url.searchParams.get('sitting') || '').trim()
+      if (sitting && (trackId !== 'exam-fe' || source !== 'exemption' || !/^202[0-3]-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])$/.test(sitting))) {
+        return json({ error: '场次只能用于 FE 修了試験，格式为 YYYY-MM-DD。' }, 400)
+      }
       try {
         const { results } = await env.DB.prepare(
           `SELECT q.id, q.track_id, q.topic, q.difficulty, q.question_type, q.prompt,
@@ -2003,6 +2007,7 @@ export default {
            FROM questions q
            LEFT JOIN question_review_state s ON s.question_id = q.id           WHERE q.track_id = ? AND (CASE ? WHEN '' THEN 1 WHEN 'sample' THEN q.question_kind = 'official_sample' WHEN 'exemption' THEN q.exam_origin = 'fe_exemption' WHEN 'licensed' THEN q.source_type = 'licensed' AND q.question_kind = 'standard' AND q.exam_origin = 'general' ELSE q.source_type = ? END)
              AND (? = '' OR (q.exam_origin = 'fe_exemption' AND q.id IN (SELECT canonical_question_id FROM fe_exemption_occurrences WHERE fiscal_year = CAST(? AS INTEGER))) OR (q.exam_origin <> 'fe_exemption' AND q.id LIKE ?))
+             AND (? = '' OR q.id IN (SELECT canonical_question_id FROM fe_exemption_occurrences WHERE sitting_date = ?))
              AND (? = '' OR q.exam_section = ?)
              AND (? = '' OR q.topic = ?)
              AND (
@@ -2021,7 +2026,7 @@ export default {
            ORDER BY CASE WHEN COALESCE(s.last_result, 'again') = 'again' THEN 0 ELSE 1 END,
                     wrong_count DESC, next_review_at ASC, q.id
            LIMIT ? OFFSET ?`,
-        ).bind(trackId, source, source, year, year, yearPattern, section, section, selectedTopic, selectedTopic, mode, mode, mode, mode, mode, limit, offset).all()
+        ).bind(trackId, source, source, year, year, yearPattern, sitting, sitting, section, section, selectedTopic, selectedTopic, mode, mode, mode, mode, mode, limit, offset).all()
         const rows = results as Record<string, unknown>[]
         const matchedTotal = Number(rows[0]?.filtered_total || 0)
         return json({
@@ -2303,6 +2308,25 @@ export default {
       }
     }
 
+    // Source-verified 修了試験 sittings. Small metadata query, never load question bodies.
+    if (url.pathname === '/api/fe-exemption-sittings' && request.method === 'GET') {
+      const year = (url.searchParams.get('year') || '').trim()
+      if (year && !/^202[012]$/.test(year)) return json({ error: '修了試験年度不正确。' }, 400)
+      try {
+        const { results } = await env.DB.prepare(
+          `SELECT sitting_date, fiscal_year, COUNT(*) AS available_positions,
+                  COUNT(DISTINCT canonical_question_id) AS distinct_questions
+           FROM fe_exemption_occurrences
+           WHERE (? = '' OR fiscal_year = CAST(? AS INTEGER))
+           GROUP BY sitting_date, fiscal_year
+           ORDER BY sitting_date DESC`,
+        ).bind(year, year).all()
+        return json({ items: results })
+      } catch {
+        return json({ items: [], error: '修了試験場次資料暂不可用，请先应用迁移 0125。' }, 503)
+      }
+    }
+
     // 官方题源目录：只返回来源元数据与官方链接，不复制第三方题库。
     if (url.pathname === '/api/question-sources' && request.method === 'GET') {
       const examCode = (url.searchParams.get('exam') || 'SG').trim().slice(0, 12).toUpperCase()
@@ -2332,16 +2356,21 @@ export default {
       const yearPattern = year ? (trackId === 'exam-sg' ? 'sg-official-%' + year + '%' : '%-' + year + '-%') : ''
       const section = (trackId === 'exam-fe' || trackId === 'exam-sg') && ['A', 'B'].includes(url.searchParams.get('section') || '') ? url.searchParams.get('section')! : ''
 
+      const sitting = (url.searchParams.get('sitting') || '').trim()
+      if (sitting && (trackId !== 'exam-fe' || source !== 'exemption' || !/^202[0-3]-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])$/.test(sitting))) {
+        return json({ error: '场次只能用于 FE 修了試験，格式为 YYYY-MM-DD。' }, 400)
+      }
       try {
         const { results } = await env.DB.prepare(
           `SELECT topic, COUNT(*) AS question_count
            FROM questions
            WHERE track_id = ? AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'exemption' THEN exam_origin = 'fe_exemption' WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' AND exam_origin = 'general' ELSE source_type = ? END)
              AND (? = '' OR (exam_origin = 'fe_exemption' AND id IN (SELECT canonical_question_id FROM fe_exemption_occurrences WHERE fiscal_year = CAST(? AS INTEGER))) OR (exam_origin <> 'fe_exemption' AND id LIKE ?))
+             AND (? = '' OR id IN (SELECT canonical_question_id FROM fe_exemption_occurrences WHERE sitting_date = ?))
              AND (? = '' OR exam_section = ?)
            GROUP BY topic
            ORDER BY topic`,
-        ).bind(trackId, source, source, year, year, yearPattern, section, section).all()
+        ).bind(trackId, source, source, year, year, yearPattern, sitting, sitting, section, section).all()
         return json({ items: results })
       } catch {
         return json({ items: [], error: '题库分类暂不可用，请确认数据库迁移已应用。' }, 503)
@@ -2471,24 +2500,32 @@ export default {
       const yearPattern = year ? (trackId === 'exam-sg' ? 'sg-official-%' + year + '%' : '%-' + year + '-%') : ''
       const section = (trackId === 'exam-fe' || trackId === 'exam-sg') && ['A', 'B'].includes(url.searchParams.get('section') || '') ? url.searchParams.get('section')! : ''
 
+      const sitting = (url.searchParams.get('sitting') || '').trim()
+      if (sitting && (trackId !== 'exam-fe' || source !== 'exemption' || !/^202[0-3]-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])$/.test(sitting))) {
+        return json({ error: '场次只能用于 FE 修了試験，格式为 YYYY-MM-DD。' }, 400)
+      }
       try {
         const totalRow = await env.DB.prepare(
           `SELECT COUNT(*) AS total FROM questions
            WHERE track_id = ? AND (? = '' OR topic = ?)
              AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'exemption' THEN exam_origin = 'fe_exemption' WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' AND exam_origin = 'general' ELSE source_type = ? END)
              AND (? = '' OR (exam_origin = 'fe_exemption' AND id IN (SELECT canonical_question_id FROM fe_exemption_occurrences WHERE fiscal_year = CAST(? AS INTEGER))) OR (exam_origin <> 'fe_exemption' AND id LIKE ?))
+             AND (? = '' OR id IN (SELECT canonical_question_id FROM fe_exemption_occurrences WHERE sitting_date = ?))
              AND (? = '' OR exam_section = ?)`,
-        ) .bind(trackId, topic, topic, source, source, year, year, yearPattern, section, section).first() as { total?: number } | null
+        ) .bind(trackId, topic, topic, source, source, year, year, yearPattern, sitting, sitting, section, section).first() as { total?: number } | null
         const { results } = await env.DB.prepare(
           `SELECT id, track_id, topic, difficulty, question_type, prompt,
                   options_json, answer_json, explanation, source_type, source_reference, language, question_kind, exam_origin,
-                  exam_section, exam_section_method
+                  exam_section, exam_section_method,
+                  (SELECT MIN(e.original_question) FROM fe_exemption_occurrences e WHERE e.sitting_date = ? AND e.canonical_question_id = questions.id) AS original_question
            FROM questions
            WHERE track_id = ? AND (? = '' OR topic = ?)
              AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'exemption' THEN exam_origin = 'fe_exemption' WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' AND exam_origin = 'general' ELSE source_type = ? END)
              AND (? = '' OR (exam_origin = 'fe_exemption' AND id IN (SELECT canonical_question_id FROM fe_exemption_occurrences WHERE fiscal_year = CAST(? AS INTEGER))) OR (exam_origin <> 'fe_exemption' AND id LIKE ?))
+             AND (? = '' OR id IN (SELECT canonical_question_id FROM fe_exemption_occurrences WHERE sitting_date = ?))
              AND (? = '' OR exam_section = ?)
-           ORDER BY CASE WHEN ? = 'ordered' THEN id END,
+           ORDER BY CASE WHEN ? = 'ordered' AND ? <> '' THEN original_question END,
+                    CASE WHEN ? = 'ordered' THEN id END,
                     CASE WHEN ? <> 'ordered' THEN (
                       (unicode(substr(id, 1, 1)) * 131
                        + unicode(substr(id, 3, 1)) * 137
@@ -2497,7 +2534,7 @@ export default {
                        + length(id) * 991 + ? * 10007) % 104729
                     ) END, id
            LIMIT ? OFFSET ?`,
-        ).bind(trackId, topic, topic, source, source, year, year, yearPattern, section, section, mode, mode, seed, limit, offset).all()
+        ).bind(sitting, trackId, topic, topic, source, source, year, year, yearPattern, sitting, sitting, section, section, mode, sitting, mode, mode, seed, limit, offset).all()
         const total = Number(totalRow?.total || 0)
         return json({
           items: results.map((row: Record<string, unknown>) => ({
