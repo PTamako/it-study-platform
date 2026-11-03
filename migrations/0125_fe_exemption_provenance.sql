@@ -18,3 +18,9 @@ CREATE TABLE IF NOT EXISTS fe_exemption_occurrences (
 );
 CREATE INDEX IF NOT EXISTS idx_fe_exemption_occurrences_question
  ON fe_exemption_occurrences(canonical_question_id);
+
+-- Filter FY2020/21/22 by the occurrence fiscal year, not the first canonical ID.
+-- The composite index makes year-scoped lookup selective and keeps repeated
+-- original questions from requiring duplicate question rows or D1 scans.
+CREATE INDEX IF NOT EXISTS idx_fe_exemption_occurrences_year_question
+ ON fe_exemption_occurrences(fiscal_year, canonical_question_id);
