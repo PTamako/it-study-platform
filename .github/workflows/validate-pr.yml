@@ -92,6 +92,10 @@ jobs:
       - name: Type-check and build frontend
         run: npm run build
 
+      # Fail before any production D1 migration if Vite did not package static lessons.
+      - name: Verify static lesson and dictionary assets included in dist (zero D1 reads)
+        run: node scripts/check-static-assets.mjs --local
+
       - name: Validate complete D1 migration chain locally
         run: npx wrangler d1 migrations apply it-study-platform-db --local
 
