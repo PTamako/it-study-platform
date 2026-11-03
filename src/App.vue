@@ -2807,7 +2807,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <button class="primary-button" @click="finishMockExam(false)">交卷并查看结果</button>
                 </div>
                 <article v-for="(question, index) in mockQuestions" :key="question.id" class="panel question-card mock-question-card">
-                  <div class="question-topline"><span>第 {{ index + 1 }} / {{ mockQuestions.length }} 题 · 科目{{ question.exam_section }} · {{ question.topic }}</span><span class="source-pill">{{ question.exam_origin === 'fe_exemption' ? '修了試験' : question.exam_origin === 'fe_exemption' ? '修了試験' : question.question_kind === 'official_sample' ? '公式サンプル問題' : question.source_type === 'generated' ? '预测题库 · 原创' : question.source_type === 'official' ? '历年真题' : question.source_type === 'licensed' ? '真题改编' : '其他题目' }}</span></div>
+                  <div class="question-topline"><span>第 {{ index + 1 }} / {{ mockQuestions.length }} 题 · 科目{{ question.exam_section }} · {{ question.topic }}</span><span class="source-pill">{{ question.exam_origin === 'fe_exemption' ? '修了試験' : question.question_kind === 'official_sample' ? '公式サンプル問題' : question.source_type === 'generated' ? '预测题库 · 原创' : question.source_type === 'official' ? '历年真题' : question.source_type === 'licensed' ? '真题改编' : '其他题目' }}</span></div>
                   <a v-if="(question.source_type === 'official' || question.source_type === 'licensed') && question.source_reference" class="language-source" :href="question.source_reference" target="_blank" rel="noreferrer">查看 IPA 原题 ↗</a>
                   <p v-if="question.id === 'fe-ipa-official-2026-a-06'" class="dictionary-status">波形图以 0、1 表示；可查看 IPA 原图。</p>
                   <div class="question-prompt-row">
