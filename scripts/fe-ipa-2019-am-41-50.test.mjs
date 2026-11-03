@@ -13,8 +13,8 @@ const A='https://www.ipa.go.jp/shiken/mondai-kaiotu/gmcbt8000000ddiw-att/2019h31
 test('2019 spring IPA official sheet keys 41-50 match source-reviewed adaptations',()=>{
  assert.equal(data.items.length,10)
  assert.deepEqual(data.items.map(x=>x.original_number),Array.from({length:10},(_,i)=>i+41))
- assert.equal(new Set(data.items.map(x=>x.id)).size,13)
- assert.equal(new Set(data.items.map(x=>x.prompt)).size,13)
+ assert.equal(new Set(data.items.map(x=>x.id)).size,10)
+ assert.equal(new Set(data.items.map(x=>x.prompt)).size,10)
  for(const row of data.items){
    assert.equal(row.id,'fe-ipa-2019-spring-am-adapt-'+row.original_number)
    assert.equal(row.pdf_page,pages[row.original_number])
