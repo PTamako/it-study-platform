@@ -64,6 +64,7 @@ node scripts/generate_fe_growth_phase1.mjs
 node scripts/generate_fe_2019_spring_source_review.mjs
 node scripts/generate_fe_2019_spring_am_28_40.mjs
 node scripts/generate_fe_2019_spring_am_41_50.mjs
+node scripts/generate_fe_2019_spring_am_51_60.mjs
 node scripts/generate_fe_2022_official_samples.mjs
 node scripts/generate_fe_2022_official_samples_completion.mjs
 node scripts/generate_fe_2020_2022_exemption_first_batch.mjs
