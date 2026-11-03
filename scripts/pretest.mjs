@@ -12,6 +12,7 @@ for (const relative of [
   '../migrations/0092_fe_practice_bank.sql',
   '../migrations/0119_fe_growth_phase1_original_80.sql',
   '../migrations/0120_fe_ipa_2019_spring_morning_07_27.sql',
+  '../migrations/0129_fe_ipa_2019_spring_am_28_40.sql',
   '../migrations/0122_fe_ipa_2022_sample_training_batch1.sql',
   '../migrations/0123_fe_ipa_2022_sample_completion.sql',
   '../migrations/0126_fe_ipa_exemption_first23.sql',
