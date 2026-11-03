@@ -5,7 +5,7 @@ import { tokyoDate, mergeDailyTaskStates } from './daily-tasks'
 import { utcReviewMillis } from './review-time'
 import { fetchVocabularySnapshot } from './vocabulary-sync'
 import { getLanguageExpansions, getSentenceParts } from './language-annotations'
-import { selectDailyScenes } from './daily-language-scenes'
+import { selectDailyScenes, dailyBusinessWordCandidates } from './daily-language-scenes'
 import { isDictionaryHeadword, loadJapanesePitchDataset, matchingJapaneseAccents, pitchLabel, partOfSpeechDisplay, getChineseWordGuide, type PitchDataset } from './dictionary-word-metadata'
 import { dictionaryTranslationRows, chinesePinyinToneLabels } from './dictionary-presentation'
 import { fetchLanguageCorpus } from './language-corpus'
@@ -1353,6 +1353,27 @@ type LanguageCard = {
   highlight_json?: string; vocabulary_expansion_json?: string; grammar_expansion_json?: string
 }
 const languageCards = ref<LanguageCard[]>([])
+const dailyEnglishWords = ref<DictionaryEntry[]>([])
+const dailyEnglishWordsError = ref('')
+let dailyEnglishWordRun = 0
+async function loadDailyBusinessWords() {
+  const run = ++dailyEnglishWordRun
+  dailyEnglishWords.value = []
+  dailyEnglishWordsError.value = ''
+  if (studyLanguage.value !== 'en') return
+  try {
+    // Static ECDICT manifest is cached once; lookups do not touch Workers/D1.
+    const terms = dailyBusinessWordCandidates(todayKey.value)
+    const rows = await Promise.all(terms.map(term => findStaticLearnerEntry(term, 'en')))
+    if (run !== dailyEnglishWordRun || studyLanguage.value !== 'en') return
+    dailyEnglishWords.value = rows.filter((word): word is NonNullable<typeof word> => Boolean(word)).slice(0, 5)
+    if (dailyEnglishWords.value.length < 5)
+      dailyEnglishWordsError.value = '词库中可验证的当日词条不足 5 个，请稍后重试。'
+  } catch {
+    if (run === dailyEnglishWordRun) dailyEnglishWordsError.value = '本地英语词库暂不可用，请检查网络或缓存。'
+  }
+}
+watch([studyLanguage, todayKey], () => { void loadDailyBusinessWords() }, { immediate: true })
 // Reuse existing licensed sentence cards, study progress and review IDs.
 const dailyLanguageScenes = computed(() => selectDailyScenes(languageCards.value, todayKey.value, studyLanguage.value))
 const languageCategories = computed(() => [
@@ -2993,6 +3014,24 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                     <a v-if="scene.card.source_url" class="language-source-link" :href="scene.card.source_url" target="_blank" rel="noopener noreferrer">查看原句来源</a>
                   </div>
                   <p v-else class="language-practice-prompt">当前类别暂无合适的学习句子。</p>
+                </article>
+              </div>
+            </section>
+            <section v-if="studyLanguage === 'en'" class="section-block" aria-label="每日 TOEIC 商务词汇">
+              <div class="section-heading"><div><h2>每日 5 个商务英语词汇</h2><p>词义来自已有 ECDICT 静态词库 · 非官方 TOEIC 词表</p></div></div>
+              <p v-if="dailyEnglishWordsError" class="dictionary-status dictionary-error">{{ dailyEnglishWordsError }}</p>
+              <p v-else-if="!dailyEnglishWords.length" class="dictionary-status">正在读取本地英语词库…</p>
+              <div v-else class="language-card-list">
+                <article v-for="word in dailyEnglishWords" :key="word.term" class="language-study-card">
+                  <div class="language-card-top"><span class="dict-tag">商务词汇</span><small class="language-source">ECDICT · MIT</small></div>
+                  <h3 class="language-sentence">{{ word.term }}</h3>
+                  <p v-if="word.partsOfSpeech?.length" class="language-reading">{{ word.partsOfSpeech.join(' / ') }}</p>
+                  <p class="language-meaning">{{ word.zh }}</p>
+                  <p v-if="word.senses?.length" class="language-explanation">{{ word.senses.slice(0, 2).map(sense => sense.definitions.join('；')).join('；') }}</p>
+                  <p v-if="word.transcription" class="language-source">词库读音标记：{{ word.transcription }}（未验证为 IPA）</p>
+                  <div class="language-speech-actions">
+                    <button type="button" class="play-button" @click="speak(word.term, 'en-US', 'business:' + word.term)"><Volume2 :size="16" /> 听发音</button>
+                  </div>
                 </article>
               </div>
             </section>
