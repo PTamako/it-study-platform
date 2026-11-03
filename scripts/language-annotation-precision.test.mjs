@@ -116,3 +116,29 @@ test('Unicode codepoint offsets from Python remain accurate in JavaScript render
   assert.equal(sentence.slice(note.start, note.end), 'schedule')
   assert.equal(getSentenceParts(c).map(part => part.text).join(''), sentence)
 })
+
+test('Japanese の is nominalization after a predicate, not a possessive noun connector', () => {
+  for (const sentence of ['食べるのが好きです。', '読むのは楽しいです。', '勉強するのが楽しいです。']) {
+    const c = card(sentence, 'ja', [hit(sentence, 'の', 'grammar', '所属', '旧释义：名词之间的连接')])
+    const annotation = getLanguageExpansions(c, 'grammar').find(item => item.term === 'の')
+    assert.ok(annotation, 'high confidence nominalizer should be retained: ' + sentence)
+    assert.match(annotation.meaning, /名词化/)
+    assert.doesNotMatch(annotation.explanation, /前面的名词限定后面的名词/)
+    assert.equal(getSentenceParts(c).map(part => part.text).join(''), sentence)
+  }
+})
+
+test('Japanese の before a case particle abstains when nominalization cannot be established', () => {
+  const sentence = '私のが好き。'
+  const c = card(sentence, 'ja', [hit(sentence, 'の', 'grammar', '名词所属', '不一定正确')])
+  assert.ok(!getLanguageExpansions(c, 'grammar').some(item => item.term === 'の'))
+})
+
+test('Japanese の keeps qualified modifier information before a lexical headword', () => {
+  const sentence = '彼女の本が好きです。'
+  const c = card(sentence, 'ja', [hit(sentence, 'の', 'grammar', '旧泛化', '旧解释')])
+  const note = getLanguageExpansions(c, 'grammar').find(item => item.term === 'の')
+  assert.ok(note)
+  assert.match(note.explanation, /彼女の本/)
+  assert.equal(getSentenceParts(c).map(part => part.text).join(''), sentence)
+})

@@ -59,6 +59,12 @@ jobs:
       - name: Verify 2019 spring 51-60 official answer keys, chart formulas and data safety
         run: node --test scripts/fe-ipa-2019-am-51-60.test.mjs
 
+      - name: Generate IPA 2019 spring FE morning 61-70 source-verified batch
+        run: node scripts/generate_fe_2019_spring_am_61_70.mjs
+
+      - name: Verify 2019 spring 61-70 answer keys, complete ROI table and history safety
+        run: node --test scripts/fe-ipa-2019-am-61-70.test.mjs
+
       - name: Prepare 2022 IPA official-sample training items without remote D1 reads
         run: node scripts/generate_fe_2022_official_samples.mjs
 
@@ -82,6 +88,12 @@ jobs:
 
       - name: Verify 2020 Q7/Q10 official keys, visual semantics and data safety
         run: node --test scripts/fe-exemption-20200614-q07-q10.test.mjs
+
+      - name: Generate IPA 2019 spring FE legacy AM 71-80 verified final batch
+        run: node scripts/generate_fe_2019_spring_am_71_80.mjs
+
+      - name: Verify official 2019 Q71-80 answers, fishbone and original opportunity-loss table
+        run: node --test scripts/fe-ipa-2019-am-71-80.test.mjs
 
       - name: Set up Python for licensed sentence dataset generation
         uses: actions/setup-python@v5
