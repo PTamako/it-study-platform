@@ -11,6 +11,7 @@ import { fetchLanguageCorpus } from './language-corpus'
 import { advancedLanguageCards } from './advanced-language-cards'
 import { advancedLanguageCardsBatch2 } from './advanced-language-cards-batch2'
 import { findStaticLearnerEntry, localLexiconLanguage } from './static-learner-dictionary'
+import { DictionaryRequestCache } from './dictionary-request-cache'
 import { parseMockSnapshot, type MockSnapshot } from './mock-recovery'
 import ExamScratchTools from './ExamScratchTools.vue'
 import {
@@ -1764,6 +1765,31 @@ const speechStatus = ref('')
 const speechStatusTarget = ref('')
 const lastSearchedTerm = ref('')
 let dictionaryRequestId = 0
+type DictionaryApiPayload = {
+  items?: DictionaryEntry[]
+  error?: string
+  detected_language?: 'ja' | 'en' | 'zh' | 'it'
+}
+const dictionaryOnlineCache = new DictionaryRequestCache<DictionaryApiPayload>()
+let dictionaryFetchController: AbortController | undefined
+
+// iPad keyboard edits can occur before the user presses Search again.
+// Cancel their obsolete requests immediately, not only after the next submit.
+watch(searchText, () => {
+  dictionaryRequestId++
+  dictionaryFetchController?.abort()
+  dictionaryFetchController = undefined
+  dictionaryOnlineCache.forgetPending()
+  dictionaryLoading.value = false
+  dictionaryLocalHit.value = false
+  dictionaryError.value = ''
+  dictionaryDetectedLanguage.value = ''
+  onlineEntries.value = []
+  lastSearchedTerm.value = ''
+  resetDictionaryAiDisplay()
+}, { flush: 'sync' })
+watch(authenticated, () => dictionaryOnlineCache.clear())
+
 const speechPaused = ref(false)
 const speechPlaying = ref(false)
 watch(recentDictionaryEntries, value => localStorage.setItem('zhixue:recent-dictionary', JSON.stringify(value)), { deep: true })
@@ -2033,12 +2059,15 @@ function enrichDictionaryTranslation() {
 }
 async function lookupDictionary() {
   const forceOnline = forceOnlineNextDictionaryLookup
-  const previouslyFoundLocally = dictionaryLocalHit.value
+  const previouslyFoundLocally = dictionaryLocalHit.value && lastSearchedTerm.value.normalize('NFKC').trim() === searchText.value.normalize('NFKC').trim()
   forceOnlineNextDictionaryLookup = false
   dictionaryLocalHit.value = false
   resetDictionaryAiDisplay()
   const q = searchText.value.normalize('NFKC').trim().replace(/\s+/g, ' ')
   const requestedLanguage = dictSourceLang.value
+  dictionaryFetchController?.abort()
+  dictionaryFetchController = undefined
+  dictionaryOnlineCache.forgetPending()
   const requestId = ++dictionaryRequestId
   speechStatus.value = ''
   speechStatusTarget.value = ''
@@ -2132,14 +2161,23 @@ async function lookupDictionary() {
         console.warn('[dictionary] static lookup unavailable', error instanceof Error ? error.message : String(error))
       }
     }
-    const response = await fetch('/api/dictionary?q=' + encodeURIComponent(q) + '&lang=' + encodeURIComponent(requestedLanguage)
-      + (staticWordChecked ? '&static_word_checked=1' : ''), {
-      signal: AbortSignal.timeout(18000),
-    })
-    const data = await response.json() as { items?: DictionaryEntry[]; error?: string; detected_language?: 'ja' | 'en' | 'zh' | 'it' }
-    // Ignore late responses from an older query or language selection.
+    const controller = new AbortController()
+    dictionaryFetchController = controller
+    const url = '/api/dictionary?q=' + encodeURIComponent(q) + '&lang=' + encodeURIComponent(requestedLanguage)
+      + (staticWordChecked ? '&static_word_checked=1' : '')
+    // Short-lived per-session cache: repeated online lookups avoid both Worker
+    // requests and D1 quota writes. Never cache failures or no-result responses.
+    const key = [requestedLanguage, q, staticWordChecked ? 'static' : 'full', authenticated.value ? 'owner' : 'public'].join('|')
+    const data = await dictionaryOnlineCache.lookup(key, async () => {
+      const response = await fetch(url, {
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(18000)]),
+      })
+      const payload = await response.json() as DictionaryApiPayload
+      if (!response.ok) throw new Error(payload.error || '在线词典暂时不可用，请稍后再试。')
+      return payload
+    }, value => Array.isArray(value.items) && value.items.length > 0)
+    // Ignore late responses from an older query, edit, or language selection.
     if (requestId !== dictionaryRequestId) return
-    if (!response.ok) throw new Error(data.error || '在线词典暂时不可用，请稍后再试。')
     onlineEntries.value = data.items || []
     // On demand, use a versioned static pitch source; never read D1 or infer pitch from translations.
     if (onlineEntries.value.some(entry => entry.language === 'ja' && entry.reading)) {
@@ -2161,10 +2199,16 @@ async function lookupDictionary() {
       ? '查询超时，请检查网络后重试。'
       : error instanceof Error ? error.message : '查询失败，请检查网络后重试。'
   } finally {
-    if (requestId === dictionaryRequestId) dictionaryLoading.value = false
+    if (requestId === dictionaryRequestId) {
+      dictionaryLoading.value = false
+      dictionaryFetchController = undefined
+    }
   }
 }
 function clearDictionarySearch() {
+  dictionaryFetchController?.abort()
+  dictionaryFetchController = undefined
+  dictionaryOnlineCache.forgetPending()
   dictionaryLocalHit.value = false
   resetDictionaryAiDisplay()
   dictionaryRequestId += 1
@@ -2179,6 +2223,9 @@ function clearDictionarySearch() {
 }
 function setDictionaryLanguage(language: 'auto' | 'ja' | 'en' | 'zh' | 'it') {
   if (dictSourceLang.value === language) return
+  dictionaryFetchController?.abort()
+  dictionaryFetchController = undefined
+  dictionaryOnlineCache.forgetPending()
   dictionaryLocalHit.value = false
   resetDictionaryAiDisplay()
   dictSourceLang.value = language
