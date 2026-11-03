@@ -10,13 +10,13 @@ export type LexiconDisplayEntry = {
   term: string; reading?: string; transcription?: string; language: LexiconLanguage
   en: string; zh: string; tag: string; source: string; sourceUrl?: string
   englishTerm?: string; translationJa?: string; japaneseTerm?: string
-  usageNote?: string; example?: string; exampleTranslationZh?: string
+  usageNote?: string; example?: string; exampleTranslationZh?: string; exampleSourceUrl?: string
   partsOfSpeech?: string[]; senses?: LexiconSense[]
 }
 type RawLexiconEntry = {
   id: string; language: LexiconLanguage; term: string; reading: string
   meaning_zh: string; explanation: string; example: string
-  example_meaning_zh: string; source_type: 'licensed' | 'generated'
+  example_meaning_zh: string; example_source_url?: string; source_type: 'licensed' | 'generated'
   translation_ja?: string; translation_en?: string
 }
 type LexiconManifest = { version: number; ja: string; en: string }
@@ -134,5 +134,6 @@ export async function findStaticLearnerEntry(
     senses: senses.length ? senses : undefined,
     example: raw.example || '',
     exampleTranslationZh: raw.example_meaning_zh || '',
+    exampleSourceUrl: raw.example_source_url || undefined,
   }
 }
