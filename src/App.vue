@@ -1313,6 +1313,16 @@ type LanguageReview = { card_id: string; review_count: number; correct_streak: n
 const languageReviews = ref<LanguageReview[]>(readStored('zhixue:language-reviews', []))
 const languageReviewBusy = ref('')
 const selectedLanguageMastery = ref<'all' | 'unlearned' | 'unmastered' | 'mastered'>('all')
+// A corpus difficulty proxy, not an invented JLPT/TOEIC classification.
+// The default removes very short beginner phrases without deleting any lessons.
+const selectedSentenceLength = ref<'all' | 'practice' | 'challenge'>('practice')
+function matchesSentenceLength(card: LanguageCard): boolean {
+  if (selectedSentenceLength.value === 'all') return true
+  const length = [...card.term].length
+  return card.language === 'ja'
+    ? length >= (selectedSentenceLength.value === 'challenge' ? 24 : 18)
+    : length >= (selectedSentenceLength.value === 'challenge' ? 65 : 40)
+}
 const languageReviewByCardId = computed(() => new Map<string, LanguageReview>(languageReviews.value.map(review => [review.card_id, review] as const)))
 const masteredLanguageIds = computed(() => new Set(completedLanguageCards.value))
 const reviewClockNow = ref(Date.now())
@@ -1323,7 +1333,7 @@ const isLanguageCardUnlearned = (card: LanguageCard) => {
   const review = languageReviewByCardId.value.get(card.id)
   return !masteredLanguageIds.value.has(card.id) && (!review || review.review_count === 0)
 }
-const unlearnedLanguageCount = computed(() => languageCards.value.filter(isLanguageCardUnlearned).length)
+const unlearnedLanguageCount = computed(() => languageCards.value.filter(card => matchesSentenceLength(card) && isLanguageCardUnlearned(card)).length)
 const visibleLanguageCards = computed(() => languageCards.value.filter(card => {
   const matchesCategory = selectedLanguageCategory.value === '全部' || card.category === selectedLanguageCategory.value
   const isMastered = masteredLanguageIds.value.has(card.id)
@@ -1332,7 +1342,7 @@ const visibleLanguageCards = computed(() => languageCards.value.filter(card => {
     || (selectedLanguageMastery.value === 'unlearned' && isUnlearned)
     || (selectedLanguageMastery.value === 'mastered' && isMastered)
     || (selectedLanguageMastery.value === 'unmastered' && !isMastered && !isUnlearned)
-  return matchesCategory && matchesMastery
+  return matchesCategory && matchesMastery && matchesSentenceLength(card)
 }).sort((a, b) => {
   const aReview = languageReviewByCardId.value.get(a.id)
   const bReview = languageReviewByCardId.value.get(b.id)
@@ -1374,7 +1384,7 @@ function nextLanguagePractice() {
   languagePracticeIndex.value = (languagePracticeIndex.value + 1) % visibleLanguageCards.value.length
   languagePracticeRevealed.value = false
 }
-watch([studyLanguage, selectedLanguageCategory, selectedLanguageMastery], () => {
+watch([studyLanguage, selectedLanguageCategory, selectedLanguageMastery, selectedSentenceLength], () => {
   stopSpeech()
   languagePage.value = 1
   languagePracticeIndex.value = 0
@@ -1587,6 +1597,10 @@ type DictionaryEntry = {
   englishTerm?: string
   japaneseTerm?: string
   technical?: boolean
+  usageNote?: string
+  exampleTranslationZh?: string
+  transcription?: string
+  sourceUrl?: string
 }
 const dictionaryEntries: DictionaryEntry[] = []
 const onlineEntries = ref<DictionaryEntry[]>([])
@@ -2833,6 +2847,12 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
               </div>
               <p v-else class="language-practice-prompt">当前筛选条件下没有卡片，切换分类或掌握状态后就能开始。</p>
             </section>
+            <div class="language-mastery-filter" role="group" aria-label="按句子长度筛选">
+              <button :class="{ chosen: selectedSentenceLength === 'all' }" @click="selectedSentenceLength = 'all'">全部句子</button>
+              <button :class="{ chosen: selectedSentenceLength === 'practice' }" @click="selectedSentenceLength = 'practice'">实用长句</button>
+              <button :class="{ chosen: selectedSentenceLength === 'challenge' }" @click="selectedSentenceLength = 'challenge'">挑战长句</button>
+            </div>
+            <p class="language-source">按句子长度筛选，默认减少过短的入门句；这不是 JLPT 或 TOEIC 难度评级。</p>
             <div class="language-category-filter" role="group" aria-label="按学习类别筛选">
               <button v-for="category in languageCategories" :key="category.title" :class="{ chosen: selectedLanguageCategory === category.title }" @click="selectedLanguageCategory = category.title">{{ category.title }}</button>
             </div>
@@ -2931,6 +2951,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                           <span v-for="(tone, index) in dictionaryWordTones(entry)" :key="index" class="lexical-pitch-chip">{{ tone }}</span>
                         </span>
                         <span v-if="entry.language === 'en' && entry.phonetic" class="lexical-ipa">{{ entry.phonetic }}</span>
+                        <span v-else-if="entry.language === 'en' && entry.transcription" class="lexical-reading">词库读音标记：{{ entry.transcription }}</span>
                         <span v-if="entry.language === 'en' && entry.reading && !entry.phonetic" class="lexical-reading">日语近似读音：{{ entry.reading }}</span>
                         <span v-if="entry.language === 'ja' && dictionaryPitchLabels(entry).length" class="lexical-pitch">
                           <span class="lexical-pitch-caption">东京式音调</span>
@@ -2958,10 +2979,12 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                     <div v-for="row in dictionaryTranslationRows(entry)" :key="row.language" class="lexical-translation-row" :lang="row.language">
                       <span class="lexical-translation-lang">{{ row.label }}</span><p>{{ row.value }}</p>
                     </div>
-                    <div v-if="entry.example" class="lexical-example"><span>例句</span><p>{{ entry.example }}</p></div>
+                    <div v-if="entry.usageNote" class="lexical-example"><span>用法说明</span><p>{{ entry.usageNote }}</p></div>
+                    <div v-if="entry.example" class="lexical-example"><span>例句</span><p>{{ entry.example }}</p><p v-if="entry.exampleTranslationZh" class="lexical-example-translation">{{ entry.exampleTranslationZh }}</p></div>
                   </div>
                   <div class="lexical-source-row">
-                    <span v-if="entry.source">{{ entry.source }}</span>
+                    <a v-if="entry.sourceUrl && entry.source" :href="entry.sourceUrl" target="_blank" rel="noopener noreferrer">{{ entry.source }}</a>
+                    <span v-else-if="entry.source">{{ entry.source }}</span>
                     <span v-else>{{ entry.tag }}</span>
                     <span v-if="entry.language === 'ja' && dictionaryPitchLabels(entry).length" class="lexical-pitch-source">音调 Kanjium · CC BY-SA 4.0</span>
                     <span v-if="entry.language === 'zh' && entry.lexicalSource && isDictionaryWord(entry)" class="lexical-pitch-source">读音与词性 {{ entry.lexicalSource }}</span>
