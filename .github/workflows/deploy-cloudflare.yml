@@ -86,6 +86,10 @@ jobs:
       - name: Type-check and build frontend
         run: npm run build
 
+      # Fail before any production D1 migration if Vite did not package static lessons.
+      - name: Verify static lesson and dictionary assets included in dist (zero D1 reads)
+        run: node scripts/check-static-assets.mjs --local
+
       # Fail closed before touching the remote database: apply the complete migration
       # chain to a fresh local D1 database, including the generated sentence corpus.
       - name: Validate complete D1 migration chain locally
@@ -114,6 +118,12 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx wrangler deploy
+
+      # Wait for static asset propagation and reject SPA HTML for missing .json files.
+      - name: Verify published static manifests and fingerprinted payloads (zero D1 reads)
+        env:
+          BASE_URL: https://it-study-platform.yupan6706.workers.dev
+        run: node scripts/check-static-assets.mjs --deployed
 
       - name: Verify deployed service health
         run: |
