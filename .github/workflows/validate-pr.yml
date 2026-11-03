@@ -53,6 +53,12 @@ jobs:
       - name: Verify 2019 spring 41-50 IPA official answer keys and history safety
         run: node --test scripts/fe-ipa-2019-am-41-50.test.mjs
 
+      - name: Generate IPA 2019 spring FE morning 51-60 source-verified batch
+        run: node scripts/generate_fe_2019_spring_am_51_60.mjs
+
+      - name: Verify 2019 spring 51-60 official answer keys, chart formulas and data safety
+        run: node --test scripts/fe-ipa-2019-am-51-60.test.mjs
+
       - name: Prepare 2022 IPA official-sample training items without remote D1 reads
         run: node scripts/generate_fe_2022_official_samples.mjs
 
