@@ -1878,6 +1878,17 @@ async function restoreVocabulary(term: string) {
   finally { savedWordRequests.delete(term) }
 }
 const savedWordRequests = new Set<string>()
+function toggleDailyEnglishWord(word: DictionaryEntry) {
+  // Daily words are sourced from the same static dictionary, so save the real
+  // entry snapshot via the existing vocabulary API instead of creating a
+  // second TOEIC-specific collection table or storing an empty placeholder.
+  if (vocabularyHydrating.value || !vocabularySyncReady.value || savedWordRequests.has(word.term)) return
+  recentDictionaryEntries.value = [
+    word,
+    ...recentDictionaryEntries.value.filter(entry => entry.term !== word.term),
+  ].slice(0, 12)
+  void toggleSaved(word.term)
+}
 async function toggleSaved(term: string) {
   // Serialize changes for the same term and update the UI only after the cloud write succeeds.
   if (vocabularyHydrating.value || !vocabularySyncReady.value || savedWordRequests.has(term)) return
@@ -3031,6 +3042,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <p v-if="word.transcription" class="language-source">词库读音标记：{{ word.transcription }}（未验证为 IPA）</p>
                   <div class="language-speech-actions">
                     <button type="button" class="play-button" @click="speak(word.term, 'en-US', 'business:' + word.term)"><Volume2 :size="16" /> 听发音</button>
+                    <button type="button" class="language-done-button" :disabled="!vocabularySyncReady || vocabularyHydrating || savedWordRequests.has(word.term)" @click="toggleDailyEnglishWord(word)">{{ savedWords.includes(word.term) ? '取消收藏' : '收藏到生词本' }}</button>
                   </div>
                 </article>
               </div>
