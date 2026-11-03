@@ -53,6 +53,7 @@ function play(scene: ListeningScene, turnIndex?: number) {
 const recordingSceneId = ref('')
 const recordingUrl = ref('')
 const recordingBusy = ref(false)
+const recordingActive = ref(false)
 const recordingError = ref('')
 let microphone: MediaStream | null = null
 let recorder: MediaRecorder | null = null
@@ -64,6 +65,7 @@ function stopLocalRecording() {
   microphone?.getTracks().forEach(track => track.stop())
   microphone = null
   recordingBusy.value = false
+  recordingActive.value = false
 }
 function clearLocalRecording() {
   recordingRun++
@@ -82,6 +84,7 @@ async function startLocalRecording(sceneId: string) {
     return
   }
   const run = ++recordingRun
+  recordingSceneId.value = sceneId
   recordingBusy.value = true
   recordingError.value = ''
   emit('stop')
@@ -101,13 +104,16 @@ async function startLocalRecording(sceneId: string) {
       if (autoStopTimer) { clearTimeout(autoStopTimer); autoStopTimer = undefined }
       if (run !== recordingRun) return
       recordingBusy.value = false
+      recordingActive.value = false
       if (!chunks.length) { recordingError.value = '没有录到声音，请检查麦克风权限。'; return }
-      const blob = new Blob(chunks, { type: media.mimeType || chunks[0] instanceof Blob ? (media.mimeType || (chunks[0] as Blob).type || 'audio/mp4') : 'audio/mp4' })
+      const blobType = media.mimeType || (chunks[0] instanceof Blob ? (chunks[0] as Blob).type : '') || 'audio/mp4'
+      const blob = new Blob(chunks, { type: blobType })
       if (blob.size > 8 * 1024 * 1024) { recordingError.value = '录音过大，请缩短跟读时间。'; return }
       if (recordingUrl.value) URL.revokeObjectURL(recordingUrl.value)
       recordingUrl.value = URL.createObjectURL(blob)
     }
     media.start()
+    recordingActive.value = true
     recordingBusy.value = false
     autoStopTimer = setTimeout(stopLocalRecording, 30000)
   } catch {
@@ -167,13 +173,13 @@ const correct = computed(() => scenes.value.filter(scene => isAnswered(scene.id)
             <strong>自己跟读 · 录音回听</strong>
             <p>只在当前设备内存中临时保存，不上传、不进行自动评分，最长 30 秒。</p>
             <div class="daily-listening-audio">
-              <button type="button" class="secondary-button" :disabled="recordingBusy || Boolean(recordingSceneId && recordingSceneId !== scene.id && !recordingUrl)" @click="startLocalRecording(scene.id)">开始录音</button>
-              <button v-if="recordingSceneId === scene.id && !recordingUrl" type="button" class="secondary-button" @click="stopLocalRecording">结束录音</button>
+              <button type="button" class="secondary-button" :disabled="recordingBusy || recordingActive" @click="startLocalRecording(scene.id)">开始录音</button>
+              <button v-if="recordingSceneId === scene.id && recordingActive" type="button" class="secondary-button" @click="stopLocalRecording">结束录音</button>
               <button v-if="recordingSceneId === scene.id && recordingUrl" type="button" class="text-link" @click="clearLocalRecording">清除录音</button>
             </div>
-            <p v-if="recordingSceneId === scene.id && !recordingUrl" class="language-source">录音开始后会自动在 30 秒内停止。</p>
+            <p v-if="recordingSceneId === scene.id && recordingActive" class="language-source">录音开始后会自动在 30 秒内停止。</p>
             <audio v-if="recordingSceneId === scene.id && recordingUrl" :src="recordingUrl" controls preload="none" aria-label="回听自己的跟读录音"></audio>
-            <p v-if="recordingError" class="dictionary-status dictionary-error" role="alert">{{ recordingError }}</p>
+            <p v-if="recordingSceneId === scene.id && recordingError" class="dictionary-status dictionary-error" role="alert">{{ recordingError }}</p>
           </div>
         </div>
       </article>
