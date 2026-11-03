@@ -43,7 +43,7 @@ export const advancedLanguageCardsBatch2: AdvancedLanguageCard[] = [
     "category": "职场语言",
     "term": "予算は確保できたとはいえ、見積もりの妥当性はもう一度確認すべきです。",
     "reading": "",
-    "meaning_zh": "虽说已经 확보了预算，但仍应再次确认报价是否合理。",
+    "meaning_zh": "虽说已经 确保了预算，但仍应再次确认报价是否合理。",
     "explanation": "原创日语进阶语境练习：结合上下文理解句式结构、措辞语气和真实使用条件。",
     "example": "",
     "example_meaning_zh": "",
@@ -887,9 +887,9 @@ export const advancedLanguageCardsBatch2: AdvancedLanguageCard[] = [
     "id": "ja-sentence-advanced-072",
     "language": "ja",
     "category": "日常句子",
-    "term": "急いで終わらせるために無理までして作業すると、後でかえって時間がかかります。",
+    "term": "締め切りに間に合わせるために徹夜までして作業したのに、資料は結局使われませんでした。",
     "reading": "",
-    "meaning_zh": "如果为了赶快完成而勉强自己工作，之后反而会花更多时间。",
+    "meaning_zh": "为了赶上截止日期，甚至熬夜工作，结果资料最终也没被采用。",
     "explanation": "原创日语进阶语境练习：结合上下文理解句式结构、措辞语气和真实使用条件。",
     "example": "",
     "example_meaning_zh": "",
@@ -897,9 +897,9 @@ export const advancedLanguageCardsBatch2: AdvancedLanguageCard[] = [
     "source_type": "generated",
     "content_type": "sentence",
     "source_url": "",
-    "highlight_json": "[{\"start\":13,\"end\":17,\"type\":\"grammar\",\"term\":\"までして\",\"meaning\":\"甚至不惜……\",\"explanation\":\"强调为了某目的采取了超出常规的行动。\"},{\"start\":25,\"end\":29,\"type\":\"vocabulary\",\"term\":\"かえって\",\"meaning\":\"反而\",\"explanation\":\"表示结果与原来期望的方向相反。\"}]",
-    "vocabulary_expansion_json": "[{\"term\":\"かえって\",\"meaning\":\"反而\",\"explanation\":\"表示结果与原来期望的方向相反。\"}]",
-    "grammar_expansion_json": "[{\"term\":\"までして\",\"meaning\":\"甚至不惜……\",\"explanation\":\"强调为了某目的采取了超出常规的行动。\"}]"
+    "highlight_json": "[{\"start\":16,\"end\":20,\"type\":\"grammar\",\"term\":\"までして\",\"meaning\":\"甚至不惜……\",\"explanation\":\"名词＋までして，强调为达成目标而采取了非常规或过度的行动。\"},{\"start\":30,\"end\":32,\"type\":\"vocabulary\",\"term\":\"結局\",\"meaning\":\"结果；最终\",\"explanation\":\"用于说明在一系列过程之后的最终结果。\"}]",
+    "vocabulary_expansion_json": "[{\"term\":\"結局\",\"meaning\":\"结果；最终\",\"explanation\":\"用于说明在一系列过程之后的最终结果。\"}]",
+    "grammar_expansion_json": "[{\"term\":\"までして\",\"meaning\":\"甚至不惜……\",\"explanation\":\"名词＋までして，强调为达成目标而采取了非常规或过度的行动。\"}]"
   },
   {
     "id": "en-sentence-advanced-023",
