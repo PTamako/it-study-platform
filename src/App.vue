@@ -2906,6 +2906,46 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
               <div class="language-progress-number">{{ languageProgress.percent }}%</div>
               <div class="language-progress-track"><span :style="{ width: languageProgress.percent + '%' }"></span></div>
             </div>
+            <section class="language-filter-panel" aria-label="句子联动筛选">
+              <div class="language-filter-top">
+                <div class="language-filter-total"><strong>筛选课程</strong><span>当前 {{ visibleLanguageCards.length.toLocaleString() }} 句</span></div>
+                <button v-if="!languageFilterIsDefault" type="button" class="language-filter-reset" @click="resetLanguageFilters">恢复默认</button>
+              </div>
+              <div class="language-filter-row">
+                <span class="language-filter-label">句子长度</span>
+                <div class="language-filter-options" role="group" aria-label="按句子长度筛选">
+                  <button v-for="option in languageLengthOptions" :key="option.id" type="button"
+                    :class="{ chosen: selectedSentenceLength === option.id }"
+                    :aria-pressed="selectedSentenceLength === option.id"
+                    @click="selectedSentenceLength = option.id">
+                    <span>{{ option.label }}</span><small>{{ languageLengthCounts[option.id] }}</small>
+                  </button>
+                </div>
+              </div>
+              <div class="language-filter-row">
+                <span class="language-filter-label">使用场景</span>
+                <div class="language-filter-options" role="group" aria-label="按学习类别筛选">
+                  <button v-for="category in languageCategories" :key="category.title" type="button"
+                    :class="{ chosen: selectedLanguageCategory === category.title }"
+                    :aria-pressed="selectedLanguageCategory === category.title"
+                    @click="selectedLanguageCategory = category.title">
+                    <span>{{ category.title }}</span><small>{{ languageCategoryCounts[category.title] || 0 }}</small>
+                  </button>
+                </div>
+              </div>
+              <div class="language-filter-row">
+                <span class="language-filter-label">学习状态</span>
+                <div class="language-filter-options language-filter-status" role="group" aria-label="按掌握状态筛选">
+                  <button v-for="option in languageMasteryOptions" :key="option.id" type="button"
+                    :class="{ chosen: selectedLanguageMastery === option.id }"
+                    :aria-pressed="selectedLanguageMastery === option.id"
+                    @click="selectedLanguageMastery = option.id">
+                    <span>{{ option.label }}</span><small>{{ languageMasteryCounts[option.id] }}</small>
+                  </button>
+                </div>
+              </div>
+              <p class="language-filter-hint">三项条件同时生效 · 长句按字数筛选，不代表考试难度</p>
+            </section>
             <section class="language-practice panel" aria-label="主动回忆练习">
               <div class="language-practice-heading">
                 <div><span class="banner-tag">主动回忆</span><h3>先回忆，再看答案</h3></div>
@@ -2956,46 +2996,6 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                 </div>
               </div>
               <p v-else class="language-practice-prompt">当前筛选条件下没有卡片，切换分类或掌握状态后就能开始。</p>
-            </section>
-            <section class="language-filter-panel" aria-label="句子联动筛选">
-              <div class="language-filter-top">
-                <div class="language-filter-total"><strong>筛选课程</strong><span>当前 {{ visibleLanguageCards.length.toLocaleString() }} 句</span></div>
-                <button v-if="!languageFilterIsDefault" type="button" class="language-filter-reset" @click="resetLanguageFilters">恢复默认</button>
-              </div>
-              <div class="language-filter-row">
-                <span class="language-filter-label">句子长度</span>
-                <div class="language-filter-options" role="group" aria-label="按句子长度筛选">
-                  <button v-for="option in languageLengthOptions" :key="option.id" type="button"
-                    :class="{ chosen: selectedSentenceLength === option.id }"
-                    :aria-pressed="selectedSentenceLength === option.id"
-                    @click="selectedSentenceLength = option.id">
-                    <span>{{ option.label }}</span><small>{{ languageLengthCounts[option.id] }}</small>
-                  </button>
-                </div>
-              </div>
-              <div class="language-filter-row">
-                <span class="language-filter-label">使用场景</span>
-                <div class="language-filter-options" role="group" aria-label="按学习类别筛选">
-                  <button v-for="category in languageCategories" :key="category.title" type="button"
-                    :class="{ chosen: selectedLanguageCategory === category.title }"
-                    :aria-pressed="selectedLanguageCategory === category.title"
-                    @click="selectedLanguageCategory = category.title">
-                    <span>{{ category.title }}</span><small>{{ languageCategoryCounts[category.title] || 0 }}</small>
-                  </button>
-                </div>
-              </div>
-              <div class="language-filter-row">
-                <span class="language-filter-label">学习状态</span>
-                <div class="language-filter-options language-filter-status" role="group" aria-label="按掌握状态筛选">
-                  <button v-for="option in languageMasteryOptions" :key="option.id" type="button"
-                    :class="{ chosen: selectedLanguageMastery === option.id }"
-                    :aria-pressed="selectedLanguageMastery === option.id"
-                    @click="selectedLanguageMastery = option.id">
-                    <span>{{ option.label }}</span><small>{{ languageMasteryCounts[option.id] }}</small>
-                  </button>
-                </div>
-              </div>
-              <p class="language-filter-hint">三项条件同时生效 · 长句按字数筛选，不代表考试难度</p>
             </section>
             <p class="language-source">例句来源：<a href="https://tatoeba.org" target="_blank" rel="noopener noreferrer">Tatoeba</a>，原句可查看来源链接。</p>
             <p v-if="languageProgressHydrating" class="dictionary-status" role="status">正在同步语言进度…</p>
