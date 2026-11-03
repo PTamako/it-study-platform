@@ -8,6 +8,7 @@ import { getLanguageExpansions, getSentenceParts } from './language-annotations'
 import { isDictionaryHeadword, loadJapanesePitchDataset, matchingJapaneseAccents, pitchLabel, partOfSpeechDisplay, getChineseWordGuide, type PitchDataset } from './dictionary-word-metadata'
 import { dictionaryTranslationRows, chinesePinyinToneLabels } from './dictionary-presentation'
 import { fetchLanguageCorpus } from './language-corpus'
+import { advancedLanguageCards } from './advanced-language-cards'
 import { parseMockSnapshot, type MockSnapshot } from './mock-recovery'
 import ExamScratchTools from './ExamScratchTools.vue'
 import {
@@ -1420,8 +1421,11 @@ async function loadLanguageCards() {
   try {
     const items = await fetchLanguageCorpus<LanguageCard>(language, controller.signal)
     if (generation !== languageCardsLoadGeneration || language !== studyLanguage.value) return
-    languageDeckCache.set(language, items)
-    languageCards.value = items
+    // The original 5,000 licensed cards stay immutable; original advanced
+    // lessons have separately migrated D1 rows for cloud review/progress.
+    const lessons: LanguageCard[] = [...advancedLanguageCards.filter(card => card.language === language), ...items]
+    languageDeckCache.set(language, lessons)
+    languageCards.value = lessons
   } catch (error) {
     if (generation !== languageCardsLoadGeneration || controller.signal.aborted) return
     languageCards.value = []
