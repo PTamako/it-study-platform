@@ -67,6 +67,7 @@ node scripts/generate_fe_2019_spring_am_41_50.mjs
 node scripts/generate_fe_2022_official_samples.mjs
 node scripts/generate_fe_2022_official_samples_completion.mjs
 node scripts/generate_fe_2020_2022_exemption_first_batch.mjs
+node scripts/generate_fe_exemption_20200614_q07_q10.mjs
 printf '\n[4/7] Typecheck\n'
 npm run typecheck
 printf '\n[5/7] Unit/integration regression tests\n'
