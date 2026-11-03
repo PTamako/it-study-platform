@@ -1641,6 +1641,8 @@ export default {
           detected_language: requestedLanguage === 'it' ? 'it' : requestedLanguage === 'auto' ? detectDictionaryLanguage(query) : requestedLanguage,
           providers: items.some(item => item.technical)
             ? ['知学 IT 术语库（D1）']
+            : items.some(item => item.source?.startsWith('知学学习词典') || item.source?.startsWith('知学自编词库'))
+              ? ['知学学习词典（D1）']
             : (() => {
                 const sourceLanguage = requestedLanguage === 'auto' ? detectDictionaryLanguage(query) : requestedLanguage
                 const baseProviders = sourceLanguage === 'en'
@@ -1652,7 +1654,9 @@ export default {
               })(),
           note: items.some(item => item.technical)
             ? '本地 IT 术语库提供中日英释义与读音，命中时不调用在线翻译。'
-            : '支持中日英互译，免费翻译源可能限流，结果仅供参考。',
+            : items.some(item => item.source?.startsWith('知学学习词典') || item.source?.startsWith('知学自编词库'))
+              ? '先使用已收录的学习词条；缺少的目标语言译文可能调用传统翻译服务，不触发 AI。'
+              : '支持中日英互译，免费翻译源可能限流，结果仅供参考。',
         })
       } catch (error) {
         console.error('[dictionary] lookup failed', {
