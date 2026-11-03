@@ -97,7 +97,7 @@ test('44 original advanced cards are well annotated and additive to progress', a
   const js = ts.transpile(advancedFile, { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext })
   const { advancedLanguageCards: cards } = await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
   assert.equal(cards.length,44)
-  assert.equal(new Set(cards.map(card=>card.id)).size,24)
+  assert.equal(new Set(cards.map(card=>card.id)).size,44)
   assert.equal(cards.filter(card=>card.language==='ja').length,22)
   assert.equal(cards.filter(card=>card.language==='en').length,22)
   for (const card of cards) {
