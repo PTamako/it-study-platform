@@ -172,7 +172,7 @@ test('saved dictionary removal does not discard local state before the cloud con
   const removeStart = handler.indexOf('action: \'remove\'')
   // A session guard returns before the confirmed deletion. Ending at the
   // first "return" would truncate the branch before its UI update.
-  const removeEnd = handler.indexOf('void loadCloudDashboard()', removeStart)
+  const removeEnd = handler.indexOf('adjustVocabularyDashboard(-1)', removeStart)
   const networkStart = handler.lastIndexOf("const response = await fetch('/api/vocabulary/saved'", removeStart)
   assert.ok(removeStart >= 0 && networkStart >= 0 && removeEnd > removeStart, 'cloud removal branch should be found')
   const networkBranch = handler.slice(networkStart, removeEnd)
