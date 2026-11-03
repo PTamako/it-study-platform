@@ -1915,9 +1915,8 @@ async function translateMissingDictionaryWithAi() {
     }
   }
 }
-watch([activeModule, authenticated], () => {
-  if (activeModule.value === 'dictionary' && authenticated.value) void loadDictionaryAiQuota()
-})
+// Do not perform a D1-backed AI quota read every time the dictionary opens.
+// The AI endpoint returns updated usage only when the owner asks for analysis.
 
 function enrichDictionaryTranslation() {
   forceOnlineNextDictionaryLookup = true
@@ -3046,7 +3045,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                         {{ dictionaryAiBusy && dictionaryAiActiveKey === dictionaryAiKey(entry) ? 'AI 解释中…'
                           : (!entry.zh || (!entry.en && !entry.englishTerm) || !entry.translationJa) ? 'AI 补充释义' : 'AI 语境解析' }}
                       </button>
-                      <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次' : 'AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small>
+                      <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次' : 'AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small><button v-if="authenticated && dictionaryAiRemaining === null" type="button" class="text-link" @click="loadDictionaryAiQuota">查看剩余</button>
                     </div>
                     <div v-if="dictionaryAiAnswers[dictionaryAiKey(entry)]" class="dictionary-ai-result">
                       <strong>AI 辅助解析</strong>
@@ -3069,7 +3068,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   :disabled="dictionaryAiBusy" @click="supplementDictionaryWithAi(null)">
                   {{ dictionaryAiBusy && dictionaryAiActiveKey === dictionaryAiKey(null) ? 'AI 解释中…' : 'AI 辅助解释' }}
                 </button>
-                <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次' : 'AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small>
+                <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次' : 'AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small><button v-if="authenticated && dictionaryAiRemaining === null" type="button" class="text-link" @click="loadDictionaryAiQuota">查看剩余</button>
                 <div v-if="dictionaryAiAnswers[dictionaryAiKey(null)]" class="dictionary-ai-result">
                   <strong>AI 辅助解析</strong><p>{{ dictionaryAiAnswers[dictionaryAiKey(null)] }}</p>
                   <small>AI 仅供参考，并非权威词典释义。</small>
