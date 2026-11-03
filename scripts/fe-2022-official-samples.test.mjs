@@ -73,11 +73,11 @@ test('official samples are separately selectable across practice, wrong review, 
  assert.match(worker,/q\.question_kind = 'official_sample'/)
  assert.match(worker,/source_type = 'licensed' AND question_kind = 'standard'/)
  assert.match(worker,/q\.source_type = 'licensed' AND q\.question_kind = 'standard'/)
- assert.match(worker,/question_kind,?\s+exam_section/)
+ assert.match(worker,/question_kind,?\s+(?:exam_origin,?\s+)?exam_section/)
  assert.match(app,/source: 'sample'|source === 'sample'/)
  assert.match(app,/sample_question_count/)
  assert.match(app,/question\.question_kind === 'official_sample'/)
- assert.match(app,/2020～2022 年正式 CBT 考题没有公开/)
+ assert.match(app,/2020～2022 年普通 FE CBT 正式题未公开/)
  assert.doesNotMatch(migrationData,/DELETE FROM|REPLACE INTO|UPDATE questions|DROP TABLE/i)
 })
 
