@@ -47,6 +47,12 @@ jobs:
       - name: Validate 2022 IPA sample answers, kind filtering and additive import
         run: node --test scripts/fe-2022-official-samples.test.mjs
 
+      - name: Generate remaining IPA 2022 sample A/B and April set locally
+        run: node scripts/generate_fe_2022_official_samples_completion.mjs
+
+      - name: Verify IPA 2020-2022 exemption catalog and all 86 samples
+        run: node --test scripts/fe-2022-official-samples-completion.test.mjs scripts/fe-2020-2022-exemption-catalog.test.mjs
+
       - name: Set up Python for licensed sentence dataset generation
         uses: actions/setup-python@v5
         with:
