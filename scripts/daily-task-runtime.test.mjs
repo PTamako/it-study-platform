@@ -3,13 +3,14 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { stripTypeScriptTypes } from 'node:module'
 import vm from 'node:vm'
+import { mergeDailyTaskTemplates } from '../src/daily-tasks.ts'
 
 const app = readFileSync(new URL('../src/App.vue', import.meta.url), 'utf8')
 const segment = app.slice(app.indexOf('const dailyTaskSaveQueues'), app.indexOf('let dailyRolloverTimer'))
 function harness(fetch, date = '2026-10-28', day = date, storage = new Map()) {
   const context = vm.createContext({ fetch, Promise, Map, Set, reactive: value => value, authenticated: { value: true },
     todayKey: { value: date }, tasks: { value: [{ id: 'x', done: true }] },
-    defaultTasks: [{ id: 'x', done: false }], cloudDashboardError: { value: '' },
+    defaultTasks: [{ id: 'x', done: false }], mergeDailyTaskTemplates: (items, templates) => mergeDailyTaskTemplates(items, templates), cloudDashboardError: { value: '' },
     tokyoDate: () => day, readStored: (key, fallback) => storage.has(key) ? JSON.parse(storage.get(key)) : fallback,
     localStorage: { setItem: (key, value) => storage.set(key, value) },
     mergeDailyTaskStates: (current, cloud, unchanged) => current.map(t => {
