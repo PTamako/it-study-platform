@@ -3167,7 +3167,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
             </section>
             <DailyGrammarLesson :language="studyLanguage" :study-date="todayKey" :authenticated="authenticated"
               @speak="(text, language) => speak(text, language, 'daily-grammar:' + studyLanguage)" />
-            <DailyListeningPractice :language="studyLanguage" :study-date="todayKey"
+            <DailyListeningPractice :language="studyLanguage" :study-date="todayKey" :authenticated="authenticated"
               :audio-status="speechStatus" :audio-status-target="speechStatusTarget"
               :audio-playing="speechPlaying" :audio-paused="speechPaused"
               @speak="(text, language, target) => speak(text, language, target)"
