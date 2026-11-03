@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { dailyGrammarLesson, previousGrammarLesson, type GrammarLanguage } from './daily-grammar-lessons'
+import {
+  validGrammarAnswers, parseGrammarCloud, mergeGrammarCloud, pendingGrammarAnswers,
+  loadGrammarOffline, saveGrammarOffline,
+} from './offline-grammar-store'
 
-const props = defineProps<{ language: GrammarLanguage; studyDate: string }>()
+const props = defineProps<{ language: GrammarLanguage; studyDate: string; authenticated: boolean }>()
 const emit = defineEmits<{ speak: [text: string, language: 'ja-JP' | 'en-US'] }>()
-
 const today = computed(() => dailyGrammarLesson(props.studyDate, props.language))
 const previous = computed(() => previousGrammarLesson(props.studyDate, props.language))
 const questions = computed(() => [
@@ -17,34 +20,102 @@ const questions = computed(() => [
 ])
 const storageKey = computed(() => 'zhixue:daily-grammar-v1:' + props.studyDate + ':' + props.language)
 const answers = ref<Record<string, number>>({})
-function restore() {
-  let stored: unknown
-  try { stored = JSON.parse(localStorage.getItem(storageKey.value) || '{}') } catch { stored = {} }
-  const valid: Record<string, number> = {}
-  if (stored && typeof stored === 'object' && !Array.isArray(stored)) {
-    for (const question of questions.value) {
-      const selected = (stored as Record<string, unknown>)[question.id]
-      if (typeof selected === 'number' && Number.isInteger(selected) && selected >= 0 && selected < question.options.length) {
-        valid[question.id] = selected
-      }
+const cloudAnswers = ref<Record<string, number>>({})
+const syncMessage = ref('本机离线保存')
+let generation = 0
+let syncing = false
+let syncAgain = false
+let syncTimer: ReturnType<typeof setTimeout> | undefined
+
+function persist() {
+  const safe = validGrammarAnswers(answers.value, questions.value)
+  try { localStorage.setItem(storageKey.value, JSON.stringify(safe)) } catch { /* private mode fallback */ }
+  void saveGrammarOffline(storageKey.value, safe)
+}
+async function syncCloud(run: number, readFirst: boolean) {
+  if (!props.authenticated || run !== generation) return
+  if (syncing) { syncAgain = true; return }
+  syncing = true
+  syncMessage.value = '正在同步…'
+  try {
+    if (readFirst) {
+      const response = await fetch('/api/grammar-progress?date=' + encodeURIComponent(props.studyDate) +
+        '&language=' + encodeURIComponent(props.language), { cache: 'no-store' })
+      if (!response.ok) throw new Error('云端练习记录暂不可用。')
+      const data = await response.json() as { items?: unknown }
+      if (run !== generation || !props.authenticated) return
+      cloudAnswers.value = parseGrammarCloud(data.items, questions.value)
+      answers.value = mergeGrammarCloud(answers.value, cloudAnswers.value, questions.value)
+      persist()
+    }
+    const pending = pendingGrammarAnswers(answers.value, cloudAnswers.value, questions.value)
+    if (pending.length) {
+      const response = await fetch('/api/grammar-progress', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ date: props.studyDate, language: props.language, answers: pending }),
+      })
+      if (!response.ok) throw new Error('网络或云端服务暂不可用。')
+      const data = await response.json() as { items?: unknown }
+      if (run !== generation || !props.authenticated) return
+      cloudAnswers.value = parseGrammarCloud(data.items, questions.value)
+      answers.value = mergeGrammarCloud(answers.value, cloudAnswers.value, questions.value)
+      persist()
+    }
+    if (run === generation) syncMessage.value = '云端已同步'
+  } catch {
+    if (run === generation) syncMessage.value = '已保存在本机，联网后可重试同步'
+  } finally {
+    syncing = false
+    if (syncAgain) {
+      syncAgain = false
+      if (props.authenticated) void syncCloud(generation, true)
     }
   }
-  answers.value = valid
 }
-watch(storageKey, restore, { immediate: true })
+function scheduleSync() {
+  if (syncTimer) clearTimeout(syncTimer)
+  if (!props.authenticated) return
+  syncMessage.value = '本机已保存 · 等待批量同步'
+  const run = generation
+  // Coalesce multiple answers into at most one indexed D1 write request.
+  syncTimer = setTimeout(() => { void syncCloud(run, false) }, 1800)
+}
+async function restore() {
+  const run = ++generation
+  if (syncTimer) clearTimeout(syncTimer)
+  cloudAnswers.value = {}
+  syncMessage.value = props.authenticated ? '正在读取进度…' : '本机离线保存'
+  let local: unknown = null
+  try { local = JSON.parse(localStorage.getItem(storageKey.value) || '{}') } catch { /* optional */ }
+  answers.value = validGrammarAnswers(local, questions.value)
+  const saved = await loadGrammarOffline(storageKey.value)
+  if (run !== generation) return
+  // Immediate localStorage writes take precedence over an older IDB transaction.
+  answers.value = mergeGrammarCloud(validGrammarAnswers(saved, questions.value), answers.value, questions.value)
+  persist()
+  if (props.authenticated) void syncCloud(run, true)
+}
 function answer(questionId: string, optionIndex: number) {
   if (Object.prototype.hasOwnProperty.call(answers.value, questionId)) return
   const question = questions.value.find(item => item.id === questionId)
-  if (!question || optionIndex < 0 || optionIndex >= question.options.length) return
+  if (!question || !Number.isInteger(optionIndex) || optionIndex < 0 || optionIndex >= question.options.length) return
   answers.value = { ...answers.value, [questionId]: optionIndex }
-  try { localStorage.setItem(storageKey.value, JSON.stringify(answers.value)) }
-  catch { /* browser storage may be unavailable; keep the session's answers */ }
+  persist()
+  scheduleSync()
 }
 function isAnswered(id: string) {
   return Object.prototype.hasOwnProperty.call(answers.value, id)
 }
 const finished = computed(() => questions.value.filter(question => isAnswered(question.id)).length)
 const correct = computed(() => questions.value.filter(question => isAnswered(question.id) && answers.value[question.id] === question.correct).length)
+function onBackOnline() { if (props.authenticated) void syncCloud(generation, true) }
+watch([storageKey, () => props.authenticated], () => { void restore() }, { immediate: true })
+onMounted(() => window.addEventListener('online', onBackOnline))
+onUnmounted(() => {
+  generation++
+  if (syncTimer) clearTimeout(syncTimer)
+  window.removeEventListener('online', onBackOnline)
+})
 </script>
 
 <template>
@@ -71,7 +142,7 @@ const correct = computed(() => questions.value.filter(question => isAnswered(que
       <p class="daily-grammar-ja">{{ today.tipJa }}</p>
       <p class="daily-grammar-review-tip">昨日复习：{{ previous.point }} · {{ previous.zh }}</p>
     </article>
-    <div class="daily-grammar-status" role="status" aria-live="polite">今日练习 {{ finished }} / {{ questions.length }} · 答对 {{ correct }} 题 <span>仅保存在本机，不额外查询 D1</span></div>
+    <div class="daily-grammar-status" role="status" aria-live="polite">今日练习 {{ finished }} / {{ questions.length }} · 答对 {{ correct }} 题 <span>{{ syncMessage }}</span></div>
     <div class="daily-grammar-exercises">
       <article v-for="(question, index) in questions" :key="question.id" class="daily-grammar-exercise">
         <div class="daily-grammar-exercise-head"><span class="dict-tag">{{ question.label }}</span><small>第 {{ index + 1 }} 题</small></div>
