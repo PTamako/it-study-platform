@@ -6,7 +6,7 @@ import ts from 'typescript'
 
 const root = new URL('../', import.meta.url)
 const [libSource, worker, schema, component, app, idb] = await Promise.all([
-  'src/listening-progress-sync.ts', 'worker/index.ts', 'migrations/0134_daily_listening_answers.sql',
+  'src/listening-progress-sync.ts', 'worker/index.ts', 'migrations/0150_daily_listening_answers.sql',
   'src/DailyListeningPractice.vue', 'src/App.vue', 'src/offline-grammar-store.ts',
 ].map(file => readFile(new URL(file, root), 'utf8')))
 const js = ts.transpileModule(libSource, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText
