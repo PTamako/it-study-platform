@@ -1384,7 +1384,7 @@ const languageCategories = computed(() => [
 ])
 const languageCardsLoading = ref(false)
 const languageCardsError = ref('')
-type LanguageReview = { card_id: string; review_count: number; correct_streak: number; next_review_at: string; last_reviewed_at: string; last_result: 'again' | 'remembered'; is_due?: number }
+type LanguageReview = { card_id: string; review_count: number; correct_streak: number; next_review_at: string; last_reviewed_at: string; last_result: 'again' | 'remembered'; last_grade?: 'again' | 'hard' | 'remembered'; is_due?: number }
 const languageReviews = ref<LanguageReview[]>(readStored('zhixue:language-reviews', []))
 const languageReviewBusy = ref('')
 type LanguageMasteryFilter = 'all' | 'unlearned' | 'unmastered' | 'mastered'
@@ -1478,9 +1478,10 @@ const visibleLanguageCards = computed(() => languageCards.value.filter(card => {
 }).sort((a, b) => {
   const aReview = languageReviewByCardId.value.get(a.id)
   const bReview = languageReviewByCardId.value.get(b.id)
-  const aDue = !aReview || reviewDueByCardId.value.get(a.id) === true
-  const bDue = !bReview || reviewDueByCardId.value.get(b.id) === true
-  return Number(bDue) - Number(aDue)
+  // Due reviews first; unseen next; not-yet-due last. Entirely local.
+  const priority = (review: LanguageReview | undefined, id: string) =>
+    review?.review_count && reviewDueByCardId.value.get(id) ? 0 : !review?.review_count ? 1 : 2
+  return priority(aReview, a.id) - priority(bReview, b.id)
 }))
 const languagePage = ref(1)
 const languagePageSize = 30
@@ -1572,7 +1573,7 @@ async function loadLanguageCards() {
     }
   }
 }
-async function submitLanguageReview(result: 'again' | 'remembered') {
+async function submitLanguageReview(result: 'again' | 'hard' | 'remembered') {
   const card = languagePracticeCard.value
   if (!card || languageReviewBusy.value) return
   languageReviewBusy.value = card.id
@@ -1592,10 +1593,8 @@ async function submitLanguageReview(result: 'again' | 'remembered') {
       data.review,
     ]
     languagePracticeRevealed.value = false
-    if (result === 'remembered') {
-      languagePracticeIndex.value = visibleLanguageCards.value.length
-        ? (languagePracticeIndex.value + 1) % visibleLanguageCards.value.length : 0
-    }
+    // The due-first order changes after saving; restart at its first card.
+    languagePracticeIndex.value = 0
   } catch (error) {
     languageCardsError.value = error instanceof Error ? error.message : '复习记录暂时无法保存，请稍后重试。'
   } finally {
@@ -3187,7 +3186,8 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                 <div class="language-practice-actions">
                   <button type="button" class="language-reveal-button" :aria-expanded="languagePracticeRevealed" @click="languagePracticeRevealed = !languagePracticeRevealed"><span>{{ languagePracticeRevealed ? '收起答案' : '显示答案' }}</span><ChevronDown :size="16" :class="{ rotated: languagePracticeRevealed }" aria-hidden="true" /></button>
                   <button class="secondary-button" @click="nextLanguagePractice">跳过 <ArrowRight :size="15" /></button>
-                  <button class="language-review-again" :disabled="languageReviewBusy === languagePracticeCard.id" @click="submitLanguageReview('again')">还不熟</button>
+                  <button class="language-review-again" :disabled="languageReviewBusy === languagePracticeCard.id" @click="submitLanguageReview('again')">不认识 · 10 分钟</button>
+                  <button class="language-review-hard" :disabled="languageReviewBusy === languagePracticeCard.id" @click="submitLanguageReview('hard')">模糊 · 6 小时</button>
                   <button class="language-review-remembered" :disabled="languageReviewBusy === languagePracticeCard.id" @click="submitLanguageReview('remembered')">记住了</button>
                   <button class="language-done-button" :disabled="languageProgressHydrating || !languageProgressReady || languageCardSaving.has(languagePracticeCard.id)" @click="toggleLanguageCard(languagePracticeCard.id)">{{ completedLanguageCards.includes(languagePracticeCard.id) ? '取消掌握' : '标记掌握' }}</button>
                 </div>
