@@ -9,6 +9,7 @@ import { isDictionaryHeadword, loadJapanesePitchDataset, matchingJapaneseAccents
 import { dictionaryTranslationRows, chinesePinyinToneLabels } from './dictionary-presentation'
 import { fetchLanguageCorpus } from './language-corpus'
 import { advancedLanguageCards } from './advanced-language-cards'
+import { advancedLanguageCardsBatch2 } from './advanced-language-cards-batch2'
 import { findStaticLearnerEntry, localLexiconLanguage } from './static-learner-dictionary'
 import { parseMockSnapshot, type MockSnapshot } from './mock-recovery'
 import ExamScratchTools from './ExamScratchTools.vue'
@@ -1424,7 +1425,11 @@ async function loadLanguageCards() {
     if (generation !== languageCardsLoadGeneration || language !== studyLanguage.value) return
     // The original 5,000 licensed cards stay immutable; original advanced
     // lessons have separately migrated D1 rows for cloud review/progress.
-    const lessons: LanguageCard[] = [...advancedLanguageCards.filter(card => card.language === language), ...items]
+    const lessons: LanguageCard[] = [
+      ...advancedLanguageCardsBatch2.filter(card => card.language === language),
+      ...advancedLanguageCards.filter(card => card.language === language),
+      ...items,
+    ]
     languageDeckCache.set(language, lessons)
     languageCards.value = lessons
   } catch (error) {
