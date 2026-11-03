@@ -49,6 +49,9 @@ jobs:
       - name: Generate FE practice question migration
         run: node scripts/generate_fe_practice_bank.mjs
 
+      - name: Generate reviewed FE A/B phase-one practice bank
+        run: node scripts/generate_fe_growth_phase1.mjs
+
       - name: Run automated regression tests
         run: npm test
 
