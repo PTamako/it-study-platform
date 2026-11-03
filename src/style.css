@@ -1342,3 +1342,33 @@ button[aria-disabled="true"] {
 .language-review-hard:disabled{opacity:.55;cursor:wait}
 .language-practice-actions .language-review-hard{grid-column:1 / -1;width:100%;min-height:44px}
 .language-practice-actions .language-review-hard:focus-visible{outline:3px solid #b9c8ec;outline-offset:2px}
+
+/* Offline daily grammar course: phone-first, comfortable iPad reading widths. */
+.daily-grammar{display:grid;gap:14px;min-width:0}
+.daily-grammar-topic{background:#fff;border:1px solid #e4e9f8;border-radius:16px;padding:18px;display:grid;gap:10px;min-width:0}
+.daily-grammar-topic-top,.daily-grammar-exercise-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.daily-grammar-topic h3{font-size:1.25rem;margin:0;color:var(--ink);overflow-wrap:anywhere}
+.daily-grammar-topic p,.daily-grammar-exercise p{margin:0;line-height:1.8;overflow-wrap:anywhere}
+.daily-grammar-meaning{color:#414e68;font-size:.94rem}
+.daily-grammar-ja{font-size:.85rem;color:#6b7185}
+.daily-grammar-form{font-size:.93rem;font-weight:650;background:#eef1fe;border-radius:9px;padding:9px 11px;overflow-wrap:anywhere}
+.daily-grammar-example{background:#f8f9fe;border-radius:12px;padding:14px;display:grid;gap:8px}
+.daily-grammar-example .play-button{justify-self:start;min-height:44px}
+.daily-grammar-tip{color:#354063;font-weight:500}
+.daily-grammar-review-tip{font-size:.84rem;background:#fff6e8;border-radius:9px;padding:10px 12px;color:#755634}
+.daily-grammar-status{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;color:#4f5a72;font-weight:650;font-size:.85rem}
+.daily-grammar-status span{color:#858ca0;font-weight:400;font-size:.75rem}
+.daily-grammar-exercises{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:12px}
+.daily-grammar-exercise{background:#fff;border:1px solid #e8ebf3;border-radius:14px;padding:15px;display:grid;align-content:start;gap:12px;min-width:0}
+.daily-grammar-exercise-head small{color:var(--muted)}
+.daily-grammar-prompt{font-size:1rem;font-weight:650;line-height:1.65;white-space:pre-wrap}
+.daily-grammar-options{display:grid;grid-template-columns:1fr;gap:7px}
+.daily-grammar-options button{border:1px solid #dfe3ef;border-radius:10px;background:#fafbff;color:#343d53;text-align:left;min-height:44px;padding:10px 12px;font-size:.92rem;overflow-wrap:anywhere}
+.daily-grammar-options button:not(:disabled):hover{background:#eef1ff;border-color:#8d9aea}
+.daily-grammar-options button:disabled{cursor:default}
+.daily-grammar-options button.selected{border-color:#8994cc;background:#eff0fa}
+.daily-grammar-options button.correct{border-color:#a2d6b5;background:#e9f7ee;color:#275a41}
+.daily-grammar-options button.incorrect{border-color:#e8b5af;background:#fff0ef;color:#8c3f36}
+.daily-grammar-feedback{display:grid;gap:7px;background:#f7f9fc;border-radius:10px;padding:12px;font-size:.85rem}
+.daily-grammar-feedback strong{color:#2e5240}
+@media(max-width:480px){.daily-grammar-topic{padding:14px}.daily-grammar-exercise{padding:13px}.daily-grammar-topic h3{font-size:1.12rem}}
