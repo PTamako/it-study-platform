@@ -95,7 +95,7 @@ test('running 2019/2022 migrations again is harmless to saved answers and master
 
 test('SG/FE keep year and subject filters without historical notices or sample PDF links', () => {
   const app = readFileSync(new URL('../src/App.vue', import.meta.url), 'utf8')
-  assert.match(app, /\[2026, 2025, 2024, 2023, 2019\]/)
+  assert.match(app, /\[2026, 2025, 2024, 2023, 2022, 2019\]/)
   assert.match(app, /\[2026, 2025, 2024, 2023, 2019, 2018, 2017, 2016\]/)
   assert.match(app, /<option value="B">科目 B<\/option>/)
   assert.doesNotMatch(app, /CBT過去問はIPA非公開です/)

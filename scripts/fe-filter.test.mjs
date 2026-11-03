@@ -39,6 +39,7 @@ function setup() {
   insert.run('sg-official-h29a-2017-q01','exam-sg','リスク管理','sg-2017','official','A')
   insert.run('sg-b-case-001','exam-sg','情報資産管理','sg-case','generated','B')
   insert.run('sg-prediction-2026-001','exam-sg','情報セキュリティ','sg-pred','generated','A')
+  sql.exec("ALTER TABLE questions ADD COLUMN question_kind TEXT NOT NULL DEFAULT 'standard' CHECK(question_kind IN ('standard','official_sample'))")
   return { sql, env: { DB: { prepare(query) { return { bind(...args) { return {
     all: async () => ({ results: sql.prepare(query).all(...args) }),
     first: async () => sql.prepare(query).get(...args),
@@ -131,4 +132,28 @@ test('new SG year/section/domain selectors are visible beside the existing FE se
   assert.match(app, /科目 A（含旧午前题）/)
   assert.doesNotMatch(app, /2016〜2019年度は旧制度の午前問題です/)
   assert.doesNotMatch(app, /selectedTrackId === 'exam-fe'".*年度・科目・分野/)
+})
+
+test('2022 IPA sample questions form a distinct source filter across FE practice, categories and review',async()=>{
+  const {sql,env}=setup()
+  sql.prepare("INSERT INTO questions (id,track_id,topic,difficulty,question_type,prompt,options_json,answer_json,explanation,source_type,source_reference,language,exam_section,exam_section_method,question_kind) VALUES (?,'exam-fe','試験サンプル','standard','single_choice','sample','[]','\"a\"','sample proof','licensed','https://www.ipa.go.jp/','ja','A','explicit','official_sample')")
+    .run('fe-ipa-sample-2022-a-001')
+  const sample=await get(env,'/api/questions?track=exam-fe&source=sample&year=2022&section=A')
+  assert.equal(sample.status,200)
+  assert.equal(sample.body.total,1)
+  assert.equal(sample.body.items[0].question_kind,'official_sample')
+  const adapted=await get(env,'/api/questions?track=exam-fe&source=licensed')
+  assert.equal(adapted.status,200)
+  assert.equal(adapted.body.total,1)
+  assert.ok(adapted.body.items.every(q=>q.id!=='fe-ipa-sample-2022-a-001'))
+  const official=await get(env,'/api/questions?track=exam-fe&source=official&year=2022')
+  assert.equal(official.body.total,0)
+  const cat=await get(env,'/api/question-categories?track=exam-fe&source=sample&year=2022&section=A')
+  assert.equal(cat.status,200)
+  assert.deepEqual(cat.body.items.map(q=>q.topic),['試験サンプル'])
+  const review=await get(env,'/api/wrong-questions?track=exam-fe&source=sample&mode=unlearned&year=2022')
+  assert.equal(review.status,200)
+  assert.equal(review.body.total,1)
+  const sg=await get(env,'/api/questions?track=exam-sg&source=sample')
+  assert.equal(sg.body.total,0)
 })

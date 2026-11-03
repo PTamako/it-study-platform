@@ -41,6 +41,12 @@ jobs:
       - name: Validate IPA official answers and safe import before large dataset generation
         run: node --test scripts/fe-ipa-2019-reviewed.test.mjs
 
+      - name: Prepare 2022 IPA official-sample training items without remote D1 reads
+        run: node scripts/generate_fe_2022_official_samples.mjs
+
+      - name: Validate 2022 IPA sample answers, kind filtering and additive import
+        run: node --test scripts/fe-2022-official-samples.test.mjs
+
       - name: Set up Python for licensed sentence dataset generation
         uses: actions/setup-python@v5
         with:
