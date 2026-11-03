@@ -1261,3 +1261,75 @@ button[aria-disabled="true"] {
   .lexical-single-definition p{font-size:15px}
   .lexical-pronunciation .lexical-pitch{max-width:100%}
 }
+
+/* Unified, linked language lesson filters.
+   The facets and counts are calculated from the already loaded static deck. */
+.language-filter-panel{
+  width:100%;min-width:0;box-sizing:border-box;
+  margin:16px 0 14px;padding:14px 16px 12px;
+  border:1px solid var(--line-strong);border-radius:var(--ui-card-radius);
+  background:var(--surface-soft);box-shadow:var(--shadow-card);
+}
+.language-filter-top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+.language-filter-total{display:flex;align-items:baseline;gap:12px;min-width:0;flex-wrap:wrap}
+.language-filter-total strong{font-size:14px;color:var(--text-primary)}
+.language-filter-total span{font-size:12px;color:var(--text-secondary);font-variant-numeric:tabular-nums}
+.language-filter-reset{
+  flex:0 0 auto;padding:5px 6px;border:0;background:transparent;
+  color:var(--primary-dark);font-size:12px;font-weight:600;cursor:pointer;
+}
+.language-filter-row{
+  display:grid;grid-template-columns:82px minmax(0,1fr);
+  align-items:center;gap:9px;min-width:0;
+  padding:10px 0;border-top:1px solid var(--line);
+}
+.language-filter-label{font-size:12px;font-weight:700;color:var(--text-secondary)}
+.language-filter-options{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:7px;width:100%;min-width:0;
+}
+.language-filter-options.language-filter-status{grid-template-columns:repeat(4,minmax(0,1fr))}
+.language-filter-options button{
+  display:flex;flex-wrap:wrap;align-items:center;justify-content:center;
+  gap:4px;min-width:0;min-height:42px;max-width:100%;
+  padding:8px 6px;box-sizing:border-box;
+  border:1px solid var(--line-strong);border-radius:10px;
+  background:var(--surface);color:var(--text-secondary);
+  font-size:12px;font-weight:600;line-height:1.35;
+  white-space:normal;text-align:center;cursor:pointer;box-shadow:none;
+}
+.language-filter-options button small{
+  font-size:11px;font-weight:600;color:var(--text-secondary);
+  font-variant-numeric:tabular-nums;white-space:nowrap;
+}
+.language-filter-options button.chosen{
+  color:var(--primary-dark);background:var(--primary-soft);
+  border-color:#c2c9f4;font-weight:700;
+}
+.language-filter-options button.chosen small{color:var(--primary-dark)}
+.language-filter-options button:focus-visible,.language-filter-reset:focus-visible{
+  outline:3px solid var(--ui-focus);outline-offset:2px;
+}
+@media(hover:hover) and (pointer:fine){
+  .language-filter-options button:hover:not(.chosen){border-color:#b9c0f4;background:#fff}
+}
+.language-filter-hint{
+  margin:3px 0 0;color:var(--text-secondary);
+  font-size:11px;line-height:1.5;
+}
+@media(max-width:760px){
+  .language-filter-panel{padding:12px;margin:13px 0}
+  .language-filter-row{grid-template-columns:66px minmax(0,1fr);gap:7px;padding:9px 0}
+  .language-filter-options{gap:6px}
+  .language-filter-options.language-filter-status{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .language-filter-options button{min-height:44px;padding:7px 5px;font-size:12px}
+  .language-filter-total{gap:8px}
+}
+@media(max-width:390px){
+  .language-filter-panel{padding:10px}
+  .language-filter-row{grid-template-columns:59px minmax(0,1fr);gap:6px}
+  .language-filter-label{font-size:11px}
+  .language-filter-options{gap:5px}
+  .language-filter-options button{padding:7px 3px;font-size:11px}
+  .language-filter-options button small{font-size:10px}
+}

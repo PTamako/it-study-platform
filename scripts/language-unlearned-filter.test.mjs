@@ -6,12 +6,16 @@ const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
 const worker = await readFile(new URL('../worker/index.ts', import.meta.url), 'utf8')
 
 test('language cards have distinct all, unlearned, in-progress, and mastered filters', () => {
-  assert.match(app, /selectedLanguageMastery = ref<'all' \| 'unlearned' \| 'unmastered' \| 'mastered'>\('all'\)/)
+  assert.match(app, /type LanguageMasteryFilter = 'all' \| 'unlearned' \| 'unmastered' \| 'mastered'/)
+  assert.match(app, /selectedLanguageMastery = ref<LanguageMasteryFilter>\('all'\)/)
   assert.match(app, /const isLanguageCardUnlearned = \(card: LanguageCard\)/)
   assert.match(app, /review\.review_count === 0/)
-  assert.match(app, /未学习 \{\{ unlearnedLanguageCount \}\}/)
+  assert.match(app, /languageMasteryOptions/)
+  assert.match(app, /languageMasteryCounts\[option\.id\]/)
+  assert.match(app, /const languageMasteryCounts = computed/)
   assert.match(app, /学习中 \/ 待复习/)
-  assert.match(app, /已掌握 \{\{ languageCards\.filter\(card => completedLanguageCards\.includes\(card\.id\)\)\.length \}\}/)
+  assert.match(app, /matchesLanguageMastery\(card\)/)
+  assert.match(app, /isLanguageCardUnlearned\(card\)/)
 })
 
 test('language cards are classified dynamically and paginated for large decks', () => {

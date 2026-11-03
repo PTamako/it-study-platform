@@ -125,10 +125,11 @@ test('44 original advanced cards are well annotated and additive to progress', a
 test('course default avoids beginner one-liners, while all cards and legacy 5k static corpus remain accessible', () => {
   assert.match(frontend,/selectedSentenceLength = ref<.*>\('practice'\)/)
   assert.match(frontend,/matchesSentenceLength\(card\)/)
-  assert.match(frontend,/selectedSentenceLength === 'all'/)
+  assert.match(frontend,/if \(filter === 'all'\)/)
+  assert.match(frontend,/languageLengthCounts\[option\.id\]/)
   assert.match(frontend,/advancedLanguageCards\.filter\(card => card\.language === language\)/)
   assert.match(frontend,/fetchLanguageCorpus<LanguageCard>/)
-  assert.match(source,/SELECT 10044 AS total/)
+  assert.match(source,/SELECT 10144 AS total/)
   assert.match(frontend,/词库读音标记/)
   assert.match(frontend,/entry\.exampleTranslationZh/)
 })
