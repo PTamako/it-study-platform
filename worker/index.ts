@@ -1376,7 +1376,7 @@ export default {
         for (let offset = 0; offset < feSeeds.length; offset += 40) {
           const part = feSeeds.slice(offset, offset + 40)
           await env.DB.batch(part.map((item, i) => env.DB.prepare(
-            `INSERT INTO questions (id, track_id, topic, difficulty, question_type, prompt, options_json, answer_json, explanation, source_type, source_reference, language, question_kind, exam_section, exam_section_method)
+            `INSERT INTO questions (id, track_id, topic, difficulty, question_type, prompt, options_json, answer_json, explanation, source_type, source_reference, language, exam_section, exam_section_method)
              VALUES (?, 'exam-fe', ?, 'standard', 'single_choice', ?, ?, ?, ?, ?, ?, 'ja', ?, 'explicit') ON CONFLICT(id) DO NOTHING`,
           ).bind(ids[offset + i], item.topic, seedPrompt(item),
             JSON.stringify(item.options.map((text, n) => ({id: String.fromCharCode(97 + n), text}))),
