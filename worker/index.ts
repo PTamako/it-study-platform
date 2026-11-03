@@ -1411,7 +1411,8 @@ export default {
                   (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id) AS question_count,
                   (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id AND q.source_type = 'official') AS official_question_count,
                   (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id AND q.source_type = 'generated') AS prediction_question_count,
-                  (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id AND q.source_type = 'licensed' AND q.question_kind = 'standard') AS adapted_question_count,
+                  (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id AND q.source_type = 'licensed' AND q.question_kind = 'standard' AND q.exam_origin = 'general') AS adapted_question_count,
+                  (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id AND q.exam_origin = 'fe_exemption') AS exemption_question_count,
                   (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id AND q.question_kind = 'official_sample') AS sample_question_count
            FROM study_tracks st
            WHERE st.enabled = 1
@@ -1978,7 +1979,7 @@ export default {
       const requestedMode = (url.searchParams.get('mode') || 'wrong').trim()
       const mode = ['wrong', 'due', 'practice', 'mastered', 'unlearned'].includes(requestedMode) ? requestedMode : 'wrong'
       const requestedSource = (url.searchParams.get('source') || '').trim()
-      const source = ['official', 'generated', 'licensed', 'sample'].includes(requestedSource) ? requestedSource : ''
+      const source = ['official', 'generated', 'licensed', 'sample', 'exemption'].includes(requestedSource) ? requestedSource : ''
       const year = (trackId === 'exam-fe' || trackId === 'exam-sg') && /^20[0-2][0-9]$/.test(url.searchParams.get('year') || '') ? url.searchParams.get('year')! : ''
       // SG official IDs contain the release year, including legacy ids such as
       // sg-official-2019f-am-25 and sg-official-h29a-2017-q01.
@@ -1989,7 +1990,7 @@ export default {
       try {
         const { results } = await env.DB.prepare(
           `SELECT q.id, q.track_id, q.topic, q.difficulty, q.question_type, q.prompt,
-                  q.options_json, q.answer_json, q.explanation, q.source_type, q.source_reference, q.language, q.question_kind,
+                  q.options_json, q.answer_json, q.explanation, q.source_type, q.source_reference, q.language, q.question_kind, q.exam_origin,
                   q.exam_section, q.exam_section_method,
                   COALESCE(s.review_count, 0) AS review_count,
                   COALESCE(s.correct_streak, 0) AS correct_streak,
@@ -2000,7 +2001,7 @@ export default {
                   (SELECT MAX(wa.answered_at) FROM study_attempts wa WHERE wa.question_id = q.id AND wa.is_correct = 0) AS last_wrong_at,
                   COUNT(*) OVER() AS filtered_total
            FROM questions q
-           LEFT JOIN question_review_state s ON s.question_id = q.id           WHERE q.track_id = ? AND (CASE ? WHEN '' THEN 1 WHEN 'sample' THEN q.question_kind = 'official_sample' WHEN 'licensed' THEN q.source_type = 'licensed' AND q.question_kind = 'standard' ELSE q.source_type = ? END)
+           LEFT JOIN question_review_state s ON s.question_id = q.id           WHERE q.track_id = ? AND (CASE ? WHEN '' THEN 1 WHEN 'sample' THEN q.question_kind = 'official_sample' WHEN 'exemption' THEN q.exam_origin = 'fe_exemption' WHEN 'licensed' THEN q.source_type = 'licensed' AND q.question_kind = 'standard' AND q.exam_origin = 'general' ELSE q.source_type = ? END)
              AND (? = '' OR q.id LIKE ?)
              AND (? = '' OR q.exam_section = ?)
              AND (? = '' OR q.topic = ?)
@@ -2323,7 +2324,7 @@ export default {
     if (url.pathname === '/api/question-categories' && request.method === 'GET') {
       const trackId = (url.searchParams.get('track') || 'exam-sg').trim().slice(0, 80)
       const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
-      const source = ['all', 'official', 'generated', 'licensed', 'sample'].includes(requestedSource) ? requestedSource : 'all'
+      const source = ['all', 'official', 'generated', 'licensed', 'sample', 'exemption'].includes(requestedSource) ? requestedSource : 'all'
       const year = (trackId === 'exam-fe' || trackId === 'exam-sg') && /^20[0-2][0-9]$/.test(url.searchParams.get('year') || '') ? url.searchParams.get('year')! : ''
       // SG official IDs contain the release year, including legacy ids such as
       // sg-official-2019f-am-25 and sg-official-h29a-2017-q01.
@@ -2335,7 +2336,7 @@ export default {
         const { results } = await env.DB.prepare(
           `SELECT topic, COUNT(*) AS question_count
            FROM questions
-           WHERE track_id = ? AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' ELSE source_type = ? END)
+           WHERE track_id = ? AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'exemption' THEN exam_origin = 'fe_exemption' WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' AND exam_origin = 'general' ELSE source_type = ? END)
              AND (? = '' OR id LIKE ?)
              AND (? = '' OR exam_section = ?)
            GROUP BY topic
@@ -2351,14 +2352,14 @@ export default {
     if (url.pathname === '/api/question-classification-stats' && request.method === 'GET') {
       const trackId = (url.searchParams.get('track') || 'exam-sg').trim().slice(0, 80)
       const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
-      const source = ['all', 'official', 'generated', 'licensed', 'sample'].includes(requestedSource) ? requestedSource : 'all'
+      const source = ['all', 'official', 'generated', 'licensed', 'sample', 'exemption'].includes(requestedSource) ? requestedSource : 'all'
       try {
         const { results } = await env.DB.prepare(
           `SELECT COALESCE(exam_section, 'unclassified') AS exam_section,
                   COALESCE(exam_section_method, 'unclassified') AS method,
                   COUNT(*) AS question_count
            FROM questions
-           WHERE track_id = ? AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' ELSE source_type = ? END)
+           WHERE track_id = ? AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'exemption' THEN exam_origin = 'fe_exemption' WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' AND exam_origin = 'general' ELSE source_type = ? END)
            GROUP BY COALESCE(exam_section, 'unclassified'),
                     COALESCE(exam_section_method, 'unclassified')
            ORDER BY exam_section, method`,
@@ -2385,14 +2386,14 @@ export default {
       if (trackId !== 'exam-sg' && trackId !== 'exam-fe') return json({ error: '此考试的模拟组卷暂未开放。' }, 400)
       if (trackId === 'exam-fe' && !['A', 'B'].includes(feSection)) return json({ error: '请选择 FE 科目 A 或科目 B。' }, 400)
       const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
-      const source = ['all', 'official', 'generated', 'licensed', 'sample'].includes(requestedSource) ? requestedSource : 'all'
+      const source = ['all', 'official', 'generated', 'licensed', 'sample', 'exemption'].includes(requestedSource) ? requestedSource : 'all'
       try {
         const { results } = await env.DB.prepare(
           `SELECT id, track_id, topic, difficulty, question_type, prompt,
-                  options_json, answer_json, explanation, source_type, source_reference, language, question_kind,
+                  options_json, answer_json, explanation, source_type, source_reference, language, question_kind, exam_origin,
                   exam_section, exam_section_method
            FROM questions
-           WHERE track_id = ? AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' ELSE source_type = ? END)`,
+           WHERE track_id = ? AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'exemption' THEN exam_origin = 'fe_exemption' WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' AND exam_origin = 'general' ELSE source_type = ? END)`,
         ).bind(trackId, source, source).all()
         const rows = results as Record<string, unknown>[]
         const sectionA = rows.filter(row => row.exam_section === 'A')
@@ -2462,7 +2463,7 @@ export default {
       const rawSeed = Number(url.searchParams.get('seed') || 0)
       const seed = Number.isSafeInteger(rawSeed) && rawSeed >= 0 && rawSeed <= 1000000 ? rawSeed : 0
       const requestedSource = (url.searchParams.get('source') || 'all').trim().toLowerCase()
-      const source = ['all', 'official', 'generated', 'licensed', 'sample'].includes(requestedSource) ? requestedSource : 'all'
+      const source = ['all', 'official', 'generated', 'licensed', 'sample', 'exemption'].includes(requestedSource) ? requestedSource : 'all'
       const year = (trackId === 'exam-fe' || trackId === 'exam-sg') && /^20[0-2][0-9]$/.test(url.searchParams.get('year') || '') ? url.searchParams.get('year')! : ''
       // SG official IDs contain the release year, including legacy ids such as
       // sg-official-2019f-am-25 and sg-official-h29a-2017-q01.
@@ -2474,17 +2475,17 @@ export default {
         const totalRow = await env.DB.prepare(
           `SELECT COUNT(*) AS total FROM questions
            WHERE track_id = ? AND (? = '' OR topic = ?)
-             AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' ELSE source_type = ? END)
+             AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'exemption' THEN exam_origin = 'fe_exemption' WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' AND exam_origin = 'general' ELSE source_type = ? END)
              AND (? = '' OR id LIKE ?)
              AND (? = '' OR exam_section = ?)`,
         ).bind(trackId, topic, topic, source, source, year, yearPattern, section, section).first() as { total?: number } | null
         const { results } = await env.DB.prepare(
           `SELECT id, track_id, topic, difficulty, question_type, prompt,
-                  options_json, answer_json, explanation, source_type, source_reference, language, question_kind,
+                  options_json, answer_json, explanation, source_type, source_reference, language, question_kind, exam_origin,
                   exam_section, exam_section_method
            FROM questions
            WHERE track_id = ? AND (? = '' OR topic = ?)
-             AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' ELSE source_type = ? END)
+             AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'exemption' THEN exam_origin = 'fe_exemption' WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' AND exam_origin = 'general' ELSE source_type = ? END)
              AND (? = '' OR id LIKE ?)
              AND (? = '' OR exam_section = ?)
            ORDER BY CASE WHEN ? = 'ordered' THEN id END,
