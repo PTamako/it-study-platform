@@ -43,6 +43,9 @@ jobs:
       - name: Generate attributed Japanese and English sentence migration
         run: python scripts/generate_language_sentence_seed.py
 
+      - name: Compile offline learner lexicon from committed licensed seeds
+        run: python scripts/build_static_learner_dictionary.py
+
       - name: Generate FE practice question migration
         run: node scripts/generate_fe_practice_bank.mjs
 
