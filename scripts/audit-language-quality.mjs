@@ -1,0 +1,205 @@
+/**
+ * Offline quality gate for licensed language assets + authored daily grammar.
+ * Structural failures block CI; linguistic ambiguities enter a review queue.
+ * No Worker, production D1, AI or network calls. Never claim semantic accuracy
+ * merely because a sentence has valid spans and bilingual explanations.
+ */
+import { readFile, mkdir, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { pathToFileURL } from 'node:url'
+import { resolve } from 'node:path'
+import ts from 'typescript'
+
+const ROOT = resolve(import.meta.dirname || new URL('..', import.meta.url).pathname, '..')
+const LANGUAGES = ['ja', 'en']
+const CATEGORIES = ['日常句子', '职场语言']
+const FILLERS = new Set(['句中重点表达','句子结构观察点','句尾活用／表达观察点'])
+const nonempty = value => typeof value === 'string' && Boolean(value.trim())
+const normalized = value => String(value || '').trim().toLocaleLowerCase()
+
+export function auditSentence(card, language) {
+  const errors = [], warnings = []
+  const field = (ok, label) => { if (!ok) errors.push(label) }
+  field(card?.language === language, 'wrong language')
+  field(card?.content_type === 'sentence', 'not a sentence')
+  field(CATEGORIES.includes(card?.category), 'invalid sentence category')
+  field(nonempty(card?.id) && nonempty(card?.term) && nonempty(card?.meaning_zh), 'missing sentence or translation')
+  field(card?.source_type === 'licensed' && /^https:\/\/tatoeba\.org\/en\/sentences\/show\/\d+$/.test(card?.source_url || ''), 'invalid Tatoeba source')
+  let hits = []
+  for (const [name, expectedType] of [['highlight_json',null],['vocabulary_expansion_json','vocabulary'],['grammar_expansion_json','grammar']]) {
+    try {
+      const parsed = JSON.parse(card?.[name] || 'null')
+      if (!Array.isArray(parsed)) throw Error('not array')
+      if (name === 'highlight_json') hits = parsed
+      else {
+        if (!parsed.length) errors.push(name + ': empty explanations')
+        const terms = new Set(hits.filter(x => x?.type === expectedType).map(x => x.term))
+        for (const term of terms) {
+          if (!parsed.some(x => x?.term === term && nonempty(x?.meaning) && nonempty(x?.explanation))) {
+            errors.push(name + ': unexplained highlight ' + term)
+          }
+        }
+      }
+    } catch {
+      errors.push(name + ': malformed JSON')
+    }
+  }
+  const points = [...String(card?.term || '')]
+  const sorted = []
+  for (const hit of hits) {
+    if (!hit || !['grammar','vocabulary'].includes(hit.type) ||
+        !Number.isInteger(hit.start) || !Number.isInteger(hit.end) ||
+        hit.start < 0 || hit.end <= hit.start || hit.end > points.length ||
+        points.slice(hit.start, hit.end).join('') !== hit.term ||
+        !nonempty(hit.meaning) || !nonempty(hit.explanation)) {
+      errors.push('invalid or ungrounded highlight')
+      continue
+    }
+    if (FILLERS.has(hit.meaning) || /未识别到明确/.test(hit.explanation)) errors.push('placeholder explanation')
+    sorted.push(hit)
+  }
+  sorted.sort((a,b) => a.start - b.start)
+  if (sorted.some((hit,i) => i > 0 && hit.start < sorted[i-1].end)) errors.push('overlapping highlights')
+  if (!hits.some(x => x?.type === 'grammar') || !hits.some(x => x?.type === 'vocabulary')) errors.push('missing grammar/vocabulary pair')
+  if (language === 'ja') {
+    if (/(?:そいつ|分からない|食べるの|読むの|するの|から|のが|のは|だけ|しか)/.test(card?.term || '')) {
+      warnings.push('Japanese token boundary / particle sense needs contextual review')
+    }
+  } else if (/\b(?:used to|would like to|have to|need to|there is|there are|would you|could you)\b/i.test(card?.term || '')) {
+    warnings.push('English auxiliary / phrase sense needs contextual review')
+  }
+  return { errors, warnings, highlights: hits.length }
+}
+
+export function auditWord(word, language) {
+  const errors = [], missing = []
+  if (word?.language !== language || !nonempty(word?.id) || !nonempty(word?.term) || !nonempty(word?.meaning_zh)) errors.push('invalid word identity / gloss')
+  if (!['licensed','generated'].includes(word?.source_type)) errors.push('missing provenance class')
+  if (!nonempty(word?.reading)) missing.push('reading')
+  if (!nonempty(word?.example) || !nonempty(word?.example_meaning_zh)) missing.push('bilingual example')
+  // These generated static seed cards have no dedicated verified POS/IPA/pitch field.
+  // The live dictionary may obtain such fields from an attributed provider; do
+  // not fabricate them during auditing or count unavailable fields as errors.
+  if (word?.source_type === 'generated' && (!nonempty(word?.explanation) || !nonempty(word?.example))) {
+    errors.push('original reviewed word missing explanation or example')
+  }
+  return { errors, missing }
+}
+
+export function auditGrammarLesson(lesson, language) {
+  const errors = []
+  if (!lesson || !String(lesson.id || '').startsWith(language+'-')) errors.push('grammar lesson ID/language mismatch')
+  for (const name of ['point','zh','ja','form','example','translation','tipZh','tipJa']) {
+    if (!nonempty(lesson?.[name])) errors.push('missing grammar field: '+name)
+  }
+  if (!Array.isArray(lesson?.questions) || lesson.questions.length !== 2) errors.push('unexpected question count')
+  for (const [i, q] of (lesson?.questions || []).entries()) {
+    if (typeof q?.prompt !== 'string' || q.prompt.split('___').length !== 2) errors.push('invalid fill-in-the-blank '+i)
+    if (!Array.isArray(q?.options) || q.options.length !== 4 ||
+        new Set(q.options.map(normalized)).size !== 4 || !q.options.every(nonempty)) errors.push('invalid answer options '+i)
+    if (!Number.isInteger(q?.correct) || q.correct < 0 || q.correct >= 4) errors.push('invalid answer index '+i)
+    if (!nonempty(q?.whyZh) || !nonempty(q?.whyJa)) errors.push('missing bilingual answer reasoning '+i)
+  }
+  return {errors}
+}
+
+export function inspectCorpus(sentencesByLanguage, wordsByLanguage, grammarByLanguage) {
+  const errors=[], reviewCandidates=[], stats={ sentences:{}, words:{}, grammar:{} }
+  const fail=(scope, id, issue) => { errors.push({scope,id,issue}) }
+  for (const language of LANGUAGES) {
+    const sentences=sentencesByLanguage[language] || []
+    const words=wordsByLanguage[language] || []
+    const grammar=grammarByLanguage[language] || []
+    const ids=new Set(), terms=new Set()
+    let annotations=0
+    for (const item of sentences) {
+      const key=item?.id
+      if (ids.has(key)) fail(language+' sentence',key,'duplicate ID')
+      ids.add(key)
+      const found=auditSentence(item,language)
+      annotations+=found.highlights
+      found.errors.forEach(error=>fail(language+' sentence',key,error))
+      if (found.warnings.length) reviewCandidates.push({
+        id:key,language,category:item.category,term:String(item.term || '').slice(0,150),
+        source_url:item.source_url,reasons:found.warnings,
+      })
+    }
+    if (sentences.length!==5000) fail(language+' sentence','corpus','expected 5,000 source-backed cards')
+    const missing={reading:0,bilingualExample:0}
+    for(const word of words) {
+      const key=normalized(word?.term)
+      if (terms.has(key)) fail(language+' word',word?.id,'duplicate headword')
+      terms.add(key)
+      const found=auditWord(word,language)
+      found.errors.forEach(error=>fail(language+' word',word?.id,error))
+      if(found.missing.includes('reading'))missing.reading++
+      if(found.missing.includes('bilingual example'))missing.bilingualExample++
+    }
+    if (words.length!==3010) fail(language+' word','corpus','expected 3,010 public learner terms')
+    const lessonIds=new Set()
+    let questions=0
+    for(const lesson of grammar){
+      if(lessonIds.has(lesson?.id))fail(language+' grammar',lesson?.id,'duplicate grammar topic')
+      lessonIds.add(lesson?.id)
+      questions+=(lesson?.questions||[]).length
+      auditGrammarLesson(lesson,language).errors.forEach(err=>fail(language+' grammar',lesson?.id,err))
+    }
+    if(grammar.length!==12)fail(language+' grammar','curriculum','expected 12 topics')
+    stats.sentences[language]={count:sentences.length,highlights:annotations}
+    stats.words[language]={count:words.length,missingReading:missing.reading,missingBilingualExample:missing.bilingualExample,
+      note:'Missing dictionary metadata is reported, never synthesized.'}
+    stats.grammar[language]={topics:grammar.length,questions}
+  }
+  const reviewQueue=[]
+  // Stable, balanced samples across language and scene category; not a claim
+  // that the other sentences have been semantically verified.
+  for(const language of LANGUAGES)for(const category of CATEGORIES){
+    const group=reviewCandidates.filter(x=>x.language===language&&x.category===category)
+      .sort((a,b)=>String(a.id).localeCompare(String(b.id)))
+    reviewQueue.push(...group.slice(0,30))
+  }
+  return {ok:errors.length===0,errors:errors.slice(0,60),errorCount:errors.length,stats,
+    reviewCandidateCount:reviewCandidates.length,reviewQueue,limitations:[
+      'Structural checks and regex examples do not establish semantic correctness.',
+      'Tatoeba Chinese translations may be contextually loose or ambiguous.',
+      'Metadata absent from static word seeds is not invented.',
+      'Human review is required for nuanced grammar, polysemy and phonetic claims.',
+    ]}
+}
+
+async function readFingerprintAsset(dir,lang) {
+  const manifest=JSON.parse(await readFile(resolve(ROOT,'public',dir,'manifest.json'),'utf8'))
+  const path=manifest[lang]
+  const match=new RegExp('^/'+dir+'/'+lang+'\\.([0-9a-f]{16})\\.json$').exec(path || '')
+  if (manifest.version!==1 || !match) throw Error(dir+': invalid '+lang+' manifest')
+  const raw=await readFile(resolve(ROOT,'public',dir,path.split('/').at(-1)),'utf8')
+  const actual=createHash('sha256').update(raw.trimEnd()).digest('hex').slice(0,16)
+  if(actual!==match[1])throw Error(dir+': fingerprint mismatch '+lang)
+  const payload=JSON.parse(raw)
+  if(!Array.isArray(payload.items))throw Error(dir+': invalid '+lang+' items')
+  return payload.items
+}
+
+async function main() {
+  const sentences={},words={},grammar={}
+  const source=await readFile(resolve(ROOT,'src/daily-grammar-lessons.ts'),'utf8')
+  const transpiled=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText
+  const curriculum=await import('data:text/javascript;base64,'+Buffer.from(transpiled).toString('base64'))
+  for(const language of LANGUAGES){
+    sentences[language]=await readFingerprintAsset('language-cards',language)
+    words[language]=await readFingerprintAsset('learner-lexicon',language)
+    grammar[language]=Array.from({length:12},(_,i)=>curriculum.dailyGrammarLesson('2026-11-'+String(i+1).padStart(2,'0'),language))
+  }
+  const result=inspectCorpus(sentences,words,grammar)
+  const out=resolve(ROOT,'quality-reports/language-quality.json')
+  await mkdir(resolve(ROOT,'quality-reports'),{recursive:true})
+  await writeFile(out,JSON.stringify(result,null,2)+'\n','utf8')
+  console.log(JSON.stringify({ok:result.ok,errorCount:result.errorCount,stats:result.stats,
+    reviewCandidates:result.reviewCandidateCount,reviewQueue:result.reviewQueue.length,report:out},null,2))
+  for(const err of result.errors)console.error('QUALITY FAIL',err.scope,err.id,err.issue)
+  if(!result.ok)process.exitCode=1
+}
+
+if (process.argv[1] && import.meta.url===pathToFileURL(resolve(process.argv[1])).href) {
+  main().catch(error=>{console.error('Language quality audit failed:',error);process.exitCode=1})
+}
