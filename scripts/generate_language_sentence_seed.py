@@ -515,7 +515,7 @@ def make_hits(sentence, lang):
             if not term.strip():
                 continue
             if lang == "en" and term.casefold() == "used to" and re.search(
-                r"\\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\\s+(?:not\\s+)?$",
+                r"\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$",
                 sentence[:match.start()], re.I):
                 # The lexicalized past-habit construction "used to + verb"
                 # is NOT "be/get used to + noun/gerund" (accustomed to), nor
