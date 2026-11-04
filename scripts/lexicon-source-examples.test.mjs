@@ -30,7 +30,7 @@ translations={"10":"去学校。","11":"我坐电车去学校。","12":"我在�
 result=choose_source_linked_examples(sentences,translations,words)
 assert result["matched"]=={"ja":1,"en":2},result["matched"]
 assert result["languages"]["ja"]["学校"]["example_source_url"].endswith("/11")
-assert result["languages"]["ja"]["学校"]["example_meaning_zh"]=="去学校。"
+assert result["languages"]["ja"]["学校"]["example_meaning_zh"]=="我坐电车去学校。"
 assert result["languages"]["en"]["work"]["example"]=="I work there."
 assert result["languages"]["en"]["run"]["example"]=="I run."
 assert "used" not in result["languages"]["en"]
