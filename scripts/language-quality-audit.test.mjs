@@ -84,3 +84,21 @@ test('collection audit reports duplicate IDs/terms and never calls Worker or pro
   const source=await readFile(new URL('./audit-language-quality.mjs',import.meta.url),'utf8')
   assert.doesNotMatch(source,/cloudflare\.request|wrangler d1|AI\.run|fetch\(/)
 })
+
+test('source-linked examples are explicitly unreviewed; audit report separates semantics from completeness', () => {
+  const item={
+    ...word('学校','ja'),reading:'がっこう',example:'学校へ行きます。',
+    example_meaning_zh:'我去学校。',
+    example_source_url:'https://tatoeba.org/en/sentences/show/12345',
+    example_provenance:'tatoeba-direct-chinese-link',
+    example_review_status:'source-linked-unreviewed-sense',
+  }
+  assert.deepEqual(auditWord(item,'ja').errors,[])
+  assert.deepEqual(auditWord(item,'ja').missing,[])
+  assert.match(auditWord({...item,example_source_url:'https://invalid.test'},'ja').errors.join(' '),/provenance/)
+  assert.match(auditWord({...item,example_review_status:'human-verified'},'ja').errors.join(' '),/provenance/)
+  const report=inspectCorpus({ja:[],en:[]},{ja:[item],en:[]},{ja:[],en:[]})
+  assert.equal(report.linkedWordReviewCandidateCount,1)
+  assert.equal(report.wordReviewQueue[0].review_status,'unreviewed-word-sense')
+  assert.equal(report.stats.words.ja.linkedExamplesAwaitingSenseReview,1)
+})

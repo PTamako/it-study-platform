@@ -17,6 +17,7 @@ type RawLexiconEntry = {
   id: string; language: LexiconLanguage; term: string; reading: string
   meaning_zh: string; explanation: string; example: string
   example_meaning_zh: string; example_source_url?: string; source_type: 'licensed' | 'generated'
+  example_review_status?: 'source-linked-unreviewed-sense'
   translation_ja?: string; translation_en?: string
 }
 type LexiconManifest = { version: number; ja: string; en: string }
@@ -129,7 +130,10 @@ export async function findStaticLearnerEntry(
     englishTerm: isJapanese ? raw.translation_en : raw.term,
     japaneseTerm: isJapanese ? raw.term : raw.translation_ja,
     translationJa: isJapanese ? undefined : raw.translation_ja || '',
-    usageNote: !licensed ? explanation : undefined,
+    usageNote: !licensed ? explanation
+      : raw.example_review_status === 'source-linked-unreviewed-sense'
+        ? 'Tatoeba 社区双语例句（有原文出处；词条与例句中的具体词义尚未逐条人工核实）'
+        : undefined,
     partsOfSpeech: senses.map(s => s.partOfSpeech).filter(Boolean),
     senses: senses.length ? senses : undefined,
     example: raw.example || '',

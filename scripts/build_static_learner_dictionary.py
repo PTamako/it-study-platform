@@ -17,6 +17,40 @@ FIELDS = (
     "id language category term reading meaning_zh explanation example "
     "example_meaning_zh example_source_url source_type"
 ).split()
+SOURCE_EXAMPLES = ROOT / "scripts/.generated/lexicon-source-examples.json"
+
+def read_attested_examples():
+    # The source generator writes this in CI from the same Tatoeba export.
+    # Standalone local builds can use the original pinned data without it.
+    if not SOURCE_EXAMPLES.exists():
+        print("No locally generated Tatoeba headword index; keeping original examples")
+        return {"ja": {}, "en": {}}
+    payload = json.loads(SOURCE_EXAMPLES.read_text(encoding="utf-8"))
+    if payload.get("version") != 1 or not isinstance(payload.get("languages"), dict):
+        raise ValueError("Invalid Tatoeba example index version")
+    from lexicon_example_matching import find_exact_headword_matches, compile_headword_patterns
+    indexed = {}
+    for lang in ("ja", "en"):
+        entries = payload["languages"].get(lang, {})
+        if not isinstance(entries, dict) or len(entries) > 3000:
+            raise ValueError("Invalid source-backed example count: " + lang)
+        indexed[lang] = {}
+        pattern = compile_headword_patterns({lang: set(entries)})
+        for term, example in entries.items():
+            source = example.get("example_source_url", "")
+            sentence = example.get("example", "")
+            translation = example.get("example_meaning_zh", "")
+            if not source.startswith("https://tatoeba.org/en/sentences/show/") or not source.rsplit("/",1)[-1].isdigit():
+                raise ValueError("Non-attributable learner example: " + term)
+            if not sentence.strip() or not translation.strip() or len(sentence) > 110:
+                raise ValueError("Invalid bilingual example: " + term)
+            normalized = term.casefold() if lang == "en" else term
+            if normalized not in find_exact_headword_matches(sentence, lang, pattern[lang]):
+                raise ValueError("Headword not independently present in source sentence: " + term)
+            if example.get("example_review_status") != "source-linked-unreviewed-sense":
+                raise ValueError("Unreviewed example incorrectly marked as verified: " + term)
+            indexed[lang][normalized] = example
+    return indexed
 
 def main():
     database = sqlite3.connect(":memory:")
@@ -45,6 +79,28 @@ def main():
     for language in grouped:
         if len(grouped[language]) != 3000:
             raise ValueError(f"Expected 3000 licensed {language} headwords, got {len(grouped[language])}")
+    source_examples = read_attested_examples()
+    augmented = {"ja": 0, "en": 0}
+    for lang, words in grouped.items():
+        for word in words:
+            if word["source_type"] != "licensed":
+                continue
+            if word["example"] and word["example_meaning_zh"]:
+                continue  # Preserve already paired source data.
+            key = word["term"].strip().casefold() if lang == "en" else word["term"].strip()
+            example = source_examples[lang].get(key)
+            if example:
+                word.update({
+                    "example": example["example"],
+                    "example_meaning_zh": example["example_meaning_zh"],
+                    "example_source_url": example["example_source_url"],
+                    # Source proves the text and direct translation pairing,
+                    # never an independently reviewed dictionary sense.
+                    "example_provenance": example["example_provenance"],
+                    "example_review_status": example["example_review_status"],
+                })
+                augmented[lang] += 1
+    print("Linked learner examples added (unreviewed lexical senses):", augmented)
     curated = json.loads(CURATED.read_text(encoding="utf-8"))
     if curated.get("version") != 1 or not isinstance(curated.get("items"), list):
         raise ValueError("Invalid manually reviewed learner additions")

@@ -80,7 +80,15 @@ function japaneseBoundaries(sentence: string): Set<number> {
 
 function validBoundary(card: AnnotatedSentence, start: number, end: number, kind: 'vocabulary' | 'grammar', boundaries: Set<number>): boolean {
   const term = card.term.slice(start, end)
-  if (card.language === 'en') return !/[A-Za-z]/.test(card.term[start - 1] || '') && !/[A-Za-z]/.test(card.term[end] || '')
+  if (card.language === 'en') {
+    if (kind === 'grammar' && term.toLowerCase() === 'used to' &&
+        /\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$/i.test(card.term.slice(0, start))) {
+      // Be/get used to + noun/gerund (习惯于), or passive be used to + verb
+      // (被用于) must never inherit past-habit "used to + infinitive".
+      return false
+    }
+    return !/[A-Za-z]/.test(card.term[start - 1] || '') && !/[A-Za-z]/.test(card.term[end] || '')
+  }
   if (!boundaries.has(start) || !boundaries.has(end)) return false
   // 分からない consists of 分 / から / ない in Japanese word segmenters;
   // から here is part of a verb, NOT an independent causal particle.

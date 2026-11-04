@@ -22,3 +22,6 @@ public/language-cards/
 
 # Offline CI language quality reports (contain public learning content only)
 quality-reports/
+
+# Generated from public Tatoeba exports during the same CI build
+scripts/.generated/
