@@ -76,6 +76,8 @@ export function auditWord(word, language) {
   if (word?.language !== language || !nonempty(word?.id) || !nonempty(word?.term) || !nonempty(word?.meaning_zh)) errors.push('invalid word identity / gloss')
   if (!['licensed','generated'].includes(word?.source_type)) errors.push('missing provenance class')
   if (!nonempty(word?.reading)) missing.push('reading')
+  if (!nonempty(word?.example)) missing.push('source example')
+  if (nonempty(word?.example) && !nonempty(word?.example_meaning_zh)) missing.push('example translation')
   if (!nonempty(word?.example) || !nonempty(word?.example_meaning_zh)) missing.push('bilingual example')
   // These generated static seed cards have no dedicated verified POS/IPA/pitch field.
   // The live dictionary may obtain such fields from an attributed provider; do
@@ -125,7 +127,7 @@ export function inspectCorpus(sentencesByLanguage, wordsByLanguage, grammarByLan
       })
     }
     if (sentences.length!==5000) fail(language+' sentence','corpus','expected 5,000 source-backed cards')
-    const missing={reading:0,bilingualExample:0}
+    const missing={reading:0,sourceExample:0,exampleTranslation:0,bilingualExample:0}
     for(const word of words) {
       const key=normalized(word?.term)
       if (terms.has(key)) fail(language+' word',word?.id,'duplicate headword')
@@ -133,6 +135,8 @@ export function inspectCorpus(sentencesByLanguage, wordsByLanguage, grammarByLan
       const found=auditWord(word,language)
       found.errors.forEach(error=>fail(language+' word',word?.id,error))
       if(found.missing.includes('reading'))missing.reading++
+      if(found.missing.includes('source example'))missing.sourceExample++
+      if(found.missing.includes('example translation'))missing.exampleTranslation++
       if(found.missing.includes('bilingual example'))missing.bilingualExample++
     }
     if (words.length!==3010) fail(language+' word','corpus','expected 3,010 public learner terms')
@@ -146,7 +150,9 @@ export function inspectCorpus(sentencesByLanguage, wordsByLanguage, grammarByLan
     }
     if(grammar.length!==12)fail(language+' grammar','curriculum','expected 12 topics')
     stats.sentences[language]={count:sentences.length,highlights:annotations}
-    stats.words[language]={count:words.length,missingReading:missing.reading,missingBilingualExample:missing.bilingualExample,
+    stats.words[language]={count:words.length,missingReading:missing.reading,
+      missingSourceExample:missing.sourceExample,missingExampleTranslation:missing.exampleTranslation,
+      missingBilingualExample:missing.bilingualExample,
       note:'Missing dictionary metadata is reported, never synthesized.'}
     stats.grammar[language]={topics:grammar.length,questions}
   }
