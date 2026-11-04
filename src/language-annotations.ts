@@ -82,7 +82,7 @@ function validBoundary(card: AnnotatedSentence, start: number, end: number, kind
   const term = card.term.slice(start, end)
   if (card.language === 'en') {
     if (kind === 'grammar' && term.toLowerCase() === 'used to' &&
-        /\\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\\s+(?:not\\s+)?$/i.test(card.term.slice(0, start))) {
+        /\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$/i.test(card.term.slice(0, start))) {
       // Be/get used to + noun/gerund (习惯于), or passive be used to + verb
       // (被用于) must never inherit past-habit "used to + infinitive".
       return false
