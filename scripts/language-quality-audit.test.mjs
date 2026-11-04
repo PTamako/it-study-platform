@@ -74,7 +74,7 @@ test('daily grammar requires bilingual reasons, unique distractors and one exerc
   assert.match(errors,/invalid fill-in-the-blank/)
   assert.match(errors,/missing bilingual answer reasoning/)
 })
-test('collection audit reports duplicate IDs/terms and never calls Worker or production D1',()=>{
+test('collection audit reports duplicate IDs/terms and never calls Worker or production D1',async()=>{
   const result=inspectCorpus({ja:[sentence(),sentence()],en:[]},{ja:[word(),word()],en:[]},{ja:[lesson()],en:[]})
   assert.equal(result.ok,false)
   assert.ok(result.errors.some(e=>e.issue==='duplicate ID'))
