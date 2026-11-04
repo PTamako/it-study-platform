@@ -58,7 +58,8 @@ test('Unicode astral symbols use Unicode code-point rather than UTF-16 offsets',
 test('missing reading or bilingual example is a reportable gap, not a license to hallucinate',()=>{
   const item=word()
   assert.deepEqual(auditWord(item,'ja').errors,[])
-  assert.deepEqual(auditWord(item,'ja').missing,['reading','bilingual example'])
+  assert.deepEqual(auditWord(item,'ja').missing,['reading','source example','bilingual example'])
+  assert.deepEqual(auditWord({...item,example:'学校に行く'},'ja').missing,['reading','example translation','bilingual example'])
   assert.ok(auditWord({...item,source_type:'generated'},'ja').errors.some(x=>x.includes('original reviewed')))
 })
 test('daily grammar requires bilingual reasons, unique distractors and one exercise blank',()=>{
