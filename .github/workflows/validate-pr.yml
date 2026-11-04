@@ -118,6 +118,18 @@ jobs:
       - name: Compile offline learner lexicon from committed licensed seeds
         run: python scripts/build_static_learner_dictionary.py
 
+      - name: Audit licensed dictionary and grammar quality offline (zero D1/AI)
+        run: node scripts/audit-language-quality.mjs
+
+      - name: Upload language quality report for human review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: language-quality-report
+          path: quality-reports/language-quality.json
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Generate FE practice question migration
         run: node scripts/generate_fe_practice_bank.mjs
 

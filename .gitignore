@@ -19,3 +19,6 @@ migrations/0092_fe_practice_bank.sql
 
 # Generated public Tatoeba sentence data (fingerprinted, emitted by generator)
 public/language-cards/
+
+# Offline CI language quality reports (contain public learning content only)
+quality-reports/
