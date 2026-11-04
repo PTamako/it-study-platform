@@ -740,6 +740,11 @@ def main():
             elif right in chinese and left in sentences: translations.setdefault(left,chinese[right])
     finally: archive.close()
     print("Source sentences with direct Chinese translations:",len(translations))
+    # Build the linked example index while both source archives are already
+    # in memory. This avoids an extra download, a second archive scan, D1 reads,
+    # or any AI-generated/unsourced translations.
+    from lexicon_example_matching import write_source_linked_examples
+    write_source_linked_examples(sentences, translations)
     cards=[]
     for lang in ("ja","en"):
         candidates=[]; seen=set()
