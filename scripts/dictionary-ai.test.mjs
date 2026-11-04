@@ -162,7 +162,12 @@ test('parallel requests cannot exceed 20 paid inference attempts in one JST day'
   assert.equal(results.filter(x=>x.status===429).length,8)
   assert.equal(env.calls,20)
   assert.equal((await status(env)).data.remaining,0)
-  const cached=await post(env,'word-0')
+  // Parallel promise settlement does not guarantee word-0 secured one of the
+  // 20 bounded AI reservations. Replay an actually accepted request to verify
+  // cached responses remain available when the daily allowance is exhausted.
+  const successfulIndex=results.findIndex(result=>result.status===200)
+  assert.ok(successfulIndex>=0)
+  const cached=await post(env,'word-'+successfulIndex)
   assert.equal(cached.status,200)
   assert.equal(cached.data.cached,true)
   assert.equal(env.calls,20)
