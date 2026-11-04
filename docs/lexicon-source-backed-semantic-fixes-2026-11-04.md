@@ -41,3 +41,7 @@
 - Cambridge Dictionary — [Used to 与 be used to 的区别](https://dictionary.cambridge.org/grammar/british-grammar/word-choice-used-to-and-be-used-to)。
 - Bunpro — [「ものの」完整接续（動詞／い形／な形／名詞）](https://bunpro.jp/ja/grammar_points/%E3%82%82%E3%81%AE%E3%81%AE)。
 - Tatoeba — [语料和翻译质量规范](https://en.wiki.tatoeba.org/articles/show/guidelines)。语料配对不构成各语言义项的专业核验。
+
+## 来源例句的二次语义巡检（追加）
+
+首次 source-linked 词条样本中检出确切误配：`アウト` 被从 `ログアウト` 误切出、`いい` 从 `格好いい` 切出、`カー` 从 `サッカー` 切出；还有 `あと10分` 的「あと」与既有「痕迹／跡」词义不符，以及被引号引用来讨论词性的 `「ああ」は感嘆詞だ。`。修复采取保守匹配策略并增加反例，而非用 AI 重新解释整批词义。数字须由合并后的重新生成报告更新：更严格的标准可能减少匹配数量，但可降低明确误导学习者的风险。其余自动关联候选仍应标记未人工校审。
