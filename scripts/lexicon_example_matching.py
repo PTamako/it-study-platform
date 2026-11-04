@@ -16,7 +16,12 @@ INDEX_PATH = ROOT / "scripts" / ".generated" / "lexicon-source-examples.json"
 SEED = ROOT / "migrations" / "0079_language_learning_6000_cards.sql"
 JAPANESE = re.compile(r"^[\u3040-\u30ff\u30fc]+$")
 HIRAGANA = re.compile(r"[\u3040-\u309f]")
+KANA = re.compile(r"[\u3040-\u30ff\u30fc]")
 KANJI = re.compile(r"[\u3400-\u9fff\u3005]")
+# Particle boundaries are intentionally a narrow positive allow-list. A suffix
+# inside 格好いい or a katakana loanword inside ログアウト is never a stand-alone
+# headword. This is conservative, not a substitute for morphological parsing.
+BOUNDARY_PARTICLES = set("はがをにでともへ")
 
 
 def load_licensed_headwords():
@@ -65,7 +70,22 @@ def is_exact_japanese_form(sentence, start, end, term):
     if term == "いつ" and before in ("そ", "こ", "あ", "ど"):
         return False
     if JAPANESE.fullmatch(term):
-        if (before and HIRAGANA.fullmatch(before)) or (after and HIRAGANA.fullmatch(after)):
+        # A literal substring in a larger kana/kanji word is not evidence of
+        # an independent lexeme: ログアウト contains アウト, 格好いい contains いい.
+        if before and ((KANA.fullmatch(before) and before not in BOUNDARY_PARTICLES)
+                       or KANJI.fullmatch(before)):
+            return False
+        if after and KANA.fullmatch(after) and after not in BOUNDARY_PARTICLES:
+            return False
+        # Quoted metalinguistic statements describe a *word itself*; the
+        # quoted text cannot safely attest a dictionary sense in normal usage.
+        if start and sentence[start - 1] in "「『" and end < len(sentence) and sentence[end] in "」』":
+            rest = sentence[end + 1:end + 15]
+            if re.match(r"(?:は|とは|というのは|と呼ばれる)(?:感嘆詞|名詞|代名詞|動詞|形容詞|副詞|助詞|単語|言葉|表現|の一種)", rest):
+                return False
+        # 'あと10分' means 'another/remaining ten minutes', not 跡 (trace),
+        # the gloss in the pinned OpenJLPT learner entry for 'あと'.
+        if term == "あと" and re.match(r"[0-9０-９一二三四五六七八九十百千]+(?:分|秒|時間|日|週間|ヶ月|か月|年|回|人|個|枚)", sentence[end:]):
             return False
     if KANJI.fullmatch(term[0]) and KANJI.fullmatch(before):
         return False
