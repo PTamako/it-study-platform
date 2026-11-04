@@ -13,6 +13,7 @@ const protectedPersonalPaths = new Set([
   '/api/language-progress',
   '/api/language-review',
   '/api/grammar-progress',
+  '/api/listening-progress',
   '/api/vocabulary/saved',
   '/api/daily-tasks',
   '/api/question-progress',
@@ -1206,7 +1207,7 @@ export default {
         if (rateLimitFailure) return rateLimitFailure
       }
     }
-    const isWriteEndpoint = ['/api/mock-exam/submit', '/api/fe-question-bank/install', '/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/grammar-progress', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history', '/api/translate-explanation', '/api/dictionary/ai'].includes(url.pathname)
+    const isWriteEndpoint = ['/api/mock-exam/submit', '/api/fe-question-bank/install', '/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/grammar-progress', '/api/listening-progress', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history', '/api/translate-explanation', '/api/dictionary/ai'].includes(url.pathname)
     const isExamHistoryDelete = request.method === 'DELETE' && url.pathname === '/api/exam-history'
     if (request.method !== 'GET' && !(request.method === 'POST' && isWriteEndpoint) && !isExamHistoryDelete) {
       return json({ error: '不支持此请求方法' }, 405)
@@ -1876,6 +1877,58 @@ export default {
         return json({ ok: true, items: results })
       } catch {
         return json({ error: '云端记录暂无法保存，本地答案仍会保留。' }, 503)
+      }
+    }
+
+
+    // Persist only two small answers per day and language. Never upload audio.
+    // Private indexed records use first-write-wins semantics for safe retries.
+    if (url.pathname === '/api/listening-progress') {
+      const validDate = (value: unknown): value is string => {
+        if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+        const epoch = Date.parse(value + 'T00:00:00Z')
+        return Number.isFinite(epoch) && new Date(epoch).toISOString().slice(0, 10) === value
+      }
+      const validLanguage = (value: unknown): value is 'ja' | 'en' => value === 'ja' || value === 'en'
+      const load = (date: string, language: 'ja' | 'en') => env.DB.prepare(
+        'SELECT scene_id, answer_index FROM daily_listening_answers WHERE study_date = ? AND language = ? ORDER BY scene_id LIMIT 2',
+      ).bind(date, language).all()
+      if (request.method === 'GET') {
+        const date = url.searchParams.get('date')
+        const language = url.searchParams.get('language')
+        if (!validDate(date) || !validLanguage(language)) return json({ error: '日期或语言参数无效。' }, 400)
+        try { const { results } = await load(date, language); return json({ items: results }) }
+        catch { return json({ error: '听力记录暂不可用，请确认已应用 D1 迁移。' }, 503) }
+      }
+      let body: Record<string, unknown>
+      try {
+        const raw = await request.text()
+        if (raw.length > 1200) return json({ error: '答题数据过大。' }, 413)
+        body = JSON.parse(raw) as Record<string, unknown>
+        if (!body || typeof body !== 'object' || Array.isArray(body)) return json({ error: '请求格式无效。' }, 400)
+      } catch { return json({ error: '答题数据必须为 JSON。' }, 400) }
+      const date = body.date
+      const language = body.language
+      const answers = body.answers
+      if (!validDate(date) || !validLanguage(language) || !Array.isArray(answers) ||
+        answers.length < 1 || answers.length > 2 ||
+        answers.some(answer => !answer || typeof answer !== 'object' || Array.isArray(answer) ||
+          typeof answer.scene_id !== 'string' ||
+          !new RegExp('^' + language + '-[dw][1-6]$').test(answer.scene_id) ||
+          !Number.isInteger(answer.answer_index) || answer.answer_index < 0 || answer.answer_index > 3) ||
+        new Set(answers.map(answer => answer.scene_id)).size !== answers.length ||
+        new Set(answers.map(answer => answer.scene_id[language.length + 1])).size !== answers.length)
+        return json({ error: '每日只接受日常与职场各一道有效听力题。' }, 400)
+      try {
+        await env.DB.prepare(
+          'INSERT INTO daily_listening_answers (study_date, language, scene_id, answer_index) VALUES ' +
+          answers.map(() => '(?, ?, ?, ?)').join(', ') +
+          ' ON CONFLICT(study_date, language, scene_id) DO NOTHING',
+        ).bind(...answers.flatMap(answer => [date, language, answer.scene_id, answer.answer_index])).run()
+        const { results } = await load(date, language)
+        return json({ ok: true, items: results })
+      } catch {
+        return json({ error: '云端听力记录暂无法保存，浏览器中的答案不受影响。' }, 503)
       }
     }
 

@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import {
+  validListeningAnswers, parseListeningCloud, mergeListeningCloud, pendingListeningAnswers,
+} from './listening-progress-sync'
+import { loadListeningOffline, saveListeningOffline } from './offline-grammar-store'
 import { dailyListeningScenes, type ListeningLanguage, type ListeningScene } from './daily-dialogue-listening'
 
 const props = defineProps<{
@@ -9,6 +13,7 @@ const props = defineProps<{
   audioStatusTarget: string
   audioPlaying: boolean
   audioPaused: boolean
+  authenticated: boolean
 }>()
 const emit = defineEmits<{
   speak: [text: string, lang: 'ja-JP' | 'en-US', target: string]
@@ -18,31 +23,95 @@ const emit = defineEmits<{
 const scenes = computed(() => dailyListeningScenes(props.studyDate, props.language))
 const storageKey = computed(() => 'zhixue:daily-listening-v1:' + props.studyDate + ':' + props.language)
 const answers = ref<Record<string, number>>({})
+const cloudAnswers = ref<Record<string, number>>({})
 const revealed = ref<Record<string, boolean>>({})
-function restore() {
-  let raw: unknown
-  try { raw = JSON.parse(localStorage.getItem(storageKey.value) || '{}') } catch { raw = {} }
-  const valid: Record<string, number> = {}
-  for (const scene of scenes.value) {
-    const value = raw && typeof raw === 'object' && !Array.isArray(raw)
-      ? (raw as Record<string, unknown>)[scene.id] : undefined
-    if (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < scene.options.length)
-      valid[scene.id] = value
-  }
-  answers.value = valid
-  revealed.value = {}
+const syncMessage = ref('本机离线保存')
+let generation = 0
+let syncing = false
+let syncAgain = false
+let syncTimer: ReturnType<typeof setTimeout> | undefined
+
+function persist() {
+  const safe = validListeningAnswers(answers.value, scenes.value)
+  // Fast synchronous fallback prevents loss when iOS PWA is closed abruptly.
+  try { localStorage.setItem(storageKey.value, JSON.stringify(safe)) } catch { /* private mode */ }
+  void saveListeningOffline(storageKey.value, safe)
 }
-watch(storageKey, restore, { immediate: true })
+async function syncCloud(run: number, readFirst: boolean) {
+  if (!props.authenticated || run !== generation) return
+  if (syncing) { syncAgain = true; return }
+  syncing = true
+  syncMessage.value = '正在同步…'
+  try {
+    if (readFirst) {
+      const response = await fetch('/api/listening-progress?date=' + encodeURIComponent(props.studyDate) +
+        '&language=' + encodeURIComponent(props.language), { cache: 'no-store' })
+      if (!response.ok) throw new Error('云端听力记录暂不可用。')
+      const data = await response.json() as { items?: unknown }
+      if (run !== generation || !props.authenticated) return
+      cloudAnswers.value = parseListeningCloud(data.items, scenes.value)
+      answers.value = mergeListeningCloud(answers.value, cloudAnswers.value, scenes.value)
+      persist()
+    }
+    const pending = pendingListeningAnswers(answers.value, cloudAnswers.value, scenes.value)
+    if (pending.length) {
+      const response = await fetch('/api/listening-progress', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ date: props.studyDate, language: props.language, answers: pending }),
+      })
+      if (!response.ok) throw new Error('网络或云端服务暂不可用。')
+      const data = await response.json() as { items?: unknown }
+      if (run !== generation || !props.authenticated) return
+      cloudAnswers.value = parseListeningCloud(data.items, scenes.value)
+      answers.value = mergeListeningCloud(answers.value, cloudAnswers.value, scenes.value)
+      persist()
+    }
+    if (run === generation) syncMessage.value = '云端已同步'
+  } catch {
+    if (run === generation) syncMessage.value = '已保存本机，联网后可重试'
+  } finally {
+    syncing = false
+    if (syncAgain) {
+      syncAgain = false
+      if (props.authenticated) void syncCloud(generation, true)
+    }
+  }
+}
+function scheduleSync() {
+  if (syncTimer) clearTimeout(syncTimer)
+  if (!props.authenticated) return
+  syncMessage.value = '本机已保存 · 等待同步'
+  const run = generation
+  syncTimer = setTimeout(() => { void syncCloud(run, false) }, 1800)
+}
+async function restore() {
+  const run = ++generation
+  if (syncTimer) clearTimeout(syncTimer)
+  cloudAnswers.value = {}
+  syncMessage.value = props.authenticated ? '正在读取进度…' : '本机离线保存'
+  let local: unknown
+  try { local = JSON.parse(localStorage.getItem(storageKey.value) || '{}') } catch { local = {} }
+  answers.value = validListeningAnswers(local, scenes.value)
+  revealed.value = {}
+  const saved = await loadListeningOffline(storageKey.value)
+  if (run !== generation) return
+  answers.value = mergeListeningCloud(validListeningAnswers(saved, scenes.value), answers.value, scenes.value)
+  persist()
+  if (props.authenticated) void syncCloud(run, true)
+}
+watch([storageKey, () => props.authenticated], () => { void restore() }, { immediate: true })
 function isAnswered(id: string) {
-  return Object.prototype.hasOwnProperty.call(answers.value,id)
+  return Object.prototype.hasOwnProperty.call(answers.value, id)
 }
 function answer(scene: ListeningScene, selected: number) {
   if (isAnswered(scene.id) || !Number.isInteger(selected) || selected < 0 || selected >= scene.options.length) return
-  answers.value = {...answers.value,[scene.id]:selected}
-  revealed.value = {...revealed.value,[scene.id]:true}
-  try { localStorage.setItem(storageKey.value, JSON.stringify(answers.value)) }
-  catch { /* retain the in-memory result if browser storage is unavailable */ }
+  answers.value = { ...answers.value, [scene.id]: selected }
+  revealed.value = { ...revealed.value, [scene.id]: true }
+  persist()
+  scheduleSync()
 }
+function onBackOnline() { if (props.authenticated) void syncCloud(generation, true) }
+onMounted(() => window.addEventListener('online', onBackOnline))
 function play(scene: ListeningScene, turnIndex?: number) {
   const content = turnIndex === undefined ? scene.turns.map(turn => turn.text).join(' ') : scene.turns[turnIndex]?.text
   if (!content) return
@@ -124,7 +193,12 @@ async function startLocalRecording(sceneId: string) {
   }
 }
 watch(storageKey, clearLocalRecording)
-onUnmounted(clearLocalRecording)
+onUnmounted(() => {
+  clearLocalRecording()
+  generation++
+  if (syncTimer) clearTimeout(syncTimer)
+  window.removeEventListener('online', onBackOnline)
+})
 
 const finished = computed(() => scenes.value.filter(scene => isAnswered(scene.id)).length)
 const correct = computed(() => scenes.value.filter(scene => isAnswered(scene.id) && answers.value[scene.id] === scene.correct).length)
@@ -136,7 +210,7 @@ const correct = computed(() => scenes.value.filter(scene => isAnswered(scene.id)
       <h2>每日听力与跟读</h2>
       <p>每天日常、职场各一段对话 · 先听后答 · 设备合成朗读，不做录音评分</p>
     </div></div>
-    <p class="daily-listening-summary" role="status">完成 {{ finished }} / {{ scenes.length }} · 答对 {{ correct }} · 答题结果保存在本机</p>
+    <p class="daily-listening-summary" role="status">完成 {{ finished }} / {{ scenes.length }} · 答对 {{ correct }} · {{ syncMessage }}</p>
     <div class="daily-listening-scenes">
       <article v-for="scene in scenes" :key="scene.id" class="daily-listening-card">
         <div class="daily-listening-top"><span class="dict-tag">{{ scene.category }}</span><span class="language-source">原创双人对话</span></div>

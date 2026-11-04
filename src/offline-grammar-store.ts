@@ -56,10 +56,12 @@ function openGrammarDb(): Promise<IDBDatabase | null> {
   if (opened) return opened
   opened = new Promise(resolve => {
     try {
-      const request = indexedDB.open('zhixue-offline-learning', 1)
+      const request = indexedDB.open('zhixue-offline-learning', 2)
       request.onupgradeneeded = () => {
         if (!request.result.objectStoreNames.contains('grammar_answers'))
           request.result.createObjectStore('grammar_answers', { keyPath: 'key' })
+        if (!request.result.objectStoreNames.contains('listening_answers'))
+          request.result.createObjectStore('listening_answers', { keyPath: 'key' })
       }
       request.onsuccess = () => resolve(request.result)
       request.onerror = () => resolve(null)
@@ -88,6 +90,34 @@ export async function saveGrammarOffline(key: string, answers: Record<string, nu
     try {
       const transaction = db.transaction('grammar_answers', 'readwrite')
       transaction.objectStore('grammar_answers').put({ key, answers })
+      transaction.oncomplete = () => resolve()
+      transaction.onerror = () => resolve()
+      transaction.onabort = () => resolve()
+    } catch { resolve() }
+  })
+}
+
+/** Reuse the same IndexedDB database; the JSON localStorage fallback is
+ * written synchronously by the listening component before this async call.
+ */
+export async function loadListeningOffline(key: string): Promise<unknown> {
+  const db = await openGrammarDb()
+  if (!db) return null
+  return new Promise(resolve => {
+    try {
+      const request = db.transaction('listening_answers', 'readonly').objectStore('listening_answers').get(key)
+      request.onsuccess = () => resolve(request.result?.answers ?? null)
+      request.onerror = () => resolve(null)
+    } catch { resolve(null) }
+  })
+}
+export async function saveListeningOffline(key: string, answers: Record<string, number>): Promise<void> {
+  const db = await openGrammarDb()
+  if (!db) return
+  await new Promise<void>(resolve => {
+    try {
+      const transaction = db.transaction('listening_answers', 'readwrite')
+      transaction.objectStore('listening_answers').put({ key, answers })
       transaction.oncomplete = () => resolve()
       transaction.onerror = () => resolve()
       transaction.onabort = () => resolve()
