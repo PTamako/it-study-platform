@@ -20,6 +20,14 @@ test('due-only selection never includes unseen cards or future-scheduled cards',
   const selected=reviews.filter(c=>Boolean(c.review?.review_count&&c.due)).map(c=>c.id)
   assert.deepEqual(selected,['due'])
 })
+test('review clock refreshes after iOS Safari returns from suspended background',()=>{
+  const begin = app.indexOf('function onDailyVisibilityChange()')
+  const end = app.indexOf('const examRecords =', begin)
+  const resume = app.slice(begin,end)
+  assert.match(resume,/document\.visibilityState === 'visible'/)
+  assert.match(resume,/reviewClockNow\.value = Date\.now\(\)/)
+  assert.doesNotMatch(resume,/fetch\(|\/api\//)
+})
 test('review queue only changes mode, not saved history or D1 data',()=>{
   assert.match(app,/languagePracticeDeck\.value\[languagePracticeIndex\.value % languagePracticeDeck\.value\.length\]/)
   assert.match(app,/languagePracticeIndex\.value = \(languagePracticeIndex\.value \+ 1\) % languagePracticeDeck\.value\.length/)

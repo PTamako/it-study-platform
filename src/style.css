@@ -1409,3 +1409,6 @@ button[aria-disabled="true"] {
 .daily-voice-practice p{font-size:.82rem;color:#68718b}
 .daily-voice-practice button{min-height:44px}
 .daily-voice-practice audio{display:block;width:100%;min-width:0;max-width:500px}
+
+/* Offline answer-sync recovery must be easy to tap on narrow iPhone/iPad layouts. */
+.daily-grammar-status .text-link,.daily-listening-summary .text-link{min-height:44px;padding:8px 10px;font-size:12px;white-space:normal;text-align:left}

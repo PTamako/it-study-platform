@@ -1910,11 +1910,18 @@ export default {
       const date = body.date
       const language = body.language
       const answers = body.answers
+      // The published original listening corpus rotates through exactly six
+      // scenes in each language/category. Accept only the selected date's ID,
+      // not merely a well-formed ID from another day (which breaks cloud merge).
+      const dayNumber = validDate(date) ? Math.floor(Date.parse(date + 'T00:00:00Z') / 86400000) : -1
+      const sceneNumber = dayNumber >= 0 ? (dayNumber % 6) + 1 : 0
+      const allowedIds = validLanguage(language)
+        ? new Set([language + '-d' + sceneNumber, language + '-w' + sceneNumber]) : new Set<string>()
       if (!validDate(date) || !validLanguage(language) || !Array.isArray(answers) ||
         answers.length < 1 || answers.length > 2 ||
         answers.some(answer => !answer || typeof answer !== 'object' || Array.isArray(answer) ||
           typeof answer.scene_id !== 'string' ||
-          !new RegExp('^' + language + '-[dw][1-6]$').test(answer.scene_id) ||
+          !allowedIds.has(answer.scene_id) ||
           !Number.isInteger(answer.answer_index) || answer.answer_index < 0 || answer.answer_index > 3) ||
         new Set(answers.map(answer => answer.scene_id)).size !== answers.length ||
         new Set(answers.map(answer => answer.scene_id[language.length + 1])).size !== answers.length)

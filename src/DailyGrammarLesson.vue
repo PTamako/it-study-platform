@@ -22,6 +22,7 @@ const storageKey = computed(() => 'zhixue:daily-grammar-v1:' + props.studyDate +
 const answers = ref<Record<string, number>>({})
 const cloudAnswers = ref<Record<string, number>>({})
 const syncMessage = ref('本机离线保存')
+const syncFailed = ref(false)
 let generation = 0
 let syncing = false
 let syncAgain = false
@@ -36,6 +37,7 @@ async function syncCloud(run: number, readFirst: boolean) {
   if (!props.authenticated || run !== generation) return
   if (syncing) { syncAgain = true; return }
   syncing = true
+  syncFailed.value = false
   syncMessage.value = '正在同步…'
   try {
     if (readFirst) {
@@ -61,9 +63,15 @@ async function syncCloud(run: number, readFirst: boolean) {
       answers.value = mergeGrammarCloud(answers.value, cloudAnswers.value, questions.value)
       persist()
     }
-    if (run === generation) syncMessage.value = '云端已同步'
+    if (run === generation) {
+      syncFailed.value = false
+      syncMessage.value = '云端已同步'
+    }
   } catch {
-    if (run === generation) syncMessage.value = '已保存在本机，联网后可重试同步'
+    if (run === generation) {
+      syncFailed.value = true
+      syncMessage.value = '已保存在本机 · 可手动重试同步'
+    }
   } finally {
     syncing = false
     if (syncAgain) {
@@ -84,6 +92,7 @@ async function restore() {
   const run = ++generation
   if (syncTimer) clearTimeout(syncTimer)
   cloudAnswers.value = {}
+  syncFailed.value = false
   syncMessage.value = props.authenticated ? '正在读取进度…' : '本机离线保存'
   let local: unknown = null
   try { local = JSON.parse(localStorage.getItem(storageKey.value) || '{}') } catch { /* optional */ }
@@ -142,7 +151,9 @@ onUnmounted(() => {
       <p class="daily-grammar-ja">{{ today.tipJa }}</p>
       <p class="daily-grammar-review-tip">昨日复习：{{ previous.point }} · {{ previous.zh }}</p>
     </article>
-    <div class="daily-grammar-status" role="status" aria-live="polite">今日练习 {{ finished }} / {{ questions.length }} · 答对 {{ correct }} 题 <span>{{ syncMessage }}</span></div>
+    <div class="daily-grammar-status" role="status" aria-live="polite">今日练习 {{ finished }} / {{ questions.length }} · 答对 {{ correct }} 题 <span>{{ syncMessage }}</span>
+      <button v-if="authenticated && syncFailed" type="button" class="text-link" @click="syncCloud(generation, true)">重新同步</button>
+    </div>
     <div class="daily-grammar-exercises">
       <article v-for="(question, index) in questions" :key="question.id" class="daily-grammar-exercise">
         <div class="daily-grammar-exercise-head"><span class="dict-tag">{{ question.label }}</span><small>第 {{ index + 1 }} 题</small></div>

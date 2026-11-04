@@ -296,7 +296,13 @@ function retryPendingDailyTask(intent: PendingDailyTask) {
   void saveDailyTask({ id: intent.taskId, done: intent.completed } as StudyTask, intent.base, intent)
 }
 let dailyRolloverTimer: ReturnType<typeof setInterval> | undefined
-function onDailyVisibilityChange() { if (document.visibilityState === 'visible') rolloverDailyTasks() }
+function onDailyVisibilityChange() {
+  if (document.visibilityState === 'visible') {
+    rolloverDailyTasks()
+    // iOS may throttle background intervals: refresh due cards immediately on resume.
+    reviewClockNow.value = Date.now()
+  }
+}
 const examRecords = ref<ExamRecord[]>(readStored('zhixue:exam-records', []))
 const examHistorySyncing = ref(false)
 const dailyGoalMinutes = ref(40)
