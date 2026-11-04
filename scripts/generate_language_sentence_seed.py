@@ -86,7 +86,7 @@ def rows_in_tar(path, suffix, source_url):
     raise RuntimeError("Could not open Tatoeba export: " + str(path))
 
 JP_WORK = re.compile(r"会社|仕事|職場|会議|打ち合わせ|報告|資料|確認|連絡|お客様|メール|電話|納期|依頼|申請|提出|対応|営業|面接|プロジェクト|システム|契約|請求|休暇|残業|出勤|退勤|上司|同僚|担当|共有|相談|予定|予約|変更|説明|承認|見積|部署|勤務")
-EN_WORK = re.compile(r"\b(company|work|office|meeting|report|document|confirm|contact|client|customer|email|phone|deadline|request|application|submit|support|sales|interview|project|system|contract|invoice|leave|overtime|manager|colleague|team|share|discuss|schedule|appointment|change|explain|approve|estimate|department|presentation|coworker)\b", re.I)
+EN_WORK = re.compile(r"\b(company|work|office|meeting|report|document|confirm|contact|client|customer|email|phone|deadline|request|application|submit|support|sales|interview|project|system|contract|invoice|leave|overtime|manager|colleague|team|share|discuss|schedule|appointment|explain|approve|estimate|department|presentation|coworker)\b", re.I)
 JP_VOCAB = [
  ("これ","这个／这","指向当前语境中可识别的事物；「これ誰の傘ですか」中的「これ」指眼前的伞"), ("それ","那个／那","指向听话人附近或前文提到的事物"), ("あれ","那个（较远处）","指说话人与听话人都相对较远的事物"), ("誰","谁","疑问代词，用于询问人物；「誰の＋名词」询问所属者"),
  ("旅行","旅行、旅游","表示外出旅行；在「旅行が楽しみです」中，是令人期待的事情"),
@@ -514,6 +514,13 @@ def make_hits(sentence, lang):
             term = match.group()
             if not term.strip():
                 continue
+            if lang == "en" and term.casefold() == "used to" and re.search(
+                r"\\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\\s+(?:not\\s+)?$",
+                sentence[:match.start()], re.I):
+                # The lexicalized past-habit construction "used to + verb"
+                # is NOT "be/get used to + noun/gerund" (accustomed to), nor
+                # passive "is used to + verb" (purpose). Abstain from guessing.
+                continue
             if lang == "en" and term.casefold().startswith(("a ", "an ", "the ")):
                 # Truncate to a plausible noun phrase before indexing/overlap
                 # arbitration; preserve exact original sentence offsets.
@@ -544,8 +551,20 @@ def make_hits(sentence, lang):
                 right = sentence[match.end():match.end() + 12]
                 local = sentence[max(0, match.start() - 4):min(len(sentence), match.end() + 4)]
                 if term == "の" and left and right:
-                    meaning = "の：连接名词／构成修饰关系"
-                    explanation = "「" + local + "」中的「の」连接前后名词，前面的名词修饰或限定后面的名词；具体关系要结合这组名词理解。"
+                    # A predicate followed by のが／のは is nominalized:
+                    # 学ぶのは / 食べるのが. It is not a possessive linker.
+                    if re.match(r"^(?:が|は|を|も)(?![ぁ-ん])", right) and re.search(
+                        r"(?:する|できる|して|した|なる|ない|かった|[うくぐすつぬぶむる])$", left):
+                        meaning = "の：动作／状态名词化"
+                        explanation = "「" + local + "」中的「の」把前面的动作或状态作为一个整体，再由后续助词引出描述；不是名词之间的所属关系。"
+                    elif re.match(r"^(?:が|は|を|も)(?![ぁ-ん])", right):
+                        # 私のが好き can elide a noun; without a reliable
+                        # predicate before の, avoid confidently calling it
+                        # nominalization or simple noun-to-noun possession.
+                        continue
+                    else:
+                        meaning = "の：连接名词／构成修饰关系"
+                        explanation = "「" + local + "」中的「の」连接前后成分，常用于所属或限定；具体关系需要结合语境理解。"
                 elif term == "に" and re.search(r"(?:陰|中|上|下|前|後ろ|隣|近く|外|内|場所|部屋|駅|会社|学校|家|ここ|そこ|あそこ)に", sentence[max(0, match.start()-8):match.end()+1]) and re.search(r"(?:隠|置|座|立|住|入|向|着|行|来|戻|泊|残|止|並|書|貼|載|落)", right):
                     meaning = "に：动作地点／目的地"
                     explanation = "「" + local + "」中的「に」结合后面的动作动词，标记动作发生的位置或移动到达的地点；本句要按动词和地点词一起理解。"
