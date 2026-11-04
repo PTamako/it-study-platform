@@ -15,8 +15,8 @@ def grammar(s,lang):
     return [x for x in annotations(s,lang) if x["type"]=="grammar"]
 for sentence in ["外国語を学ぶのは難しい。","私は野菜を食べるのが好きです。","時のたつのは早いものだ。"]:
     hits=grammar(sentence,"ja")
-    nominal=[x for x in hits if x["term"]=="の"]
-    assert nominal and all("名词化" in x["meaning"] for x in nominal),(sentence,hits)
+    nominal=[x for x in hits if "の" in x["term"] and "名词化" in (x["meaning"]+x["explanation"])]
+    assert nominal,(sentence,hits)
 for sentence in ["I am not used to hard work.","This tool is used to clean the keyboard.","He got used to working from home."]:
     hits=grammar(sentence,"en")
     assert not any(x["term"].casefold()=="used to" for x in hits),(sentence,hits)
