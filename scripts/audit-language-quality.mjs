@@ -114,7 +114,7 @@ export function auditGrammarLesson(lesson, language) {
 }
 
 export function inspectCorpus(sentencesByLanguage, wordsByLanguage, grammarByLanguage) {
-  const errors=[], reviewCandidates=[], stats={ sentences:{}, words:{}, grammar:{} }
+  const errors=[], reviewCandidates=[], wordReviewCandidates=[], missingWordCandidates=[], stats={ sentences:{}, words:{}, grammar:{} }
   const fail=(scope, id, issue) => { errors.push({scope,id,issue}) }
   for (const language of LANGUAGES) {
     const sentences=sentencesByLanguage[language] || []
@@ -142,7 +142,22 @@ export function inspectCorpus(sentencesByLanguage, wordsByLanguage, grammarByLan
       if (terms.has(key)) fail(language+' word',word?.id,'duplicate headword')
       terms.add(key)
       const found=auditWord(word,language)
-      if(word?.example_review_status === 'source-linked-unreviewed-sense')linkedExamplesAwaitingSenseReview++
+      if(word?.example_review_status === 'source-linked-unreviewed-sense') {
+        linkedExamplesAwaitingSenseReview++
+        wordReviewCandidates.push({
+          id:word.id,language,term:word.term,meaning_zh:String(word.meaning_zh || '').slice(0,160),
+          example:String(word.example || '').slice(0,160),
+          example_meaning_zh:String(word.example_meaning_zh || '').slice(0,160),
+          example_source_url:word.example_source_url,
+          review_status:'unreviewed-word-sense',
+        })
+      }
+      if(found.missing.includes('bilingual example') || found.missing.includes('reading')) {
+        missingWordCandidates.push({
+          id:word.id,language,term:word.term,
+          missing:found.missing.filter(x=>['bilingual example','reading'].includes(x)),
+        })
+      }
       found.errors.forEach(error=>fail(language+' word',word?.id,error))
       if(found.missing.includes('reading'))missing.reading++
       if(found.missing.includes('source example'))missing.sourceExample++
@@ -175,8 +190,18 @@ export function inspectCorpus(sentencesByLanguage, wordsByLanguage, grammarByLan
       .sort((a,b)=>String(a.id).localeCompare(String(b.id)))
     reviewQueue.push(...group.slice(0,30))
   }
+  const wordReviewQueue=[]
+  const missingWordQueue=[]
+  for(const language of LANGUAGES) {
+    wordReviewQueue.push(...wordReviewCandidates.filter(x=>x.language===language)
+      .sort((a,b)=>String(a.term).localeCompare(String(b.term))).slice(0,60))
+    missingWordQueue.push(...missingWordCandidates.filter(x=>x.language===language)
+      .sort((a,b)=>String(a.term).localeCompare(String(b.term))).slice(0,60))
+  }
   return {ok:errors.length===0,errors:errors.slice(0,60),errorCount:errors.length,stats,
-    reviewCandidateCount:reviewCandidates.length,reviewQueue,limitations:[
+    reviewCandidateCount:reviewCandidates.length,reviewQueue,
+    linkedWordReviewCandidateCount:wordReviewCandidates.length,wordReviewQueue,
+    missingWordCandidateCount:missingWordCandidates.length,missingWordQueue,limitations:[
       'Structural checks and regex examples do not establish semantic correctness.',
       'Tatoeba Chinese translations may be contextually loose or ambiguous.',
       'Metadata absent from static word seeds is not invented.',
@@ -212,7 +237,9 @@ async function main() {
   await mkdir(resolve(ROOT,'quality-reports'),{recursive:true})
   await writeFile(out,JSON.stringify(result,null,2)+'\n','utf8')
   console.log(JSON.stringify({ok:result.ok,errorCount:result.errorCount,stats:result.stats,
-    reviewCandidates:result.reviewCandidateCount,reviewQueue:result.reviewQueue.length,report:out},null,2))
+    reviewCandidates:result.reviewCandidateCount,reviewQueue:result.reviewQueue.length,
+    linkedWordReviewCandidates:result.linkedWordReviewCandidateCount,
+    missingWordCandidates:result.missingWordCandidateCount,report:out},null,2))
   for(const err of result.errors)console.error('QUALITY FAIL',err.scope,err.id,err.issue)
   if(!result.ok)process.exitCode=1
 }
