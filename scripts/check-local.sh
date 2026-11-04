@@ -59,6 +59,7 @@ npm ci
 printf '\n[3/7] Generate reproducible local migration/test fixtures\n'
 "$python_bin" scripts/generate_language_sentence_seed.py
 "$python_bin" scripts/build_static_learner_dictionary.py
+node scripts/audit-language-quality.mjs
 node scripts/generate_fe_practice_bank.mjs
 node scripts/generate_fe_growth_phase1.mjs
 node scripts/generate_fe_2019_spring_source_review.mjs
