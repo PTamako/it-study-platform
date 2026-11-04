@@ -21,6 +21,27 @@ assert "学校" in find_exact_headword_matches("学校へ行く", "ja", patterns
 assert "run" not in find_exact_headword_matches("running", "en", patterns["en"])
 assert "run" in find_exact_headword_matches("Do you run?", "en", patterns["en"])
 assert "work" not in find_exact_headword_matches("workplace", "en", patterns["en"])
+# Real false matches from the published lexicon's human-review sample.
+kana_terms={"ja":{"アウト","アイデア","アルコール","カー","いい","ああ","あと","あさって","いつ"}}
+kana_pat=compile_headword_patterns(kana_terms)["ja"]
+for sentence, bad in [
+    ("ログアウト後に再度ログインする。","アウト"),
+    ("ナイスアイデア！","アイデア"),
+    ("ノンアルコールビール","アルコール"),
+    ("サッカー観る","カー"),
+    ("トムは格好いい。","いい"),
+    ("「ああ」は感嘆詞だ。","ああ"),
+    ("あと10分寝させて。","あと"),
+    ("そいつは来た","いつ"),
+]:
+    assert bad not in find_exact_headword_matches(sentence,"ja",kana_pat),(sentence,bad)
+for sentence, good in [
+    ("これはいい。","いい"),
+    ("いつ来ますか？","いつ"),
+    ("あさって来てください。","あさって"),
+    ("アイデアがいい。","アイデア"),
+]:
+    assert good in find_exact_headword_matches(sentence,"ja",kana_pat),(sentence,good)
 sentences={
     "10":("ja","学校へ行く。"),"11":("ja","学校へ電車で行きます。"),
     "12":("en","I work there."),"13":("en","This is a workplace."),
