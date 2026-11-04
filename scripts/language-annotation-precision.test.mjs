@@ -142,3 +142,20 @@ test('Japanese の keeps qualified modifier information before a lexical headwor
   assert.match(note.explanation, /彼女の本/)
   assert.equal(getSentenceParts(c).map(part => part.text).join(''), sentence)
 })
+
+
+test('English used to means past habit only without be/get used to or passive construction', () => {
+  const past = 'Tom used to work here.'
+  assert.ok(getLanguageHighlights(card(past, 'en')).some(x => x.term.toLowerCase() === 'used to' && /过去/.test(x.meaning)))
+  const cases = [
+    'I am not used to hard work.',
+    'This tool is used to clean the keyboard.',
+    'She got used to working from home.',
+    'He was used to getting up early.',
+  ]
+  for (const sentence of cases) {
+    const stale = hit(sentence, 'used to', 'grammar', '过去常常', '错把形容词化或被动形式标为过去习惯')
+    const hits = getLanguageHighlights(card(sentence, 'en', [stale]))
+    assert.ok(!hits.some(x => x.term.toLowerCase() === 'used to'), 'must not mislabel: ' + sentence)
+  }
+})
