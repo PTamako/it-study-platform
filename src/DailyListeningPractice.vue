@@ -26,6 +26,7 @@ const answers = ref<Record<string, number>>({})
 const cloudAnswers = ref<Record<string, number>>({})
 const revealed = ref<Record<string, boolean>>({})
 const syncMessage = ref('本机离线保存')
+const syncFailed = ref(false)
 let generation = 0
 let syncing = false
 let syncAgain = false
@@ -41,6 +42,7 @@ async function syncCloud(run: number, readFirst: boolean) {
   if (!props.authenticated || run !== generation) return
   if (syncing) { syncAgain = true; return }
   syncing = true
+  syncFailed.value = false
   syncMessage.value = '正在同步…'
   try {
     if (readFirst) {
@@ -66,9 +68,15 @@ async function syncCloud(run: number, readFirst: boolean) {
       answers.value = mergeListeningCloud(answers.value, cloudAnswers.value, scenes.value)
       persist()
     }
-    if (run === generation) syncMessage.value = '云端已同步'
+    if (run === generation) {
+      syncFailed.value = false
+      syncMessage.value = '云端已同步'
+    }
   } catch {
-    if (run === generation) syncMessage.value = '已保存本机，联网后可重试'
+    if (run === generation) {
+      syncFailed.value = true
+      syncMessage.value = '已保存在本机 · 可手动重试同步'
+    }
   } finally {
     syncing = false
     if (syncAgain) {
@@ -88,6 +96,7 @@ async function restore() {
   const run = ++generation
   if (syncTimer) clearTimeout(syncTimer)
   cloudAnswers.value = {}
+  syncFailed.value = false
   syncMessage.value = props.authenticated ? '正在读取进度…' : '本机离线保存'
   let local: unknown
   try { local = JSON.parse(localStorage.getItem(storageKey.value) || '{}') } catch { local = {} }
@@ -210,7 +219,9 @@ const correct = computed(() => scenes.value.filter(scene => isAnswered(scene.id)
       <h2>每日听力与跟读</h2>
       <p>每天日常、职场各一段对话 · 先听后答 · 设备合成朗读，不做录音评分</p>
     </div></div>
-    <p class="daily-listening-summary" role="status">完成 {{ finished }} / {{ scenes.length }} · 答对 {{ correct }} · {{ syncMessage }}</p>
+    <p class="daily-listening-summary" role="status">完成 {{ finished }} / {{ scenes.length }} · 答对 {{ correct }} · {{ syncMessage }}
+      <button v-if="authenticated && syncFailed" type="button" class="text-link" @click="syncCloud(generation, true)">重新同步</button>
+    </p>
     <div class="daily-listening-scenes">
       <article v-for="scene in scenes" :key="scene.id" class="daily-listening-card">
         <div class="daily-listening-top"><span class="dict-tag">{{ scene.category }}</span><span class="language-source">原创双人对话</span></div>
