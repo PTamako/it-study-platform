@@ -82,6 +82,14 @@ export function auditWord(word, language) {
   // These generated static seed cards have no dedicated verified POS/IPA/pitch field.
   // The live dictionary may obtain such fields from an attributed provider; do
   // not fabricate them during auditing or count unavailable fields as errors.
+  if (word?.example_review_status) {
+    if (word.example_review_status !== 'source-linked-unreviewed-sense' ||
+        word.example_provenance !== 'tatoeba-direct-chinese-link' ||
+        !/^https:\/\/tatoeba\.org\/en\/sentences\/show\/\d+$/.test(word.example_source_url || '') ||
+        !nonempty(word.example) || !nonempty(word.example_meaning_zh))
+      errors.push('invalid or misleading source-linked example provenance')
+    if (word?.source_type !== 'licensed') errors.push('nonlicensed headword marked as source-linked')
+  }
   if (word?.source_type === 'generated' && (!nonempty(word?.explanation) || !nonempty(word?.example))) {
     errors.push('original reviewed word missing explanation or example')
   }
@@ -128,11 +136,13 @@ export function inspectCorpus(sentencesByLanguage, wordsByLanguage, grammarByLan
     }
     if (sentences.length!==5000) fail(language+' sentence','corpus','expected 5,000 source-backed cards')
     const missing={reading:0,sourceExample:0,exampleTranslation:0,bilingualExample:0}
+    let linkedExamplesAwaitingSenseReview=0
     for(const word of words) {
       const key=normalized(word?.term)
       if (terms.has(key)) fail(language+' word',word?.id,'duplicate headword')
       terms.add(key)
       const found=auditWord(word,language)
+      if(word?.example_review_status === 'source-linked-unreviewed-sense')linkedExamplesAwaitingSenseReview++
       found.errors.forEach(error=>fail(language+' word',word?.id,error))
       if(found.missing.includes('reading'))missing.reading++
       if(found.missing.includes('source example'))missing.sourceExample++
@@ -153,7 +163,8 @@ export function inspectCorpus(sentencesByLanguage, wordsByLanguage, grammarByLan
     stats.words[language]={count:words.length,missingReading:missing.reading,
       missingSourceExample:missing.sourceExample,missingExampleTranslation:missing.exampleTranslation,
       missingBilingualExample:missing.bilingualExample,
-      note:'Missing dictionary metadata is reported, never synthesized.'}
+      linkedExamplesAwaitingSenseReview,
+      note:'Linked Tatoeba sentences prove source/translation pairing, not word-sense correctness. No missing phonetics are invented.'}
     stats.grammar[language]={topics:grammar.length,questions}
   }
   const reviewQueue=[]
