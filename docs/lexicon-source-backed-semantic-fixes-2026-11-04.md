@@ -35,3 +35,9 @@
 - `node scripts/audit-language-quality.mjs` —— 出具来源/结构质量报告，不接触生产 D1。
 - `npm test` —— 语法正反例、来源和回归测试。
 - 由 PR CI 核验无误后合并，main 工作流发布，保留生产只读验证。
+
+## 语言校对参考来源
+
+- Cambridge Dictionary — [Used to 与 be used to 的区别](https://dictionary.cambridge.org/grammar/british-grammar/word-choice-used-to-and-be-used-to)。
+- Bunpro — [「ものの」完整接续（動詞／い形／な形／名詞）](https://bunpro.jp/ja/grammar_points/%E3%82%82%E3%81%AE%E3%81%AE)。
+- Tatoeba — [语料和翻译质量规范](https://en.wiki.tatoeba.org/articles/show/guidelines)。语料配对不构成各语言义项的专业核验。
