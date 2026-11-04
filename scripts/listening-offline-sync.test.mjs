@@ -52,7 +52,7 @@ test('API is authenticated, origin-checked and bounded to one daily and one work
   assert.match(auth,/\/api\/listening-progress/)
   assert.match(methods,/\/api\/listening-progress/)
   const code = worker.slice(worker.indexOf('// Persist only two small answers per day'),worker.indexOf('// Language spaced repetition'))
-  for (const part of ['LIMIT 2','answers.length > 2','new Set(answers.map','ON CONFLICT(study_date, language, scene_id) DO NOTHING','new RegExp','return json({ ok: true, items: results })'])
+  for (const part of ['LIMIT 2','answers.length > 2','new Set(answers.map','ON CONFLICT(study_date, language, scene_id) DO NOTHING','allowedIds.has(answer.scene_id)','return json({ ok: true, items: results })'])
     assert.ok(code.includes(part),part)
   assert.doesNotMatch(code,/SELECT \* FROM daily_listening_answers|DELETE FROM|DROP TABLE|AI\.run/)
 })
