@@ -3183,11 +3183,11 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
             </div>
             <section class="section-block" aria-label="每日双场景学习">
               <div class="section-heading">
-                <div><h2>今日双场景</h2><p>每天同时练习日常会话与职场沟通 · 沿用已有句子卡和复习记录</p></div>
+                <div><h2>今日双场景</h2><p>未学习优先 · 到期复习可在下方集中练习</p></div>
               </div>
               <div class="language-card-list">
                 <article v-for="scene in dailyLanguageScenes" :key="scene.category" class="language-study-card">
-                  <div class="language-card-top"><span class="dict-tag">{{ scene.category }}</span><small class="language-source">今日精选</small></div>
+                  <div class="language-card-top"><span class="dict-tag">{{ scene.category }}</span><small class="language-source">{{ scene.card ? (completedLanguageCards.includes(scene.card.id) ? '已掌握' : isLanguageCardUnlearned(scene.card) ? '未学习优先' : reviewDueByCardId.get(scene.card.id) ? '到期复习' : '学习中') : '今日精选' }}</small></div>
                   <div v-if="scene.card">
                     <h3 class="language-sentence"><span v-for="(part, index) in sentenceParts(scene.card)" :key="index" :class="part.type ? 'sentence-highlight-' + part.type : ''" :title="part.detail">{{ part.text }}</span></h3>
                     <p class="language-meaning language-sentence-translation">{{ scene.card.meaning_zh }}</p>
@@ -3220,7 +3220,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
               <p v-else-if="!dailyJapaneseWords.length" class="dictionary-status">正在读取日语词库…</p>
               <div v-else class="language-card-list">
                 <article v-for="word in dailyJapaneseWords" :key="word.term" class="language-study-card">
-                  <div class="language-card-top"><span class="dict-tag">日语词汇</span><small class="language-source">{{ word.source }}</small></div>
+                  <div class="language-card-top"><span class="dict-tag">日语词汇</span><small class="language-source">{{ dailyWordStatus('ja', word.term) }} · {{ word.source }}</small></div>
                   <h3 class="language-sentence">{{ word.term }}</h3>
                   <p v-if="word.reading" class="language-reading">{{ word.reading }}</p>
                   <p class="language-meaning">{{ word.zh }}</p>
@@ -3229,6 +3229,8 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <p v-if="word.reading && matchingJapaneseAccents(dictionaryPitchData, word.term, word.reading).length" class="language-source">声调：{{ matchingJapaneseAccents(dictionaryPitchData, word.term, word.reading).map(n => pitchLabel(n, word.reading || '')).join(' / ') }}</p>
                   <div class="language-speech-actions">
                     <button type="button" class="play-button" @click="speak(word.term, 'ja-JP', 'japanese-word:' + word.term)"><Volume2 :size="16" /> 听发音</button>
+                    <button type="button" class="language-review-again" :disabled="!dailyWordReviewAvailable('ja', word.term)" @click="recordDailyWordReview('ja', word.term, false)">没记住</button>
+                    <button type="button" class="language-review-remembered" :disabled="!dailyWordReviewAvailable('ja', word.term)" @click="recordDailyWordReview('ja', word.term, true)">记住了</button>
                     <button type="button" class="language-done-button" :disabled="!vocabularySyncReady || vocabularyHydrating || savedWordRequests.has(word.term)" @click="toggleDailyEnglishWord(word)">{{ savedWords.includes(word.term) ? '取消收藏' : '收藏到生词本' }}</button>
                   </div>
                 </article>
@@ -3240,7 +3242,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
               <p v-else-if="!dailyEnglishWords.length" class="dictionary-status">正在读取本地英语词库…</p>
               <div v-else class="language-card-list">
                 <article v-for="word in dailyEnglishWords" :key="word.term" class="language-study-card">
-                  <div class="language-card-top"><span class="dict-tag">商务词汇</span><small class="language-source">ECDICT · MIT</small></div>
+                  <div class="language-card-top"><span class="dict-tag">商务词汇</span><small class="language-source">{{ dailyWordStatus('en', word.term) }} · ECDICT</small></div>
                   <h3 class="language-sentence">{{ word.term }}</h3>
                   <p v-if="word.partsOfSpeech?.length" class="language-reading">{{ word.partsOfSpeech.join(' / ') }}</p>
                   <p class="language-meaning">{{ word.zh }}</p>
@@ -3248,6 +3250,8 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <p v-if="word.transcription" class="language-source">词库读音标记：{{ word.transcription }}（未验证为 IPA）</p>
                   <div class="language-speech-actions">
                     <button type="button" class="play-button" @click="speak(word.term, 'en-US', 'business:' + word.term)"><Volume2 :size="16" /> 听发音</button>
+                    <button type="button" class="language-review-again" :disabled="!dailyWordReviewAvailable('en', word.term)" @click="recordDailyWordReview('en', word.term, false)">没记住</button>
+                    <button type="button" class="language-review-remembered" :disabled="!dailyWordReviewAvailable('en', word.term)" @click="recordDailyWordReview('en', word.term, true)">记住了</button>
                     <button type="button" class="language-done-button" :disabled="!vocabularySyncReady || vocabularyHydrating || savedWordRequests.has(word.term)" @click="toggleDailyEnglishWord(word)">{{ savedWords.includes(word.term) ? '取消收藏' : '收藏到生词本' }}</button>
                   </div>
                 </article>
