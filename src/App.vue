@@ -1454,8 +1454,11 @@ async function loadDailyJapaneseWords() {
 }
 watch([studyLanguage, todayKey], () => { void loadDailyJapaneseWords() }, { immediate: true })
 
-// Reuse existing licensed sentence cards, study progress and review IDs.
-const dailyLanguageScenes = computed(() => selectDailyScenes(languageCards.value, todayKey.value, studyLanguage.value))
+// Today's selections remain visible after marking mastered. Reuse cloud-backed
+// language reviews and store just the two assigned IDs in a small local cache.
+const dailySceneAssignments = ref<Record<string, string>>(readStored('zhixue:daily-scene-assignments-v1', {}))
+const dailyScenesReady = ref(false)
+const dailySceneKey = (category: string) => todayKey.value + ':' + studyLanguage.value + ':' + category
 const languageCategories = computed(() => [
   { title: '全部', desc: '全部句子', icon: BookOpen },
   { title: '日常句子', desc: '日常生活中自然会说的话', icon: BookMarked },
@@ -1496,6 +1499,40 @@ const reviewClockNow = ref(Date.now())
 const reviewDueByCardId = computed(() => new Map<string, boolean>(
   [...languageReviewByCardId.value].map(([id, review]) => [id, utcReviewMillis(review.next_review_at) <= reviewClockNow.value] as const),
 ))
+const dailySceneProgress = computed(() => {
+  const states = new Map<string, DailyCardProgress>()
+  for (const id of masteredLanguageIds.value) states.set(id, { reviewCount: 0, due: false, mastered: true })
+  for (const [id, review] of languageReviewByCardId.value) states.set(id, {
+    reviewCount: review.review_count,
+    due: Boolean(reviewDueByCardId.value.get(id)),
+    mastered: masteredLanguageIds.value.has(id),
+  })
+  return states
+})
+const dailyLanguageScenes = computed(() => {
+  if (!dailyScenesReady.value || !languageCards.value.length) return []
+  return selectDailyScenes(languageCards.value, todayKey.value, studyLanguage.value, {
+    progress: dailySceneProgress.value,
+    pinned: {
+      '日常句子': dailySceneAssignments.value[dailySceneKey('日常句子')],
+      '职场语言': dailySceneAssignments.value[dailySceneKey('职场语言')],
+    },
+  })
+})
+watch(dailyLanguageScenes, scenes => {
+  if (!scenes.length) return
+  const next = { ...dailySceneAssignments.value }
+  let changed = false
+  for (const scene of scenes) {
+    if (!scene.card) continue
+    const key = dailySceneKey(scene.category)
+    if (next[key] !== scene.card.id) { next[key] = scene.card.id; changed = true }
+  }
+  if (!changed) return
+  // Keep recent assignments bounded; all past cards remain in the full library.
+  dailySceneAssignments.value = Object.fromEntries(Object.entries(next).sort().slice(-16))
+  try { localStorage.setItem('zhixue:daily-scene-assignments-v1', JSON.stringify(dailySceneAssignments.value)) } catch { /* optional cache */ }
+})
 const isLanguageCardUnlearned = (card: LanguageCard) => {
   const review = languageReviewByCardId.value.get(card.id)
   return !masteredLanguageIds.value.has(card.id) && (!review || review.review_count === 0)
@@ -1747,6 +1784,7 @@ async function hydrateCloudProgress() {
   const isCurrent = () => generation === masterySyncGeneration && authenticated.value
   languageProgressHydrating.value = true
   languageProgressReady.value = false
+  dailyScenesReady.value = false
   languageSyncError.value = ''
   try {
     await Promise.all([loadCloudDashboard(), loadExamTracks(), loadLanguageCards()])
@@ -1788,6 +1826,8 @@ async function hydrateCloudProgress() {
     }
   } catch {
     // Keep local reviews usable if the cloud is unavailable.
+  } finally {
+    if (isCurrent()) dailyScenesReady.value = true
   }
 }
 onMounted(async () => {
