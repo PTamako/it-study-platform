@@ -1454,6 +1454,7 @@ async function loadDailyJapaneseWords() {
 }
 watch([studyLanguage, todayKey], () => { void loadDailyJapaneseWords() }, { immediate: true })
 
+// Reuse existing licensed sentence cards and cloud progress for daily scenes.
 // Today's selections remain visible after marking mastered. Reuse cloud-backed
 // language reviews and store just the two assigned IDs in a small local cache.
 const dailySceneAssignments = ref<Record<string, string>>(readStored('zhixue:daily-scene-assignments-v1', {}))
