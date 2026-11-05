@@ -78,6 +78,19 @@ test('unlearned words come first, due reviews next, future-scheduled words last'
   assert.equal(dailyWordPriority(progress['en:future'], date), 2)
 })
 
+test('due reviews still receive two of five daily slots while new words remain', () => {
+  const terms = ['new-a', 'new-b', 'new-c', 'new-d', 'new-e', 'due-a', 'due-b', 'due-c', 'later']
+  const review = (nextDate) => ({ streak: 2, nextDate, lastDate: '2026-11-01' })
+  const state = {
+    'en:due-a': review('2026-11-04'),
+    'en:due-b': review('2026-11-05'),
+    'en:due-c': review('2026-11-05'),
+    'en:later': review('2026-11-20'),
+  }
+  assert.deepEqual(prioritizeDailyWords(terms, '2026-11-05', 'en', state).slice(0, 5),
+    ['new-a', 'new-b', 'new-c', 'due-a', 'due-b'])
+})
+
 test('word recall intervals follow 1/3/7/14/30 days and cannot be double-graded', () => {
   let row
   for (const [date, expected] of [
