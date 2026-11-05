@@ -4,7 +4,7 @@ import { hydrateMastery, mergeExamHistory, restoreMasteredCard } from './progres
 import { tokyoDate, mergeDailyTaskStates, mergeDailyTaskTemplates } from './daily-tasks'
 import { utcReviewMillis } from './review-time'
 import { fetchVocabularySnapshot } from './vocabulary-sync'
-import { selectDailyScenes, dailyBusinessWordCandidates, dailyJapaneseWordCandidates } from './daily-language-scenes'
+import { selectDailyScenes, dailyBusinessWordCandidates, dailyJapaneseWordCandidates, prioritizeDailyWords, gradeDailyWord, type DailyWordReview, type DailyCardProgress } from './daily-language-scenes'
 import { getLanguageExpansions, getSentenceParts } from './language-annotations'
 import { isDictionaryHeadword, loadJapanesePitchDataset, matchingJapaneseAccents, pitchLabel, partOfSpeechDisplay, getChineseWordGuide, type PitchDataset } from './dictionary-word-metadata'
 import { dictionaryTranslationRows, chinesePinyinToneLabels } from './dictionary-presentation'
@@ -1365,6 +1365,44 @@ type LanguageCard = {
   highlight_json?: string; vocabulary_expansion_json?: string; grammar_expansion_json?: string
 }
 const languageCards = ref<LanguageCard[]>([])
+// A saved word is not automatically a learned word. Keep lightweight review
+// progress in browser storage; never issue an extra D1 query per daily term.
+const dailyWordProgress = ref<Record<string, DailyWordReview>>(readStored('zhixue:daily-word-review-v1', {}))
+const dailyWordSelections = ref<Record<string, string[]>>(readStored('zhixue:daily-word-selections-v1', {}))
+function dailyWordKey(language: 'ja' | 'en', term: string): string { return language + ':' + term }
+function dailyWordSelectionKey(language: 'ja' | 'en', date = todayKey.value): string { return date + ':' + language }
+function orderedDailyWordTerms(language: 'ja' | 'en', date: string): string[] {
+  const rotated = language === 'ja' ? dailyJapaneseWordCandidates(date) : dailyBusinessWordCandidates(date)
+  const pinned = dailyWordSelections.value[dailyWordSelectionKey(language, date)] || []
+  const validPinned = pinned.filter(term => rotated.includes(term))
+  const preferred = prioritizeDailyWords(rotated, date, language, dailyWordProgress.value)
+  return [...validPinned, ...preferred.filter(term => !validPinned.includes(term))]
+}
+function pinDailyWords(language: 'ja' | 'en', date: string, words: DictionaryEntry[]) {
+  const key = dailyWordSelectionKey(language, date)
+  if (dailyWordSelections.value[key]?.length === 5 || words.length < 5) return
+  const next = { ...dailyWordSelections.value, [key]: words.slice(0, 5).map(word => word.term) }
+  dailyWordSelections.value = Object.fromEntries(Object.entries(next).sort().slice(-8))
+  try { localStorage.setItem('zhixue:daily-word-selections-v1', JSON.stringify(dailyWordSelections.value)) } catch { /* optional local cache */ }
+}
+function dailyWordStatus(language: 'ja' | 'en', term: string): string {
+  const review = dailyWordProgress.value[dailyWordKey(language, term)]
+  if (!review?.lastDate) return '未学习'
+  return review.nextDate <= todayKey.value ? '待复习' : '下次复习 ' + review.nextDate.slice(5)
+}
+function dailyWordReviewAvailable(language: 'ja' | 'en', term: string): boolean {
+  const review = dailyWordProgress.value[dailyWordKey(language, term)]
+  return !review?.lastDate || (review.lastDate !== todayKey.value && review.nextDate <= todayKey.value)
+}
+function recordDailyWordReview(language: 'ja' | 'en', term: string, remembered: boolean) {
+  if (!dailyWordReviewAvailable(language, term)) return
+  const key = dailyWordKey(language, term)
+  dailyWordProgress.value = {
+    ...dailyWordProgress.value,
+    [key]: gradeDailyWord(dailyWordProgress.value[key], todayKey.value, remembered),
+  }
+  try { localStorage.setItem('zhixue:daily-word-review-v1', JSON.stringify(dailyWordProgress.value)) } catch { /* optional local cache */ }
+}
 const dailyEnglishWords = ref<DictionaryEntry[]>([])
 const dailyEnglishWordsError = ref('')
 let dailyEnglishWordRun = 0
@@ -1375,10 +1413,12 @@ async function loadDailyBusinessWords() {
   if (studyLanguage.value !== 'en') return
   try {
     // Static ECDICT manifest is cached once; lookups do not touch Workers/D1.
-    const terms = dailyBusinessWordCandidates(todayKey.value)
+    const date = todayKey.value
+    const terms = orderedDailyWordTerms('en', date)
     const rows = await Promise.all(terms.map(term => findStaticLearnerEntry(term, 'en')))
-    if (run !== dailyEnglishWordRun || studyLanguage.value !== 'en') return
+    if (run !== dailyEnglishWordRun || studyLanguage.value !== 'en' || todayKey.value !== date) return
     dailyEnglishWords.value = rows.filter((word): word is NonNullable<typeof word> => Boolean(word)).slice(0, 5)
+    pinDailyWords('en', date, dailyEnglishWords.value)
     if (dailyEnglishWords.value.length < 5)
       dailyEnglishWordsError.value = '词库中可验证的当日词条不足 5 个，请稍后重试。'
   } catch {
@@ -1397,10 +1437,12 @@ async function loadDailyJapaneseWords() {
   if (studyLanguage.value !== 'ja') return
   try {
     // Source-backed Japanese reading and meanings from immutable static assets.
-    const terms = dailyJapaneseWordCandidates(todayKey.value)
+    const date = todayKey.value
+    const terms = orderedDailyWordTerms('ja', date)
     const rows = await Promise.all(terms.map(term => findStaticLearnerEntry(term, 'ja')))
-    if (run !== dailyJapaneseWordRun || studyLanguage.value !== 'ja') return
+    if (run !== dailyJapaneseWordRun || studyLanguage.value !== 'ja' || todayKey.value !== date) return
     dailyJapaneseWords.value = rows.filter((word): word is NonNullable<typeof word> => Boolean(word)).slice(0, 5)
+    pinDailyWords('ja', date, dailyJapaneseWords.value)
     if (dailyJapaneseWords.value.length < 5)
       dailyJapaneseWordsError.value = '已验证的日语词条不足 5 个，请检查静态学习词库。'
     // Pitch is optional and only displayed for exact readings present in
