@@ -3,6 +3,53 @@
  */
 export type DailySceneCard = { id: string; language: 'ja' | 'en'; category: string; term: string }
 export type DailyScene = { category: '日常句子' | '职场语言'; card: DailySceneCard | null }
+export type DailyCardProgress = { reviewCount: number; due: boolean; mastered: boolean }
+export type DailyWordReview = { streak: number; nextDate: string; lastDate: string }
+
+/** Never equate a word being bookmarked with having learned it. */
+export function dailyWordPriority(review: DailyWordReview | undefined, date: string): number {
+  if (!review || !review.lastDate) return 0 // Never studied
+  return review.nextDate <= date ? 1 : 2 // Due, then scheduled in future
+}
+
+export function prioritizeDailyWords(
+  terms: readonly string[], date: string, language: 'ja' | 'en',
+  progress: Readonly<Record<string, DailyWordReview>>,
+): string[] {
+  // Keep the calendar's rotation within each tier. With both new and due
+  // terms available, reserve two of the five daily slots for timely review.
+  // This avoids starving a 1-day review behind weeks of unseen vocabulary.
+  const buckets: string[][] = [[], [], []]
+  for (const term of terms) buckets[dailyWordPriority(progress[language + ':' + term], date)].push(term)
+  const [unseen, due, later] = buckets
+  return [
+    ...unseen.slice(0, 3), ...due.slice(0, 2),
+    ...unseen.slice(3), ...due.slice(2), ...later,
+  ]
+}
+
+export function gradeDailyWord(
+  previous: DailyWordReview | undefined, date: string, remembered: boolean,
+): DailyWordReview {
+  if (previous?.lastDate === date) return previous // No accidental double grading
+  const streak = remembered ? Math.min(5, Math.max(0, previous?.streak || 0) + 1) : 0
+  const days = remembered ? [1, 1, 3, 7, 14, 30][streak] : 1
+  const time = Date.parse(date + 'T00:00:00Z')
+  const nextDate = Number.isFinite(time)
+    ? new Date(time + days * 86400000).toISOString().slice(0, 10) : date
+  return { streak, nextDate, lastDate: date }
+}
+
+function dayNumber(date: string): number {
+  const timestamp = Date.parse(date + 'T00:00:00Z')
+  return Number.isFinite(timestamp) ? Math.floor(timestamp / 86400000) : 0
+}
+
+export type DailySceneOptions = {
+  progress?: ReadonlyMap<string, DailyCardProgress>
+  pinned?: Readonly<Partial<Record<DailyScene['category'], string>>>
+}
+
 
 function stableHash(input: string): number {
   // Deterministic 32-bit FNV-1a hash; avoids random reshuffling during reactivity.
@@ -18,17 +65,29 @@ export function selectDailyScenes<T extends DailySceneCard>(
   cards: readonly T[],
   studyDate: string,
   language: 'ja' | 'en',
+  options: DailySceneOptions = {},
 ): Array<{ category: DailyScene['category']; card: T | null }> {
   const day = /^\d{4}-\d{2}-\d{2}$/.test(studyDate) ? studyDate : '1970-01-01'
   return (['日常句子', '职场语言'] as const).map(category => {
     const pool = cards.filter(card => card.language === language && card.category === category)
     if (!pool.length) return { category, card: null }
     const ready = pool.filter(card => [...card.term].length >= (language === 'ja' ? 18 : 40))
-    // Keep the same selection for every session on the same day. Stable IDs
-    // guarantee existing review/mastery state is used, not a parallel system.
     const candidates = (ready.length ? ready : pool).slice().sort((a, b) => a.id.localeCompare(b.id))
-    const index = stableHash([day, language, category].join('|')) % candidates.length
-    return { category, card: candidates[index] }
+    // Today's assignment stays pinned even if the user marks it mastered.
+    const pinned = candidates.find(card => card.id === options.pinned?.[category])
+    if (pinned) return { category, card: pinned }
+    // New > due review > learned (not due) > mastered. Reviewed cards remain
+    // available in the separately accessible spaced-repetition review queue.
+    const tier = (card: T) => {
+      const state = options.progress?.get(card.id)
+      if (state?.mastered) return 3
+      if (!state?.reviewCount) return 0
+      return state.due ? 1 : 2
+    }
+    const bestTier = Math.min(...candidates.map(tier))
+    const eligible = candidates.filter(card => tier(card) === bestTier)
+    const index = (dayNumber(day) + stableHash(language + '|' + category)) % eligible.length
+    return { category, card: eligible[index] }
   })
 }
 
@@ -49,7 +108,7 @@ const BUSINESS_HEADWORDS = [
 
 export function dailyBusinessWordCandidates(studyDate: string): string[] {
   const day = /^\d{4}-\d{2}-\d{2}$/.test(studyDate) ? studyDate : '1970-01-01'
-  const offset = stableHash('business-words|' + day) % BUSINESS_HEADWORDS.length
+  const offset = (dayNumber(day) * 5) % BUSINESS_HEADWORDS.length
   return [...BUSINESS_HEADWORDS.slice(offset), ...BUSINESS_HEADWORDS.slice(0, offset)]
 }
 
@@ -70,6 +129,6 @@ const JAPANESE_HEADWORDS = [
 
 export function dailyJapaneseWordCandidates(studyDate: string): string[] {
   const day = /^\d{4}-\d{2}-\d{2}$/.test(studyDate) ? studyDate : '1970-01-01'
-  const offset = stableHash('japanese-headwords|' + day) % JAPANESE_HEADWORDS.length
+  const offset = (dayNumber(day) * 5) % JAPANESE_HEADWORDS.length
   return [...JAPANESE_HEADWORDS.slice(offset), ...JAPANESE_HEADWORDS.slice(0, offset)]
 }

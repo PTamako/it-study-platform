@@ -35,7 +35,7 @@ test('no fabricated filler card when a category is empty; stable order never mut
 })
 test('UI reuses existing TTS, saved mastery and context parsing', async () => {
   const app=await readFile(new URL('../src/App.vue',import.meta.url),'utf8')
-  assert.match(app,/selectDailyScenes\(languageCards\.value, todayKey\.value, studyLanguage\.value\)/)
+  assert.match(app,/selectDailyScenes\(languageCards\.value, todayKey\.value, studyLanguage\.value, \{/)
   assert.match(app,/v-for="scene in dailyLanguageScenes"/)
   assert.match(app,/toggleLanguageCard\(scene\.card\.id\)/)
   assert.match(app,/speakLanguageCard\(scene\.card\)/)
@@ -50,7 +50,7 @@ test('daily business headwords rotate reproducibly and never assert official TOE
   assert.deepEqual(today, dailyBusinessWordCandidates('2026-11-03'))
   assert.notDeepEqual(today, dailyBusinessWordCandidates('2026-11-04'))
   const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
-  assert.match(app, /dailyBusinessWordCandidates\(todayKey\.value\)/)
+  assert.match(app, /dailyBusinessWordCandidates\(date\)/)
   assert.match(app, /findStaticLearnerEntry\(term, 'en'\)/)
   assert.match(app, /\.slice\(0, 5\)/)
   assert.match(app, /非官方 TOEIC 词表/)

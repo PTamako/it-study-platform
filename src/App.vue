@@ -4,7 +4,7 @@ import { hydrateMastery, mergeExamHistory, restoreMasteredCard } from './progres
 import { tokyoDate, mergeDailyTaskStates, mergeDailyTaskTemplates } from './daily-tasks'
 import { utcReviewMillis } from './review-time'
 import { fetchVocabularySnapshot } from './vocabulary-sync'
-import { selectDailyScenes, dailyBusinessWordCandidates, dailyJapaneseWordCandidates } from './daily-language-scenes'
+import { selectDailyScenes, dailyBusinessWordCandidates, dailyJapaneseWordCandidates, prioritizeDailyWords, gradeDailyWord, type DailyWordReview, type DailyCardProgress } from './daily-language-scenes'
 import { getLanguageExpansions, getSentenceParts } from './language-annotations'
 import { isDictionaryHeadword, loadJapanesePitchDataset, matchingJapaneseAccents, pitchLabel, partOfSpeechDisplay, getChineseWordGuide, type PitchDataset } from './dictionary-word-metadata'
 import { dictionaryTranslationRows, chinesePinyinToneLabels } from './dictionary-presentation'
@@ -1365,6 +1365,44 @@ type LanguageCard = {
   highlight_json?: string; vocabulary_expansion_json?: string; grammar_expansion_json?: string
 }
 const languageCards = ref<LanguageCard[]>([])
+// A saved word is not automatically a learned word. Keep lightweight review
+// progress in browser storage; never issue an extra D1 query per daily term.
+const dailyWordProgress = ref<Record<string, DailyWordReview>>(readStored('zhixue:daily-word-review-v1', {}))
+const dailyWordSelections = ref<Record<string, string[]>>(readStored('zhixue:daily-word-selections-v1', {}))
+function dailyWordKey(language: 'ja' | 'en', term: string): string { return language + ':' + term }
+function dailyWordSelectionKey(language: 'ja' | 'en', date = todayKey.value): string { return date + ':' + language }
+function orderedDailyWordTerms(language: 'ja' | 'en', date: string): string[] {
+  const rotated = language === 'ja' ? dailyJapaneseWordCandidates(date) : dailyBusinessWordCandidates(date)
+  const pinned = dailyWordSelections.value[dailyWordSelectionKey(language, date)] || []
+  const validPinned = pinned.filter(term => rotated.includes(term))
+  const preferred = prioritizeDailyWords(rotated, date, language, dailyWordProgress.value)
+  return [...validPinned, ...preferred.filter(term => !validPinned.includes(term))]
+}
+function pinDailyWords(language: 'ja' | 'en', date: string, words: DictionaryEntry[]) {
+  const key = dailyWordSelectionKey(language, date)
+  if (dailyWordSelections.value[key]?.length === 5 || words.length < 5) return
+  const next = { ...dailyWordSelections.value, [key]: words.slice(0, 5).map(word => word.term) }
+  dailyWordSelections.value = Object.fromEntries(Object.entries(next).sort().slice(-8))
+  try { localStorage.setItem('zhixue:daily-word-selections-v1', JSON.stringify(dailyWordSelections.value)) } catch { /* optional local cache */ }
+}
+function dailyWordStatus(language: 'ja' | 'en', term: string): string {
+  const review = dailyWordProgress.value[dailyWordKey(language, term)]
+  if (!review?.lastDate) return '未学习'
+  return review.nextDate <= todayKey.value ? '待复习' : '下次复习 ' + review.nextDate.slice(5)
+}
+function dailyWordReviewAvailable(language: 'ja' | 'en', term: string): boolean {
+  const review = dailyWordProgress.value[dailyWordKey(language, term)]
+  return !review?.lastDate || (review.lastDate !== todayKey.value && review.nextDate <= todayKey.value)
+}
+function recordDailyWordReview(language: 'ja' | 'en', term: string, remembered: boolean) {
+  if (!dailyWordReviewAvailable(language, term)) return
+  const key = dailyWordKey(language, term)
+  dailyWordProgress.value = {
+    ...dailyWordProgress.value,
+    [key]: gradeDailyWord(dailyWordProgress.value[key], todayKey.value, remembered),
+  }
+  try { localStorage.setItem('zhixue:daily-word-review-v1', JSON.stringify(dailyWordProgress.value)) } catch { /* optional local cache */ }
+}
 const dailyEnglishWords = ref<DictionaryEntry[]>([])
 const dailyEnglishWordsError = ref('')
 let dailyEnglishWordRun = 0
@@ -1375,10 +1413,12 @@ async function loadDailyBusinessWords() {
   if (studyLanguage.value !== 'en') return
   try {
     // Static ECDICT manifest is cached once; lookups do not touch Workers/D1.
-    const terms = dailyBusinessWordCandidates(todayKey.value)
+    const date = todayKey.value
+    const terms = orderedDailyWordTerms('en', date)
     const rows = await Promise.all(terms.map(term => findStaticLearnerEntry(term, 'en')))
-    if (run !== dailyEnglishWordRun || studyLanguage.value !== 'en') return
+    if (run !== dailyEnglishWordRun || studyLanguage.value !== 'en' || todayKey.value !== date) return
     dailyEnglishWords.value = rows.filter((word): word is NonNullable<typeof word> => Boolean(word)).slice(0, 5)
+    pinDailyWords('en', date, dailyEnglishWords.value)
     if (dailyEnglishWords.value.length < 5)
       dailyEnglishWordsError.value = '词库中可验证的当日词条不足 5 个，请稍后重试。'
   } catch {
@@ -1397,10 +1437,12 @@ async function loadDailyJapaneseWords() {
   if (studyLanguage.value !== 'ja') return
   try {
     // Source-backed Japanese reading and meanings from immutable static assets.
-    const terms = dailyJapaneseWordCandidates(todayKey.value)
+    const date = todayKey.value
+    const terms = orderedDailyWordTerms('ja', date)
     const rows = await Promise.all(terms.map(term => findStaticLearnerEntry(term, 'ja')))
-    if (run !== dailyJapaneseWordRun || studyLanguage.value !== 'ja') return
+    if (run !== dailyJapaneseWordRun || studyLanguage.value !== 'ja' || todayKey.value !== date) return
     dailyJapaneseWords.value = rows.filter((word): word is NonNullable<typeof word> => Boolean(word)).slice(0, 5)
+    pinDailyWords('ja', date, dailyJapaneseWords.value)
     if (dailyJapaneseWords.value.length < 5)
       dailyJapaneseWordsError.value = '已验证的日语词条不足 5 个，请检查静态学习词库。'
     // Pitch is optional and only displayed for exact readings present in
@@ -1412,8 +1454,12 @@ async function loadDailyJapaneseWords() {
 }
 watch([studyLanguage, todayKey], () => { void loadDailyJapaneseWords() }, { immediate: true })
 
-// Reuse existing licensed sentence cards, study progress and review IDs.
-const dailyLanguageScenes = computed(() => selectDailyScenes(languageCards.value, todayKey.value, studyLanguage.value))
+// Reuse existing licensed sentence cards and cloud progress for daily scenes.
+// Today's selections remain visible after marking mastered. Reuse cloud-backed
+// language reviews and store just the two assigned IDs in a small local cache.
+const dailySceneAssignments = ref<Record<string, string>>(readStored('zhixue:daily-scene-assignments-v1', {}))
+const dailyScenesReady = ref(false)
+const dailySceneKey = (category: string) => todayKey.value + ':' + studyLanguage.value + ':' + category
 const languageCategories = computed(() => [
   { title: '全部', desc: '全部句子', icon: BookOpen },
   { title: '日常句子', desc: '日常生活中自然会说的话', icon: BookMarked },
@@ -1454,6 +1500,40 @@ const reviewClockNow = ref(Date.now())
 const reviewDueByCardId = computed(() => new Map<string, boolean>(
   [...languageReviewByCardId.value].map(([id, review]) => [id, utcReviewMillis(review.next_review_at) <= reviewClockNow.value] as const),
 ))
+const dailySceneProgress = computed(() => {
+  const states = new Map<string, DailyCardProgress>()
+  for (const id of masteredLanguageIds.value) states.set(id, { reviewCount: 0, due: false, mastered: true })
+  for (const [id, review] of languageReviewByCardId.value) states.set(id, {
+    reviewCount: review.review_count,
+    due: Boolean(reviewDueByCardId.value.get(id)),
+    mastered: masteredLanguageIds.value.has(id),
+  })
+  return states
+})
+const dailyLanguageScenes = computed(() => {
+  if (!dailyScenesReady.value || !languageCards.value.length) return []
+  return selectDailyScenes(languageCards.value, todayKey.value, studyLanguage.value, {
+    progress: dailySceneProgress.value,
+    pinned: {
+      '日常句子': dailySceneAssignments.value[dailySceneKey('日常句子')],
+      '职场语言': dailySceneAssignments.value[dailySceneKey('职场语言')],
+    },
+  })
+})
+watch(dailyLanguageScenes, scenes => {
+  if (!scenes.length) return
+  const next = { ...dailySceneAssignments.value }
+  let changed = false
+  for (const scene of scenes) {
+    if (!scene.card) continue
+    const key = dailySceneKey(scene.category)
+    if (next[key] !== scene.card.id) { next[key] = scene.card.id; changed = true }
+  }
+  if (!changed) return
+  // Keep recent assignments bounded; all past cards remain in the full library.
+  dailySceneAssignments.value = Object.fromEntries(Object.entries(next).sort().slice(-16))
+  try { localStorage.setItem('zhixue:daily-scene-assignments-v1', JSON.stringify(dailySceneAssignments.value)) } catch { /* optional cache */ }
+})
 const isLanguageCardUnlearned = (card: LanguageCard) => {
   const review = languageReviewByCardId.value.get(card.id)
   return !masteredLanguageIds.value.has(card.id) && (!review || review.review_count === 0)
@@ -1705,6 +1785,7 @@ async function hydrateCloudProgress() {
   const isCurrent = () => generation === masterySyncGeneration && authenticated.value
   languageProgressHydrating.value = true
   languageProgressReady.value = false
+  dailyScenesReady.value = false
   languageSyncError.value = ''
   try {
     await Promise.all([loadCloudDashboard(), loadExamTracks(), loadLanguageCards()])
@@ -1746,6 +1827,8 @@ async function hydrateCloudProgress() {
     }
   } catch {
     // Keep local reviews usable if the cloud is unavailable.
+  } finally {
+    if (isCurrent()) dailyScenesReady.value = true
   }
 }
 onMounted(async () => {
@@ -3101,11 +3184,11 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
             </div>
             <section class="section-block" aria-label="每日双场景学习">
               <div class="section-heading">
-                <div><h2>今日双场景</h2><p>每天同时练习日常会话与职场沟通 · 沿用已有句子卡和复习记录</p></div>
+                <div><h2>今日双场景</h2><p>未学习优先 · 到期复习可在下方集中练习</p></div>
               </div>
               <div class="language-card-list">
                 <article v-for="scene in dailyLanguageScenes" :key="scene.category" class="language-study-card">
-                  <div class="language-card-top"><span class="dict-tag">{{ scene.category }}</span><small class="language-source">今日精选</small></div>
+                  <div class="language-card-top"><span class="dict-tag">{{ scene.category }}</span><small class="language-source">{{ scene.card ? (completedLanguageCards.includes(scene.card.id) ? '已掌握' : isLanguageCardUnlearned(scene.card) ? '未学习优先' : reviewDueByCardId.get(scene.card.id) ? '到期复习' : '学习中') : '今日精选' }}</small></div>
                   <div v-if="scene.card">
                     <h3 class="language-sentence"><span v-for="(part, index) in sentenceParts(scene.card)" :key="index" :class="part.type ? 'sentence-highlight-' + part.type : ''" :title="part.detail">{{ part.text }}</span></h3>
                     <p class="language-meaning language-sentence-translation">{{ scene.card.meaning_zh }}</p>
@@ -3138,7 +3221,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
               <p v-else-if="!dailyJapaneseWords.length" class="dictionary-status">正在读取日语词库…</p>
               <div v-else class="language-card-list">
                 <article v-for="word in dailyJapaneseWords" :key="word.term" class="language-study-card">
-                  <div class="language-card-top"><span class="dict-tag">日语词汇</span><small class="language-source">{{ word.source }}</small></div>
+                  <div class="language-card-top"><span class="dict-tag">日语词汇</span><small class="language-source">{{ dailyWordStatus('ja', word.term) }} · {{ word.source }}</small></div>
                   <h3 class="language-sentence">{{ word.term }}</h3>
                   <p v-if="word.reading" class="language-reading">{{ word.reading }}</p>
                   <p class="language-meaning">{{ word.zh }}</p>
@@ -3147,6 +3230,8 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <p v-if="word.reading && matchingJapaneseAccents(dictionaryPitchData, word.term, word.reading).length" class="language-source">声调：{{ matchingJapaneseAccents(dictionaryPitchData, word.term, word.reading).map(n => pitchLabel(n, word.reading || '')).join(' / ') }}</p>
                   <div class="language-speech-actions">
                     <button type="button" class="play-button" @click="speak(word.term, 'ja-JP', 'japanese-word:' + word.term)"><Volume2 :size="16" /> 听发音</button>
+                    <button type="button" class="language-review-again" :disabled="!dailyWordReviewAvailable('ja', word.term)" @click="recordDailyWordReview('ja', word.term, false)">没记住</button>
+                    <button type="button" class="language-review-remembered" :disabled="!dailyWordReviewAvailable('ja', word.term)" @click="recordDailyWordReview('ja', word.term, true)">记住了</button>
                     <button type="button" class="language-done-button" :disabled="!vocabularySyncReady || vocabularyHydrating || savedWordRequests.has(word.term)" @click="toggleDailyEnglishWord(word)">{{ savedWords.includes(word.term) ? '取消收藏' : '收藏到生词本' }}</button>
                   </div>
                 </article>
@@ -3158,7 +3243,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
               <p v-else-if="!dailyEnglishWords.length" class="dictionary-status">正在读取本地英语词库…</p>
               <div v-else class="language-card-list">
                 <article v-for="word in dailyEnglishWords" :key="word.term" class="language-study-card">
-                  <div class="language-card-top"><span class="dict-tag">商务词汇</span><small class="language-source">ECDICT · MIT</small></div>
+                  <div class="language-card-top"><span class="dict-tag">商务词汇</span><small class="language-source">{{ dailyWordStatus('en', word.term) }} · ECDICT</small></div>
                   <h3 class="language-sentence">{{ word.term }}</h3>
                   <p v-if="word.partsOfSpeech?.length" class="language-reading">{{ word.partsOfSpeech.join(' / ') }}</p>
                   <p class="language-meaning">{{ word.zh }}</p>
@@ -3166,6 +3251,8 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <p v-if="word.transcription" class="language-source">词库读音标记：{{ word.transcription }}（未验证为 IPA）</p>
                   <div class="language-speech-actions">
                     <button type="button" class="play-button" @click="speak(word.term, 'en-US', 'business:' + word.term)"><Volume2 :size="16" /> 听发音</button>
+                    <button type="button" class="language-review-again" :disabled="!dailyWordReviewAvailable('en', word.term)" @click="recordDailyWordReview('en', word.term, false)">没记住</button>
+                    <button type="button" class="language-review-remembered" :disabled="!dailyWordReviewAvailable('en', word.term)" @click="recordDailyWordReview('en', word.term, true)">记住了</button>
                     <button type="button" class="language-done-button" :disabled="!vocabularySyncReady || vocabularyHydrating || savedWordRequests.has(word.term)" @click="toggleDailyEnglishWord(word)">{{ savedWords.includes(word.term) ? '取消收藏' : '收藏到生词本' }}</button>
                   </div>
                 </article>

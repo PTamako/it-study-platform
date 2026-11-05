@@ -331,6 +331,8 @@
 .language-practice-answer { margin: 15px 0; padding: 15px; border-radius: 13px; background: rgba(255,255,255,.78); }
 .language-practice-answer > strong { font-size: 1rem; line-height: 1.65; }
 .language-practice-answer > p { color: var(--muted, #777789); line-height: 1.7; }
+.language-speech-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin-top: 14px; }
+.language-speech-actions button { min-height: 40px; }
 .language-practice-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; margin-top: 17px; }
 .language-practice-actions button { min-height: 40px; }
 @media (max-width: 560px) {
