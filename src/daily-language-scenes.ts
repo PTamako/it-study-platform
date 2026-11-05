@@ -16,10 +16,16 @@ export function prioritizeDailyWords(
   terms: readonly string[], date: string, language: 'ja' | 'en',
   progress: Readonly<Record<string, DailyWordReview>>,
 ): string[] {
-  // Stable sort preserves the calendar's 5-per-day rotation within each tier.
-  return [...terms].sort((a, b) =>
-    dailyWordPriority(progress[language + ':' + a], date) -
-    dailyWordPriority(progress[language + ':' + b], date))
+  // Keep the calendar's rotation within each tier. With both new and due
+  // terms available, reserve two of the five daily slots for timely review.
+  // This avoids starving a 1-day review behind weeks of unseen vocabulary.
+  const buckets: string[][] = [[], [], []]
+  for (const term of terms) buckets[dailyWordPriority(progress[language + ':' + term], date)].push(term)
+  const [unseen, due, later] = buckets
+  return [
+    ...unseen.slice(0, 3), ...due.slice(0, 2),
+    ...unseen.slice(3), ...due.slice(2), ...later,
+  ]
 }
 
 export function gradeDailyWord(
