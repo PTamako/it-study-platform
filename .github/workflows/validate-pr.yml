@@ -137,7 +137,12 @@ jobs:
       - name: Run automated regression tests
         run: npm test
 
+      - name: Generate immutable release version marker
+        run: printf '{"version":"%s"}\n' "$GITHUB_SHA" > public/version.json
+
       - name: Type-check and build frontend
+        env:
+          VITE_APP_VERSION: ${{ github.sha }}
         run: npm run build
 
       # Fail before any production D1 migration if Vite did not package static lessons.

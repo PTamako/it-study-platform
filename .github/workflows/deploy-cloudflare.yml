@@ -131,7 +131,12 @@ jobs:
       - name: Run automated regression tests
         run: npm test
 
+      - name: Generate immutable release version marker
+        run: printf '{"version":"%s"}\n' "$GITHUB_SHA" > public/version.json
+
       - name: Type-check and build frontend
+        env:
+          VITE_APP_VERSION: ${{ github.sha }}
         run: npm run build
 
       # Fail before any production D1 migration if Vite did not package static lessons.
@@ -221,10 +226,10 @@ jobs:
           // manually maintained list. Future endpoints become covered by default.
           const { readFileSync } = await import('node:fs')
           const worker = readFileSync('worker/index.ts', 'utf8')
-          const protectedBlock = worker.match(/const protectedPersonalPaths = new Set\\(\\[([\\s\\S]*?)\\]\\)/)?.[1]
-          const writeBlock = worker.match(/const isWriteEndpoint = \\[([\\s\\S]*?)\\]\\.includes\\(url\\.pathname\\)/)?.[1]
+          const protectedBlock = worker.match(/const protectedPersonalPaths = new Set\(\[([\s\S]*?)\]\)/)?.[1]
+          const writeBlock = worker.match(/const isWriteEndpoint = \[([\s\S]*?)\]\.includes\(url\.pathname\)/)?.[1]
           if (!protectedBlock || !writeBlock) throw new Error('Could not discover protected endpoints from Worker')
-          const paths = block => [...block.matchAll(/'\\/api\\/[^']+'/g)].map(m => m[0].slice(1, -1))
+          const paths = block => [...block.matchAll(/'\/api\/[^']+'/g)].map(m => m[0].slice(1, -1))
           const protectedReads = [...new Set(paths(protectedBlock))]
           const protectedWrites = [...new Set(paths(writeBlock))].map(path => ['POST', path])
           protectedWrites.push(['DELETE', '/api/exam-history'])
