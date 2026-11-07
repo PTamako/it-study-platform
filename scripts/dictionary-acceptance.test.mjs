@@ -146,27 +146,27 @@ test('production UI does not expose preview demo mode or seeded sample sentences
 
 
 test('saved dictionary changes update local state only after the cloud confirms the write', () => {
-  const start = app.indexOf('async function toggleSaved(term: string)')
+  const start = app.indexOf('async function toggleSaved(entry: DictionaryEntry)')
   const end = app.indexOf('async function lookupDictionary()', start)
   const handler = app.slice(start, end)
   assert.ok(start >= 0 && end > start, 'saved-word handler should be found')
   assert.match(app, /const savedWordRequests = new Set<string>()/)
-  assert.match(handler, /savedWordRequests\.has\(term\)\) return/)
+  assert.match(handler, /savedWordRequests\.has\(key\)/)
   assert.match(handler, /const response = await fetch\('\/api\/vocabulary\/saved'/)
   assert.match(handler, /if \(!response\.ok\) throw new Error/)
   assert.match(handler, /本地收藏状态未更改/)
-  assert.match(handler, /savedWordRequests\.delete\(term\)/)
+  assert.match(handler, /savedWordRequests\.delete\(key\)/)
 })
 
 test('dictionary terms without a saved entry snapshot show a concise actionable message', () => {
-  const start = app.indexOf('async function toggleSaved(term: string)')
+  const start = app.indexOf('async function toggleSaved(entry: DictionaryEntry)')
   const end = app.indexOf('async function lookupDictionary()', start)
   const handler = app.slice(start, end)
-  assert.match(handler, /if \(!entry\) \{[\s\S]*?请先查询到完整词条，再收藏以同步到生词本。[\s\S]*?return/)
+  assert.match(handler, /if\s*\(!word\.en\s*&&\s*!word\.zh[\s\S]*?请先查询到完整词条，再收藏以同步到生词本。[\s\S]*?return/)
 })
 
 test('saved dictionary removal does not discard local state before the cloud confirms deletion', () => {
-  const start = app.indexOf('async function toggleSaved(term: string)')
+  const start = app.indexOf('async function toggleSaved(entry: DictionaryEntry)')
   const end = app.indexOf('async function lookupDictionary()', start)
   const handler = app.slice(start, end)
   const removeStart = handler.indexOf('action: \'remove\'')
@@ -185,11 +185,11 @@ test('saved dictionary removal does not discard local state before the cloud con
 
 
 test('saved vocabulary sync failures preserve local state and report actionable errors', () => {
-  const start = app.indexOf('async function toggleSaved(term: string)')
+  const start = app.indexOf('async function toggleSaved(entry: DictionaryEntry)')
   const end = app.indexOf('async function lookupDictionary()', start)
   const handler = app.slice(start, end)
   assert.match(handler, /本地收藏状态未更改/)
-  assert.match(handler, /savedWordRequests\.delete\(term\)/)
+  assert.match(handler, /savedWordRequests\.delete\(key\)/)
 })
 
 

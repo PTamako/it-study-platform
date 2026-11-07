@@ -23,7 +23,7 @@ test('compact controls preserve the original interactive commands', () => {
     'submitPracticeAnswer', 'startMockExam', 'applyPracticeFilter(\'topic\')',
     'speakQuestion(currentQuestion)', 'toggleSpeechPause', 'stopSpeech',
     "submitLanguageReview('remembered')", 'supplementDictionaryWithAi(entry)',
-    'toggleSaved(entry.term)', 'syncPendingMockSubmission',
+    'toggleSaved(entry)', 'syncPendingMockSubmission',
   ]) {
     assert.ok(app.includes(action), `Missing action: ${action}`)
   }
