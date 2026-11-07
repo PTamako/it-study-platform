@@ -1960,6 +1960,65 @@ export default {
       }
     }
 
+
+    // Cross-device daily vocabulary recall. The later study day wins,
+    // and same-day writes are first-write-wins to avoid double grading.
+    if (url.pathname === '/api/daily-word-reviews') {
+      if (request.method === 'GET') {
+        try {
+          const { results } = await env.DB.prepare(
+            'SELECT word_key, streak, next_date, last_date FROM daily_word_reviews ORDER BY word_key LIMIT 500',
+          ).all()
+          return json({ items: results })
+        } catch { return json({ error: '单词记忆云端记录暂不可用。' }, 503) }
+      }
+      let body: Record<string, unknown>
+      try {
+        const raw = await request.text()
+        if (raw.length > 16000) return json({ error: '单词同步批次过大。' }, 413)
+        body = JSON.parse(raw) as Record<string, unknown>
+      } catch { return json({ error: '单词同步数据必须是 JSON。' }, 400) }
+      const items = body?.items
+      if (!Array.isArray(items) || items.length < 1 || items.length > 50) {
+        return json({ error: '每次同步需要 1 至 50 条单词状态。' }, 400)
+      }
+      const day = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)
+      const validDate = (value: unknown): value is string => {
+        if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+        const millis = Date.parse(value + 'T00:00:00Z')
+        return Number.isFinite(millis) && new Date(millis).toISOString().slice(0, 10) === value
+      }
+      const valid = items.every((item: unknown) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) return false
+        const row = item as Record<string, unknown>
+        return typeof row.word_key === 'string' && /^(ja|en):[^:\r\n]{1,80}$/.test(row.word_key)
+          && Number.isInteger(row.streak) && Number(row.streak) >= 0 && Number(row.streak) <= 5
+          && validDate(row.last_date) && validDate(row.next_date)
+          && String(row.last_date) <= day && String(row.next_date) > String(row.last_date)
+          && (Date.parse(String(row.next_date) + 'T00:00:00Z') - Date.parse(String(row.last_date) + 'T00:00:00Z')) <= 31 * 86400000
+      })
+      const keys = items.map((item: { word_key: string }) => item.word_key)
+      if (!valid || new Set(keys).size !== keys.length) return json({ error: '单词复习日期或状态无效。' }, 400)
+      try {
+        const statement = [
+          'INSERT INTO daily_word_reviews (word_key, streak, next_date, last_date, updated_at)',
+          "SELECT json_extract(value, '$.word_key'), CAST(json_extract(value, '$.streak') AS INTEGER),",
+          "json_extract(value, '$.next_date'), json_extract(value, '$.last_date'), CURRENT_TIMESTAMP",
+          'FROM json_each(?) WHERE 1 = 1',
+          'ON CONFLICT(word_key) DO UPDATE SET',
+          'streak = excluded.streak, next_date = excluded.next_date,',
+          'last_date = excluded.last_date, updated_at = CURRENT_TIMESTAMP',
+          'WHERE excluded.last_date > daily_word_reviews.last_date',
+        ].join(' ')
+        await env.DB.prepare(statement).bind(JSON.stringify(items)).run()
+        const marks = keys.map(() => '?').join(',')
+        const { results } = await env.DB.prepare(
+          'SELECT word_key, streak, next_date, last_date FROM daily_word_reviews WHERE word_key IN (' + marks + ')',
+        ).bind(...keys).all()
+        return json({ ok: true, items: results })
+      } catch { return json({ error: '云端单词复习状态暂无法同步，本机记录已保留。' }, 503) }
+    }
+
     // Language spaced repetition: keep a review schedule per card in D1.
     if (url.pathname === '/api/language-review') {
       if (request.method === 'GET') {
