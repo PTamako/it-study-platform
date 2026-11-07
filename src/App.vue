@@ -299,6 +299,7 @@ function retryPendingDailyTask(intent: PendingDailyTask) {
   void saveDailyTask({ id: intent.taskId, done: intent.completed } as StudyTask, intent.base, intent)
 }
 let dailyRolloverTimer: ReturnType<typeof setInterval> | undefined
+function onDailyNetworkOnline() { if (authenticated.value) void hydrateDailyWordProgress() }
 function onDailyVisibilityChange() {
   if (document.visibilityState === 'visible') {
     rolloverDailyTasks()
@@ -704,7 +705,7 @@ function closeMockReview() {
   mockError.value = ''
   try { localStorage.removeItem(MOCK_REVIEW_KEY) } catch { /* optional local snapshot */ }
 }
-onUnmounted(() => { if (mockTimer) clearInterval(mockTimer); if (dailyRolloverTimer) clearInterval(dailyRolloverTimer); document.removeEventListener('visibilitychange', onDailyVisibilityChange) })
+onUnmounted(() => { if (mockTimer) clearInterval(mockTimer); if (dailyRolloverTimer) clearInterval(dailyRolloverTimer); document.removeEventListener('visibilitychange', onDailyVisibilityChange); window.removeEventListener('online', onDailyNetworkOnline) })
 
 type ScenarioOption = { id: string; text: string }
 type PracticalScenario = {
@@ -1935,6 +1936,7 @@ onMounted(async () => {
   rolloverDailyTasks()
   dailyRolloverTimer = setInterval(() => { rolloverDailyTasks(); reviewClockNow.value = Date.now() }, 30000)
   document.addEventListener('visibilitychange', onDailyVisibilityChange)
+  window.addEventListener('online', onDailyNetworkOnline)
   // Preload the browser's speech voices before the user taps a pronunciation button.
   // iOS Safari may initially return an empty voice list; waiting until the first tap
   // makes that tap appear to do nothing and forces the user to tap a second time.
