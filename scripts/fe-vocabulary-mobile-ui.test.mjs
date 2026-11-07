@@ -29,10 +29,10 @@ test('saved vocabulary cards give definitions full width and put all actions in 
 })
 
 test('existing pronunciation, sync and remove actions remain wired in saved vocabulary', () => {
-  for (const action of ['speakDictionaryEnglish(entry)', 'speakDictionaryJapanese(entry)', 'speakDictionaryChinese(entry)', 'restoreVocabulary(entry.term)', 'toggleSaved(entry.term)', 'toggleSpeechPause', 'stopSpeech']) {
+  for (const action of ['speakDictionaryEnglish(entry)', 'speakDictionaryJapanese(entry)', 'speakDictionaryChinese(entry)', 'restoreVocabulary(vocabularyKey(entry.term,entry.language||\'auto\'))', 'toggleSaved(entry)', 'toggleSpeechPause', 'stopSpeech']) {
     assert.ok(app.includes(action), action)
   }
-  assert.match(app, /vocabularyPending\.has\(entry\.term\)/)
+  assert.match(app, /vocabularyPending\.has\(vocabularyKey\(entry\.term,entry\.language\|\|'auto'\)\)/)
   assert.match(app, /:disabled="vocabularyHydrating \|\| !vocabularySyncReady"/)
   assert.match(app, /<span class="saved-vocabulary-lang" lang="en">EN<\/span>/)
   assert.match(app, /<span class="saved-vocabulary-lang" lang="ja">日<\/span>/)

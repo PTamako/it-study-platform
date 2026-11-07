@@ -57,5 +57,5 @@ test('daily business headwords rotate reproducibly and never assert official TOE
   assert.match(app, /未验证为 IPA/)
   assert.match(app, /speak\(word\.term, 'en-US'/)
   assert.match(app, /toggleDailyEnglishWord\(word\)/)
-  assert.match(app, /void toggleSaved\(word\.term\)/)
+  assert.match(app, /void toggleSaved\(word\)/)
 })
