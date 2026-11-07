@@ -1965,11 +1965,15 @@ export default {
     // and same-day writes are first-write-wins to avoid double grading.
     if (url.pathname === '/api/daily-word-reviews') {
       if (request.method === 'GET') {
+        const after = url.searchParams.get('after') || ''
+        if (after && (after.length > 84 || !/^(ja|en):[^:\r\n]{1,80}$/.test(after))) {
+          return json({ error: '无效的单词分页游标。' }, 400)
+        }
         try {
           const { results } = await env.DB.prepare(
-            'SELECT word_key, streak, next_date, last_date FROM daily_word_reviews ORDER BY word_key LIMIT 500',
-          ).all()
-          return json({ items: results })
+            'SELECT word_key, streak, next_date, last_date FROM daily_word_reviews WHERE word_key > ? ORDER BY word_key LIMIT 200',
+          ).bind(after).all<{ word_key: string; streak: number; next_date: string; last_date: string }>()
+          return json({ items: results, next_cursor: results.length === 200 ? results[results.length - 1].word_key : null })
         } catch { return json({ error: '单词记忆云端记录暂不可用。' }, 503) }
       }
       let body: Record<string, unknown>

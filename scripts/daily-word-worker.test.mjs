@@ -28,9 +28,9 @@ function fixture() {
       }
     }, async all() { return { results: db.prepare(statement).all() } } }
   } } }
-  async function request(items) {
+  async function request(items, after = '') {
     const write = items !== undefined
-    const response = await worker.fetch(new Request('https://example.test/api/daily-word-reviews', {
+    const response = await worker.fetch(new Request('https://example.test/api/daily-word-reviews' + (!write && after ? '?after=' + encodeURIComponent(after) : ''), {
       ...(write ? { method: 'POST', headers: { origin: 'https://example.test', 'content-type': 'application/json' }, body: JSON.stringify({ items }) } : {}),
     }), env)
     return { status: response.status, body: await response.json() }
@@ -70,4 +70,23 @@ test('invalid, duplicate or future-dated recall does not mutate D1', async () =>
     ]) assert.equal((await request(batch)).status,400)
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM daily_word_reviews').get().n,0)
   } finally { db.close() }
+})
+\ntest('GET cursor pagination returns all 501 rows without a truncation or a duplicate',async()=>{
+  const { db, request } = fixture()
+  try {
+    const insert=db.prepare('INSERT INTO daily_word_reviews (word_key,streak,last_date,next_date) VALUES (?,?,?,?)')
+    for(let n=0;n<501;n++) insert.run('en:term'+String(n).padStart(4,'0'),1,'2026-10-01','2026-10-02')
+    const seen=[]
+    let cursor=''
+    for(let page=0;page<4;page++){
+      const response=await request(undefined,cursor)
+      assert.equal(response.status,200)
+      for(const row of response.body.items)seen.push(row.word_key)
+      cursor=response.body.next_cursor
+      if(!cursor)break
+    }
+    assert.equal(seen.length,501)
+    assert.equal(new Set(seen).size,501)
+    assert.equal((await request(undefined,'invalid')).status,400)
+  }finally{db.close()}
 })

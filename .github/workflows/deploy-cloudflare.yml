@@ -144,7 +144,7 @@ jobs:
         run: npx wrangler d1 migrations apply it-study-platform-db --local
 
       - name: Verify all question JSON and required texts in local D1
-        run: npx wrangler d1 execute it-study-platform-db --local --json --command "SELECT COUNT(*) AS invalid_count FROM questions WHERE NOT json_valid(options_json) OR NOT json_valid(answer_json) OR TRIM(prompt) = '' OR TRIM(explanation) = '';" | node scripts/check-question-json.mjs
+        run: npx wrangler d1 execute it-study-platform-db --local --json --command "$(cat scripts/question-integrity.sql)" | node scripts/check-question-json.mjs
 
 
       - name: Verify Cloudflare credentials are configured
@@ -184,7 +184,7 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler d1 execute it-study-platform-db --remote --json --command "SELECT COUNT(*) AS invalid_count FROM questions WHERE NOT json_valid(options_json) OR NOT json_valid(answer_json) OR TRIM(prompt) = '' OR TRIM(explanation) = '';" | node scripts/check-question-json.mjs
+        run: npx wrangler d1 execute it-study-platform-db --remote --json --command "$(cat scripts/question-integrity.sql)" | node scripts/check-question-json.mjs
 
       - name: Deploy Worker and static assets
         env:
@@ -217,38 +217,21 @@ jobs:
         run: |
           node --input-type=module <<'NODE'
           const base = process.env.BASE_URL
-          const protectedReads = [
-            '/api/dashboard',
-            '/api/exam-history',
-            '/api/attempts',
-            '/api/mock-exam/submit',
-            '/api/fe-question-bank/install',
-            '/api/scenario-attempts',
-            '/api/language-progress',
-            '/api/language-review',
-            '/api/grammar-progress',
-            '/api/listening-progress',
-            '/api/vocabulary/saved',
-            '/api/daily-tasks',
-            '/api/question-progress',
-            '/api/wrong-questions',
-            '/api/translate-explanation',
-          ]
-          const protectedWrites = [
-            ['POST', '/api/attempts'],
-            ['POST', '/api/mock-exam/submit'],
-            ['POST', '/api/fe-question-bank/install'],
-            ['POST', '/api/scenario-attempts'],
-            ['POST', '/api/language-progress'],
-            ['POST', '/api/language-review'],
-            ['POST', '/api/grammar-progress'],
-            ['POST', '/api/listening-progress'],
-            ['POST', '/api/vocabulary/saved'],
-            ['POST', '/api/daily-tasks'],
-            ['POST', '/api/question-progress'],
-            ['POST', '/api/translate-explanation'],
-            ['DELETE', '/api/exam-history'],
-          ]
+          // Derive protection smoke cases from the Worker rather than a stale
+          // manually maintained list. Future endpoints become covered by default.
+          const { readFileSync } = await import('node:fs')
+          const worker = readFileSync('worker/index.ts', 'utf8')
+          const protectedBlock = worker.match(/const protectedPersonalPaths = new Set\\(\\[([\\s\\S]*?)\\]\\)/)?.[1]
+          const writeBlock = worker.match(/const isWriteEndpoint = \\[([\\s\\S]*?)\\]\\.includes\\(url\\.pathname\\)/)?.[1]
+          if (!protectedBlock || !writeBlock) throw new Error('Could not discover protected endpoints from Worker')
+          const paths = block => [...block.matchAll(/'\\/api\\/[^']+'/g)].map(m => m[0].slice(1, -1))
+          const protectedReads = [...new Set(paths(protectedBlock))]
+          const protectedWrites = [...new Set(paths(writeBlock))].map(path => ['POST', path])
+          protectedWrites.push(['DELETE', '/api/exam-history'])
+          for (const [, path] of protectedWrites) {
+            if (!protectedReads.includes(path)) throw new Error('Write endpoint not protected: ' + path)
+          }
+          if (protectedReads.length < 25) throw new Error('Protected endpoint count unexpectedly decreased')
           for (const path of protectedReads) {
             const response = await fetch(new URL(path, base), { redirect: 'manual' })
             if (response.status !== 401) {

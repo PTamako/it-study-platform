@@ -1,0 +1,25 @@
+-- Read-only, bounded full-bank integrity check. Malformed JSON is caught by
+-- the first CASE arm before JSON functions traverse that document.
+SELECT COUNT(*) AS invalid_count
+FROM questions AS q
+WHERE CASE
+  WHEN NOT json_valid(q.answer_json) OR NOT json_valid(q.options_json) THEN 1
+  WHEN json_type(q.answer_json) <> 'text' OR json_type(q.options_json) <> 'array' THEN 1
+  WHEN TRIM(COALESCE(q.prompt, '')) = '' OR TRIM(COALESCE(q.explanation, '')) = '' THEN 1
+  WHEN json_array_length(q.options_json) < 2 THEN 1
+  WHEN EXISTS (
+    SELECT 1 FROM json_each(q.options_json) AS opt
+    WHERE CASE WHEN NOT json_valid(opt.value) THEN 1
+      WHEN json_type(opt.value) <> 'object' THEN 1
+      WHEN json_type(opt.value, '$.id') <> 'text' OR TRIM(COALESCE(json_extract(opt.value, '$.id'), '')) = '' THEN 1
+      WHEN json_type(opt.value, '$.text') <> 'text' OR TRIM(COALESCE(json_extract(opt.value, '$.text'), '')) = '' THEN 1
+      ELSE 0 END = 1
+  ) THEN 1
+  WHEN (SELECT COUNT(DISTINCT json_extract(opt.value, '$.id'))
+        FROM json_each(q.options_json) AS opt) <> json_array_length(q.options_json) THEN 1
+  WHEN NOT EXISTS (
+    SELECT 1 FROM json_each(q.options_json) AS opt
+    WHERE json_extract(opt.value, '$.id') = json_extract(q.answer_json, '$')
+  ) THEN 1
+  ELSE 0
+END = 1;
