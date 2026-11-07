@@ -1381,6 +1381,7 @@ const languageCards = ref<LanguageCard[]>([])
 const dailyWordProgress = ref<Record<string, DailyWordReview>>(readStored('zhixue:daily-word-review-v1', {}))
 // Never fix the day's five-word selection before the cloud has been consulted.
 const dailyWordSyncState = ref<'loading' | 'ready' | 'offline'>('loading')
+const dailyWordSyncRevision = ref(0)
 const dailyWordSelections = ref<Record<string, string[]>>(readStored('zhixue:daily-word-selections-v1', {}))
 function dailyWordKey(language: 'ja' | 'en', term: string): string { return language + ':' + term }
 function dailyWordSelectionKey(language: 'ja' | 'en', date = todayKey.value): string { return date + ':' + language }
@@ -1410,6 +1411,12 @@ function dailyWordReviewAvailable(language: 'ja' | 'en', term: string): boolean 
 }
 function recordDailyWordReview(language: 'ja' | 'en', term: string, remembered: boolean) {
   if (dailyWordSyncState.value === 'loading' || !dailyWordReviewAvailable(language, term)) return
+  // Preserve the visible five words once the learner has actually started,
+  // including when the server is temporarily unavailable.
+  const todaysSelection = dailyWordSelectionKey(language)
+  if (!dailyWordSelections.value[todaysSelection]?.length) {
+    pinDailyWords(language, todayKey.value, language === 'ja' ? dailyJapaneseWords.value : dailyEnglishWords.value)
+  }
   const key = dailyWordKey(language, term)
   dailyWordProgress.value = {
     ...dailyWordProgress.value,
@@ -1441,7 +1448,7 @@ async function loadDailyBusinessWords() {
     if (run === dailyEnglishWordRun) dailyEnglishWordsError.value = '本地英语词库暂不可用，请检查网络或缓存。'
   }
 }
-watch([studyLanguage, todayKey, dailyWordSyncState, authenticated], () => { void loadDailyBusinessWords() }, { immediate: true })
+watch([studyLanguage, todayKey, dailyWordSyncState, dailyWordSyncRevision, authenticated], () => { void loadDailyBusinessWords() }, { immediate: true })
 
 const dailyJapaneseWords = ref<DictionaryEntry[]>([])
 const dailyJapaneseWordsError = ref('')
@@ -1468,7 +1475,7 @@ async function loadDailyJapaneseWords() {
     if (run === dailyJapaneseWordRun) dailyJapaneseWordsError.value = '日语学习词库暂不可用，请检查网络或本地缓存。'
   }
 }
-watch([studyLanguage, todayKey, dailyWordSyncState, authenticated], () => { void loadDailyJapaneseWords() }, { immediate: true })
+watch([studyLanguage, todayKey, dailyWordSyncState, dailyWordSyncRevision, authenticated], () => { void loadDailyJapaneseWords() }, { immediate: true })
 
 type DailyWordCloudRow = { word_key: string; streak: number; next_date: string; last_date: string }
 const dailyWordPending = ref<Record<string, DailyWordReview>>(readStored('zhixue:daily-word-pending-v1', {}))
@@ -1570,11 +1577,32 @@ async function hydrateDailyWordProgress() {
     for (const [key, state] of Object.entries(pending)) {
       if (cloud[key] && cloud[key].lastDate >= state.lastDate) delete pending[key]
     }
-    dailyWordProgress.value = mergeDailyWordSnapshots(local, cloud)
+    const merged = mergeDailyWordSnapshots(local, cloud)
+    const cloudChanged = Object.entries(merged).some(([key, state]) => {
+      const previous = local[key]
+      return !previous || previous.lastDate !== state.lastDate ||
+        previous.nextDate !== state.nextDate || previous.streak !== state.streak
+    })
+    if (cloudChanged && dailyWordSyncState.value === 'ready') {
+      // On an already-open second device, refresh an unstarted selection if
+      // another device changed its due status. Keep any selection already
+      // graded today stable, so completed lessons never jump away.
+      const selections = { ...dailyWordSelections.value }
+      for (const language of ['ja', 'en'] as const) {
+        const key = dailyWordSelectionKey(language)
+        const pinned = selections[key] || []
+        if (pinned.length && !pinned.some(term => merged[language + ':' + term]?.lastDate === todayKey.value))
+          delete selections[key]
+      }
+      dailyWordSelections.value = selections
+      try { localStorage.setItem('zhixue:daily-word-selections-v1', JSON.stringify(selections)) } catch { /* local cache is optional */ }
+    }
+    dailyWordProgress.value = merged
     dailyWordPending.value = pending
     persistDailyWordState()
     // Only after hydration may the daily words be permanently pinned.
     dailyWordSyncState.value = 'ready'
+    dailyWordSyncRevision.value++
     dailyWordSyncError.value = ''
     await flushDailyWordProgress()
   } catch (error) {
