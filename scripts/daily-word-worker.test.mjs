@@ -28,10 +28,10 @@ function fixture() {
       }
     }, async all() { return { results: db.prepare(statement).all() } } }
   } } }
-  async function request(items, after = '') {
+  async function request(items, after = '', force_same_day = false) {
     const write = items !== undefined
     const response = await worker.fetch(new Request('https://example.test/api/daily-word-reviews' + (!write && after ? '?after=' + encodeURIComponent(after) : ''), {
-      ...(write ? { method: 'POST', headers: { origin: 'https://example.test', 'content-type': 'application/json' }, body: JSON.stringify({ items }) } : {}),
+      ...(write ? { method: 'POST', headers: { origin: 'https://example.test', 'content-type': 'application/json' }, body: JSON.stringify({ items, force_same_day }) } : {}),
     }), env)
     return { status: response.status, body: await response.json() }
   }
@@ -89,5 +89,22 @@ test('GET cursor pagination returns all 501 rows without a truncation or a dupli
     assert.equal(seen.length,501)
     assert.equal(new Set(seen).size,501)
     assert.equal((await request(undefined,'invalid')).status,400)
+  }finally{db.close()}
+})
+
+test('conflicting same-day result stays intact until explicit one-item override', async()=>{
+  const {db,request}=fixture()
+  try {
+    const original={word_key:'en:issue',streak:1,last_date:'2026-10-01',next_date:'2026-10-02'}
+    assert.equal((await request([original])).body.ok,true)
+    const alternative={...original,streak:0,next_date:'2026-10-03'}
+    const collision=await request([alternative])
+    assert.equal(collision.status,200)
+    assert.equal(collision.body.ok,false)
+    assert.deepEqual(collision.body.conflicts,['en:issue'])
+    assert.equal(db.prepare("SELECT streak FROM daily_word_reviews").get().streak,1)
+    assert.equal((await request([alternative,alternative],'',true)).status,400)
+    assert.equal((await request([alternative],'',true)).body.ok,true)
+    assert.equal(db.prepare("SELECT streak FROM daily_word_reviews").get().streak,0)
   }finally{db.close()}
 })
