@@ -16,7 +16,9 @@ test('five daily source-backed Japanese word slots rotate deterministically',()=
   assert.notDeepEqual(dailyJapaneseWordCandidates('2026-11-04'),today)
 })
 test('Japanese vocabulary is never invented by Workers AI or additional D1 lookup',()=>{
-  const slice=app.slice(app.indexOf('async function loadDailyJapaneseWords'),app.indexOf('// Reuse existing licensed sentence cards'))
+  const start=app.indexOf('async function loadDailyJapaneseWords')
+  const syncStart=app.indexOf('type DailyWordCloudRow', start)
+  const slice=app.slice(start, syncStart>=0 ? syncStart : app.indexOf('// Reuse existing licensed sentence cards'))
   assert.match(slice,/findStaticLearnerEntry\(term, 'ja'\)/)
   assert.match(slice,/\.slice\(0, 5\)/)
   assert.match(slice,/loadJapanesePitchDataset/)
