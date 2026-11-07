@@ -171,3 +171,36 @@ test('one-time migration preserves personal records, tracks future inserts/updat
     assert.ok(plan.some(x=>String(x.detail).includes('idx_mock_pool_section_draw')),JSON.stringify(plan))
   }finally{f.sql.close()}
 })
+
+
+test('FE B official 2022 samples participate in mock draws without changing their precise study topics', async () => {
+  const mkSample = (id, topic) => ({
+    id, track_id: 'exam-fe', exam_section: 'B', exam_section_method: 'explicit',
+    topic, source_type: 'licensed', question_kind: 'official_sample', exam_origin: 'general',
+  })
+  const algorithm = [
+    ...Array.from({ length: 5 }, (_, i) => mkSample('fe-ipa-sample-2022-april-b-' + String(i + 1).padStart(3, '0'), '数组/条件细分题目')),
+    ...Array.from({ length: 16 }, (_, i) => mkSample('fe-ipa-sample-2022-b-' + String(i + 1).padStart(3, '0'), '算法细分题目')),
+  ]
+  const security = [
+    mkSample('fe-ipa-sample-2022-april-b-006', 'PaaS・脆弱性責任'),
+    ...Array.from({ length: 4 }, (_, i) => mkSample('fe-ipa-sample-2022-b-' + String(i + 17).padStart(3, '0'), '风险细分题目')),
+  ]
+  const f = setup([...algorithm, ...security])
+  try {
+    const { status, data } = await f.run('track=exam-fe&section=B&source=sample')
+    assert.equal(status, 200)
+    assert.equal(data.items.length, 20)
+    assert.equal(data.items.filter(item => security.some(s => s.id === item.id)).length, 4)
+    assert.equal(data.items.filter(item => algorithm.some(s => s.id === item.id)).length, 16)
+    assert.ok(data.items.every(item => item.question_kind === 'official_sample'))
+    assert.ok(f.measures.materialized <= 20)
+    const oldOnly = setup([...rows(50, 'B', 'FE算法与程序设计'), ...rows(20, 'B', 'FE信息安全')])
+    try { assert.equal((await oldOnly.run('track=exam-fe&section=B')).status, 200) }
+    finally { oldOnly.sql.close() }
+    const unknown = setup([...rows(15,'B','FE算法与程序设计'),
+      mkSample('fe-ipa-sample-2023-b-001', '未经审查的新样题'), ...rows(5,'B','FE信息安全')])
+    try { assert.equal((await unknown.run('track=exam-fe&section=B')).status, 409) }
+    finally { unknown.sql.close() }
+  } finally { f.sql.close() }
+})

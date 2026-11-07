@@ -2629,6 +2629,20 @@ export default {
       // Use only the compact pool metadata for filtering; detail rows are read
       // by primary key only after a candidate is selected. Exact counts are
       // requested only when a pool has too few questions to build an exam.
+      // IPA 2022 科目 B sample IDs were verified by sitting and question number.
+      // Keep fine-grained "topic" labels for study; assign *only these reviewed
+      // official sample IDs* to the 16 algorithm / 4 security mock domains.
+      // Unknown future samples must be reviewed before joining the mock pool.
+      const sampleSecurityIds = [
+        'fe-ipa-sample-2022-april-b-006',
+        ...[17, 18, 19, 20].map(n => 'fe-ipa-sample-2022-b-' + String(n).padStart(3, '0')),
+      ]
+      const sampleAlgorithmIds = [
+        ...[1, 2, 3, 4, 5].map(n => 'fe-ipa-sample-2022-april-b-' + String(n).padStart(3, '0')),
+        ...Array.from({ length: 16 }, (_, index) => 'fe-ipa-sample-2022-b-' + String(index + 1).padStart(3, '0')),
+      ]
+      const reviewedSamplesForTopic = (topic: string) => topic === 'FE信息安全'
+        ? sampleSecurityIds : topic === 'FE算法与程序设计' ? sampleAlgorithmIds : []
       const sourceClause = `(CASE ? WHEN 'all' THEN 1
         WHEN 'sample' THEN p.question_kind = 'official_sample'
         WHEN 'exemption' THEN p.exam_origin = 'fe_exemption'
@@ -2638,10 +2652,10 @@ export default {
       const poolConditions = (pool: MockPool) =>
         `p.track_id = ? AND p.exam_section = ?` +
         (pool.explicit ? ` AND p.exam_section_method = 'explicit'` : '') +
-        (pool.topic ? ` AND p.topic = ?` : '') +
+        (pool.topic ? ` AND (p.topic = ? OR (p.question_kind = 'official_sample' AND p.question_id IN (${reviewedSamplesForTopic(pool.topic).map(() => '?').join(',')})))` : '') +
         ` AND ${sourceClause}`
       const poolBindings = (pool: MockPool) =>
-        [trackId, pool.section, ...(pool.topic ? [pool.topic] : []), source, source]
+        [trackId, pool.section, ...(pool.topic ? [pool.topic, ...reviewedSamplesForTopic(pool.topic)] : []), source, source]
       const draw = async (pool: MockPool): Promise<Record<string, unknown>[]> => {
         const pivot = Math.floor(Math.random() * 2147483648)
         const where = poolConditions(pool)
