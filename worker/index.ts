@@ -12,6 +12,7 @@ const protectedPersonalPaths = new Set([
   '/api/scenario-attempts',
   '/api/language-progress',
   '/api/language-review',
+  '/api/daily-word-reviews',
   '/api/grammar-progress',
   '/api/listening-progress',
   '/api/vocabulary/saved',
@@ -21,6 +22,17 @@ const protectedPersonalPaths = new Set([
   '/api/translate-explanation',
   '/api/dictionary/ai',
   '/api/dictionary/ai/status',
+  // Heavy read-only study resources are owner-only: anonymous requests must not
+  // burn D1 quota or expose exam answers via public query parameters.
+  '/api/tracks',
+  '/api/questions',
+  '/api/mock-exam-questions',
+  '/api/question-categories',
+  '/api/question-classification-stats',
+  '/api/question-sources',
+  '/api/fe-exemption-sittings',
+  '/api/scenarios',
+  '/api/language-cards',
 ])
 
 export interface Env {
@@ -1207,7 +1219,7 @@ export default {
         if (rateLimitFailure) return rateLimitFailure
       }
     }
-    const isWriteEndpoint = ['/api/mock-exam/submit', '/api/fe-question-bank/install', '/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/grammar-progress', '/api/listening-progress', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history', '/api/translate-explanation', '/api/dictionary/ai'].includes(url.pathname)
+    const isWriteEndpoint = ['/api/mock-exam/submit', '/api/fe-question-bank/install', '/api/attempts', '/api/scenario-attempts', '/api/language-progress', '/api/language-review', '/api/daily-word-reviews', '/api/grammar-progress', '/api/listening-progress', '/api/vocabulary/saved', '/api/daily-tasks', '/api/question-progress', '/api/exam-history', '/api/translate-explanation', '/api/dictionary/ai'].includes(url.pathname)
     const isExamHistoryDelete = request.method === 'DELETE' && url.pathname === '/api/exam-history'
     if (request.method !== 'GET' && !(request.method === 'POST' && isWriteEndpoint) && !isExamHistoryDelete) {
       return json({ error: '不支持此请求方法' }, 405)
@@ -1410,13 +1422,22 @@ export default {
       try {
         const { results } = await env.DB.prepare(
           `SELECT st.id, st.kind, st.title, st.subtitle,
-                  (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id) AS question_count,
-                  (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id AND q.source_type = 'official') AS official_question_count,
-                  (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id AND q.source_type = 'generated') AS prediction_question_count,
-                  (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id AND q.source_type = 'licensed' AND q.question_kind = 'standard' AND q.exam_origin = 'general') AS adapted_question_count,
-                  (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id AND q.exam_origin = 'fe_exemption') AS exemption_question_count,
-                  (SELECT COUNT(*) FROM questions q WHERE q.track_id = st.id AND q.question_kind = 'official_sample') AS sample_question_count
+                  COALESCE(q.question_count, 0) AS question_count,
+                  COALESCE(q.official_question_count, 0) AS official_question_count,
+                  COALESCE(q.prediction_question_count, 0) AS prediction_question_count,
+                  COALESCE(q.adapted_question_count, 0) AS adapted_question_count,
+                  COALESCE(q.exemption_question_count, 0) AS exemption_question_count,
+                  COALESCE(q.sample_question_count, 0) AS sample_question_count
            FROM study_tracks st
+           LEFT JOIN (
+             SELECT track_id, COUNT(*) AS question_count,
+                    SUM(CASE WHEN source_type = 'official' THEN 1 ELSE 0 END) AS official_question_count,
+                    SUM(CASE WHEN source_type = 'generated' THEN 1 ELSE 0 END) AS prediction_question_count,
+                    SUM(CASE WHEN source_type = 'licensed' AND question_kind = 'standard' AND exam_origin = 'general' THEN 1 ELSE 0 END) AS adapted_question_count,
+                    SUM(CASE WHEN exam_origin = 'fe_exemption' THEN 1 ELSE 0 END) AS exemption_question_count,
+                    SUM(CASE WHEN question_kind = 'official_sample' THEN 1 ELSE 0 END) AS sample_question_count
+             FROM questions GROUP BY track_id
+           ) q ON q.track_id = st.id
            WHERE st.enabled = 1
            ORDER BY st.kind, st.title`,
         ).all()
