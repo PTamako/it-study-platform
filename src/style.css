@@ -1414,3 +1414,10 @@ button[aria-disabled="true"] {
 
 /* Offline answer-sync recovery must be easy to tap on narrow iPhone/iPad layouts. */
 .daily-grammar-status .text-link,.daily-listening-summary .text-link{min-height:44px;padding:8px 10px;font-size:12px;white-space:normal;text-align:left}
+
+/* Update notice is opt-in; never automatically discard an unfinished exam. */
+.app-update-notice{position:fixed;z-index:1000;left:12px;right:12px;top:max(10px,env(safe-area-inset-top));max-width:640px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 13px;border:1px solid #c8d0e6;border-radius:12px;background:#fff;color:#33415f;box-shadow:0 10px 30px #25345a25;font-size:13px;line-height:1.5}
+.app-update-notice button{flex-shrink:0;min-height:44px;border:0;border-radius:9px;padding:8px 12px;background:#5349a7;color:#fff;font:inherit;font-weight:700;cursor:pointer}
+.daily-word-sync-alert{display:flex;align-items:center;flex-wrap:wrap;gap:8px 12px;padding:9px 12px;border-radius:10px;background:#fff5f0;color:#8b3f26;font-size:13px;line-height:1.5}
+.daily-word-sync-alert .text-link{min-height:44px;padding:8px 12px}
+@media(max-width:480px){.app-update-notice{align-items:flex-start;flex-direction:column}.app-update-notice button{align-self:flex-end}}

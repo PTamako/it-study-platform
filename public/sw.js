@@ -1,4 +1,4 @@
-const CACHE_NAME = 'zhixue-app-v3'
+const CACHE_NAME = 'zhixue-app-v4'
 const APP_SHELL = ['/', '/manifest.webmanifest', '/icon-192.png', '/icon-512.webp']
 const API_PREFIX = '/api/'
 
