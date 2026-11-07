@@ -1583,6 +1583,11 @@ async function hydrateDailyWordProgress() {
     const waiting = pendingDailyWordSnapshots(local, cloud)
     const conflicts: Record<string, {local: DailyWordReview; cloud: DailyWordReview}> = {}
     for (const [key, state] of Object.entries(local)) if (sameDayWordConflict(state, cloud[key])) conflicts[key] = {local:state, cloud:cloud[key]}
+    // An unresolved offline grade survives a page reload in dailyWordPending.
+    // Restore the explicit decision UI before any hydration merge discards it.
+    for (const [key, pending] of Object.entries(dailyWordPending.value)) {
+      if (cloud[key] && sameDayWordConflict(pending, cloud[key])) conflicts[key] = { local: pending, cloud: cloud[key] }
+    }
     for (const [key, previous] of Object.entries(dailyWordConflicts.value)) {
       if (cloud[key] && sameDayWordConflict(previous.local, cloud[key])) conflicts[key] = {local:previous.local,cloud:cloud[key]}
     }
