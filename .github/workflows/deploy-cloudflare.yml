@@ -202,6 +202,7 @@ jobs:
           npx wrangler d1 execute it-study-platform-db --remote --command "SELECT card_id, last_grade FROM language_card_reviews WHERE 0 LIMIT 0;"
           npx wrangler d1 execute it-study-platform-db --remote --command "SELECT question_id FROM study_attempts WHERE 0 LIMIT 0;"
           npx wrangler d1 execute it-study-platform-db --remote --command "SELECT term FROM saved_vocabulary_entries WHERE 0 LIMIT 0;"
+          npx wrangler d1 execute it-study-platform-db --remote --command "SELECT language, term FROM saved_vocabulary_entries_v2 WHERE 0 LIMIT 0;"
           npx wrangler d1 execute it-study-platform-db --remote --command "SELECT word_key FROM daily_word_reviews WHERE 0 LIMIT 0;"
 
       - name: Verify production answer JSON before publishing
