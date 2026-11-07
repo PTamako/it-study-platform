@@ -97,12 +97,12 @@ export function selectDailyScenes<T extends DailySceneCard>(
 const BUSINESS_HEADWORDS = [
   'confirm', 'schedule', 'project', 'report', 'employee', 'customer',
   'purchase', 'payment', 'budget', 'meeting', 'department', 'contract',
-  'request', 'provide', 'receive', 'submit', 'approve', 'available',
-  'update', 'review', 'deadline', 'shipment', 'invoice', 'agreement',
+  'request', 'provide', 'receive', 'complete', 'approve', 'available',
+  'prepare', 'review', 'urgent', 'deliver', 'permission', 'agreement',
   'appointment', 'policy', 'procedure', 'facility', 'training', 'equipment',
   'management', 'information', 'document', 'application', 'service', 'account',
   'order', 'delivery', 'contact', 'support', 'business', 'manager',
-  'office', 'team', 'notice', 'required', 'supply', 'quality', 'issue',
+  'office', 'team', 'notice', 'progress', 'supply', 'quality', 'issue',
   'result', 'plan', 'conference', 'reservation', 'reception', 'position',
 ] as const
 
@@ -116,15 +116,15 @@ export function dailyBusinessWordCandidates(studyDate: string): string[] {
  * from the licensed static Japanese learner lexicon, never invented here.
  */
 const JAPANESE_HEADWORDS = [
-  '確認', '対応', '相談', '連絡', '準備', '予定', '仕事', '報告',
+  '確認', '実施', '相談', '連絡', '準備', '予定', '仕事', '報告',
   '説明', '状況', '問題', '原因', '修正', '変更', '改善', '提案',
-  '担当', '判断', '方法', '必要', '大切', '期限', '予約', '出発',
-  '到着', '交通', '支払', '費用', '時間', '開始', '終了', '参加',
-  '共有', '情報', '安全', '管理', '作業', '結果', '条件', '内容',
-  '確認する', '検討', '意見', '手続き', '申請', '提出', '依頼',
-  '承認', '予算', '失敗', '成功', '連休', '利用', '追加', '削除',
-  '更新', '昨日', '明日', '今日', '使用', '比較', '注意',
-  '到達', '影響', '納期', '調整', '報告する', '連絡する',
+  '担当', '判断', '方法', '必要', '大切', '協力', '予約', '出発',
+  '到着', '交通', '支払', '費用', '時間', '開始', '完了', '参加',
+  '手段', '情報', '安全', '管理', '作業', '結果', '条件', '内容',
+  '支出', '検討', '意見', '技術', '家庭', '提出', '依頼',
+  '承認', '予算', '失敗', '成功', '会社', '利用', '会議', '目標',
+  '機能', '昨日', '明日', '今日', '使用', '比較', '注意',
+  '中止', '影響', '決定', '調査', '書類', '異常',
 ] as const
 
 export function dailyJapaneseWordCandidates(studyDate: string): string[] {
