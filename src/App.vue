@@ -3422,7 +3422,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
               <span>{{ dailyWordSyncError }}{{ dailyWordSyncState === 'offline' ? ' · 当前使用本机记录，不会预先固定当天词汇。' : '' }}</span>
               <button type="button" class="text-link" @click="hydrateDailyWordProgress">重新同步</button>
               <div v-for="(conflict, key) in dailyWordConflicts" :key="key" class="language-speech-actions">
-                <span>{{ key }}：两台设备当天的结果不同</span>
+                <span>{{ key }}：本机记忆次数 {{ conflict.local.streak }}，云端 {{ conflict.cloud.streak }}；结果不同</span>
                 <button type="button" class="text-link" @click="resolveDailyWordConflict(key, true)">保留本机</button>
                 <button type="button" class="text-link" @click="resolveDailyWordConflict(key, false)">采用云端</button>
               </div>
