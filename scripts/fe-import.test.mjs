@@ -28,7 +28,7 @@ test('failed transactional batch can be retried safely',async()=>{const t=setup(
 
 test('adapted FE rows are separate from official question filtering',async()=>{
  const {db,sql}=setup(); assert.equal((await req(db)).status,200)
- const get = async source => (await worker.fetch(new Request('https://example.test/api/questions?track=exam-fe&mode=ordered&source='+source+'&limit=50'),{DB:db})).json()
+ const get = async source => (await worker.fetch(new Request('https://example.test/api/questions?track=exam-fe&mode=ordered&source='+source+'&limit=50',{headers:{'x-auth':'yes'}}),{DB:db})).json()
  const adapted=await get('licensed'), original=await get('generated'), official=await get('official')
  assert.equal(adapted.total,feSeeds.filter(q=>q.origin !== 'original').length); assert.equal(original.total,6); assert.equal(official.total,0)
  assert.equal(sql.prepare("SELECT count(*) AS c FROM questions WHERE track_id='exam-fe' AND exam_section='B'").get().c,feSeeds.filter(q => q.section === 'B').length)

@@ -120,3 +120,16 @@ test('daily progress uses current review/cache and preserves existing grammar, b
   const localWordSection = app.slice(app.indexOf('const dailyWordProgress ='), app.indexOf('const dailyEnglishWords ='))
   assert.doesNotMatch(localWordSection, /fetch\(|\.prepare\(|AI\.run\(/)
 })
+
+test('every daily business/Japanese headword resolves from the static licensed dictionary', async () => {
+  const manifest = JSON.parse(await readFile(new URL('../public/learner-lexicon/manifest.json', import.meta.url), 'utf8'))
+  for (const [language, terms] of [
+    ['ja', dailyJapaneseWordCandidates('2026-11-07')],
+    ['en', dailyBusinessWordCandidates('2026-11-07')],
+  ]) {
+    const asset = JSON.parse(await readFile(new URL('../public' + manifest[language], import.meta.url), 'utf8'))
+    const indexed = new Set(asset.items.map(item => item.term.normalize('NFKC').toLowerCase()))
+    const missing = terms.filter(term => !indexed.has(term.normalize('NFKC').toLowerCase()))
+    assert.deepEqual(missing, [], language + ': daily candidates must exist in build-time lexicon')
+  }
+})

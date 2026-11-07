@@ -147,5 +147,8 @@ jobs:
       - name: Validate complete D1 migration chain locally
         run: npx wrangler d1 migrations apply it-study-platform-db --local
 
+      - name: Verify all question JSON and required texts in local D1
+        run: npx wrangler d1 execute it-study-platform-db --local --json --command "SELECT COUNT(*) AS invalid_count FROM questions WHERE NOT json_valid(options_json) OR NOT json_valid(answer_json) OR TRIM(prompt) = '' OR TRIM(explanation) = '';" | node scripts/check-question-json.mjs
+
       - name: Validate Worker bundle without deploying
         run: npx wrangler deploy --dry-run
