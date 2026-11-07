@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 const raw = readFileSync(0, 'utf8')
 let payload
 try {
-  const start = raw.indexOf('[{')
+  const start = raw.search(/\[\s*\{/)
   if (start < 0) throw new Error('No D1 JSON results present')
   payload = JSON.parse(raw.slice(start))
 } catch (error) {
