@@ -1646,7 +1646,7 @@ async function resolveDailyWordConflict(key: string, useLocal: boolean) {
       })
       if (!response.ok) throw new Error('本机记录同步失败。')
       accepted = parseDailyWordCloud((await response.json() as {items:unknown}).items)[key]
-      if (!accepted || sameDayWordConflict(conflict.local, accepted)) throw new Error('云端没有接受本机记录。')
+      if (!accepted || accepted.lastDate !== conflict.local.lastDate || accepted.nextDate !== conflict.local.nextDate || accepted.streak !== conflict.local.streak) throw new Error('云端没有接受本机记录，请重新同步后处理冲突。')
     } catch (error) { dailyWordSyncError.value = error instanceof Error ? error.message : '同步失败。'; return }
   }
   dailyWordProgress.value = {...dailyWordProgress.value,[key]:accepted}
