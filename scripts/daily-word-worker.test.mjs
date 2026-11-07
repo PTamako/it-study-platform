@@ -71,7 +71,8 @@ test('invalid, duplicate or future-dated recall does not mutate D1', async () =>
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM daily_word_reviews').get().n,0)
   } finally { db.close() }
 })
-\ntest('GET cursor pagination returns all 501 rows without a truncation or a duplicate',async()=>{
+
+test('GET cursor pagination returns all 501 rows without a truncation or a duplicate',async()=>{
   const { db, request } = fixture()
   try {
     const insert=db.prepare('INSERT INTO daily_word_reviews (word_key,streak,last_date,next_date) VALUES (?,?,?,?)')

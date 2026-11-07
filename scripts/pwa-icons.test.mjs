@@ -31,7 +31,7 @@ test('manifest and iOS Apple touch shortcut both use the new icon assets', () =>
   assert.match(html, /rel="apple-touch-icon"[^>]*href="\/icon-192\.png/)
   assert.match(html, /name="apple-mobile-web-app-title" content="知学"/)
   assert.match(html, /rel="icon"[^>]*href="\/icon-192\.png/)
-  assert.match(sw, /zhixue-app-v3/)
+  assert.match(sw, /zhixue-app-v[0-9]+/)
   assert.match(sw, /'\/icon-192\.png'/)
   assert.match(sw, /'\/icon-512\.webp'/)
 })

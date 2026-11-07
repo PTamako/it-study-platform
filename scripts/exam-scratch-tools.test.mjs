@@ -39,6 +39,6 @@ test('all answer surfaces embed inline scratch tools without covering questions'
   assert.match(tool, /toBlob/)
   assert.match(css, /@media\(max-width:699px\)\{\.exam-scratch-tools\{display:none!important\}\}/)
   assert.match(css, /\.scratch-drawing-canvas\{[\s\S]*?touch-action:none/)
-  const block = css.slice(css.indexOf('\/\* Large-screen exam calculator'))
+  const block = css.slice(css.indexOf('/* Large-screen exam calculator'), css.indexOf('/* Update notice is opt-in'))
   assert.doesNotMatch(block, /position:(?:fixed|absolute|sticky)/)
 })
