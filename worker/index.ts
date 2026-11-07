@@ -1983,6 +1983,8 @@ export default {
         body = JSON.parse(raw) as Record<string, unknown>
       } catch { return json({ error: '单词同步数据必须是 JSON。' }, 400) }
       const items = body?.items
+      const forceSameDay = body?.force_same_day === true
+      if (forceSameDay && Array.isArray(items) && items.length !== 1) return json({ error: '同日覆盖只能操作一个词条。' }, 400)
       if (!Array.isArray(items) || items.length < 1 || items.length > 50) {
         return json({ error: '每次同步需要 1 至 50 条单词状态。' }, 400)
       }
@@ -2012,14 +2014,20 @@ export default {
           'ON CONFLICT(word_key) DO UPDATE SET',
           'streak = excluded.streak, next_date = excluded.next_date,',
           'last_date = excluded.last_date, updated_at = CURRENT_TIMESTAMP',
-          'WHERE excluded.last_date > daily_word_reviews.last_date',
+          'WHERE excluded.last_date > daily_word_reviews.last_date OR (? = 1 AND excluded.last_date = daily_word_reviews.last_date)',
         ].join(' ')
-        await env.DB.prepare(statement).bind(JSON.stringify(items)).run()
+        await env.DB.prepare(statement).bind(JSON.stringify(items), forceSameDay ? 1 : 0).run()
         const marks = keys.map(() => '?').join(',')
         const { results } = await env.DB.prepare(
           'SELECT word_key, streak, next_date, last_date FROM daily_word_reviews WHERE word_key IN (' + marks + ')',
         ).bind(...keys).all()
-        return json({ ok: true, items: results })
+        const byKey = new Map((results as Array<{word_key:string;streak:number;next_date:string;last_date:string}>).map(row => [row.word_key, row]))
+        const conflicts = (items as Array<{word_key:string;streak:number;next_date:string;last_date:string}>)
+          .filter(row => {
+            const saved = byKey.get(row.word_key)
+            return saved && saved.last_date === row.last_date && (saved.streak !== row.streak || saved.next_date !== row.next_date)
+          }).map(row => row.word_key)
+        return json({ ok: conflicts.length === 0, items: results, conflicts })
       } catch { return json({ error: '云端单词复习状态暂无法同步，本机记录已保留。' }, 503) }
     }
 

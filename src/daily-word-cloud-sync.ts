@@ -14,3 +14,7 @@ export function pendingDailyWordSnapshots(local: WordReviewMap, cloud: WordRevie
   return Object.fromEntries(Object.entries(local).filter(([key, state]) =>
     state?.lastDate && (!cloud[key] || state.lastDate > cloud[key].lastDate)))
 }
+
+export function sameDayWordConflict(local: DailyWordReview | undefined, cloud: DailyWordReview | undefined): boolean {
+  return Boolean(local && cloud && local.lastDate === cloud.lastDate && (local.streak !== cloud.streak || local.nextDate !== cloud.nextDate))
+}

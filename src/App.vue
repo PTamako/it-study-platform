@@ -5,7 +5,7 @@ import { tokyoDate, mergeDailyTaskStates, mergeDailyTaskTemplates } from './dail
 import { utcReviewMillis } from './review-time'
 import { fetchVocabularySnapshot, vocabularyKey, parseVocabularyKey } from './vocabulary-sync'
 import { selectDailyScenes, dailyBusinessWordCandidates, dailyJapaneseWordCandidates, prioritizeDailyWords, gradeDailyWord, type DailyWordReview, type DailyCardProgress } from './daily-language-scenes'
-import { mergeDailyWordSnapshots, pendingDailyWordSnapshots } from './daily-word-cloud-sync'
+import { mergeDailyWordSnapshots, pendingDailyWordSnapshots, sameDayWordConflict } from './daily-word-cloud-sync'
 import { getLanguageExpansions, getSentenceParts } from './language-annotations'
 import { isDictionaryHeadword, loadJapanesePitchDataset, matchingJapaneseAccents, pitchLabel, partOfSpeechDisplay, getChineseWordGuide, type PitchDataset } from './dictionary-word-metadata'
 import { dictionaryTranslationRows, chinesePinyinToneLabels } from './dictionary-presentation'
@@ -1479,6 +1479,7 @@ watch([studyLanguage, todayKey, dailyWordSyncState, dailyWordSyncRevision, authe
 
 type DailyWordCloudRow = { word_key: string; streak: number; next_date: string; last_date: string }
 const dailyWordPending = ref<Record<string, DailyWordReview>>(readStored('zhixue:daily-word-pending-v1', {}))
+const dailyWordConflicts = ref<Record<string, { local: DailyWordReview; cloud: DailyWordReview }>>({})
 const dailyWordSyncError = ref('')
 let dailyWordHydrationRun = 0
 let dailyWordFlushJob: Promise<void> | null = null
@@ -1514,7 +1515,7 @@ async function flushDailyWordProgress(): Promise<void> {
   if (dailyWordFlushJob) return dailyWordFlushJob
   const job = (async () => {
     while (authenticated.value) {
-      const rows = Object.entries(dailyWordPending.value).slice(0, 50)
+      const rows = Object.entries(dailyWordPending.value).filter(([key]) => !dailyWordConflicts.value[key]).slice(0, 50)
       if (!rows.length) break
       const response = await fetch('/api/daily-word-reviews', {
         method: 'POST', headers: { 'content-type': 'application/json' },
@@ -1530,6 +1531,12 @@ async function flushDailyWordProgress(): Promise<void> {
       for (const [key] of rows) {
         const server = canonical[key]
         if (!server) throw new Error('云端没有确认全部单词进度。')
+        const local = rows.find(([candidate]) => candidate === key)?.[1]
+        if (local && sameDayWordConflict(local, server)) {
+          dailyWordConflicts.value = { ...dailyWordConflicts.value, [key]: { local, cloud: server } }
+          nextProgress[key] = server
+          continue
+        }
         if (!nextProgress[key] || server.lastDate >= nextProgress[key].lastDate) nextProgress[key] = server
         if (nextPending[key] && nextPending[key].lastDate <= server.lastDate) delete nextPending[key]
       }
@@ -1537,7 +1544,8 @@ async function flushDailyWordProgress(): Promise<void> {
       dailyWordPending.value = nextPending
       persistDailyWordState()
     }
-    dailyWordSyncError.value = ''
+    dailyWordSyncError.value = Object.keys(dailyWordConflicts.value).length
+      ? '同一天的跨设备复习记录发生冲突，请选择要保留的结果。' : ''
   })()
   dailyWordFlushJob = job
   try { await job } catch (error) {
@@ -1573,10 +1581,22 @@ async function hydrateDailyWordProgress() {
     }
     const local = dailyWordProgress.value
     const waiting = pendingDailyWordSnapshots(local, cloud)
-    const pending = { ...dailyWordPending.value, ...waiting }
-    for (const [key, state] of Object.entries(pending)) {
-      if (cloud[key] && cloud[key].lastDate >= state.lastDate) delete pending[key]
+    const conflicts: Record<string, {local: DailyWordReview; cloud: DailyWordReview}> = {}
+    for (const [key, state] of Object.entries(local)) if (sameDayWordConflict(state, cloud[key])) conflicts[key] = {local:state, cloud:cloud[key]}
+    // An unresolved offline grade survives a page reload in dailyWordPending.
+    // Restore the explicit decision UI before any hydration merge discards it.
+    for (const [key, pending] of Object.entries(dailyWordPending.value)) {
+      if (cloud[key] && sameDayWordConflict(pending, cloud[key])) conflicts[key] = { local: pending, cloud: cloud[key] }
     }
+    for (const [key, previous] of Object.entries(dailyWordConflicts.value)) {
+      if (cloud[key] && sameDayWordConflict(previous.local, cloud[key])) conflicts[key] = {local:previous.local,cloud:cloud[key]}
+    }
+    const pending = { ...dailyWordPending.value, ...waiting,
+      ...Object.fromEntries(Object.entries(conflicts).map(([key, value]) => [key, value.local])) }
+    for (const [key, state] of Object.entries(pending)) {
+      if (!conflicts[key] && cloud[key] && cloud[key].lastDate >= state.lastDate) delete pending[key]
+    }
+    dailyWordConflicts.value = conflicts
     const merged = mergeDailyWordSnapshots(local, cloud)
     const cloudChanged = Object.entries(merged).some(([key, state]) => {
       const previous = local[key]
@@ -1603,7 +1623,7 @@ async function hydrateDailyWordProgress() {
     // Only after hydration may the daily words be permanently pinned.
     dailyWordSyncState.value = 'ready'
     dailyWordSyncRevision.value++
-    dailyWordSyncError.value = ''
+    dailyWordSyncError.value = Object.keys(conflicts).length ? '同一天的跨设备复习记录发生冲突，请选择要保留的结果。' : ''
     await flushDailyWordProgress()
   } catch (error) {
     if (generation === dailyWordHydrationRun && authenticated.value) {
@@ -1611,6 +1631,30 @@ async function hydrateDailyWordProgress() {
       dailyWordSyncError.value = error instanceof Error ? error.message : '跨设备同步失败，本机单词记录已保留。'
     }
   }
+}
+async function resolveDailyWordConflict(key: string, useLocal: boolean) {
+  const conflict = dailyWordConflicts.value[key]
+  if (!conflict || !authenticated.value) return
+  let accepted = conflict.cloud
+  if (useLocal) {
+    try {
+      const response = await fetch('/api/daily-word-reviews', { method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ force_same_day: true, items: [{
+          word_key: key, streak: conflict.local.streak, last_date: conflict.local.lastDate, next_date: conflict.local.nextDate,
+        }] }),
+      })
+      if (!response.ok) throw new Error('本机记录同步失败。')
+      accepted = parseDailyWordCloud((await response.json() as {items:unknown}).items)[key]
+      if (!accepted || accepted.lastDate !== conflict.local.lastDate || accepted.nextDate !== conflict.local.nextDate || accepted.streak !== conflict.local.streak) throw new Error('云端没有接受本机记录，请重新同步后处理冲突。')
+    } catch (error) { dailyWordSyncError.value = error instanceof Error ? error.message : '同步失败。'; return }
+  }
+  dailyWordProgress.value = {...dailyWordProgress.value,[key]:accepted}
+  const pending={...dailyWordPending.value};delete pending[key];dailyWordPending.value=pending
+  const conflicts={...dailyWordConflicts.value};delete conflicts[key];dailyWordConflicts.value=conflicts
+  persistDailyWordState()
+  dailyWordSyncError.value=Object.keys(conflicts).length?'仍有复习冲突待处理。':''
+  if (!Object.keys(conflicts).length) void flushDailyWordProgress()
 }
 // Reuse existing licensed sentence cards and cloud progress for daily scenes.
 // Today's selections remain visible after marking mastered. Reuse cloud-backed
@@ -3388,6 +3432,11 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
             <div v-if="dailyWordSyncError" class="daily-word-sync-alert" role="status">
               <span>{{ dailyWordSyncError }}{{ dailyWordSyncState === 'offline' ? ' · 当前使用本机记录，不会预先固定当天词汇。' : '' }}</span>
               <button type="button" class="text-link" @click="hydrateDailyWordProgress">重新同步</button>
+              <div v-for="(conflict, key) in dailyWordConflicts" :key="key" class="language-speech-actions">
+                <span>{{ key }}：本机记忆次数 {{ conflict.local.streak }}，云端 {{ conflict.cloud.streak }}；结果不同</span>
+                <button type="button" class="text-link" @click="resolveDailyWordConflict(key, true)">保留本机</button>
+                <button type="button" class="text-link" @click="resolveDailyWordConflict(key, false)">采用云端</button>
+              </div>
             </div>
             <section v-if="studyLanguage === 'ja'" class="section-block" aria-label="每日实用日语词汇">
               <div class="section-heading"><div><h2>每日 5 个日语实用词汇</h2><p>读音与释义来自已有日语静态词库 · 仅在来源明确时显示声调</p></div></div>

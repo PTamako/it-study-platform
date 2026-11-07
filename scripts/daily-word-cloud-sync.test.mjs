@@ -7,7 +7,7 @@ const source = await readFile(new URL('../src/daily-word-cloud-sync.ts', import.
 const script = ts.transpileModule(source, { compilerOptions: {
   target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext,
 } }).outputText
-const { mergeDailyWordSnapshots, pendingDailyWordSnapshots } =
+const { mergeDailyWordSnapshots, pendingDailyWordSnapshots, sameDayWordConflict } =
   await import('data:text/javascript;base64,' + Buffer.from(script).toString('base64'))
 const worker = await readFile(new URL('../worker/index.ts', import.meta.url), 'utf8')
 const app = await readFile(new URL('../src/App.vue', import.meta.url), 'utf8')
@@ -51,4 +51,13 @@ test('daily word panel hydrates before fixing selection, shows offline state and
   assert.match(app,/dailyWordSyncState\.value = 'offline'/)
   assert.match(app,/next_cursor/)
   assert.match(app,/hydrateDailyWordProgress">重新同步/)
+})
+
+test('same-day grades with different outcomes trigger explicit conflict resolution',()=>{
+  const a={streak:1,lastDate:'2026-11-07',nextDate:'2026-11-08'}
+  const b={streak:0,lastDate:'2026-11-07',nextDate:'2026-11-09'}
+  assert.equal(sameDayWordConflict(a,b),true)
+  assert.equal(sameDayWordConflict(a,{...a}),false)
+  assert.equal(sameDayWordConflict(a,{...b,lastDate:'2026-11-06'}),false)
+  assert.match(app,/resolveDailyWordConflict\(key, true\)/)
 })
