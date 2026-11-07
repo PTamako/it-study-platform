@@ -163,6 +163,25 @@ jobs:
           fi
 
       # Apply reviewed, versioned schema changes before deploying code that depends on them.
+      # D1 Time Travel is enabled automatically for production storage. Capture
+      # a usable recovery bookmark *before* modifying schema; fail closed otherwise.
+      - name: Capture production D1 pre-migration recovery bookmark
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-audit
+          npx wrangler d1 time-travel info it-study-platform-db --json > release-audit/pre-migration-bookmark.json
+          node -e "const fs=require('node:fs');const value=JSON.parse(fs.readFileSync('release-audit/pre-migration-bookmark.json','utf8'));if(!/[a-f0-9]{8}-[a-f0-9]{8}-[a-f0-9]{8}-[a-f0-9]{8}-[a-f0-9]{12}/i.test(JSON.stringify(value)))process.exit(1)"
+      - name: Archive pre-migration recovery bookmark
+        uses: actions/upload-artifact@v4
+        with:
+          name: d1-pre-migration-bookmark
+          path: release-audit/pre-migration-bookmark.json
+          retention-days: 7
+          if-no-files-found: error
+
       - name: Apply reviewed D1 migrations
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -183,6 +202,7 @@ jobs:
           npx wrangler d1 execute it-study-platform-db --remote --command "SELECT card_id, last_grade FROM language_card_reviews WHERE 0 LIMIT 0;"
           npx wrangler d1 execute it-study-platform-db --remote --command "SELECT question_id FROM study_attempts WHERE 0 LIMIT 0;"
           npx wrangler d1 execute it-study-platform-db --remote --command "SELECT term FROM saved_vocabulary_entries WHERE 0 LIMIT 0;"
+          npx wrangler d1 execute it-study-platform-db --remote --command "SELECT language, term FROM saved_vocabulary_entries_v2 WHERE 0 LIMIT 0;"
           npx wrangler d1 execute it-study-platform-db --remote --command "SELECT word_key FROM daily_word_reviews WHERE 0 LIMIT 0;"
 
       - name: Verify production answer JSON before publishing

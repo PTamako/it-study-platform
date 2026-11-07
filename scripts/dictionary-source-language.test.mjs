@@ -93,7 +93,7 @@ test('UI reflects source language, pinyin+tone and provenance while retaining au
   assert.match(app,/entry\.lexicalSource/)
   assert.doesNotMatch(app,/v-if="entry\.zh" class="lexical-translation-row"/)
   assert.match(app,/speakDictionaryChinese\(entry\)/)
-  assert.match(app,/toggleSaved\(entry\.term\)/)
+  assert.match(app,/toggleSaved\(entry\)/)
   assert.match(app,/supplementDictionaryWithAi\(entry\)/)
   assert.match(worker,/fetchChineseWordMetadata\(query\)/)
   assert.match(worker,/pinyin:\s*lexical\?\.pinyin/)
