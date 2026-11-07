@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: cloudflare-production-deploy
@@ -17,6 +18,32 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
+      # Direct pushes are still possible until GitHub repository branch protection
+      # is enabled by an owner. Keep those pushes from being deployed automatically.
+      - name: Refuse production deployment for unreviewed direct pushes
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          const response = await fetch(`https://api.github.com/repos/${process.env.REPO}/commits/${process.env.SHA}/pulls`, {
+            headers: {
+              authorization: `Bearer ${process.env.GH_TOKEN}`,
+              accept: 'application/vnd.github+json',
+              'x-github-api-version': '2022-11-28',
+            },
+          })
+          if (!response.ok) throw new Error('Cannot verify merged PR origin: HTTP ' + response.status)
+          const prs = await response.json()
+          if (!Array.isArray(prs) || !prs.some(pr =>
+            pr.merged_at && pr.base?.ref === 'main' && pr.merge_commit_sha === process.env.SHA)) {
+            throw new Error('Production deployment blocked: main must be updated by a merged PR (or manual approved workflow dispatch).')
+          }
+          console.log('Verified merged PR origin for production commit.')
+          NODE
+
       - name: Check out repository
         uses: actions/checkout@v4
 
