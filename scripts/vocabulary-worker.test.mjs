@@ -16,7 +16,7 @@ const worker = (await import(pathToFileURL(workerFile))).default
 process.on('exit', () => { void rm(dir, { recursive: true, force: true }) })
 function dbAdapter() {
   const db = new DatabaseSync(':memory:')
-  db.exec('CREATE TABLE saved_vocabulary_entries (term TEXT PRIMARY KEY, language TEXT NOT NULL, entry_json TEXT NOT NULL, saved_at TEXT DEFAULT CURRENT_TIMESTAMP)')
+  db.exec('CREATE TABLE saved_vocabulary_entries_v2 (language TEXT NOT NULL, term TEXT NOT NULL, entry_json TEXT NOT NULL, saved_at TEXT DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(language,term))')
   return { raw: db, prepare(sql) {
     const prepare = args => ({
       all: async () => ({results: db.prepare(sql).all(...args)}),
@@ -33,7 +33,7 @@ test('old automatic save cannot resurrect deletion; explicit save can restore', 
   const db=dbAdapter()
   assert.equal((await request(db,{term:'a',entry:{term:'a'}})).status,409)
   assert.equal((await request(db,{term:'a',entry:{term:'a'},explicit:true})).status,200)
-  assert.equal((await request(db,{term:'a',action:'remove'})).status,200)
+  assert.equal((await request(db,{term:'a',language:'auto',action:'remove'})).status,200)
   assert.equal((await request(db,{term:'a',entry:{term:'a'}})).status,409)
   assert.deepEqual((await (await request(db)).json()).items,[])
   assert.equal((await (await request(db,undefined,'?sync=1')).json()).items[0].deleted,true)
@@ -42,8 +42,20 @@ test('old automatic save cannot resurrect deletion; explicit save can restore', 
 })
 test('pages all items without exposing tombstones to legacy GET',async()=>{
  const db=dbAdapter()
- for(let i=0;i<260;i++) db.raw.prepare('INSERT INTO saved_vocabulary_entries VALUES (?,?,?,CURRENT_TIMESTAMP)').run('term'+String(i).padStart(3,'0'),'ja', JSON.stringify(i%2?{term:'x'}:{_zhixue_deleted_v1:true}))
+ for(let i=0;i<260;i++) db.raw.prepare('INSERT INTO saved_vocabulary_entries_v2 (term,language,entry_json,saved_at) VALUES (?,?,?,CURRENT_TIMESTAMP)').run('term'+String(i).padStart(3,'0'),'ja', JSON.stringify(i%2?{term:'x'}:{_zhixue_deleted_v1:true}))
  const page1=await (await request(db,undefined,'?sync=1')).json(); assert.equal(page1.items.length,200); assert.ok(page1.next)
- const page2=await (await request(db,undefined,'?sync=1&after='+page1.next)).json(); assert.equal(page2.items.length,60); assert.equal(page2.next,null)
+ const page2=await (await request(db,undefined,'?sync=1&after='+encodeURIComponent(page1.next))).json(); assert.equal(page2.items.length,60); assert.equal(page2.next,null)
  assert.equal((await (await request(db)).json()).items.length,130)
+})
+
+test('the same spelling in en and ja is saved and deleted independently',async()=>{
+ const db=dbAdapter()
+ for(const language of ['en','ja']) assert.equal((await request(db,{term:'gift',language,entry:{term:'gift',language,en:'example'},explicit:true})).status,200)
+ let rows=(await (await request(db,undefined,'?sync=1')).json()).items
+ assert.deepEqual(rows.map(r=>r.language),['en','ja'])
+ assert.equal((await request(db,{term:'gift',language:'ja',action:'remove'})).status,200)
+ rows=(await (await request(db,undefined,'?sync=1')).json()).items
+ assert.deepEqual(rows.map(r=>r.deleted),[false,true])
+ assert.equal((await request(db,{term:'gift',action:'remove'})).status,409)
+ db.raw.close()
 })

@@ -1764,7 +1764,7 @@ export default {
           env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(SUM(is_correct), 0) AS correct FROM study_attempts').first() as Promise<Record<string, unknown>>,
           env.DB.prepare('SELECT COUNT(*) AS total, COALESCE(AVG(score), 0) AS average_score FROM scenario_attempts').first() as Promise<Record<string, unknown>>,
           env.DB.prepare(`SELECT 10144 AS total, COALESCE((SELECT SUM(p.mastered) FROM language_card_progress p WHERE p.card_id LIKE 'ja-sentence-%' OR p.card_id LIKE 'en-sentence-%'), 0) AS mastered`).first() as Promise<Record<string, unknown>>,
-          env.DB.prepare(`SELECT COUNT(*) AS total FROM saved_vocabulary_entries WHERE CASE WHEN json_valid(entry_json) THEN COALESCE(json_extract(entry_json, '$._zhixue_deleted_v1'), 0) ELSE 0 END != 1`).first() as Promise<Record<string, unknown>>,
+          env.DB.prepare(`SELECT COUNT(*) AS total FROM saved_vocabulary_entries_v2 WHERE CASE WHEN json_valid(entry_json) THEN COALESCE(json_extract(entry_json, '$._zhixue_deleted_v1'), 0) ELSE 0 END != 1`).first() as Promise<Record<string, unknown>>,
           env.DB.prepare("SELECT COUNT(*) AS total, COALESCE(SUM(completed), 0) AS completed FROM daily_task_completions WHERE study_date = date('now', '+9 hours')").first() as Promise<Record<string, unknown>>,
         ])
         const total = Number(attempts?.total || 0)
@@ -2079,53 +2079,68 @@ export default {
 
     // 生词本存储词条快照，避免第三方词典后续变化导致收藏内容消失。
     if (url.pathname === '/api/vocabulary/saved') {
+      // Language-qualified bookmarks: en:term and ja:term are independent.
       if (request.method === 'GET') {
         try {
           const sync = url.searchParams.get('sync') === '1'
           const after = url.searchParams.get('after') || ''
-          if (after.length > 100) return json({ error: '无效的分页参数。' }, 400)
+          const cursor = /^(auto|en|ja|zh):(.*)$/.exec(after)
+          if (after && (!cursor || cursor[2].length > 100)) return json({ error: '无效的分页参数。' }, 400)
           const liveCondition = "CASE WHEN json_valid(entry_json) THEN COALESCE(json_extract(entry_json, '$._zhixue_deleted_v1'), 0) ELSE 0 END != 1"
           if (!sync) {
-            const { results } = await env.DB.prepare(`SELECT term, language, entry_json, saved_at FROM saved_vocabulary_entries WHERE ${liveCondition} ORDER BY saved_at DESC LIMIT 200`).all()
-            return json({ items: results.map((row: Record<string, unknown>) => ({ term: row.term, language: row.language, saved_at: row.saved_at, entry: JSON.parse(String(row.entry_json || '{}')) })) })
+            const { results } = await env.DB.prepare(`SELECT term, language, entry_json, saved_at
+              FROM saved_vocabulary_entries_v2 WHERE ${liveCondition}
+              ORDER BY saved_at DESC, language, term LIMIT 200`).all()
+            return json({ items: results.map((row: Record<string, unknown>) => ({
+              term: row.term, language: row.language, saved_at: row.saved_at,
+              entry: JSON.parse(String(row.entry_json || '{}')),
+            })) })
           }
-          // Keyset pagination reads live rows and tombstones without truncating at 200.
-          const { results } = await env.DB.prepare('SELECT term, language, entry_json, saved_at FROM saved_vocabulary_entries WHERE term > ? ORDER BY term LIMIT 201').bind(after).all()
+          const { results } = await env.DB.prepare(`SELECT term, language, entry_json, saved_at
+            FROM saved_vocabulary_entries_v2
+            WHERE language > ? OR (language = ? AND term > ?)
+            ORDER BY language,term LIMIT 201`)
+            .bind(cursor?.[1] || '', cursor?.[1] || '', cursor?.[2] || '').all()
           const page = results.slice(0, 200) as Record<string, unknown>[]
           return json({ items: page.map(row => {
             const entry = JSON.parse(String(row.entry_json || '{}')) as Record<string, unknown>
             const deleted = entry._zhixue_deleted_v1 === true
-            return { term: row.term, language: row.language, saved_at: row.saved_at, deleted, entry: deleted ? undefined : entry }
-          }), next: results.length > 200 ? page[page.length - 1]?.term : null })
-        } catch {
-          return json({ items: [], error: '生词本表尚未初始化。' }, 503)
-        }
+            return { term: row.term, language: row.language, saved_at: row.saved_at,
+              deleted, entry: deleted ? undefined : entry }
+          }), next: results.length > 200 ? page[page.length - 1]?.language + ':' + page[page.length - 1]?.term : null })
+        } catch { return json({ items: [], error: '生词本暂不可用。' }, 503) }
       }
       let body: Record<string, unknown>
       try { body = await request.json() as Record<string, unknown> }
       catch { return json({ error: '请求体必须是 JSON。' }, 400) }
       const term = String(body.term || '').trim()
+      const language = String(body.language || 'auto')
       const action = String(body.action || 'save')
       if (!term || term.length > 100) return json({ error: 'term 必填且不能超过 100 个字符。' }, 400)
+      if (!['auto','ja','en','zh'].includes(language)) return json({ error: '不支持该语言。' }, 400)
       if (action === 'remove') {
+        // Old PWA clients do not specify the language on remove. Fail closed to
+        // prevent a stale client from removing the wrong-language record.
+        if (typeof body.language !== 'string') return json({ error: '请刷新后删除该语言的词条。' }, 409)
         try {
-          await env.DB.prepare(`INSERT INTO saved_vocabulary_entries (term, language, entry_json, saved_at)
-            VALUES (?, 'auto', '{"_zhixue_deleted_v1":true}', CURRENT_TIMESTAMP)
-            ON CONFLICT(term) DO UPDATE SET entry_json = '{"_zhixue_deleted_v1":true}', saved_at = CURRENT_TIMESTAMP`).bind(term).run()
-          return json({ ok: true, term, saved: false })
-        } catch { return json({ error: '删除生词失败。' }, 503) }
+          await env.DB.prepare(`INSERT INTO saved_vocabulary_entries_v2 (language,term,entry_json,saved_at)
+            VALUES (?,?,'{"_zhixue_deleted_v1":true}',CURRENT_TIMESTAMP)
+            ON CONFLICT(language,term) DO UPDATE SET
+              entry_json='{"_zhixue_deleted_v1":true}',saved_at=CURRENT_TIMESTAMP`).bind(language,term).run()
+          return json({ ok:true,term,language,saved:false })
+        } catch { return json({ error:'删除生词失败。' },503) }
       }
       if (body.explicit !== true) return json({ error: '请刷新页面后再收藏生词。' }, 409)
       const entry = body.entry
-      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return json({ error: '保存词条时必须提供 entry 对象。' }, 400)
-      if ((entry as Record<string, unknown>)._zhixue_deleted_v1 === true) return json({ error: '无效词条。' }, 400)
-      const language = ['auto', 'ja', 'en', 'zh'].includes(String(body.language)) ? String(body.language) : 'auto'
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return json({ error: '词条必须包含完整 entry 对象。' },400)
+      if ((entry as Record<string, unknown>)._zhixue_deleted_v1 === true) return json({ error:'无效词条。' },400)
       try {
-        await env.DB.prepare(
-          'INSERT INTO saved_vocabulary_entries (term, language, entry_json, saved_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(term) DO UPDATE SET language = excluded.language, entry_json = excluded.entry_json, saved_at = CURRENT_TIMESTAMP',
-        ).bind(term, language, JSON.stringify(entry)).run()
-        return json({ ok: true, term, saved: true })
-      } catch { return json({ error: '保存生词失败，请确认已应用最新 D1 迁移。' }, 503) }
+        await env.DB.prepare(`INSERT INTO saved_vocabulary_entries_v2 (language,term,entry_json,saved_at)
+          VALUES (?,?,?,CURRENT_TIMESTAMP)
+          ON CONFLICT(language,term) DO UPDATE SET entry_json=excluded.entry_json,saved_at=CURRENT_TIMESTAMP`)
+          .bind(language,term,JSON.stringify(entry)).run()
+        return json({ ok:true,term,language,saved:true })
+      } catch { return json({ error:'保存生词失败，请确认最新 D1 迁移已应用。' },503) }
     }
 
     // 读取指定日期的每日任务完成状态。
