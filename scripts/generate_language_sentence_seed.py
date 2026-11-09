@@ -501,7 +501,7 @@ EN_MODIFIERS = {
     "quick", "busy", "available", "first", "last", "best", "better",
     "excellent", "bad", "modern", "simple", "correct", "clear",
     "strong", "early", "late", "special", "popular", "common",
-    "big", "little", "young", "kind", "happy", "final", "main", "post",
+    "big", "little", "young", "kind", "happy", "final", "main",
     "international", "Japanese", "English", "hard", "appropriate",
 }
 
@@ -562,6 +562,10 @@ def safe_english_article_phrase(text):
         return text
     if len(words) < 3:
         return text
+    # A postal "post office" is a known compound noun. Do not broadly mark
+    # post as an adjective: "a post like yours" must remain "a post".
+    if words[1].casefold() == "post" and words[2].casefold() == "office":
+        return " ".join(words[:3])
     # A modifier is recognized only before the final noun. Unknown continuations
     # are intentionally omitted rather than teaching a false noun phrase.
     end = 2

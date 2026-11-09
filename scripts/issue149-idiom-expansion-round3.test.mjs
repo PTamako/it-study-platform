@@ -30,6 +30,9 @@ s='There is a post office close by.'
 assert has(s,'a post office'),hits(s)
 assert not has(s,'a post'),hits(s)
 assert has(s,'close by'),hits(s)
+# Do not overgeneralize post as a modifier in every phrase.
+s='I wrote a post like yours.'
+assert has(s,'a post') and not has(s,'a post like'),hits(s)
 assert not has(s,'close'),hits(s)
 s='I am very sorry that I have to ask you for help.'
 assert not has(s,'that'),hits(s)
