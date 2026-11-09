@@ -41,6 +41,8 @@ const WORDS: Record<string, Note> = {
   'a lot of': { meaning: '很多／大量', explanation: '数量短语，修饰后面的名词。' },
   'would you like to': { meaning: '您想／愿意……吗', explanation: '征询意愿或发出邀请。' },
   'would like to': { meaning: '想要／希望……', explanation: '用于客气地表达意愿。' },
+  'post office': { meaning: '邮局', explanation: '完整复合名词，不能把 post 单独译成职位。' },
+  'close by': { meaning: '在附近', explanation: '固定副词短语，不表示关闭。' },
   'よくない': { meaning: '不好／不合适', explanation: '「よい」的否定，不是“经常”。' },
 }
 
@@ -99,7 +101,10 @@ function validBoundary(card: AnnotatedSentence, start: number, end: number, kind
         /^\s+(?:a|an|the)\s+\w+/i.test(after)) return false
     if (token === 'meeting' && /\b(?:my|your|his|her|our|their)\s+$/i.test(before) &&
         /^\s+(?:him|her|them|me|us|you)\b/i.test(after)) return false
-    if (token === 'that' && /\b(?:said|say|says|knew|know|think|thought)\s+$/i.test(before)) return false
+    if (token === 'that' && /\b(?:said|say|says|knew|know|think|thought|sorry|glad|certain|aware)\s+$/i.test(before)) return false
+    if (token === 'close' && /^\s+by\b/i.test(after)) return false
+    if (/^a post$/i.test(token) && /^\s+office\b/i.test(after)) return false
+    if (token === 'leave' && /^\s+(?:him|her|me|us|them|you)\s+a\s+message\b/i.test(after)) return false
     if (token === 'a lot' && /^\s+of\b/i.test(after)) return false
     if (token === 'take' && /^\s+a\s+dump\b/i.test(after)) return false
     if (token === 'make' && /^\s+a\s+phone\s+call\b/i.test(after)) return false
@@ -234,6 +239,16 @@ function fallback(card: AnnotatedSentence, boundaries: Set<number>): LanguageHig
       const end = start + match[0].length
       if (validBoundary(card, start, end, 'grammar', boundaries)) {
         found.push({ start, end, term: match[0], type: 'grammar', meaning: rule.meaning, explanation: rule.explanation })
+      }
+    }
+  }
+  if (card.language === 'en') {
+    for (const match of card.term.matchAll(/\bleave\s+(?:him|her|me|us|them|you)\s+a\s+message\b/gi)) {
+      const start=match.index ?? -1
+      const end=start+match[0].length
+      if (start >= 0 && validBoundary(card,start,end,'vocabulary',boundaries)) {
+        found.push({start,end,type:'vocabulary',term:match[0],
+          meaning:'给某人留言',explanation:'leave + 人 + a message，表示给某人留言。'})
       }
     }
   }

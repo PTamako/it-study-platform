@@ -101,9 +101,15 @@ export function auditSentence(card, language) {
       if (/^meeting$/i.test(hit.term) && /\b(?:my|your|his|her|our|their)\s+$/i.test(before) &&
           /^\s+(?:him|her|them|me|us|you)\b/i.test(after) && /会议/.test(hit.meaning))
         errors.push('gerund meeting somebody is not a conference')
+      if (/^close$/i.test(hit.term) && /^\s+by\b/i.test(after) && /关闭|接近/.test(hit.meaning))
+        errors.push('close by means nearby, not close/shut')
+      if (/^a post$/i.test(hit.term) && /^\s+office\b/i.test(after))
+        errors.push('post office is one compound noun')
+      if (/^leave$/i.test(hit.term) && /^\s+(?:him|her|me|us|them|you)\s+a\s+message\b/i.test(after) && /离开/.test(hit.meaning))
+        errors.push('leave someone a message must not be taught as depart')
       if (/^a lot$/i.test(hit.term) && /^\s+of\b/i.test(after))
         errors.push('a lot of is a quantity phrase, not noun phrase a lot')
-      if (/^that$/i.test(hit.term) && /\b(?:said|say|says|knew|know|thought|think)\s+$/i.test(before) &&
+      if (/^that$/i.test(hit.term) && /\b(?:said|say|says|knew|know|thought|think|sorry|glad|certain|aware)\s+$/i.test(before) &&
           /那个|那/.test(hit.meaning))
         errors.push('complementizer that is not a demonstrative')
       if (/^(?:make|leave|take)$/i.test(hit.term) &&

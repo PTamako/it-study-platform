@@ -335,6 +335,8 @@ EN_VOCAB += [
     ("a lot of", "许多／大量", "数量短语，修饰后面的名词，不是完整名词短语。"),
     ("would you like to", "您想／愿意……吗", "征询对方意愿或发出邀请，不等于单纯要求对方帮忙。"),
     ("would like to", "想要／希望……", "常用于客气地表达意愿，例如 I would like to ...。"),
+    ("post office", "邮局", "邮政机构/邮局；这里 post 与 office 是复合名词。"),
+    ("close by", "在附近", "固定副词短语，表示附近，并非“关闭”。"),
 ]
 JP_GRAMMAR = [
  (r"んだ(?=[。！？!?…]*$)|(?<!も)のだ(?=[。！？!?…]*$)","说明／解释语气","「のだ」的口语形式「んだ」用于解释、强调当前情况。"),
@@ -499,7 +501,7 @@ EN_MODIFIERS = {
     "quick", "busy", "available", "first", "last", "best", "better",
     "excellent", "bad", "modern", "simple", "correct", "clear",
     "strong", "early", "late", "special", "popular", "common",
-    "big", "little", "young", "kind", "happy", "final", "main",
+    "big", "little", "young", "kind", "happy", "final", "main", "post",
     "international", "Japanese", "English", "hard", "appropriate",
 }
 
@@ -531,11 +533,15 @@ def english_unsafe_sense(sentence, start, end, term):
         return True  # ECDICT adjective headword used as a past-tense verb
     if phrase == "meeting" and re.search(r"\b(?:my|your|his|her|our|their)\s+$", before, re.I) and re.match(r"\s+(?:him|her|them|me|us|you)\b", after, re.I):
         return True  # 'my meeting him' is a gerund, not a conference
-    if phrase == "that" and (re.search(r"\b(?:said|say|says|knew|know|think|thought)\s+$", before, re.I) or
+    if phrase == "that" and (re.search(r"\b(?:said|say|says|knew|know|think|thought|sorry|glad|certain|aware)\s+$", before, re.I) or
                             (re.search(r"\b(?:water|information|work|data|rules)\s+$", before, re.I) and re.match(r"\s+(?:is|was|fell|will|has|had)\b", after, re.I))):
         return True  # complementizer/relative pronoun, not demonstrative 'that'
     if phrase in {"a lot", "a lot of"} and re.match(r"\s+of\b", after, re.I):
         return phrase == "a lot"  # quantity phrase is the proper whole span
+    if phrase == "close" and re.match(r"\s+by\b", after, re.I):
+        return True  # 'close by' means nearby, not shutting a door
+    if phrase == "leave" and re.match(r"\s+(?:him|her|me|us|them|you)\s+a\s+message\b", after, re.I):
+        return True  # teach the whole "leave someone a message" phrase
     if phrase in {"take", "make", "leave"} and re.match({
         "take": r"\s+a\s+dump\b", "make": r"\s+a\s+phone\s+call\b",
         "leave": r"\s+a\s+message\b",
@@ -668,6 +674,18 @@ def make_hits(sentence, lang):
                 "term": term, "meaning": meaning, "explanation": explanation,
                 "rule_id": ("ja" if lang == "ja" else "en") + ".grammar." + str(rule_index + 1),
                 "confidence": "rule", "rule_priority": len(grammar) - rule_index,
+            })
+
+    if lang == "en":
+        # Productive indirect-object form of "leave a message": do not teach
+        # 'leave = depart' in "Would you like to leave him a message?".
+        for match in re.finditer(r"\bleave\s+(?:him|her|me|us|them|you)\s+a\s+message\b", sentence, re.I):
+            candidates.append({
+                "start": match.start(), "end": match.end(), "type": "vocabulary",
+                "term": match.group(), "meaning": "给某人留言",
+                "explanation": "leave + 人 + a message，给指定对象留言，是完整固定搭配。",
+                "rule_id": "en.vocab.idiom.leave-recipient-a-message",
+                "confidence": "curated-context", "rule_priority": len(vocab)+200,
             })
 
     for rule_index, (term, meaning, explanation) in enumerate(vocab):
