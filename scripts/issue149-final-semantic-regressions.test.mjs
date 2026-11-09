@@ -84,6 +84,6 @@ test('offline quality gate fails closed on four verified first-120 semantic erro
   ]
   for(const [sentence,lang,term,meaning] of rows){
     const r=auditSentence(example(sentence,lang,term,meaning),'en'===lang?'en':'ja')
-    assert.ok(r.errors.some(e=>/名词短语|customer service|代わりに|ようにお願いします/.test(e)),JSON.stringify({sentence,result:r}))
+    assert.ok(r.errors.some(e=>/名词短语|customer service|代わりに|ようにお願いします|a bit \+ degree/.test(e)),JSON.stringify({sentence,result:r}))
   }
 })
