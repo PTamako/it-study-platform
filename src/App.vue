@@ -3450,6 +3450,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   <p class="language-meaning">{{ word.zh }}</p>
                   <p v-if="word.example" class="language-explanation">{{ word.example }}</p>
                   <p v-if="word.exampleTranslationZh" class="language-meaning">{{ word.exampleTranslationZh }}</p>
+                  <p v-else-if="word.example" class="language-source">中文例句译文待核验</p>
                   <p v-if="word.reading && matchingJapaneseAccents(dictionaryPitchData, word.term, word.reading).length" class="language-source">声调：{{ matchingJapaneseAccents(dictionaryPitchData, word.term, word.reading).map(n => pitchLabel(n, word.reading || '')).join(' / ') }}</p>
                   <div class="language-speech-actions">
                     <button type="button" class="play-button" @click="speak(word.term, 'ja-JP', 'japanese-word:' + word.term)"><Volume2 :size="16" /> 听发音</button>
@@ -3703,7 +3704,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                       <span class="lexical-translation-lang">{{ row.label }}</span><p>{{ row.value }}</p>
                     </div>
                     <div v-if="entry.usageNote" class="lexical-example"><span>用法说明</span><p>{{ entry.usageNote }}</p></div>
-                    <div v-if="entry.example" class="lexical-example"><span>例句</span><p>{{ entry.example }}</p><p v-if="entry.exampleTranslationZh" class="lexical-example-translation">{{ entry.exampleTranslationZh }}</p><a v-if="entry.exampleSourceUrl" :href="entry.exampleSourceUrl" target="_blank" rel="noopener noreferrer">查看原始例句来源</a></div>
+                    <div v-if="entry.example" class="lexical-example"><span>例句</span><p>{{ entry.example }}</p><p v-if="entry.exampleTranslationZh" class="lexical-example-translation">{{ entry.exampleTranslationZh }}</p><p v-else class="lexical-example-translation">中文译文待核验</p><a v-if="entry.exampleSourceUrl" :href="entry.exampleSourceUrl" target="_blank" rel="noopener noreferrer">查看原始例句来源</a></div>
                   </div>
                   <div class="lexical-source-row">
                     <a v-if="entry.sourceUrl && entry.source" :href="entry.sourceUrl" target="_blank" rel="noopener noreferrer">{{ entry.source }}</a>

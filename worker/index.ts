@@ -2672,8 +2672,12 @@ export default {
         WHEN 'licensed' THEN p.source_type = 'licensed' AND p.question_kind = 'standard' AND p.exam_origin = 'general'
         ELSE p.source_type = ? END)`
       type MockPool = { section: 'A' | 'B'; count: number; explicit?: boolean; topic?: string }
+      // The 2017 A31 and 2024 Q07 SG official records have the same prompt,
+      // but different choices. Keep both historical questions and attempts;
+      // omit only the earlier mirror from timed mocks so one sitting cannot repeat it.
       const poolConditions = (pool: MockPool) =>
         `p.track_id = ? AND p.exam_section = ?` +
+        (trackId === 'exam-sg' ? " AND p.question_id <> 'sg-official-h29a-2017-q31'" : '') +
         (pool.explicit ? ` AND p.exam_section_method = 'explicit'` : '') +
         (pool.topic ? ` AND (p.topic = ? OR (p.question_kind = 'official_sample' AND p.question_id IN (${reviewedSamplesForTopic(pool.topic).map(() => '?').join(',')})))` : '') +
         ` AND ${sourceClause}`
