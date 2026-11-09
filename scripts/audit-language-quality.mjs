@@ -79,7 +79,7 @@ export function auditSentence(card, language) {
         errors.push('fixed adverb is not case particle に')
       if (hit.term === 'あれ' && /^ば/.test(after))
         errors.push('verb conditional あれば is not demonstrative あれ')
-      if (hit.term === 'の' && /^[。！？!?…]*$/.test(after) && /连接名词/.test(hit.meaning))
+      if (hit.term === 'の' && /^[。！？!?…]/.test(after) && /连接名词/.test(hit.meaning))
         errors.push('sentence-final の is not noun connector')
     }
     if (language === 'ja') {
@@ -93,6 +93,14 @@ export function auditSentence(card, language) {
         errors.push('よくない is negative adjective, not positive/frequency よく')
       if (hit.term === 'で' && /^はない/.test(after) && /地点|手段/.test(hit.meaning))
         errors.push('ではない is copular negation, not location/instrument で')
+      if (hit.term === 'で' && /地点|手段/.test(hit.meaning) && (
+          /^(?:きる|きない|きます|きました|きません|きた|きて|きれば)/.test(after) ||
+          /[0-9０-９一二三四五六七八九十]+(?:歩|日|分|時間|週間|か月|ヶ月|年)$/.test(before) ||
+          /(?:る|た|ない)上$/.test(before) ||
+          (before.endsWith('天気予報') && /^は/.test(after))
+        )) errors.push('fixed expression or temporal/conditional で is not a place/instrument particle')
+      if (hit.term === 'と' && before.endsWith('へ') && /共同对象|引用/.test(hit.meaning))
+        errors.push('directional へと is not quotation or accompaniment と')
     }
     if (language === 'en') {
       if (/^like$/i.test(hit.term) && /\b(?:eat|ate|run|ran|behave|act)\s+$/i.test(before) &&
