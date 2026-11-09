@@ -79,6 +79,23 @@ def is_exact_japanese_form(sentence, start, end, term):
         return False  # である is a copula, not existential ある
     if term == "あと" and re.match(r"(?:何|なん|[0-9０-９一二三四五六七八九十百千]+)(?:時間|分|秒|日|週間|ヶ月|か月|年|回|人|個|枚)", sentence[end:]):
         return False  # 'how much time remains' vs. 跡 ('trace')
+    # Context-specific homographs from the complete public source-linked
+    # audit. A literal spelling match cannot prove the intended dictionary
+    # sense (proper name, fixed phrase, or conjugated suffix).
+    remaining = sentence[end:]
+    before_text = sentence[:start]
+    if term == "しまい" and before_text.endswith("と") and remaining.startswith("と"):
+        return False  # ...しようとしまいと, not 姉妹
+    if term == "ピン" and re.match(r"と(?:きた|来た|くる|来る|きて|来て|きます|来ます)", remaining):
+        return False  # ピンときた, insight, not a pin
+    if term == "トランプ" and re.match(r"は(?:今)?[0-9０-９]+代(?:です|だ|に|の|[。！？!?])", remaining):
+        return False  # Donald Trump as a person, not playing cards
+    if term == "ビル" and re.match(r"は(?:野球選手|先生|医者|医師|学生|笑った|言った)", remaining):
+        return False  # Bill the person, not a building
+    if term == "マイク" and re.match(r"は(?:笑った|言った|話した|来た|歌った)", remaining):
+        return False  # Mike the person, not a microphone
+    if term == "ベル" and re.match(r"(?:によって|により)(?:発明|考案|発見)", remaining):
+        return False  # Bell the inventor, not a bell
     if JAPANESE.fullmatch(term):
         # A literal substring in a larger kana/kanji word is not evidence of
         # an independent lexeme: ログアウト contains アウト, 格好いい contains いい.
@@ -137,11 +154,12 @@ def choose_source_linked_examples(sentences, translations, licensed_words):
             continue
         scanned[lang] += 1
         for key in find_exact_headword_matches(original, lang, patterns[lang]):
-            if lang == "en" and key in {"abandoned", "advanced"} and re.search(
+            if lang == "en" and key in {"abandoned", "advanced", "confused", "excited", "fixed", "mixed"} and re.search(
                 r"\b(?:i|you|he|she|we|they|tom|mary)\s+" + re.escape(key) +
                 r"\s+(?:them|him|her|us|me|to|the|an?|their)\b", original, re.I):
-                # ECDICT's entry is adjective here, but the example is a finite
-                # past-tense *verb*. Do not promote it as an illustrative sense.
+                # ECDICT's entry is adjective here, but the example uses
+                # its finite past-tense verb. Linked text is not word-sense
+                # proof; keep adjective examples if their grammar fits.
                 continue
             if key not in normalized[lang]:
                 continue
