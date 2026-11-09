@@ -81,28 +81,35 @@ function japaneseBoundaries(sentence: string): Set<number> {
 function validBoundary(card: AnnotatedSentence, start: number, end: number, kind: 'vocabulary' | 'grammar', boundaries: Set<number>): boolean {
   const term = card.term.slice(start, end)
   if (card.language === 'en') {
-    // 'Would you' and 'Could you' are also present in the vocabulary
-    // lexicon: reject false requests for BOTH annotation classes.
-    if (/^(?:would you|could you)$/i.test(term) && card.term.slice(0,start).trim() &&
-        !/[,!?。.]\s*$/.test(card.term.slice(0,start))) return false
-    if (kind === 'grammar') {
-      const prefix = card.term.slice(0, start)
-      const suffix = card.term.slice(end)
-      if (/^have to$/i.test(term) && /\bwhat(?:'ll| will) you\s*$/i.test(prefix) &&
-          /^\s*(?:drink|eat)\b/i.test(suffix)) return false
-      if (/^need to$/i.test(term) && /\b(?:the|a)\s+$/i.test(prefix)) return false
-    }
-    if (kind === 'grammar' && term.toLowerCase() === 'used to' &&
-        /\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$/i.test(card.term.slice(0, start))) {
-      // Be/get used to + noun/gerund (习惯于), or passive be used to + verb
-      // (被用于) must never inherit past-habit "used to + infinitive".
+    const prefix = card.term.slice(0, start)
+    const suffix = card.term.slice(end)
+    // These safeguards apply to vocabulary AND grammar: the authored seed
+    // lists sometimes contain the same phrase under both categories.
+    if (/^(?:would you|could you)$/i.test(term) && prefix.trim() &&
+        !/[,!?。.]\s*$/.test(prefix)) return false
+    if (/^have to$/i.test(term) && /\bwhat(?:'ll| will) you\s*$/i.test(prefix) &&
+        /^\s*(?:drink|eat)\b/i.test(suffix)) return false
+    if (/^need to$/i.test(term) && /\b(?:the|a)\s+$/i.test(prefix)) return false
+    if (/^used to$/i.test(term) &&
+        /\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$/i.test(prefix)) return false
+    if (/^(?:I|you|we|they|he|she|it|this|that|there)\s+(?:have|has|had)$/i.test(term) &&
+        /^\s+to\b/i.test(suffix)) return false
+    if (/^who(?:\s+|$)/i.test(term) && prefix.trim() && !/[.?!]\s*$/.test(prefix))
       return false
-    }
     return !/[A-Za-z]/.test(card.term[start - 1] || '') && !/[A-Za-z]/.test(card.term[end] || '')
   }
   // A stale source highlight for 'ものだ' must not display 'のだ' as an
   // explanation marker in legacy D1 cards. The static generator also abstains.
   if (kind === 'grammar' && /^(?:のだ|のです)$/.test(term) && card.term[start - 1] === 'も') return false
+  const prefix = card.term.slice(0, start)
+  const suffix = card.term.slice(end)
+  if (term === 'から' && /(?:分|判|解|わ)$/.test(prefix) && /^(?:ない|なかった|ず)/.test(suffix)) return false
+  if (term === 'だけ' && /いた$/.test(prefix) && /^(?:る|ます|ません|ない|れ|た)/.test(suffix)) return false
+  if (term === 'の' && /(?:こ|そ|あ|ど|ほん)$/.test(prefix)) return false
+  if (term === 'と' && (/^(?:ても|き)/.test(suffix) || /こ$/.test(prefix))) return false
+  if (term === 'に' && /(?:確か|本当|非常|特|実)$/.test(prefix)) return false
+  if (term === 'で' && /いつ$/.test(prefix) && /^も/.test(suffix)) return false
+  if (term === 'あれ' && /^ば/.test(suffix)) return false
   if (!boundaries.has(start) || !boundaries.has(end)) return false
   // 分からない consists of 分 / から / ない in Japanese word segmenters;
   // から here is part of a verb, NOT an independent causal particle.

@@ -27,6 +27,8 @@ bad=[
  ("The need to collect water is urgent.","en","need to"),
  ("He is used to teamwork.","en","used to"),
  ("The tool may be used to evaluate data.","en","used to"),
+ ("We have to go.","en","We have"),
+ ("Youths who are caught breaking rules will be disciplined.","en","who are"),
 ]
 good=[
  ("だからやるのだ。","ja","のだ"),
@@ -35,6 +37,7 @@ good=[
  ("We have to go.","en","have to"),
  ("I need to configure this.","en","need to"),
  ("Tom used to live here.","en","used to"),
+ ("We have to go.","en","have to"),
 ]
 for sentence,lang,target in bad:
   hits=gen.make_hits(sentence,lang)
@@ -92,4 +95,34 @@ test('quality gate rejects a false old grammar highlight with correct Unicode of
   assert.match(auditSentence(first,'ja').errors.join(' / '),/ものだ/)
   const second=sentence("What'll you have to drink?",'en','have to')
   assert.match(auditSentence(second,'en').errors.join(' / '),/ambiguous have to/)
+})
+
+test('first-120 real-source fragments abstain but retain genuine grammatical constructions',()=>{
+  const code=String.raw`
+import importlib.util
+from pathlib import Path
+spec=importlib.util.spec_from_file_location("first_120",str(Path("scripts/generate_language_sentence_seed.py").resolve()))
+gen=importlib.util.module_from_spec(spec);spec.loader.exec_module(gen)
+checks=[
+ ("わからない言葉があればすぐに辞書で調べる。","ja",("から","あれ")),
+ ("どうやって説明すればいいかわからない。","ja",("から",)),
+ ("1時間ほどお待ちいただけますか？","ja",("だけ",)),
+ ("代わりにダイアルしていただけませんか？","ja",("だけ",)),
+ ("今日はとても忙しいから一緒に行けないの。","ja",("と",)),
+ ("私は帰国してからとても忙しい。","ja",("と",)),
+ ("Y ouths who are caught violating rules will lose their right.","en",("who are",)),
+]
+for sentence,lang,forbidden in checks:
+ hits=gen.make_hits(sentence,lang)
+ assert not any(x["term"].casefold() in forbidden for x in hits),(sentence,hits)
+nominal=gen.make_hits("夢を見るのはただだよ。","ja")
+assert any(x["term"]=="の" and "名词化" in x["meaning"] for x in nominal),nominal
+ending=gen.make_hits("その自信はどこから来るの？","ja")
+assert any(x["term"]=="の" and "句末" in x["meaning"] for x in ending),ending
+full=gen.make_hits("It's not fair! I have to do the hard work!","en")
+assert not any(x["term"].casefold()=="the hard" for x in full),full
+assert any(x["term"].casefold()=="the hard work" for x in full),full
+`
+  const result=spawnSync('python3',['-c',code],{encoding:'utf8',timeout:60000})
+  assert.equal(result.status,0,[result.stdout,result.stderr].filter(Boolean).join('\n'))
 })

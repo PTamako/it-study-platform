@@ -66,6 +66,32 @@ export function auditSentence(card, language) {
     if (language === 'en' && /^(?:would you|could you)$/i.test(hit.term) &&
         before.trim() && !/[,!?。.]\s*$/.test(before))
       errors.push('embedded modal question is not a polite-request formula')
+    if (language === 'ja') {
+      if (hit.term === 'から' && /(?:分|判|解|わ)$/.test(before) && /^(?:ない|なかった|ず)/.test(after))
+        errors.push('negative verb わからない is not causal から')
+      if (hit.term === 'だけ' && /いた$/.test(before) && /^(?:る|ます|ません|ない|れ|た)/.test(after))
+        errors.push('いただけます is not restriction だけ')
+      if (hit.term === 'の' && /(?:こ|そ|あ|ど|ほん)$/.test(before))
+        errors.push('demonstrative/adverb is not possessive の')
+      if (hit.term === 'と' && (/^(?:ても|き)/.test(after) || /こ$/.test(before)))
+        errors.push('fixed word fragment is not particle と')
+      if (hit.term === 'に' && /(?:確か|本当|非常|特|実)$/.test(before))
+        errors.push('fixed adverb is not case particle に')
+      if (hit.term === 'あれ' && /^ば/.test(after))
+        errors.push('verb conditional あれば is not demonstrative あれ')
+      if (hit.term === 'の' && /^[。！？!?…]*$/.test(after) && /连接名词/.test(hit.meaning))
+        errors.push('sentence-final の is not noun connector')
+    }
+    if (language === 'en') {
+      if (/^used to$/i.test(hit.term) &&
+          /\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$/i.test(before))
+        errors.push('passive or accustomed used to is not past habitual')
+      if (/^(?:I|you|we|they|he|she|it|this|that|there)\s+(?:have|has|had)$/i.test(hit.term) &&
+          /^\s+to\b/i.test(after))
+        errors.push('generic subject have must not conceal deontic have to')
+      if (/^who(?:\s+|$)/i.test(hit.term) && before.trim() && !/[.?!]\s*$/.test(before) &&
+          /疑问/.test(hit.meaning)) errors.push('relative who is not interrogative')
+    }
     if (hit.type === 'grammar' && language === 'en') {
       if (/^have to$/i.test(hit.term) && /\bwhat(?:'ll| will) you\s*$/i.test(before) &&
           /^\s*(?:drink|eat)\b/i.test(after))

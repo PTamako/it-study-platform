@@ -449,8 +449,22 @@ def japanese_safe_word_span(sentence, start, end, term, kind="vocabulary"):
     if term == "いつ" and before in {"そ", "こ", "あ", "ど"}:
         return False
     # Do not treat the stem 分からない as a causal/starting-point から.
-    if term == "から" and sentence[:start].endswith(("分", "判", "解")) and re.match(r"ない|なかった|ず", after):
+    if term == "から" and sentence[:start].endswith(("分", "判", "解", "わ")) and re.match(r"ない|なかった|ず", after):
         return False
+    # Frequent fixed expressions and inflections are not detachable particles.
+    prefix = sentence[:start]
+    if term == "だけ" and prefix.endswith("いた") and re.match(r"(?:る|ます|ません|ない|れ|た)", after):
+        return False  # いただける／いただけます
+    if term == "の" and prefix.endswith(("こ", "そ", "あ", "ど", "ほん")):
+        return False  # この／その／あの／どの／ほんの
+    if term == "と" and (after.startswith(("ても", "き")) or prefix.endswith("こ")):
+        return False  # とても／とき／こと
+    if term == "に" and prefix.endswith(("確か", "本当", "非常", "特", "実")):
+        return False  # adverbial 確かに／本当に／特に
+    if term == "で" and prefix.endswith("いつ") and after.startswith("も"):
+        return False  # いつでも
+    if term == "あれ" and after.startswith("ば"):
+        return False  # あれば = ある conditional
     # Kana-leading entries embedded in an uninterrupted hiragana word are
     # uncertain; prefer a missed highlight to a false explanation.
     if kind == "vocabulary" and term and re.match(r"[ぁ-ん]", term[0]) and re.match(r"[ぁ-ん]", before) and before not in {"は", "が", "を", "に", "で", "と", "へ", "の", "も"}:
@@ -466,8 +480,26 @@ EN_MODIFIERS = {
     "excellent", "bad", "modern", "simple", "correct", "clear",
     "strong", "early", "late", "special", "popular", "common",
     "big", "little", "young", "kind", "happy", "final", "main",
-    "international", "Japanese", "English",
+    "international", "Japanese", "English", "hard", "appropriate",
 }
+
+def english_unsafe_sense(sentence, start, end, term):
+    """Skip demonstrably misleading annotations; preserve true constructions."""
+    before, after = sentence[:start], sentence[end:]
+    phrase = term.casefold()
+    if phrase in {"would you", "could you"} and before.strip() and not re.search(r"[,!?。.]\s*$", before):
+        return True  # embedded hypothetical question, not a direct polite request
+    if phrase == "have to" and re.search(r"\bwhat(?:'ll| will) you\s*$", before, re.I) and re.match(r"\s*(?:drink|eat)\b", after, re.I):
+        return True  # context may be an offer rather than an obligation
+    if phrase == "need to" and re.search(r"\b(?:the|a)\s+$", before, re.I):
+        return True  # nominal 'the need to ...', not a verbal construction
+    if phrase == "used to" and re.search(r"\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$", before, re.I):
+        return True  # accustomed to, or passive-purpose use
+    if re.fullmatch(r"(?:I|you|we|they|he|she|it|this|that|there)\s+(?:have|has|had)", term, re.I) and re.match(r"\s+to\b", after, re.I):
+        return True  # Don't let 'I have' conceal the more useful 'have to'
+    if re.match(r"who(?:\s+|$)", phrase) and before.strip() and not re.search(r"[.?!]\s*$", before):
+        return True  # relative clause 'people who are ...' is not a wh-question
+    return False
 
 def safe_english_article_phrase(text):
     """Only keep an article's modifier chain through a plausible head noun.
@@ -514,28 +546,7 @@ def make_hits(sentence, lang):
             term = match.group()
             if not term.strip():
                 continue
-            if lang == "en":
-                prefix = sentence[:match.start()]
-                suffix = sentence[match.end():]
-                # 'What more would you want?' asks about a hypothetical wish,
-                # not a standalone polite request (unlike 'Would you help?').
-                if term.casefold() in {"would you", "could you"} and prefix.strip() and not re.search(r"[,!?。.]\s*$", prefix):
-                    continue
-                # 'What'll you have to drink?' often means 'what will you
-                # choose to drink'; absent context, do not teach 'have to' as
-                # deontic obligation or force an authoritative interpretation.
-                if term.casefold() == "have to" and re.search(r"\bwhat(?:'ll| will) you\s*$", prefix, re.I) and re.match(r"\s*(?:drink|eat)\b", suffix, re.I):
-                    continue
-                # A noun phrase 'the need to collect water' is not the verb
-                # construction 'need to + verb'.
-                if term.casefold() == "need to" and re.search(r"\b(?:the|a)\s+$", prefix, re.I):
-                    continue
-            if lang == "en" and term.casefold() == "used to" and re.search(
-                r"\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$",
-                sentence[:match.start()], re.I):
-                # The lexicalized past-habit construction "used to + verb"
-                # is NOT "be/get used to + noun/gerund" (accustomed to), nor
-                # passive "is used to + verb" (purpose). Abstain from guessing.
+            if lang == "en" and english_unsafe_sense(sentence, match.start(), match.end(), term):
                 continue
             if lang == "en" and term.casefold().startswith(("a ", "an ", "the ")):
                 # Truncate to a plausible noun phrase before indexing/overlap
@@ -567,13 +578,18 @@ def make_hits(sentence, lang):
                 right = sentence[match.end():match.end() + 12]
                 local = sentence[max(0, match.start() - 4):min(len(sentence), match.end() + 4)]
                 if term == "の" and left and right:
+                    # Sentence-final の can mark a gentle question or
+                    # explanatory tone, not a noun-to-noun possessive.
+                    if re.fullmatch(r"[。！？!?…]*", right) and re.search(r"(?:ない|した|った|[うくぐすつぬぶむるた])$", left):
+                        meaning = "の：句末说明／轻问语气"
+                        explanation = "句末「の」用于较柔和地提问或补充说明；并非名词所属。"
                     # A predicate followed by のが／のは is nominalized:
                     # 学ぶのは / 食べるのが. It is not a possessive linker.
-                    if re.match(r"^(?:が|は|を|も)(?![ぁ-ん])", right) and re.search(
+                    elif re.match(r"^(?:が|は|を|も)", right) and re.search(
                         r"(?:する|できる|して|した|なる|ない|かった|[うくぐすつぬぶむる])$", left):
                         meaning = "の：动作／状态名词化"
                         explanation = "「" + local + "」中的「の」把前面的动作或状态作为一个整体，再由后续助词引出描述；不是名词之间的所属关系。"
-                    elif re.match(r"^(?:が|は|を|も)(?![ぁ-ん])", right):
+                    elif re.match(r"^(?:が|は|を|も)", right):
                         # 私のが好き can elide a noun; without a reliable
                         # predicate before の, avoid confidently calling it
                         # nominalization or simple noun-to-noun possession.
@@ -606,13 +622,8 @@ def make_hits(sentence, lang):
         if lang == "en":
             pattern = r"(?<![A-Za-z])" + pattern + r"(?![A-Za-z])"
         for match in re.finditer(pattern, sentence, re.I if lang == "en" else 0):
-            if lang == "en" and term.casefold() in {"would you", "could you"}:
-                prefix = sentence[:match.start()]
-                if prefix.strip() and not re.search(r"[,!?。.]\s*$", prefix):
-                    # The headword list also contains polite-request phrases.
-                    # The same contextual guard must apply to vocabulary,
-                    # otherwise it bypasses the grammar-only safeguard.
-                    continue
+            if lang == "en" and english_unsafe_sense(sentence, match.start(), match.end(), match.group()):
+                continue
             if lang == "ja" and not japanese_safe_word_span(sentence, match.start(), match.end(), match.group()):
                 continue
             candidates.append({
