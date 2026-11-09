@@ -131,9 +131,12 @@ export async function findStaticLearnerEntry(
     japaneseTerm: isJapanese ? raw.term : raw.translation_ja,
     translationJa: isJapanese ? undefined : raw.translation_ja || '',
     usageNote: !licensed ? explanation
-      : raw.example_review_status === 'source-linked-unreviewed-sense'
-        ? 'Tatoeba 社区双语例句（有原文出处；词条与例句中的具体词义尚未逐条人工核实）'
-        : undefined,
+      : [
+          ...(raw.example_review_status === 'source-linked-unreviewed-sense'
+            ? ['Tatoeba 社区双语例句（有原文出处；词条与例句中的具体词义尚未逐条人工核实）'] : []),
+          ...(raw.example && !raw.example_meaning_zh
+            ? ['该例句尚缺中文译文，暂不自动生成未经核实的翻译'] : []),
+        ].join('；') || undefined,
     partsOfSpeech: senses.map(s => s.partOfSpeech).filter(Boolean),
     senses: senses.length ? senses : undefined,
     example: raw.example || '',

@@ -204,3 +204,27 @@ test('FE B official 2022 samples participate in mock draws without changing thei
     finally { unknown.sql.close() }
   } finally { f.sql.close() }
 })
+
+
+test('SG timed mock excludes the verified historical mirror without deleting either official question',async()=>{
+  const historical = { id:'sg-official-h29a-2017-q31',track_id:'exam-sg',
+    exam_section:'A',exam_section_method:'default_a',topic:'privacy',
+    source_type:'official',question_kind:'standard',exam_origin:'general' }
+  const modern = { ...historical,id:'sg-official-r06-2024-q07' }
+  const f=setup([...rows(85,'A','SG',{track:'exam-sg'}), ...rows(35,'B','SG',{track:'exam-sg'}),
+    historical,modern])
+  try {
+    const recorded=f.sql.prepare('SELECT COUNT(*) n FROM questions WHERE id IN (?,?)')
+      .get(historical.id,modern.id).n
+    assert.equal(recorded,2,'both source-backed questions must remain in the learning bank')
+    for(let i=0;i<5;i++){
+      const {status,data}=await f.run('track=exam-sg&source=official')
+      // Other fixture SG rows are generated, so official-only cannot form a mock.
+      assert.equal(status,409)
+      const full=await f.run('track=exam-sg')
+      assert.equal(full.status,200)
+      assert.equal(full.data.items.length,60)
+      assert.ok(!full.data.items.some(item=>item.id===historical.id))
+    }
+  } finally {f.sql.close()}
+})
