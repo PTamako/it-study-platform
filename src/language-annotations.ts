@@ -103,8 +103,11 @@ function validBoundary(card: AnnotatedSentence, start: number, end: number, kind
     if (/^(?:you|we|they|he|she|i) would$/.test(token) && /^\s+like\s+to\b/i.test(after)) return false
     if (token === 'like' && /\b(?:eat|eats|eating|ate|run|runs|ran|looks?|behaves?|acts?)\s+$/i.test(before) &&
         /^\s+(?:a|an|the)\s+\w+/i.test(after)) return false
-    if (kind === 'grammar' && /^a bit(?:\s+(?:early|late|more|less|better|worse|faster|slower|longer|shorter))?$/i.test(term) &&
-        /^(?:a bit\s+|\s+(?:early|late|more|less|better|worse|faster|slower|longer|shorter)\b)/i.test(term+' '+after)) return false
+    if (kind === 'grammar' && (
+      /^a bit\s+(?:early|late|more|less|better|worse|faster|slower|longer|shorter)\b/i.test(term) ||
+      (/^a bit$/i.test(term) && /^\s+(?:early|late|more|less|better|worse|faster|slower|longer|shorter)\b/i.test(after))
+    )) return false
+    if (kind === 'vocabulary' && token === 'a bit' && /^\s+of\b/i.test(after)) return false
     if (kind === 'grammar' && /^a customer$/i.test(term) && /^\s+service\s+representative\b/i.test(after)) return false
     if (token === 'meeting' && /\b(?:my|your|his|her|our|their)\s+$/i.test(before) &&
         /^\s+(?:him|her|them|me|us|you)\b/i.test(after)) return false
