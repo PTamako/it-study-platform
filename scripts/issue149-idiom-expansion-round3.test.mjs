@@ -42,7 +42,7 @@ assert has(s,'That'),hits(s)
 
 test('browser does not render misleading old phrases and recognizes productive message idiom',()=>{
   const old=[
-    ["There is a post office close by.",'a post','完整名词短语','a post office'],
+    ["There is a post office close by.",'a post','完整名词短语','post office'],
     ["There is a post office close by.",'close','关闭／接近','close by'],
     ["Would you like to leave him a message?",'leave','离开／留下','leave him a message'],
     ["I am very sorry that I have to ask you to change the meeting date.",'that','那个／那',''],
