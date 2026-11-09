@@ -11,6 +11,9 @@ type Note = { meaning: string; explanation: string }
 type Rule = { language: 'ja' | 'en'; pattern: RegExp; meaning: string; explanation: string }
 
 const WORDS: Record<string, Note> = {
+  '代わりに': { meaning: '代替／代劳', explanation: '表示替代、代替某人做事，不能把「に」单独解成目的地。' },
+  'a bit': { meaning: '稍微／有点', explanation: '修饰形容词或副词，表示程度，不是冠词加名词。' },
+  'customer service representative': { meaning: '客服代表', explanation: '完整复合名词，指负责回应顾客的客服人员。' },
   'そいつ': { meaning: '那个家伙／那个东西', explanation: '随意的指示代词，指语境中提到的人或物；对人使用有时显得不礼貌。' },
   '使い方': { meaning: '使用方法', explanation: '「使う」的ます形词干「使い」＋「方」，表示使用某物的方法。' },
   '分からない': { meaning: '不知道／不明白', explanation: '「分かる」的否定形，本句指不知道使用方法。' },
@@ -47,6 +50,7 @@ const WORDS: Record<string, Note> = {
 }
 
 const GRAMMAR: Rule[] = [
+  { language: 'ja', pattern: /ようにお願いします/g, meaning: '恳请……／希望……', explanation: '整句请求表达，不将末尾「に」误读为目标或时间。' },
   { language: 'ja', pattern: /(?:んだ|んです|(?<!も)のだ|(?<!も)のです)(?=[。！？!?…]*$)/g, meaning: '说明／解释语气', explanation: '「のだ／のです」用于解释情况，「んだ」是口语形式。' },
   { language: 'ja', pattern: /ていただけますか|でいただけますか/g, meaning: '能否请您……', explanation: '动词て形＋いただけますか，礼貌地提出请求。' },
   { language: 'ja', pattern: /てください/g, meaning: '请……', explanation: '动词て形＋ください，表示礼貌请求。' },
@@ -99,6 +103,12 @@ function validBoundary(card: AnnotatedSentence, start: number, end: number, kind
     if (/^(?:you|we|they|he|she|i) would$/.test(token) && /^\s+like\s+to\b/i.test(after)) return false
     if (token === 'like' && /\b(?:eat|eats|eating|ate|run|runs|ran|looks?|behaves?|acts?)\s+$/i.test(before) &&
         /^\s+(?:a|an|the)\s+\w+/i.test(after)) return false
+    if (kind === 'grammar' && (
+      /^a bit\s+(?:early|late|more|less|better|worse|faster|slower|longer|shorter)\b/i.test(term) ||
+      (/^a bit$/i.test(term) && /^\s+(?:early|late|more|less|better|worse|faster|slower|longer|shorter)\b/i.test(after))
+    )) return false
+    if (kind === 'vocabulary' && token === 'a bit' && /^\s+of\b/i.test(after)) return false
+    if (kind === 'grammar' && /^a customer$/i.test(term) && /^\s+service\s+representative\b/i.test(after)) return false
     if (token === 'meeting' && /\b(?:my|your|his|her|our|their)\s+$/i.test(before) &&
         /^\s+(?:him|her|them|me|us|you)\b/i.test(after)) return false
     if (token === 'that' && /\b(?:said|say|says|knew|know|think|thought|sorry|glad|certain|aware)\s+$/i.test(before)) return false
@@ -142,6 +152,7 @@ function validBoundary(card: AnnotatedSentence, start: number, end: number, kind
   if (term === 'の' && /(?:こ|そ|あ|ど|ほん)$/.test(prefix)) return false
   if (term === 'と' && (/^(?:ても|き)/.test(suffix) || /こ$/.test(prefix))) return false
   if (term === 'に' && /(?:確か|本当|非常|特|実)$/.test(prefix)) return false
+  if (term === 'に' && (prefix.endsWith('代わり') || (prefix.endsWith('よう') && /^お願いします/.test(suffix)))) return false
   if (term === 'で' && /いつ$/.test(prefix) && /^も/.test(suffix)) return false
   if (term === 'で' && (
     /^(?:きる|きない|きます|きました|きません|きた|きて|きれば)/.test(suffix) ||

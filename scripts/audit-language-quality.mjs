@@ -93,6 +93,9 @@ export function auditSentence(card, language) {
         errors.push('よくない is negative adjective, not positive/frequency よく')
       if (hit.term === 'で' && /^はない/.test(after) && /地点|手段/.test(hit.meaning))
         errors.push('ではない is copular negation, not location/instrument で')
+      if (hit.term === 'に' && /目标|时间|对象/.test(hit.meaning) &&
+          (before.endsWith('代わり') || (before.endsWith('よう') && /^お願いします/.test(after))))
+        errors.push('代わりに / ようにお願いします must not be labelled as generic particle に')
       if (hit.term === 'で' && /地点|手段/.test(hit.meaning) && (
           /^(?:きる|きない|きます|きました|きません|きた|きて|きれば)/.test(after) ||
           /[0-9０-９一二三四五六七八九十]+(?:歩|日|分|時間|週間|か月|ヶ月|年)$/.test(before) ||
@@ -103,6 +106,12 @@ export function auditSentence(card, language) {
         errors.push('directional へと is not quotation or accompaniment と')
     }
     if (language === 'en') {
+      if (hit.type === 'grammar' && /名词短语/.test(hit.meaning) &&
+          (/^a bit\s+(?:early|late|more|less|better|worse|faster|slower|longer|shorter)\b/i.test(hit.term) ||
+           (/^a bit$/i.test(hit.term) && /^\s+(?:early|late|more|less|better|worse|faster|slower|longer|shorter)\b/i.test(after))))
+        errors.push('a bit + degree modifier is an adverbial, not an ordinary noun phrase')
+      if (hit.type === 'grammar' && /^a customer$/i.test(hit.term) && /^\s+service\s+representative\b/i.test(after))
+        errors.push('customer service representative is a full occupational compound')
       if (/^like$/i.test(hit.term) && /\b(?:eat|ate|run|ran|behave|act)\s+$/i.test(before) &&
           /^\s+(?:a|an|the)\s+/i.test(after) && /喜欢|love|enjoy/.test(hit.meaning))
         errors.push('comparative like is not the verb like/love')
