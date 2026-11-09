@@ -56,6 +56,59 @@ export function auditSentence(card, language) {
       continue
     }
     if (FILLERS.has(hit.meaning) || /未识别到明确/.test(hit.explanation)) errors.push('placeholder explanation')
+    const before = points.slice(0, hit.start).join('')
+    const after = points.slice(hit.end).join('')
+    // Proven false positive forms from the published first 120 review queue.
+    // Don't let the generator silently reintroduce them in future deployments.
+    if (hit.type === 'grammar' && language === 'ja' &&
+        /^(?:のだ|のです)$/.test(hit.term) && before.endsWith('も'))
+      errors.push('ものだ/ものです is not explanatory のだ/のです')
+    if (language === 'en' && /^(?:would you|could you)$/i.test(hit.term) &&
+        before.trim() && !/[,!?。.]\s*$/.test(before))
+      errors.push('embedded modal question is not a polite-request formula')
+    if (language === 'ja') {
+      if (hit.term === 'から' && /(?:分|判|解|わ)$/.test(before) && /^(?:ない|なかった|ず)/.test(after))
+        errors.push('negative verb わからない is not causal から')
+      if (hit.term === 'だけ' && /いた$/.test(before) && /^(?:る|ます|ません|ない|れ|た)/.test(after))
+        errors.push('いただけます is not restriction だけ')
+      if (hit.term === 'の' && /(?:こ|そ|あ|ど|ほん)$/.test(before))
+        errors.push('demonstrative/adverb is not possessive の')
+      if (hit.term === 'と' && (/^(?:ても|き)/.test(after) || /こ$/.test(before)))
+        errors.push('fixed word fragment is not particle と')
+      if (hit.term === 'に' && /(?:確か|本当|非常|特|実)$/.test(before))
+        errors.push('fixed adverb is not case particle に')
+      if (hit.term === 'あれ' && /^ば/.test(after))
+        errors.push('verb conditional あれば is not demonstrative あれ')
+      if (hit.term === 'の' && /^[。！？!?…]*$/.test(after) && /连接名词/.test(hit.meaning))
+        errors.push('sentence-final の is not noun connector')
+    }
+    if (language === 'en') {
+      if (/^(?:have to|need to)$/i.test(hit.term) &&
+          /\b(?:don't|doesn't|didn't|do not|does not|did not)\s+$/i.test(before))
+        errors.push('negative necessity is not must or need')
+      if (/^used$/i.test(hit.term) &&
+          /\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$/i.test(before) &&
+          /^\s+to\b/i.test(after))
+        errors.push('be used to is not bare use')
+      if (/^used to$/i.test(hit.term) &&
+          /\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$/i.test(before))
+        errors.push('passive or accustomed used to is not past habitual')
+      if (/^(?:I|you|we|they|he|she|it|this|that|there)\s+(?:have|has|had)$/i.test(hit.term) &&
+          /^\s+to\b/i.test(after))
+        errors.push('generic subject have must not conceal deontic have to')
+      if (/^who(?:\s+|$)/i.test(hit.term) && before.trim() && !/[.?!]\s*$/.test(before) &&
+          /疑问/.test(hit.meaning)) errors.push('relative who is not interrogative')
+    }
+    if (hit.type === 'grammar' && language === 'en') {
+      if (/^have to$/i.test(hit.term) && /\bwhat(?:'ll| will) you\s*$/i.test(before) &&
+          /^\s*(?:drink|eat)\b/i.test(after))
+        errors.push('ambiguous have to drink/eat must not be forced to obligation')
+      if (/^need to$/i.test(hit.term) && /\b(?:the|a)\s+$/i.test(before))
+        errors.push('nominal need to is not verbal need to')
+      if (/^used to$/i.test(hit.term) &&
+          /\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$/i.test(before))
+        errors.push('passive or accustomed used to is not past habitual')
+    }
     sorted.push(hit)
   }
   sorted.sort((a,b) => a.start - b.start)
@@ -131,7 +184,18 @@ export function inspectCorpus(sentencesByLanguage, wordsByLanguage, grammarByLan
       found.errors.forEach(error=>fail(language+' sentence',key,error))
       if (found.warnings.length) reviewCandidates.push({
         id:key,language,category:item.category,term:String(item.term || '').slice(0,150),
+        meaning_zh:String(item.meaning_zh || '').slice(0,260),
         source_url:item.source_url,reasons:found.warnings,
+        // The exact marked phrase and its proposed sense must be visible to
+        // reviewers; source URL alone cannot diagnose a misleading gloss.
+        highlights:(()=>{try{
+          const parsed=JSON.parse(item.highlight_json || '[]')
+          return Array.isArray(parsed) ? parsed.slice(0,8).filter(x=>x&&typeof x==='object').map(hit=>({
+            term:hit.term,type:hit.type,meaning:hit.meaning,explanation:hit.explanation,
+            start:hit.start,end:hit.end,
+          })) : []
+        }catch{return []}})(),
+        review_status:'awaiting-linguistic-review',
       })
     }
     if (sentences.length!==5000) fail(language+' sentence','corpus','expected 5,000 source-backed cards')
@@ -236,6 +300,18 @@ async function main() {
   const out=resolve(ROOT,'quality-reports/language-quality.json')
   await mkdir(resolve(ROOT,'quality-reports'),{recursive:true})
   await writeFile(out,JSON.stringify(result,null,2)+'\n','utf8')
+  // Human-friendly worksheet; every row is source-backed and explicitly
+  // UNVERIFIED, not silently counted as a linguistically approved sentence.
+  const columnNames=['id','language','category','sentence','chinese_translation','source_url',
+    'proposed_highlights_json','review_status','reviewer','reviewed_at','review_notes']
+  const csv=(value)=>'"'+String(value ?? '').replace(/"/g,'""')+'"'
+  const lines=[columnNames.map(csv).join(',')]
+  for(const row of result.reviewQueue) lines.push([
+    row.id,row.language,row.category,row.term,row.meaning_zh,row.source_url,
+    JSON.stringify(row.highlights),'待人工逐条核验','','','',
+  ].map(csv).join(','))
+  await writeFile(resolve(ROOT,'quality-reports/language-semantic-first-120.csv'),
+    lines.join('\n')+'\n','utf8')
   console.log(JSON.stringify({ok:result.ok,errorCount:result.errorCount,stats:result.stats,
     reviewCandidates:result.reviewCandidateCount,reviewQueue:result.reviewQueue.length,
     linkedWordReviewCandidates:result.linkedWordReviewCandidateCount,

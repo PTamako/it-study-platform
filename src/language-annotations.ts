@@ -37,7 +37,7 @@ const WORDS: Record<string, Note> = {
 }
 
 const GRAMMAR: Rule[] = [
-  { language: 'ja', pattern: /(?:んだ|んです|のだ|のです)(?=[。！？!?…]*$)/g, meaning: '说明／解释语气', explanation: '「のだ／のです」用于解释情况，「んだ」是口语形式。' },
+  { language: 'ja', pattern: /(?:んだ|んです|(?<!も)のだ|(?<!も)のです)(?=[。！？!?…]*$)/g, meaning: '说明／解释语气', explanation: '「のだ／のです」用于解释情况，「んだ」是口语形式。' },
   { language: 'ja', pattern: /ていただけますか|でいただけますか/g, meaning: '能否请您……', explanation: '动词て形＋いただけますか，礼貌地提出请求。' },
   { language: 'ja', pattern: /てください/g, meaning: '请……', explanation: '动词て形＋ください，表示礼貌请求。' },
   { language: 'ja', pattern: /てから/g, meaning: '……之后', explanation: '表示先完成前项动作再做后项动作。' },
@@ -48,6 +48,8 @@ const GRAMMAR: Rule[] = [
   { language: 'en', pattern: /\bcould you\b/gi, meaning: '礼貌请求句型', explanation: 'Could you 后接动词原形，表达礼貌请求。' },
   { language: 'en', pattern: /\bwould you\b/gi, meaning: '礼貌请求句型', explanation: 'Would you 后接动词原形，表达礼貌请求。' },
   { language: 'en', pattern: /\bwould like to\b/gi, meaning: '礼貌表达意愿', explanation: '比 want to 更委婉。' },
+  { language: 'en', pattern: /\b(?:don't|doesn't|didn't|do not|does not|did not)\s+(?:have|need)\s+to\b/gi,
+    meaning: '不必／不需要', explanation: '否定必要性：不必做某事，不等于 must not 所表达的禁止。' },
   { language: 'en', pattern: /\bhave to\b/gi, meaning: '必须……', explanation: '表示义务或必要性。' },
   { language: 'en', pattern: /\bneed to\b/gi, meaning: '需要……', explanation: '表示做某事的必要性。' },
   { language: 'en', pattern: /\bused to\b/gi, meaning: '过去常常……', explanation: '指过去的习惯或状态。' },
@@ -81,14 +83,40 @@ function japaneseBoundaries(sentence: string): Set<number> {
 function validBoundary(card: AnnotatedSentence, start: number, end: number, kind: 'vocabulary' | 'grammar', boundaries: Set<number>): boolean {
   const term = card.term.slice(start, end)
   if (card.language === 'en') {
-    if (kind === 'grammar' && term.toLowerCase() === 'used to' &&
-        /\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$/i.test(card.term.slice(0, start))) {
-      // Be/get used to + noun/gerund (习惯于), or passive be used to + verb
-      // (被用于) must never inherit past-habit "used to + infinitive".
+    const prefix = card.term.slice(0, start)
+    const suffix = card.term.slice(end)
+    // These safeguards apply to vocabulary AND grammar: the authored seed
+    // lists sometimes contain the same phrase under both categories.
+    if (/^(?:would you|could you)$/i.test(term) && prefix.trim() &&
+        !/[,!?。.]\s*$/.test(prefix)) return false
+    if (/^have to$/i.test(term) && /\bwhat(?:'ll| will) you\s*$/i.test(prefix) &&
+        /^\s*(?:drink|eat)\b/i.test(suffix)) return false
+    if (/^need to$/i.test(term) && /\b(?:the|a)\s+$/i.test(prefix)) return false
+    if (/^(?:have to|need to)$/i.test(term) &&
+        /\b(?:don't|doesn't|didn't|do not|does not|did not)\s+$/i.test(prefix)) return false
+    if (/^used$/i.test(term) &&
+        /\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$/i.test(prefix) &&
+        /^\s+to\b/i.test(suffix)) return false
+    if (/^used to$/i.test(term) &&
+        /\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$/i.test(prefix)) return false
+    if (/^(?:I|you|we|they|he|she|it|this|that|there)\s+(?:have|has|had)$/i.test(term) &&
+        /^\s+to\b/i.test(suffix)) return false
+    if (/^who(?:\s+|$)/i.test(term) && prefix.trim() && !/[.?!]\s*$/.test(prefix))
       return false
-    }
     return !/[A-Za-z]/.test(card.term[start - 1] || '') && !/[A-Za-z]/.test(card.term[end] || '')
   }
+  // A stale source highlight for 'ものだ' must not display 'のだ' as an
+  // explanation marker in legacy D1 cards. The static generator also abstains.
+  if (kind === 'grammar' && /^(?:のだ|のです)$/.test(term) && card.term[start - 1] === 'も') return false
+  const prefix = card.term.slice(0, start)
+  const suffix = card.term.slice(end)
+  if (term === 'から' && /(?:分|判|解|わ)$/.test(prefix) && /^(?:ない|なかった|ず)/.test(suffix)) return false
+  if (term === 'だけ' && /いた$/.test(prefix) && /^(?:る|ます|ません|ない|れ|た)/.test(suffix)) return false
+  if (term === 'の' && /(?:こ|そ|あ|ど|ほん)$/.test(prefix)) return false
+  if (term === 'と' && (/^(?:ても|き)/.test(suffix) || /こ$/.test(prefix))) return false
+  if (term === 'に' && /(?:確か|本当|非常|特|実)$/.test(prefix)) return false
+  if (term === 'で' && /いつ$/.test(prefix) && /^も/.test(suffix)) return false
+  if (term === 'あれ' && /^ば/.test(suffix)) return false
   if (!boundaries.has(start) || !boundaries.has(end)) return false
   // 分からない consists of 分 / から / ない in Japanese word segmenters;
   // から here is part of a verb, NOT an independent causal particle.

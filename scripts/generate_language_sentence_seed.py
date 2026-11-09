@@ -319,7 +319,7 @@ EN_VOCAB = [
  ("successful","成功的","表示达到预期目标")
 ]
 JP_GRAMMAR = [
- (r"んだ(?=[。！？!?…]*$)|のだ(?=[。！？!?…]*$)","说明／解释语气","「のだ」的口语形式「んだ」用于解释、强调当前情况。"),
+ (r"んだ(?=[。！？!?…]*$)|(?<!も)のだ(?=[。！？!?…]*$)","说明／解释语气","「のだ」的口语形式「んだ」用于解释、强调当前情况。"),
  (r"誰の[^、。！？!?\s]+?(?=です|だ|だった|[。！？!?…]|$)|何の[^、。！？!?\s]+?(?=です|だ|だった|[。！？!?…]|$)","疑問词＋の＋名词：所属・内容","「誰の＋名詞」は持ち主を、「何の＋名詞」は種類や内容を尋ねる。「の」は疑問詞と名詞をつなぐ。"),
  (r"ですか(?=[。！？!?…]*$)","ですか：礼貌疑问句","名词或な形容词等后接「ですか」构成礼貌疑问；「か」标记疑问，不是独立的重点词汇。"),
  (r"でしょうか(?=[。！？!?…]*$)","でしょうか：委婉疑问","比直接的「ですか」更委婉，常用于询问或确认。"),
@@ -337,7 +337,7 @@ JP_GRAMMAR = [
  (r"かもしれません","也许……","表达不确定的推测"), (r"ようにします","尽量做到……","表示有意识地努力形成习惯"),
  (r"てから","……之后","表示先完成前项再进行后项"), (r"までに","在……之前","表示截止时间"),
  (r"について","关于……","表示谈论的主题"), (r"ために","为了……","表示目的或原因，依上下文判断"),
- (r"んです|のです","说明／强调语气","用于解释背景或强调说明"),
+ (r"んです|(?<!も)のです","说明／强调语气","用于解释背景或强调说明"),
  (r"ないでください","请不要……","动词ない形＋でください，用于礼貌地请求对方不要做某事"),
  (r"なくてもいい(?:です)?","不……也可以","表示某动作不是必须的，允许不做"),
  (r"たほうがいい","最好……","用于提出建议，表示某做法更合适"),
@@ -377,7 +377,9 @@ EN_GRAMMAR = [
 (r"\b(?:a|an|the)\s+\w+","冠词＋名词","a/an 通常引入一个非特定的可数单数对象；the 指向语境中可识别的特定对象。"),
  (r"\bwould you\b","Would you…? 礼貌请求","用 would you + 动词原形提出礼貌请求"),
  (r"\bcould you\b","Could you…? 礼貌请求","用 could you + 动词原形提出礼貌请求"),
- (r"\bwould like to\b","would like to + 动词","较礼貌地表达意愿"), (r"\bhave to\b","have to + 动词","表示外部要求或必要性"),
+ (r"\bwould like to\b","would like to + 动词","较礼貌地表达意愿"),
+ (r"\b(?:don't|doesn't|didn't|do not|does not|did not)\s+(?:have|need)\s+to\b","不必／不需要","否定必要性：don't have to / don't need to 表示不必做，不等于 must not 所表达的禁止。"),
+ (r"\bhave to\b","have to + 动词","表示外部要求或必要性"),
  (r"\bneed to\b","need to + 动词","表示需要做某事"), (r"\bused to\b","used to + 动词","表示过去常有、现在不再持续的习惯或状态"),
  (r"\bhave been\b|\bhas been\b","现在完成相关结构","have/has been 后可接形容词、名词、现在分词或过去分词"),
  (r"\bwill\b","will + 动词原形","常用于预测、承诺或临时决定"), (r"\bshould\b","should + 动词原形","表达建议或合理预期"),
@@ -449,8 +451,22 @@ def japanese_safe_word_span(sentence, start, end, term, kind="vocabulary"):
     if term == "いつ" and before in {"そ", "こ", "あ", "ど"}:
         return False
     # Do not treat the stem 分からない as a causal/starting-point から.
-    if term == "から" and sentence[:start].endswith(("分", "判", "解")) and re.match(r"ない|なかった|ず", after):
+    if term == "から" and sentence[:start].endswith(("分", "判", "解", "わ")) and re.match(r"ない|なかった|ず", after):
         return False
+    # Frequent fixed expressions and inflections are not detachable particles.
+    prefix = sentence[:start]
+    if term == "だけ" and prefix.endswith("いた") and re.match(r"(?:る|ます|ません|ない|れ|た)", after):
+        return False  # いただける／いただけます
+    if term == "の" and prefix.endswith(("こ", "そ", "あ", "ど", "ほん")):
+        return False  # この／その／あの／どの／ほんの
+    if term == "と" and (after.startswith(("ても", "き")) or prefix.endswith("こ")):
+        return False  # とても／とき／こと
+    if term == "に" and prefix.endswith(("確か", "本当", "非常", "特", "実")):
+        return False  # adverbial 確かに／本当に／特に
+    if term == "で" and prefix.endswith("いつ") and after.startswith("も"):
+        return False  # いつでも
+    if term == "あれ" and after.startswith("ば"):
+        return False  # あれば = ある conditional
     # Kana-leading entries embedded in an uninterrupted hiragana word are
     # uncertain; prefer a missed highlight to a false explanation.
     if kind == "vocabulary" and term and re.match(r"[ぁ-ん]", term[0]) and re.match(r"[ぁ-ん]", before) and before not in {"は", "が", "を", "に", "で", "と", "へ", "の", "も"}:
@@ -466,8 +482,30 @@ EN_MODIFIERS = {
     "excellent", "bad", "modern", "simple", "correct", "clear",
     "strong", "early", "late", "special", "popular", "common",
     "big", "little", "young", "kind", "happy", "final", "main",
-    "international", "Japanese", "English",
+    "international", "Japanese", "English", "hard", "appropriate",
 }
+
+def english_unsafe_sense(sentence, start, end, term):
+    """Skip demonstrably misleading annotations; preserve true constructions."""
+    before, after = sentence[:start], sentence[end:]
+    phrase = term.casefold()
+    if phrase in {"would you", "could you"} and before.strip() and not re.search(r"[,!?。.]\s*$", before):
+        return True  # embedded hypothetical question, not a direct polite request
+    if phrase == "have to" and re.search(r"\bwhat(?:'ll| will) you\s*$", before, re.I) and re.match(r"\s*(?:drink|eat)\b", after, re.I):
+        return True  # context may be an offer rather than an obligation
+    if phrase == "need to" and re.search(r"\b(?:the|a)\s+$", before, re.I):
+        return True  # nominal 'the need to ...', not a verbal construction
+    if phrase in {"have to", "need to"} and re.search(r"\b(?:don't|doesn't|didn't|do not|does not|did not)\s+$", before, re.I):
+        return True  # negation means no obligation, not necessity
+    if phrase == "used" and re.search(r"\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$", before, re.I) and re.match(r"\s+to\b", after, re.I):
+        return True  # be used to must not be taught as 'use'
+    if phrase == "used to" and re.search(r"\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$", before, re.I):
+        return True  # accustomed to, or passive-purpose use
+    if re.fullmatch(r"(?:I|you|we|they|he|she|it|this|that|there)\s+(?:have|has|had)", term, re.I) and re.match(r"\s+to\b", after, re.I):
+        return True  # Don't let 'I have' conceal the more useful 'have to'
+    if re.match(r"who(?:\s+|$)", phrase) and before.strip() and not re.search(r"[.?!]\s*$", before):
+        return True  # relative clause 'people who are ...' is not a wh-question
+    return False
 
 def safe_english_article_phrase(text):
     """Only keep an article's modifier chain through a plausible head noun.
@@ -514,12 +552,7 @@ def make_hits(sentence, lang):
             term = match.group()
             if not term.strip():
                 continue
-            if lang == "en" and term.casefold() == "used to" and re.search(
-                r"\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$",
-                sentence[:match.start()], re.I):
-                # The lexicalized past-habit construction "used to + verb"
-                # is NOT "be/get used to + noun/gerund" (accustomed to), nor
-                # passive "is used to + verb" (purpose). Abstain from guessing.
+            if lang == "en" and english_unsafe_sense(sentence, match.start(), match.end(), term):
                 continue
             if lang == "en" and term.casefold().startswith(("a ", "an ", "the ")):
                 # Truncate to a plausible noun phrase before indexing/overlap
@@ -551,13 +584,23 @@ def make_hits(sentence, lang):
                 right = sentence[match.end():match.end() + 12]
                 local = sentence[max(0, match.start() - 4):min(len(sentence), match.end() + 4)]
                 if term == "の" and left and right:
+                    # Sentence-final の can mark a gentle question or
+                    # explanatory tone, not a noun-to-noun possessive.
+                    if re.fullmatch(r"[。！？!?…]*", right):
+                        if re.search(r"(?:ない|した|った|[うくぐすつぬぶむるた])$", left):
+                            meaning = "の：句末说明／轻问语气"
+                            explanation = "句末「の」用于较柔和地提问或补充说明；并非名词所属。"
+                        else:
+                            # No next noun and no confidently recognized
+                            # predicate: omit rather than call it ownership.
+                            continue
                     # A predicate followed by のが／のは is nominalized:
                     # 学ぶのは / 食べるのが. It is not a possessive linker.
-                    if re.match(r"^(?:が|は|を|も)(?![ぁ-ん])", right) and re.search(
+                    elif re.match(r"^(?:が|は|を|も)", right) and re.search(
                         r"(?:する|できる|して|した|なる|ない|かった|[うくぐすつぬぶむる])$", left):
                         meaning = "の：动作／状态名词化"
                         explanation = "「" + local + "」中的「の」把前面的动作或状态作为一个整体，再由后续助词引出描述；不是名词之间的所属关系。"
-                    elif re.match(r"^(?:が|は|を|も)(?![ぁ-ん])", right):
+                    elif re.match(r"^(?:が|は|を|も)", right):
                         # 私のが好き can elide a noun; without a reliable
                         # predicate before の, avoid confidently calling it
                         # nominalization or simple noun-to-noun possession.
@@ -590,6 +633,8 @@ def make_hits(sentence, lang):
         if lang == "en":
             pattern = r"(?<![A-Za-z])" + pattern + r"(?![A-Za-z])"
         for match in re.finditer(pattern, sentence, re.I if lang == "en" else 0):
+            if lang == "en" and english_unsafe_sense(sentence, match.start(), match.end(), match.group()):
+                continue
             if lang == "ja" and not japanese_safe_word_span(sentence, match.start(), match.end(), match.group()):
                 continue
             candidates.append({
@@ -606,6 +651,8 @@ def make_hits(sentence, lang):
                     continue
                 pattern = r"(?<![A-Za-z])" + re.escape(surface) + r"(?![A-Za-z])"
                 for match in re.finditer(pattern, sentence, re.I):
+                    if english_unsafe_sense(sentence, match.start(), match.end(), match.group()):
+                        continue
                     candidates.append({
                         "start": match.start(), "end": match.end(), "type": "vocabulary",
                         "term": match.group(), "meaning": meaning + "（原形 " + lemma + " 的词形变化）",
