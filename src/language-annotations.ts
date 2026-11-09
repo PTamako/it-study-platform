@@ -143,6 +143,13 @@ function validBoundary(card: AnnotatedSentence, start: number, end: number, kind
   if (term === 'と' && (/^(?:ても|き)/.test(suffix) || /こ$/.test(prefix))) return false
   if (term === 'に' && /(?:確か|本当|非常|特|実)$/.test(prefix)) return false
   if (term === 'で' && /いつ$/.test(prefix) && /^も/.test(suffix)) return false
+  if (term === 'で' && (
+    /^(?:きる|きない|きます|きました|きません|きた|きて|きれば)/.test(suffix) ||
+    /[0-9０-９一二三四五六七八九十]+(?:歩|日|分|時間|週間|か月|ヶ月|年)$/.test(prefix) ||
+    /(?:る|た|ない)上$/.test(prefix) ||
+    (prefix.endsWith('天気予報') && /^は/.test(suffix))
+  )) return false
+  if (term === 'と' && prefix.endsWith('へ')) return false
   if (term === 'あれ' && /^ば/.test(suffix)) return false
   if (kind === 'vocabulary' && term === 'もの' && /^が言え/.test(after)) return false
   if (kind === 'vocabulary' && term === 'よく' && /^ない/.test(after)) return false
@@ -192,6 +199,12 @@ function normalize(card: AnnotatedSentence, value: unknown, boundaries: Set<numb
     if (hit.term === 'が' && /^分からない/.test(card.term.slice(end))) {
       return { start, end, term: hit.term, type: hit.type,
         meaning: '不知道的内容', explanation: '「～が分からない」表示不知道或不明白前面提到的事情、方法或对象。' }
+    }
+    if (hit.term === 'の' && /^[。！？!?…]/.test(card.term.slice(end)) &&
+        /(?:ない|した|った|[うくぐすつぬぶむるた])$/.test(card.term.slice(0, start))) {
+      return { start, end, term: hit.term, type: hit.type,
+        meaning: '句末说明／轻问语气',
+        explanation: '句尾「の」用于说明或柔和提问，即使后面还有另一个句子，也不是名词所属。' }
     }
     if (hit.term === 'の' && typeof Intl.Segmenter === 'function') {
       const tokens = [...new Intl.Segmenter('ja', { granularity: 'word' }).segment(card.term)]
