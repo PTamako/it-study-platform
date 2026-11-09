@@ -101,4 +101,7 @@ test('source-linked examples are explicitly unreviewed; audit report separates s
   assert.equal(report.linkedWordReviewCandidateCount,1)
   assert.equal(report.wordReviewQueue[0].review_status,'unreviewed-word-sense')
   assert.equal(report.stats.words.ja.linkedExamplesAwaitingSenseReview,1)
+  assert.equal(report.allWordReviewCandidates.length,1)
+  assert.equal(report.allWordReviewCandidates[0].review_status,'unreviewed-word-sense')
+  assert.ok(Array.isArray(report.allMissingWordCandidates))
 })
