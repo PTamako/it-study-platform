@@ -154,6 +154,24 @@ def choose_source_linked_examples(sentences, translations, licensed_words):
             continue
         scanned[lang] += 1
         for key in find_exact_headword_matches(original, lang, patterns[lang]):
+            # The Chinese Tatoeba translation itself can distinguish named
+            # persons from homographic Japanese common nouns. Check both
+            # simplified/traditional characters without guessing from position.
+            # A proper-name reading of ビル／マイク／ベル／トランプ
+            # is not a valid example of a building/microphone/bell/cards.
+            proper_name_translations = {
+                "ビル": r"(?:比尔|比爾|\bBill\b)",
+                "マイク": r"(?:迈克|邁克|麦克(?!风)|麥克(?!風)|\bMike\b)",
+                "ベル": r"(?:贝尔|貝爾|\bBell\b)",
+                "トランプ": r"(?:特朗普|川普|\bTrump\b)",
+            }
+            if lang == "ja" and key in proper_name_translations and re.search(
+                proper_name_translations[key], chinese, re.I):
+                continue
+            if lang == "en" and key == "fixed" and re.search(
+                r"\b(?:bugs?|errors?|problems?|code|issues?)\s+(?:were|was|are|is|have\s+been|has\s+been)\s+fixed\b",
+                original, re.I):
+                continue  # repaired software defects, not a fixed attribute
             if lang == "en" and key in {"abandoned", "advanced", "confused", "excited", "fixed", "mixed"} and re.search(
                 r"\b(?:i|you|he|she|we|they|tom|mary)\s+" + re.escape(key) +
                 r"\s+(?:them|him|her|us|me|to|the|an?|their)\b", original, re.I):
