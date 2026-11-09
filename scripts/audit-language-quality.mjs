@@ -107,8 +107,8 @@ export function auditSentence(card, language) {
     }
     if (language === 'en') {
       if (hit.type === 'grammar' && /名词短语/.test(hit.meaning) &&
-          (/^a bit(?:\s+(?:early|late|more|less|better|worse|faster|slower|longer|shorter))?$/i.test(hit.term) &&
-           /^(?:a bit\s+|\s+(?:early|late|more|less|better|worse|faster|slower|longer|shorter)\b)/i.test(hit.term+' '+after)))
+          (/^a bit\s+(?:early|late|more|less|better|worse|faster|slower|longer|shorter)\b/i.test(hit.term) ||
+           (/^a bit$/i.test(hit.term) && /^\s+(?:early|late|more|less|better|worse|faster|slower|longer|shorter)\b/i.test(after))))
         errors.push('a bit + degree modifier is an adverbial, not an ordinary noun phrase')
       if (hit.type === 'grammar' && /^a customer$/i.test(hit.term) && /^\s+service\s+representative\b/i.test(after))
         errors.push('customer service representative is a full occupational compound')
