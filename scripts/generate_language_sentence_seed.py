@@ -522,7 +522,7 @@ EN_MODIFIERS = {
     "international", "Japanese", "English", "hard", "appropriate",
 }
 
-def english_unsafe_sense(sentence, start, end, term):
+def english_unsafe_sense(sentence, start, end, term, kind="grammar"):
     """Skip demonstrably misleading annotations; preserve true constructions."""
     before, after = sentence[:start], sentence[end:]
     phrase = term.casefold()
@@ -548,11 +548,11 @@ def english_unsafe_sense(sentence, start, end, term):
         return True  # 'eat like a pig': comparison preposition, not liking
     if phrase in {"abandoned", "advanced"} and re.search(r"\b(?:i|you|he|she|we|they|tom|mary)\s+$", before, re.I) and re.match(r"\s+(?:them|him|her|us|me|to|the|an?|their)\b", after, re.I):
         return True  # ECDICT adjective headword used as a past-tense verb
-    if re.match(r"^a bit\s+(?:early|late|more|less|better|worse|faster|slower|longer|shorter)\b", phrase, re.I):
+    if kind == "grammar" and re.match(r"^a bit\s+(?:early|late|more|less|better|worse|faster|slower|longer|shorter)\b", phrase, re.I):
         return True  # an adverbial degree phrase is not an article+noun phrase
-    if phrase == "a bit" and re.match(r"\s+of\b", after, re.I):
+    if kind == "vocabulary" and phrase == "a bit" and re.match(r"\s+of\b", after, re.I):
         return True  # a bit of is a partitive construction, not an adverb
-    if phrase == "a bit" and re.match(r"\s+(?:early|late|more|less|better|worse|faster|slower|longer|shorter)\b", after, re.I):
+    if kind == "grammar" and phrase == "a bit" and re.match(r"\s+(?:early|late|more|less|better|worse|faster|slower|longer|shorter)\b", after, re.I):
         return True  # avoid the shorter misleading article+noun grammar highlight
     if phrase == "meeting" and re.search(r"\b(?:my|your|his|her|our|their)\s+$", before, re.I) and re.match(r"\s+(?:him|her|them|me|us|you)\b", after, re.I):
         return True  # 'my meeting him' is a gerund, not a conference
@@ -728,7 +728,7 @@ def make_hits(sentence, lang):
         if lang == "en":
             pattern = r"(?<![A-Za-z])" + pattern + r"(?![A-Za-z])"
         for match in re.finditer(pattern, sentence, re.I if lang == "en" else 0):
-            if lang == "en" and english_unsafe_sense(sentence, match.start(), match.end(), match.group()):
+            if lang == "en" and english_unsafe_sense(sentence, match.start(), match.end(), match.group(), kind="vocabulary"):
                 continue
             if lang == "ja" and not japanese_safe_word_span(sentence, match.start(), match.end(), match.group()):
                 continue
