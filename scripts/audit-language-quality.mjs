@@ -82,6 +82,34 @@ export function auditSentence(card, language) {
       if (hit.term === 'の' && /^[。！？!?…]*$/.test(after) && /连接名词/.test(hit.meaning))
         errors.push('sentence-final の is not noun connector')
     }
+    if (language === 'ja') {
+      if (hit.term === 'の' && before.endsWith('も'))
+        errors.push('もの is a noun, not standalone possessive の')
+      if (hit.term === 'と' && before.endsWith('あ'))
+        errors.push('あと is a word, not standalone conjunction と')
+      if (hit.term === 'もの' && /^が言え/.test(after))
+        errors.push('ものが言えない is an idiom, not a physical item')
+      if (hit.term === 'よく' && /^ない/.test(after))
+        errors.push('よくない is negative adjective, not positive/frequency よく')
+      if (hit.term === 'で' && /^はない/.test(after) && /地点|手段/.test(hit.meaning))
+        errors.push('ではない is copular negation, not location/instrument で')
+    }
+    if (language === 'en') {
+      if (/^like$/i.test(hit.term) && /\b(?:eat|ate|run|ran|behave|act)\s+$/i.test(before) &&
+          /^\s+(?:a|an|the)\s+/i.test(after) && /喜欢|love|enjoy/.test(hit.meaning))
+        errors.push('comparative like is not the verb like/love')
+      if (/^meeting$/i.test(hit.term) && /\b(?:my|your|his|her|our|their)\s+$/i.test(before) &&
+          /^\s+(?:him|her|them|me|us|you)\b/i.test(after) && /会议/.test(hit.meaning))
+        errors.push('gerund meeting somebody is not a conference')
+      if (/^a lot$/i.test(hit.term) && /^\s+of\b/i.test(after))
+        errors.push('a lot of is a quantity phrase, not noun phrase a lot')
+      if (/^that$/i.test(hit.term) && /\b(?:said|say|says|knew|know|thought|think)\s+$/i.test(before) &&
+          /那个|那/.test(hit.meaning))
+        errors.push('complementizer that is not a demonstrative')
+      if (/^(?:make|leave|take)$/i.test(hit.term) &&
+          new RegExp('^\\s+' + ({make:'a phone call',leave:'a message',take:'a dump'}[hit.term.toLowerCase()] || '$^'), 'i').test(after))
+        errors.push('whole idiom must not be replaced with an unrelated literal verb sense')
+    }
     if (language === 'en') {
       if (/^(?:have to|need to)$/i.test(hit.term) &&
           /\b(?:don't|doesn't|didn't|do not|does not|did not)\s+$/i.test(before))
@@ -114,6 +142,18 @@ export function auditSentence(card, language) {
   sorted.sort((a,b) => a.start - b.start)
   if (sorted.some((hit,i) => i > 0 && hit.start < sorted[i-1].end)) errors.push('overlapping highlights')
   if (!hits.some(x => x?.type === 'grammar') || !hits.some(x => x?.type === 'vocabulary')) errors.push('missing grammar/vocabulary pair')
+  // Verifiable source text does not guarantee a semantically faithful community
+  // translation. Flag concrete mismatches for review rather than altering a
+  // Tatoeba Chinese contributor's text or implying a certified correction.
+  const suspectTranslations = {
+    '4907': '凡人 here means ordinary person, not necessarily 正常人',
+    '211894': '会議 means a meeting; the linked Chinese says 委員會',
+    '236366': 'こちらからお電話: who calls whom differs from Chinese',
+    '4844477': "isn't going to work means plan will not work, not cannot begin a job",
+    '7844518': 'very tired and 很睏 are not interchangeable in every context',
+  }
+  const sid=/^https:\/\/tatoeba\.org\/en\/sentences\/show\/(\d+)$/.exec(card?.source_url||'')?.[1]
+  if(sid && suspectTranslations[sid]) warnings.push('potential community translation mismatch: '+suspectTranslations[sid])
   if (language === 'ja') {
     if (/(?:そいつ|分からない|食べるの|読むの|するの|から|のが|のは|だけ|しか)/.test(card?.term || '')) {
       warnings.push('Japanese token boundary / particle sense needs contextual review')

@@ -34,6 +34,14 @@ const WORDS: Record<string, Note> = {
   'check': { meaning: '检查／核实', explanation: '用于核对信息或细节。' },
   'confirm': { meaning: '确认', explanation: '用于确认内容、安排或结果。' },
   'schedule': { meaning: '日程／安排', explanation: '可作名词或动词。' },
+  'take a dump': { meaning: '大便／上厕所', explanation: '口语且较粗俗，须整体理解。' },
+  'make a phone call': { meaning: '打电话', explanation: '固定搭配，不按 make 的“制造”义拆开。' },
+  'leave a message': { meaning: '留言', explanation: '固定搭配，不按 leave 的“离开”义拆开。' },
+  'play it by ear': { meaning: '见机行事', explanation: '根据具体情况临时决定。' },
+  'a lot of': { meaning: '很多／大量', explanation: '数量短语，修饰后面的名词。' },
+  'would you like to': { meaning: '您想／愿意……吗', explanation: '征询意愿或发出邀请。' },
+  'would like to': { meaning: '想要／希望……', explanation: '用于客气地表达意愿。' },
+  'よくない': { meaning: '不好／不合适', explanation: '「よい」的否定，不是“经常”。' },
 }
 
 const GRAMMAR: Rule[] = [
@@ -82,7 +90,21 @@ function japaneseBoundaries(sentence: string): Set<number> {
 
 function validBoundary(card: AnnotatedSentence, start: number, end: number, kind: 'vocabulary' | 'grammar', boundaries: Set<number>): boolean {
   const term = card.term.slice(start, end)
+  const before = card.term.slice(0, start)
+  const after = card.term.slice(end)
   if (card.language === 'en') {
+    const token = term.toLowerCase()
+    if (/^(?:you|we|they|he|she|i) would$/.test(token) && /^\s+like\s+to\b/i.test(after)) return false
+    if (token === 'like' && /\b(?:eat|eats|eating|ate|run|runs|ran|looks?|behaves?|acts?)\s+$/i.test(before) &&
+        /^\s+(?:a|an|the)\s+\w+/i.test(after)) return false
+    if (token === 'meeting' && /\b(?:my|your|his|her|our|their)\s+$/i.test(before) &&
+        /^\s+(?:him|her|them|me|us|you)\b/i.test(after)) return false
+    if (token === 'that' && /\b(?:said|say|says|knew|know|think|thought)\s+$/i.test(before)) return false
+    if (token === 'a lot' && /^\s+of\b/i.test(after)) return false
+    if (token === 'take' && /^\s+a\s+dump\b/i.test(after)) return false
+    if (token === 'make' && /^\s+a\s+phone\s+call\b/i.test(after)) return false
+    if (token === 'leave' && /^\s+a\s+message\b/i.test(after)) return false
+    if (/^a lot(?: of)?(?:\s+\w+)*$/i.test(term) && kind === 'grammar') return false
     const prefix = card.term.slice(0, start)
     const suffix = card.term.slice(end)
     // These safeguards apply to vocabulary AND grammar: the authored seed
@@ -117,6 +139,11 @@ function validBoundary(card: AnnotatedSentence, start: number, end: number, kind
   if (term === 'に' && /(?:確か|本当|非常|特|実)$/.test(prefix)) return false
   if (term === 'で' && /いつ$/.test(prefix) && /^も/.test(suffix)) return false
   if (term === 'あれ' && /^ば/.test(suffix)) return false
+  if (kind === 'vocabulary' && term === 'もの' && /^が言え/.test(after)) return false
+  if (kind === 'vocabulary' && term === 'よく' && /^ない/.test(after)) return false
+  if (term === 'の' && before.endsWith('も')) return false // もの is one word
+  if (term === 'と' && before.endsWith('あ')) return false // あと is one word
+  if (term === 'で' && /^(?:はない|はありません|はなかった)/.test(after)) return false
   if (!boundaries.has(start) || !boundaries.has(end)) return false
   // 分からない consists of 分 / から / ない in Japanese word segmenters;
   // から here is part of a verb, NOT an independent causal particle.
@@ -182,6 +209,17 @@ function normalize(card: AnnotatedSentence, value: unknown, boundaries: Set<numb
       }
     }
     return { start, end, term: hit.term, type: hit.type, ...note }
+  }
+  // Older stored public annotations may have a valid span but a demonstrably
+  // wrong lexical gloss. Never reuse that old gloss after updating the generator.
+  if (card.language === 'en' && hit.type === 'vocabulary') {
+    const key=hit.term.toLowerCase()
+    if (key === 'sorry' && /^\s*[,!]/.test(card.term.slice(end))) {
+      return {start,end,term:hit.term,type:hit.type,meaning:'抱歉／不好意思',explanation:'这里是道歉的感叹语。'}
+    }
+    if (key === 'like' && /\bwould(?:\s+you)?\s*$/i.test(card.term.slice(0,start))) {
+      return {start,end,term:hit.term,type:hit.type,meaning:'想要／愿意',explanation:'Would you like ...? 用于邀请或征询意愿。'}
+    }
   }
   return { start, end, term: hit.term, type: hit.type, meaning: hit.meaning, explanation: hit.explanation }
 }

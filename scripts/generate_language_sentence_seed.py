@@ -318,6 +318,24 @@ EN_VOCAB = [
  ("effective","有效的","表示能够实现预期结果"),
  ("successful","成功的","表示达到预期目标")
 ]
+# Contextual phrases take priority over short dictionary items; a phrase such
+# as “make a phone call” must not be reduced to “make = manufacture”.
+JP_VOCAB += [
+    ("よくない", "不好／不合适", "「よい」的否定「よくない」，表示不好或不恰当；不能把「よく」单独教成“经常”。"),
+    ("夢を見る", "做梦", "固定搭配，梦中经历；这里的「見る」不是单纯视觉观察。"),
+    ("できるだけ", "尽可能／尽量", "固定表达，表示在能力和条件允许范围内尽量做到。"),
+    ("あとから", "过会儿／稍后", "表示经过一段时间之后，与单独表示起点的「から」区分。"),
+    ("このところ", "最近／这段时间", "固定时间表达，不是表示地点的「ところ」。"),
+]
+EN_VOCAB += [
+    ("take a dump", "大便／上厕所", "口语且较粗俗；整体记忆，不是 take = 拿取。"),
+    ("make a phone call", "打电话", "固定搭配，make 在此不表示制造实物。"),
+    ("leave a message", "留言", "固定搭配，leave 在此不表示离开。"),
+    ("play it by ear", "见机行事", "习语，指根据情况临时决定，不是字面上的耳朵。"),
+    ("a lot of", "许多／大量", "数量短语，修饰后面的名词，不是完整名词短语。"),
+    ("would you like to", "您想／愿意……吗", "征询对方意愿或发出邀请，不等于单纯要求对方帮忙。"),
+    ("would like to", "想要／希望……", "常用于客气地表达意愿，例如 I would like to ...。"),
+]
 JP_GRAMMAR = [
  (r"んだ(?=[。！？!?…]*$)|(?<!も)のだ(?=[。！？!?…]*$)","说明／解释语气","「のだ」的口语形式「んだ」用于解释、强调当前情况。"),
  (r"誰の[^、。！？!?\s]+?(?=です|だ|だった|[。！？!?…]|$)|何の[^、。！？!?\s]+?(?=です|だ|だった|[。！？!?…]|$)","疑問词＋の＋名词：所属・内容","「誰の＋名詞」は持ち主を、「何の＋名詞」は種類や内容を尋ねる。「の」は疑問詞と名詞をつなぐ。"),
@@ -457,10 +475,10 @@ def japanese_safe_word_span(sentence, start, end, term, kind="vocabulary"):
     prefix = sentence[:start]
     if term == "だけ" and prefix.endswith("いた") and re.match(r"(?:る|ます|ません|ない|れ|た)", after):
         return False  # いただける／いただけます
-    if term == "の" and prefix.endswith(("こ", "そ", "あ", "ど", "ほん")):
-        return False  # この／その／あの／どの／ほんの
-    if term == "と" and (after.startswith(("ても", "き")) or prefix.endswith("こ")):
-        return False  # とても／とき／こと
+    if term == "の" and prefix.endswith(("こ", "そ", "あ", "ど", "ほん", "も")):
+        return False  # この／その／あの／どの／ほんの／もの
+    if term == "と" and (after.startswith(("ても", "き")) or prefix.endswith(("こ", "あ"))):
+        return False  # とても／とき／こと／あと（あ + と）
     if term == "に" and prefix.endswith(("確か", "本当", "非常", "特", "実")):
         return False  # adverbial 確かに／本当に／特に
     if term == "で" and prefix.endswith("いつ") and after.startswith("も"):
@@ -503,6 +521,26 @@ def english_unsafe_sense(sentence, start, end, term):
         return True  # accustomed to, or passive-purpose use
     if re.fullmatch(r"(?:I|you|we|they|he|she|it|this|that|there)\s+(?:have|has|had)", term, re.I) and re.match(r"\s+to\b", after, re.I):
         return True  # Don't let 'I have' conceal the more useful 'have to'
+    if re.fullmatch(r"(?:i|you|we|they|he|she|it|this|that|there)\s+(?:have|has|had)", phrase, re.I) and re.match(r"\s+(?:an?|the|my|our|their|your)\s+", after, re.I):
+        return True  # lexical have = possess/hold, not the auxiliary in this case
+    if re.fullmatch(r"(?:you|we|they|he|she|i)\s+would", phrase, re.I) and re.match(r"\s+like\s+to\b", after, re.I):
+        return True  # prefer the whole would like to phrase, not a vague auxiliary span
+    if phrase == "like" and re.match(r"\s+(?:a|an|the)\s+\w+", after, re.I) and re.search(r"\b(?:eat|eats|eating|ate|run|runs|ran|looks?|behaves?|acts?)\s+$", before, re.I):
+        return True  # 'eat like a pig': comparison preposition, not liking
+    if phrase in {"abandoned", "advanced"} and re.search(r"\b(?:i|you|he|she|we|they|tom|mary)\s+$", before, re.I) and re.match(r"\s+(?:them|him|her|us|me|to|the|an?|their)\b", after, re.I):
+        return True  # ECDICT adjective headword used as a past-tense verb
+    if phrase == "meeting" and re.search(r"\b(?:my|your|his|her|our|their)\s+$", before, re.I) and re.match(r"\s+(?:him|her|them|me|us|you)\b", after, re.I):
+        return True  # 'my meeting him' is a gerund, not a conference
+    if phrase == "that" and (re.search(r"\b(?:said|say|says|knew|know|think|thought)\s+$", before, re.I) or
+                            (re.search(r"\b(?:water|information|work|data|rules)\s+$", before, re.I) and re.match(r"\s+(?:is|was|fell|will|has|had)\b", after, re.I))):
+        return True  # complementizer/relative pronoun, not demonstrative 'that'
+    if phrase in {"a lot", "a lot of"} and re.match(r"\s+of\b", after, re.I):
+        return phrase == "a lot"  # quantity phrase is the proper whole span
+    if phrase in {"take", "make", "leave"} and re.match({
+        "take": r"\s+a\s+dump\b", "make": r"\s+a\s+phone\s+call\b",
+        "leave": r"\s+a\s+message\b",
+    }[phrase], after, re.I):
+        return True  # annotate the idiom as one indivisible vocabulary unit
     if re.match(r"who(?:\s+|$)", phrase) and before.strip() and not re.search(r"[.?!]\s*$", before):
         return True  # relative clause 'people who are ...' is not a wh-question
     return False
@@ -554,6 +592,8 @@ def make_hits(sentence, lang):
                 continue
             if lang == "en" and english_unsafe_sense(sentence, match.start(), match.end(), term):
                 continue
+            if lang == "en" and re.match(r"^a lot(?: of)?\b", term, re.I):
+                continue  # A lot of is a quantifier, not an article+noun phrase
             if lang == "en" and term.casefold().startswith(("a ", "an ", "the ")):
                 # Truncate to a plausible noun phrase before indexing/overlap
                 # arbitration; preserve exact original sentence offsets.
@@ -608,6 +648,12 @@ def make_hits(sentence, lang):
                     else:
                         meaning = "の：连接名词／构成修饰关系"
                         explanation = "「" + local + "」中的「の」连接前后成分，常用于所属或限定；具体关系需要结合语境理解。"
+                elif term == "が" and right.startswith(("、しかし", "、けれど", "、でも")) and left.endswith("い"):
+                    meaning = "が：转折接续"
+                    explanation = "前项描述与后项形成转折，这里的「が」是连接分句的接续助词，而不是标记主语。"
+                elif term == "で" and right.startswith(("はない", "はありません", "はなかった")):
+                    meaning = "ではない：否定判断的连接形式"
+                    explanation = "这里的「で」属于「ではない」的否定判断表达，不能解释成动作发生的地点或手段。"
                 elif term == "に" and re.search(r"(?:陰|中|上|下|前|後ろ|隣|近く|外|内|場所|部屋|駅|会社|学校|家|ここ|そこ|あそこ)に", sentence[max(0, match.start()-8):match.end()+1]) and re.search(r"(?:隠|置|座|立|住|入|向|着|行|来|戻|泊|残|止|並|書|貼|載|落)", right):
                     meaning = "に：动作地点／目的地"
                     explanation = "「" + local + "」中的「に」结合后面的动作动词，标记动作发生的位置或移动到达的地点；本句要按动词和地点词一起理解。"
@@ -637,9 +683,16 @@ def make_hits(sentence, lang):
                 continue
             if lang == "ja" and not japanese_safe_word_span(sentence, match.start(), match.end(), match.group()):
                 continue
+            actual_meaning, actual_explanation = meaning, explanation
+            if lang == "ja" and term == "もの" and sentence[match.end():].startswith(("が言え", "がいえ")):
+                continue  # ものが言えない = cannot speak, not a physical thing
+            if lang == "en" and term.casefold() == "sorry" and re.match(r"^\s*[,!]", sentence[match.end():]):
+                actual_meaning, actual_explanation = "抱歉／不好意思", "句首感叹语，用于道歉或打断；不是形容词“抱歉的”。"
+            if lang == "en" and term.casefold() == "like" and re.search(r"\bwould(?:\s+you)?\s*$", sentence[:match.start()], re.I):
+                actual_meaning, actual_explanation = "想要／愿意", "Would you like ...? 是征询对方意愿或邀请，不是单独表达“喜欢”。"
             candidates.append({
                 "start": match.start(), "end": match.end(), "type": "vocabulary",
-                "term": match.group(), "meaning": meaning, "explanation": explanation,
+                "term": match.group(), "meaning": actual_meaning, "explanation": actual_explanation,
                 "rule_id": ("ja" if lang == "ja" else "en") + ".vocab." + str(rule_index + 1),
                 "confidence": "lexicon", "rule_priority": len(vocab) - rule_index,
             })
