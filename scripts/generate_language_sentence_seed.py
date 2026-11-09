@@ -580,9 +580,14 @@ def make_hits(sentence, lang):
                 if term == "の" and left and right:
                     # Sentence-final の can mark a gentle question or
                     # explanatory tone, not a noun-to-noun possessive.
-                    if re.fullmatch(r"[。！？!?…]*", right) and re.search(r"(?:ない|した|った|[うくぐすつぬぶむるた])$", left):
-                        meaning = "の：句末说明／轻问语气"
-                        explanation = "句末「の」用于较柔和地提问或补充说明；并非名词所属。"
+                    if re.fullmatch(r"[。！？!?…]*", right):
+                        if re.search(r"(?:ない|した|った|[うくぐすつぬぶむるた])$", left):
+                            meaning = "の：句末说明／轻问语气"
+                            explanation = "句末「の」用于较柔和地提问或补充说明；并非名词所属。"
+                        else:
+                            # No next noun and no confidently recognized
+                            # predicate: omit rather than call it ownership.
+                            continue
                     # A predicate followed by のが／のは is nominalized:
                     # 学ぶのは / 食べるのが. It is not a possessive linker.
                     elif re.match(r"^(?:が|は|を|も)", right) and re.search(
