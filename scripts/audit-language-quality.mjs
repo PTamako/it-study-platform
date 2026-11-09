@@ -311,6 +311,11 @@ export function inspectCorpus(sentencesByLanguage, wordsByLanguage, grammarByLan
   return {ok:errors.length===0,errors:errors.slice(0,60),errorCount:errors.length,stats,
     reviewCandidateCount:reviewCandidates.length,reviewQueue,
     linkedWordReviewCandidateCount:wordReviewCandidates.length,wordReviewQueue,
+    // Full public-only candidate inventory for offline semantic triage. Unlike
+    // personal saved vocabulary, these are immutable published corpus rows.
+    // Do not label them verified: every candidate remains unreviewed.
+    allWordReviewCandidates:wordReviewCandidates,
+    allMissingWordCandidates:missingWordCandidates,
     missingWordCandidateCount:missingWordCandidates.length,missingWordQueue,limitations:[
       'Structural checks and regex examples do not establish semantic correctness.',
       'Tatoeba Chinese translations may be contextually loose or ambiguous.',
