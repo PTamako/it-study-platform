@@ -56,6 +56,26 @@ export function auditSentence(card, language) {
       continue
     }
     if (FILLERS.has(hit.meaning) || /未识别到明确/.test(hit.explanation)) errors.push('placeholder explanation')
+    const before = points.slice(0, hit.start).join('')
+    const after = points.slice(hit.end).join('')
+    // Proven false positive forms from the published first 120 review queue.
+    // Don't let the generator silently reintroduce them in future deployments.
+    if (hit.type === 'grammar' && language === 'ja' &&
+        /^(?:のだ|のです)$/.test(hit.term) && before.endsWith('も'))
+      errors.push('ものだ/ものです is not explanatory のだ/のです')
+    if (hit.type === 'grammar' && language === 'en') {
+      if (/^(?:would you|could you)$/i.test(hit.term) && before.trim() &&
+          !/[,!?。.]\s*$/.test(before))
+        errors.push('embedded modal question is not a polite-request formula')
+      if (/^have to$/i.test(hit.term) && /\bwhat(?:'ll| will) you\s*$/i.test(before) &&
+          /^\s*(?:drink|eat)\b/i.test(after))
+        errors.push('ambiguous have to drink/eat must not be forced to obligation')
+      if (/^need to$/i.test(hit.term) && /\b(?:the|a)\s+$/i.test(before))
+        errors.push('nominal need to is not verbal need to')
+      if (/^used to$/i.test(hit.term) &&
+          /\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$/i.test(before))
+        errors.push('passive or accustomed used to is not past habitual')
+    }
     sorted.push(hit)
   }
   sorted.sort((a,b) => a.start - b.start)
@@ -131,7 +151,15 @@ export function inspectCorpus(sentencesByLanguage, wordsByLanguage, grammarByLan
       found.errors.forEach(error=>fail(language+' sentence',key,error))
       if (found.warnings.length) reviewCandidates.push({
         id:key,language,category:item.category,term:String(item.term || '').slice(0,150),
+        meaning_zh:String(item.meaning_zh || '').slice(0,260),
         source_url:item.source_url,reasons:found.warnings,
+        // The exact marked phrase and its proposed sense must be visible to
+        // reviewers; source URL alone cannot diagnose a misleading gloss.
+        highlights:JSON.parse(item.highlight_json || '[]').slice(0,8).map(hit=>({
+          term:hit.term,type:hit.type,meaning:hit.meaning,explanation:hit.explanation,
+          start:hit.start,end:hit.end,
+        })),
+        review_status:'awaiting-linguistic-review',
       })
     }
     if (sentences.length!==5000) fail(language+' sentence','corpus','expected 5,000 source-backed cards')
@@ -236,6 +264,18 @@ async function main() {
   const out=resolve(ROOT,'quality-reports/language-quality.json')
   await mkdir(resolve(ROOT,'quality-reports'),{recursive:true})
   await writeFile(out,JSON.stringify(result,null,2)+'\n','utf8')
+  // Human-friendly worksheet; every row is source-backed and explicitly
+  // UNVERIFIED, not silently counted as a linguistically approved sentence.
+  const columnNames=['id','language','category','sentence','chinese_translation','source_url',
+    'proposed_highlights_json','review_status','reviewer','reviewed_at','review_notes']
+  const csv=(value)=>'"'+String(value ?? '').replace(/"/g,'""')+'"'
+  const lines=[columnNames.map(csv).join(',')]
+  for(const row of result.reviewQueue) lines.push([
+    row.id,row.language,row.category,row.term,row.meaning_zh,row.source_url,
+    JSON.stringify(row.highlights),'待人工逐条核验','','','',
+  ].map(csv).join(','))
+  await writeFile(resolve(ROOT,'quality-reports/language-semantic-first-120.csv'),
+    lines.join('\n')+'\n','utf8')
   console.log(JSON.stringify({ok:result.ok,errorCount:result.errorCount,stats:result.stats,
     reviewCandidates:result.reviewCandidateCount,reviewQueue:result.reviewQueue.length,
     linkedWordReviewCandidates:result.linkedWordReviewCandidateCount,

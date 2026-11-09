@@ -319,7 +319,7 @@ EN_VOCAB = [
  ("successful","成功的","表示达到预期目标")
 ]
 JP_GRAMMAR = [
- (r"んだ(?=[。！？!?…]*$)|のだ(?=[。！？!?…]*$)","说明／解释语气","「のだ」的口语形式「んだ」用于解释、强调当前情况。"),
+ (r"んだ(?=[。！？!?…]*$)|(?<!も)のだ(?=[。！？!?…]*$)","说明／解释语气","「のだ」的口语形式「んだ」用于解释、强调当前情况。"),
  (r"誰の[^、。！？!?\s]+?(?=です|だ|だった|[。！？!?…]|$)|何の[^、。！？!?\s]+?(?=です|だ|だった|[。！？!?…]|$)","疑問词＋の＋名词：所属・内容","「誰の＋名詞」は持ち主を、「何の＋名詞」は種類や内容を尋ねる。「の」は疑問詞と名詞をつなぐ。"),
  (r"ですか(?=[。！？!?…]*$)","ですか：礼貌疑问句","名词或な形容词等后接「ですか」构成礼貌疑问；「か」标记疑问，不是独立的重点词汇。"),
  (r"でしょうか(?=[。！？!?…]*$)","でしょうか：委婉疑问","比直接的「ですか」更委婉，常用于询问或确认。"),
@@ -337,7 +337,7 @@ JP_GRAMMAR = [
  (r"かもしれません","也许……","表达不确定的推测"), (r"ようにします","尽量做到……","表示有意识地努力形成习惯"),
  (r"てから","……之后","表示先完成前项再进行后项"), (r"までに","在……之前","表示截止时间"),
  (r"について","关于……","表示谈论的主题"), (r"ために","为了……","表示目的或原因，依上下文判断"),
- (r"んです|のです","说明／强调语气","用于解释背景或强调说明"),
+ (r"んです|(?<!も)のです","说明／强调语气","用于解释背景或强调说明"),
  (r"ないでください","请不要……","动词ない形＋でください，用于礼貌地请求对方不要做某事"),
  (r"なくてもいい(?:です)?","不……也可以","表示某动作不是必须的，允许不做"),
  (r"たほうがいい","最好……","用于提出建议，表示某做法更合适"),
@@ -514,6 +514,22 @@ def make_hits(sentence, lang):
             term = match.group()
             if not term.strip():
                 continue
+            if lang == "en":
+                prefix = sentence[:match.start()]
+                suffix = sentence[match.end():]
+                # 'What more would you want?' asks about a hypothetical wish,
+                # not a standalone polite request (unlike 'Would you help?').
+                if term.casefold() in {"would you", "could you"} and prefix.strip() and not re.search(r"[,!?。.]\s*$", prefix):
+                    continue
+                # 'What'll you have to drink?' often means 'what will you
+                # choose to drink'; absent context, do not teach 'have to' as
+                # deontic obligation or force an authoritative interpretation.
+                if term.casefold() == "have to" and re.search(r"\bwhat(?:'ll| will) you\s*$", prefix, re.I) and re.match(r"\s*(?:drink|eat)\b", suffix, re.I):
+                    continue
+                # A noun phrase 'the need to collect water' is not the verb
+                # construction 'need to + verb'.
+                if term.casefold() == "need to" and re.search(r"\b(?:the|a)\s+$", prefix, re.I):
+                    continue
             if lang == "en" and term.casefold() == "used to" and re.search(
                 r"\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$",
                 sentence[:match.start()], re.I):
