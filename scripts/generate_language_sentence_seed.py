@@ -88,6 +88,7 @@ def rows_in_tar(path, suffix, source_url):
 JP_WORK = re.compile(r"会社|仕事|職場|会議|打ち合わせ|報告|資料|確認|連絡|お客様|メール|電話|納期|依頼|申請|提出|対応|営業|面接|プロジェクト|システム|契約|請求|休暇|残業|出勤|退勤|上司|同僚|担当|共有|相談|予定|予約|変更|説明|承認|見積|部署|勤務")
 EN_WORK = re.compile(r"\b(company|work|office|meeting|report|document|confirm|contact|client|customer|email|phone|deadline|request|application|submit|support|sales|interview|project|system|contract|invoice|leave|overtime|manager|colleague|team|share|discuss|schedule|appointment|explain|approve|estimate|department|presentation|coworker)\b", re.I)
 JP_VOCAB = [
+ ("代わりに","代替／代劳","「代わりに」は固定搭配，表示代替或代为完成；不能把结尾「に」单独释作目的地。"),
  ("これ","这个／这","指向当前语境中可识别的事物；「これ誰の傘ですか」中的「これ」指眼前的伞"), ("それ","那个／那","指向听话人附近或前文提到的事物"), ("あれ","那个（较远处）","指说话人与听话人都相对较远的事物"), ("誰","谁","疑问代词，用于询问人物；「誰の＋名词」询问所属者"),
  ("旅行","旅行、旅游","表示外出旅行；在「旅行が楽しみです」中，是令人期待的事情"),
  ("よろしくお願いします","麻烦你了／请多关照","用于请求、协作或初次见面后的礼貌表达"),
@@ -243,6 +244,8 @@ def english_surface_forms(lemma):
     return {form: lemma for form in forms}
 
 EN_VOCAB = [
+ ("a bit","稍微／有点","表示程度，修饰 early、late 等形容词或副词，不是普通冠词名词短语。"),
+ ("customer service representative","客服代表","完整名词短语，指客服人员，不应只突出 a customer。"),
  ("this","这个／这","指向当前语境中可识别的人或物；作代词时可独立指代事物"), ("that","那个／那","指向语境中可识别的人或物；作代词时可独立指代事物"), ("umbrella","伞","遮雨或遮阳的工具，常见表达「an umbrella」"),
  ("could you","能否请你","礼貌请求，比 can you 更委婉"), ("would you","你愿意／能否","常用于礼貌请求"),
  ("thank you","谢谢","常见感谢表达"), ("please","请","礼貌请求标记"), ("confirm","确认","常见搭配 confirm the details"),
@@ -339,6 +342,7 @@ EN_VOCAB += [
     ("close by", "在附近", "固定副词短语，表示附近，并非“关闭”。"),
 ]
 JP_GRAMMAR = [
+ (r"ようにお願いします","恳请……／希望……","「……ようにお願いします」是表达请求的整体句型，不应只对「に」作地点或时间释义。"),
  (r"んだ(?=[。！？!?…]*$)|(?<!も)のだ(?=[。！？!?…]*$)","说明／解释语气","「のだ」的口语形式「んだ」用于解释、强调当前情况。"),
  (r"誰の[^、。！？!?\s]+?(?=です|だ|だった|[。！？!?…]|$)|何の[^、。！？!?\s]+?(?=です|だ|だった|[。！？!?…]|$)","疑問词＋の＋名词：所属・内容","「誰の＋名詞」は持ち主を、「何の＋名詞」は種類や内容を尋ねる。「の」は疑問詞と名詞をつなぐ。"),
  (r"ですか(?=[。！？!?…]*$)","ですか：礼貌疑问句","名词或な形容词等后接「ですか」构成礼貌疑问；「か」标记疑问，不是独立的重点词汇。"),
@@ -476,6 +480,8 @@ def japanese_safe_word_span(sentence, start, end, term, kind="vocabulary"):
     # A mora can look like a particle inside a verb or fixed expression.
     # With no morphological proof, omit a misleading standalone gloss.
     prefix = sentence[:start]
+    if term == "に" and (prefix.endswith("代わり") or (prefix.endswith("よう") and after.startswith("お願いします"))):
+        return False  # 代わりに／ようにお願いします are cohesive phrases
     if term == "で" and (
         after.startswith(("きる", "きない", "きます", "きました", "きません", "きた", "きて", "きれば"))
         or re.search(r"(?:[0-9０-９一二三四五六七八九十]+(?:歩|日|分|時間|週間|か月|ヶ月|年))$", prefix)
@@ -542,6 +548,10 @@ def english_unsafe_sense(sentence, start, end, term):
         return True  # 'eat like a pig': comparison preposition, not liking
     if phrase in {"abandoned", "advanced"} and re.search(r"\b(?:i|you|he|she|we|they|tom|mary)\s+$", before, re.I) and re.match(r"\s+(?:them|him|her|us|me|to|the|an?|their)\b", after, re.I):
         return True  # ECDICT adjective headword used as a past-tense verb
+    if re.match(r"^a bit\s+(?:early|late|more|less|better|worse|faster|slower|longer|shorter)\b", phrase, re.I):
+        return True  # an adverbial degree phrase is not an article+noun phrase
+    if phrase == "a bit" and re.match(r"\s+(?:early|late|more|less|better|worse|faster|slower|longer|shorter)\b", after, re.I):
+        return True  # avoid the shorter misleading article+noun grammar highlight
     if phrase == "meeting" and re.search(r"\b(?:my|your|his|her|our|their)\s+$", before, re.I) and re.match(r"\s+(?:him|her|them|me|us|you)\b", after, re.I):
         return True  # 'my meeting him' is a gerund, not a conference
     if phrase == "that" and (re.search(r"\b(?:said|say|says|knew|know|think|thought|sorry|glad|certain|aware)\s+$", before, re.I) or
@@ -573,6 +583,10 @@ def safe_english_article_phrase(text):
         return text
     if len(words) < 3:
         return text
+    # Keep the occupational compound as one noun phrase, not 'a customer'.
+    if (len(words) >= 4 and [w.casefold() for w in words[1:4]] ==
+            ["customer", "service", "representative"]):
+        return " ".join(words[:4])
     # A postal "post office" is a known compound noun. Do not broadly mark
     # post as an adjective: "a post like yours" must remain "a post".
     if words[1].casefold() == "post" and words[2].casefold() == "office":
