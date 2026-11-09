@@ -473,8 +473,19 @@ def japanese_safe_word_span(sentence, start, end, term, kind="vocabulary"):
     # Do not treat the stem 分からない as a causal/starting-point から.
     if term == "から" and sentence[:start].endswith(("分", "判", "解", "わ")) and re.match(r"ない|なかった|ず", after):
         return False
-    # Frequent fixed expressions and inflections are not detachable particles.
+    # A mora can look like a particle inside a verb or fixed expression.
+    # With no morphological proof, omit a misleading standalone gloss.
     prefix = sentence[:start]
+    if term == "で" and (
+        after.startswith(("きる", "きない", "きます", "きました", "きません", "きた", "きて", "きれば"))
+        or re.search(r"(?:[0-9０-９一二三四五六七八九十]+(?:歩|日|分|時間|週間|か月|ヶ月|年))$", prefix)
+        or re.search(r"(?:る|た|ない)上$", prefix)
+        or (prefix.endswith("天気予報") and after.startswith("は"))
+    ):
+        return False  # できる／もう一歩で／生きる上で／天気予報では
+    if term == "と" and prefix.endswith("へ"):
+        return False  # へと: directional emphasis, not quotation or companion
+    # Frequent fixed expressions and inflections are not detachable particles.
     if term == "だけ" and prefix.endswith("いた") and re.match(r"(?:る|ます|ません|ない|れ|た)", after):
         return False  # いただける／いただけます
     if term == "の" and prefix.endswith(("こ", "そ", "あ", "ど", "ほん", "も")):
@@ -636,7 +647,7 @@ def make_hits(sentence, lang):
                 if term == "の" and left and right:
                     # Sentence-final の can mark a gentle question or
                     # explanatory tone, not a noun-to-noun possessive.
-                    if re.fullmatch(r"[。！？!?…]*", right):
+                    if re.match(r"[。！？!?…]", right):
                         if re.search(r"(?:ない|した|った|[うくぐすつぬぶむるた])$", left):
                             meaning = "の：句末说明／轻问语气"
                             explanation = "句末「の」用于较柔和地提问或补充说明；并非名词所属。"
