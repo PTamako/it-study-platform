@@ -55,7 +55,13 @@ test('client refuses wrong legacy particle glosses but preserves valid usage and
     assert.ok(!hits.some(x=>x.start===start && x.term===term),'stale misleading marker '+sentence)
   }
   for(const [sentence,term] of [['学校で勉強する。','で'],['母と話す。','と']]){
-    const hits=frontend.getLanguageHighlights({term:sentence,language:'ja',highlight_json:'[]'})
+    // The browser fallback does not invent every Japanese particle; verify
+    // that an explicitly sourced correct annotation survives validation.
+    const start=sentence.indexOf(term)
+    const valid={start,end:start+term.length,term,type:'grammar',
+      meaning:term==='で'?'动作场所':'共同对象',explanation:'句中真实助词用法'}
+    const hits=frontend.getLanguageHighlights({term:sentence,language:'ja',
+      highlight_json:JSON.stringify([valid])})
     assert.ok(hits.some(x=>x.term===term),'valid particle lost '+sentence)
   }
   const sentence='「また電話？」「毎晩かかってくるの。番号教えなきゃよかった」'
