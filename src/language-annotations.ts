@@ -48,6 +48,8 @@ const GRAMMAR: Rule[] = [
   { language: 'en', pattern: /\bcould you\b/gi, meaning: '礼貌请求句型', explanation: 'Could you 后接动词原形，表达礼貌请求。' },
   { language: 'en', pattern: /\bwould you\b/gi, meaning: '礼貌请求句型', explanation: 'Would you 后接动词原形，表达礼貌请求。' },
   { language: 'en', pattern: /\bwould like to\b/gi, meaning: '礼貌表达意愿', explanation: '比 want to 更委婉。' },
+  { language: 'en', pattern: /\b(?:don't|doesn't|didn't|do not|does not|did not)\s+(?:have|need)\s+to\b/gi,
+    meaning: '不必／不需要', explanation: '否定必要性：不必做某事，不等于 must not 所表达的禁止。' },
   { language: 'en', pattern: /\bhave to\b/gi, meaning: '必须……', explanation: '表示义务或必要性。' },
   { language: 'en', pattern: /\bneed to\b/gi, meaning: '需要……', explanation: '表示做某事的必要性。' },
   { language: 'en', pattern: /\bused to\b/gi, meaning: '过去常常……', explanation: '指过去的习惯或状态。' },
@@ -90,6 +92,11 @@ function validBoundary(card: AnnotatedSentence, start: number, end: number, kind
     if (/^have to$/i.test(term) && /\bwhat(?:'ll| will) you\s*$/i.test(prefix) &&
         /^\s*(?:drink|eat)\b/i.test(suffix)) return false
     if (/^need to$/i.test(term) && /\b(?:the|a)\s+$/i.test(prefix)) return false
+    if (/^(?:have to|need to)$/i.test(term) &&
+        /\b(?:don't|doesn't|didn't|do not|does not|did not)\s+$/i.test(prefix)) return false
+    if (/^used$/i.test(term) &&
+        /\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$/i.test(prefix) &&
+        /^\s+to\b/i.test(suffix)) return false
     if (/^used to$/i.test(term) &&
         /\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$/i.test(prefix)) return false
     if (/^(?:I|you|we|they|he|she|it|this|that|there)\s+(?:have|has|had)$/i.test(term) &&

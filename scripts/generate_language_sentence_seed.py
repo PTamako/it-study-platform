@@ -377,7 +377,9 @@ EN_GRAMMAR = [
 (r"\b(?:a|an|the)\s+\w+","冠词＋名词","a/an 通常引入一个非特定的可数单数对象；the 指向语境中可识别的特定对象。"),
  (r"\bwould you\b","Would you…? 礼貌请求","用 would you + 动词原形提出礼貌请求"),
  (r"\bcould you\b","Could you…? 礼貌请求","用 could you + 动词原形提出礼貌请求"),
- (r"\bwould like to\b","would like to + 动词","较礼貌地表达意愿"), (r"\bhave to\b","have to + 动词","表示外部要求或必要性"),
+ (r"\bwould like to\b","would like to + 动词","较礼貌地表达意愿"),
+ (r"\b(?:don't|doesn't|didn't|do not|does not|did not)\s+(?:have|need)\s+to\b","不必／不需要","否定必要性：don't have to / don't need to 表示不必做，不等于 must not 所表达的禁止。"),
+ (r"\bhave to\b","have to + 动词","表示外部要求或必要性"),
  (r"\bneed to\b","need to + 动词","表示需要做某事"), (r"\bused to\b","used to + 动词","表示过去常有、现在不再持续的习惯或状态"),
  (r"\bhave been\b|\bhas been\b","现在完成相关结构","have/has been 后可接形容词、名词、现在分词或过去分词"),
  (r"\bwill\b","will + 动词原形","常用于预测、承诺或临时决定"), (r"\bshould\b","should + 动词原形","表达建议或合理预期"),
@@ -493,6 +495,10 @@ def english_unsafe_sense(sentence, start, end, term):
         return True  # context may be an offer rather than an obligation
     if phrase == "need to" and re.search(r"\b(?:the|a)\s+$", before, re.I):
         return True  # nominal 'the need to ...', not a verbal construction
+    if phrase in {"have to", "need to"} and re.search(r"\b(?:don't|doesn't|didn't|do not|does not|did not)\s+$", before, re.I):
+        return True  # negation means no obligation, not necessity
+    if phrase == "used" and re.search(r"\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$", before, re.I) and re.match(r"\s+to\b", after, re.I):
+        return True  # be used to must not be taught as 'use'
     if phrase == "used to" and re.search(r"\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$", before, re.I):
         return True  # accustomed to, or passive-purpose use
     if re.fullmatch(r"(?:I|you|we|they|he|she|it|this|that|there)\s+(?:have|has|had)", term, re.I) and re.match(r"\s+to\b", after, re.I):
@@ -645,6 +651,8 @@ def make_hits(sentence, lang):
                     continue
                 pattern = r"(?<![A-Za-z])" + re.escape(surface) + r"(?![A-Za-z])"
                 for match in re.finditer(pattern, sentence, re.I):
+                    if english_unsafe_sense(sentence, match.start(), match.end(), match.group()):
+                        continue
                     candidates.append({
                         "start": match.start(), "end": match.end(), "type": "vocabulary",
                         "term": match.group(), "meaning": meaning + "（原形 " + lemma + " 的词形变化）",

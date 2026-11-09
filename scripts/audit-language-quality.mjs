@@ -83,6 +83,13 @@ export function auditSentence(card, language) {
         errors.push('sentence-final の is not noun connector')
     }
     if (language === 'en') {
+      if (/^(?:have to|need to)$/i.test(hit.term) &&
+          /\b(?:don't|doesn't|didn't|do not|does not|did not)\s+$/i.test(before))
+        errors.push('negative necessity is not must or need')
+      if (/^used$/i.test(hit.term) &&
+          /\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$/i.test(before) &&
+          /^\s+to\b/i.test(after))
+        errors.push('be used to is not bare use')
       if (/^used to$/i.test(hit.term) &&
           /\b(?:am|is|are|was|were|be|been|being|get|gets|got|getting)(?:n't)?\s+(?:not\s+)?$/i.test(before))
         errors.push('passive or accustomed used to is not past habitual')
