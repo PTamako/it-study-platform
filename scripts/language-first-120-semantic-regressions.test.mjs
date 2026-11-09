@@ -28,6 +28,9 @@ bad=[
  ("He is used to teamwork.","en","used to"),
  ("The tool may be used to evaluate data.","en","used to"),
  ("We have to go.","en","We have"),
+ ("I don't have to go to work.","en","have to"),
+ ("Peter doesn't need to attend the meeting.","en","need to"),
+ ("He is used to traveling.","en","used"),
  ("Youths who are caught breaking rules will be disciplined.","en","who are"),
 ]
 good=[
@@ -37,7 +40,8 @@ good=[
  ("We have to go.","en","have to"),
  ("I need to configure this.","en","need to"),
  ("Tom used to live here.","en","used to"),
- ("We have to go.","en","have to"),
+ ("I don't have to go to work.","en","don't have to"),
+ ("Peter doesn't need to attend the meeting.","en","doesn't need to"),
 ]
 for sentence,lang,target in bad:
   hits=gen.make_hits(sentence,lang)
@@ -58,6 +62,9 @@ test('browser filters misleading old D1 highlights and still recognizes true pat
     ['en',"What'll you have to drink?",'have to'],
     ['en','The need to collect water is urgent.','need to'],
     ['en','He is used to teamwork.','used to'],
+    ['en','He is used to traveling.','used'],
+    ['en',"I don't have to go to work.",'have to'],
+    ['en',"Peter doesn't need to attend the meeting.",'need to'],
   ]
   for(const [language,sentence,term] of bad){
     const offset=sentence.toLocaleLowerCase().lastIndexOf(term)
@@ -74,6 +81,8 @@ test('browser filters misleading old D1 highlights and still recognizes true pat
   for(const [language,sentence,term] of [
     ['en','Would you close the window?','would you'],
     ['en','Tom used to live here.','used to'],
+    ['en',"I don't have to go to work.", "don't have to"],
+    ['en',"Peter doesn't need to attend the meeting.", "doesn't need to"],
   ]) assert.ok(clientHighlights(sentence,language).some(x=>x.term.toLocaleLowerCase()===term),sentence)
 })
 
@@ -110,7 +119,7 @@ checks=[
  ("代わりにダイアルしていただけませんか？","ja",("だけ",)),
  ("今日はとても忙しいから一緒に行けないの。","ja",("と",)),
  ("私は帰国してからとても忙しい。","ja",("と",)),
- ("Y ouths who are caught violating rules will lose their right.","en",("who are",)),
+ ("Youths who are caught violating rules will lose their right.","en",("who are",)),
 ]
 for sentence,lang,forbidden in checks:
  hits=gen.make_hits(sentence,lang)
