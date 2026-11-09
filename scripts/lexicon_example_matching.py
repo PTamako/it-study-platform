@@ -69,6 +69,16 @@ def is_exact_japanese_form(sentence, start, end, term):
     after = sentence[end] if end < len(sentence) else ""
     if term == "いつ" and before in ("そ", "こ", "あ", "ど"):
         return False
+    # Kana spans crossing word boundaries are false evidence of a word sense.
+    # 「いくつもり」 here is 「行くつもり」, not いくつ (how many).
+    if term == "いくつ" and sentence[end:].startswith("もり"):
+        return False
+    if term == "うん" and sentence[end:].startswith("と"):
+        return False  # うんと = 'very/a lot', not assent 'yes'
+    if term == "ある" and sentence[:start].endswith("で"):
+        return False  # である is a copula, not existential ある
+    if term == "あと" and re.match(r"(?:何|なん|[0-9０-９一二三四五六七八九十百千]+)(?:時間|分|秒|日|週間|ヶ月|か月|年|回|人|個|枚)", sentence[end:]):
+        return False  # 'how much time remains' vs. 跡 ('trace')
     if JAPANESE.fullmatch(term):
         # A literal substring in a larger kana/kanji word is not evidence of
         # an independent lexeme: ログアウト contains アウト, 格好いい contains いい.
@@ -79,8 +89,8 @@ def is_exact_japanese_form(sentence, start, end, term):
             return False
         # Quoted metalinguistic statements describe a *word itself*; the
         # quoted text cannot safely attest a dictionary sense in normal usage.
-        if start and sentence[start - 1] in "「『" and end < len(sentence) and sentence[end] in "」』":
-            rest = sentence[end + 1:end + 15]
+        if start and sentence[start - 1] in "「『" and re.match(r"[!！?？]*[」』]", sentence[end:]):
+            rest = re.sub(r"^[!！?？]*[」』]", "", sentence[end:])[:20]
             if re.match(r"(?:は|とは|というのは|と呼ばれる)(?:感嘆詞|名詞|代名詞|動詞|形容詞|副詞|助詞|単語|言葉|表現|の一種)", rest):
                 return False
         # 'あと10分' means 'another/remaining ten minutes', not 跡 (trace),
@@ -127,6 +137,12 @@ def choose_source_linked_examples(sentences, translations, licensed_words):
             continue
         scanned[lang] += 1
         for key in find_exact_headword_matches(original, lang, patterns[lang]):
+            if lang == "en" and key in {"abandoned", "advanced"} and re.search(
+                r"\b(?:i|you|he|she|we|they|tom|mary)\s+" + re.escape(key) +
+                r"\s+(?:them|him|her|us|me|to|the|an?|their)\b", original, re.I):
+                # ECDICT's entry is adjective here, but the example is a finite
+                # past-tense *verb*. Do not promote it as an illustrative sense.
+                continue
             if key not in normalized[lang]:
                 continue
             # Avoid showcasing a long, difficult example when a shorter one
