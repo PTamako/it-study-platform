@@ -63,10 +63,10 @@ export function auditSentence(card, language) {
     if (hit.type === 'grammar' && language === 'ja' &&
         /^(?:のだ|のです)$/.test(hit.term) && before.endsWith('も'))
       errors.push('ものだ/ものです is not explanatory のだ/のです')
+    if (language === 'en' && /^(?:would you|could you)$/i.test(hit.term) &&
+        before.trim() && !/[,!?。.]\s*$/.test(before))
+      errors.push('embedded modal question is not a polite-request formula')
     if (hit.type === 'grammar' && language === 'en') {
-      if (/^(?:would you|could you)$/i.test(hit.term) && before.trim() &&
-          !/[,!?。.]\s*$/.test(before))
-        errors.push('embedded modal question is not a polite-request formula')
       if (/^have to$/i.test(hit.term) && /\bwhat(?:'ll| will) you\s*$/i.test(before) &&
           /^\s*(?:drink|eat)\b/i.test(after))
         errors.push('ambiguous have to drink/eat must not be forced to obligation')
@@ -155,10 +155,13 @@ export function inspectCorpus(sentencesByLanguage, wordsByLanguage, grammarByLan
         source_url:item.source_url,reasons:found.warnings,
         // The exact marked phrase and its proposed sense must be visible to
         // reviewers; source URL alone cannot diagnose a misleading gloss.
-        highlights:JSON.parse(item.highlight_json || '[]').slice(0,8).map(hit=>({
-          term:hit.term,type:hit.type,meaning:hit.meaning,explanation:hit.explanation,
-          start:hit.start,end:hit.end,
-        })),
+        highlights:(()=>{try{
+          const parsed=JSON.parse(item.highlight_json || '[]')
+          return Array.isArray(parsed) ? parsed.slice(0,8).filter(x=>x&&typeof x==='object').map(hit=>({
+            term:hit.term,type:hit.type,meaning:hit.meaning,explanation:hit.explanation,
+            start:hit.start,end:hit.end,
+          })) : []
+        }catch{return []}})(),
         review_status:'awaiting-linguistic-review',
       })
     }

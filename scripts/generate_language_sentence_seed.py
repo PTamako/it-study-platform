@@ -606,6 +606,13 @@ def make_hits(sentence, lang):
         if lang == "en":
             pattern = r"(?<![A-Za-z])" + pattern + r"(?![A-Za-z])"
         for match in re.finditer(pattern, sentence, re.I if lang == "en" else 0):
+            if lang == "en" and term.casefold() in {"would you", "could you"}:
+                prefix = sentence[:match.start()]
+                if prefix.strip() and not re.search(r"[,!?。.]\s*$", prefix):
+                    # The headword list also contains polite-request phrases.
+                    # The same contextual guard must apply to vocabulary,
+                    # otherwise it bypasses the grammar-only safeguard.
+                    continue
             if lang == "ja" and not japanese_safe_word_span(sentence, match.start(), match.end(), match.group()):
                 continue
             candidates.append({

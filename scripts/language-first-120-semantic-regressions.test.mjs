@@ -38,10 +38,10 @@ good=[
 ]
 for sentence,lang,target in bad:
   hits=gen.make_hits(sentence,lang)
-  assert not any(x["type"]=="grammar" and x["term"].casefold()==target for x in hits),(sentence,hits)
+  assert not any(x["term"].casefold()==target for x in hits),(sentence,hits)
 for sentence,lang,target in good:
   hits=gen.make_hits(sentence,lang)
-  assert any(x["type"]=="grammar" and x["term"].casefold()==target for x in hits),(sentence,hits)
+  assert any(x["term"].casefold()==target for x in hits),(sentence,hits)
 `
   const r=spawnSync('python3',['-c',code],{encoding:'utf8',timeout:60000})
   assert.equal(r.status,0,[r.stdout,r.stderr].filter(Boolean).join('\n'))
@@ -59,12 +59,14 @@ test('browser filters misleading old D1 highlights and still recognizes true pat
   for(const [language,sentence,term] of bad){
     const offset=sentence.toLocaleLowerCase().lastIndexOf(term)
     assert.ok(offset>=0,sentence)
-    const stale={start:offset,end:offset+term.length,term:sentence.slice(offset,offset+term.length),
-      type:'grammar',meaning:'错误语义',explanation:'旧题库误标'}
-    const hits=frontend.getLanguageHighlights({term:sentence,language,
-      highlight_json:JSON.stringify([stale])})
-    assert.ok(!hits.some(x=>x.type==='grammar'&&x.term.toLocaleLowerCase()===term),
-      'stale highlight leaked in '+sentence)
+    for(const type of ['grammar','vocabulary']){
+      const stale={start:offset,end:offset+term.length,term:sentence.slice(offset,offset+term.length),
+        type,meaning:'错误语义',explanation:'旧题库误标'}
+      const hits=frontend.getLanguageHighlights({term:sentence,language,
+        highlight_json:JSON.stringify([stale])})
+      assert.ok(!hits.some(x=>x.term.toLocaleLowerCase()===term),
+        'stale highlight leaked in '+sentence+' ('+type+')')
+    }
   }
   for(const [language,sentence,term] of [
     ['en','Would you close the window?','would you'],

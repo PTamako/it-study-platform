@@ -81,11 +81,13 @@ function japaneseBoundaries(sentence: string): Set<number> {
 function validBoundary(card: AnnotatedSentence, start: number, end: number, kind: 'vocabulary' | 'grammar', boundaries: Set<number>): boolean {
   const term = card.term.slice(start, end)
   if (card.language === 'en') {
+    // 'Would you' and 'Could you' are also present in the vocabulary
+    // lexicon: reject false requests for BOTH annotation classes.
+    if (/^(?:would you|could you)$/i.test(term) && card.term.slice(0,start).trim() &&
+        !/[,!?。.]\s*$/.test(card.term.slice(0,start))) return false
     if (kind === 'grammar') {
       const prefix = card.term.slice(0, start)
       const suffix = card.term.slice(end)
-      if (/^(?:would you|could you)$/i.test(term) && prefix.trim() &&
-          !/[,!?。.]\s*$/.test(prefix)) return false
       if (/^have to$/i.test(term) && /\bwhat(?:'ll| will) you\s*$/i.test(prefix) &&
           /^\s*(?:drink|eat)\b/i.test(suffix)) return false
       if (/^need to$/i.test(term) && /\b(?:the|a)\s+$/i.test(prefix)) return false

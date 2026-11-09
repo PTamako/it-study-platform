@@ -126,7 +126,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: language-quality-report
-          path: quality-reports/language-quality.json
+          path: |
+            quality-reports/language-quality.json
+            quality-reports/language-semantic-first-120.csv
           if-no-files-found: ignore
           retention-days: 14
 
