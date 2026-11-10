@@ -40,6 +40,7 @@ test('December 2020 batch retains official answer keys and is safe to apply twic
       assert.equal(JSON.parse(r.options_json).length,4)
       assert.equal(r.exam_origin,'fe_exemption')
       assert.match(r.explanation,/中文解析/)
+      assert.doesNotMatch(r.explanation,/\\n/)
     }
     assert.equal(db.prepare("SELECT COUNT(*) AS n FROM mock_question_pool WHERE exam_origin='fe_exemption'").get().n,7)
     assert.equal(db.prepare("SELECT prompt FROM questions WHERE id='existing'").get().prompt,'unchanged')
