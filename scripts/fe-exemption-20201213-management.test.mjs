@@ -26,18 +26,33 @@ test('2020 exemption questions and exact 2022 repeats preserve keys, history and
       ['2020-12-13',51,'c'],['2020-12-13',54,'d'],['2020-12-13',55,'a'],
       ['2020-12-13',56,'d'],['2020-12-13',57,'c'],['2020-12-13',58,'d'],['2020-12-13',59,'c'],
       ['2020-12-13',60,'a'],['2020-12-13',61,'a'],['2020-12-13',62,'d'],['2020-12-13',65,'c'],
-      ['2020-12-13',66,'a'],['2020-12-13',69,'d'],['2022-07-24',54,'d'],['2022-07-24',55,'a']])
-    assert.equal(rows[1].canonical_question_id,rows[13].canonical_question_id)
-    assert.equal(rows[2].canonical_question_id,rows[14].canonical_question_id)
+      ['2020-12-13',66,'a'],['2020-12-13',67,'b'],['2020-12-13',68,'d'],['2020-12-13',69,'d'],
+      ['2020-12-13',70,'c'],['2020-12-13',71,'a'],['2020-12-13',72,'d'],['2020-12-13',73,'d'],
+      ['2020-12-13',74,'b'],['2020-12-13',75,'d'],['2020-12-13',76,'c'],['2020-12-13',78,'d'],
+      ['2020-12-13',79,'d'],['2020-12-13',80,'a'],['2022-07-24',54,'d'],['2022-07-24',55,'a']])
+    assert.equal(rows[1].canonical_question_id,rows[25].canonical_question_id)
+    assert.equal(rows[2].canonical_question_id,rows[26].canonical_question_id)
     for (const row of rows) {
       assert.equal(JSON.parse(row.answer_json),row.official_answer)
       assert.equal(JSON.parse(row.options_json).length,4)
       assert.match(row.explanation,/中文解析/)
       assert.doesNotMatch(row.explanation,/\\n/)
     }
-    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM mock_question_pool WHERE exam_origin='fe_exemption'").get().n,13)
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM mock_question_pool WHERE exam_origin='fe_exemption'").get().n,25)
     assert.equal(db.prepare("SELECT prompt FROM questions WHERE id='existing'").get().prompt,'unchanged')
     assert.equal(db.prepare('SELECT count(*) AS n FROM study_attempts').get().n,1)
     assert.doesNotMatch(migration,/\b(?:DELETE|UPDATE|REPLACE|DROP)\b/i)
   } finally { db.close() }
+})
+
+test('source figures for production capacity and expected inspection cost yield the stated answers', () => {
+  let best = 0
+  for (let x = 0; x <= 1000; x++) for (let y = 0; y <= 900; y++) {
+    const remaining = 12000 - 6*x - 10*y
+    if (remaining < 0) continue
+    const z = Math.min(500, Math.floor(remaining / 15))
+    best = Math.max(best, 1800*x + 2500*y + 3000*z)
+  }
+  assert.equal(best,3300000)
+  assert.deepEqual([[0,1500],[40,1000],[80,500],[120,200]].map(([good,bad])=>0.9*good+0.1*bad),[150,136,122,128])
 })
