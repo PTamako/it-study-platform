@@ -27,11 +27,14 @@ test('December 2020 batch retains official answer keys and is safe to apply twic
     assert.deepEqual(rows.map(r => [r.sitting_date,r.original_question,r.official_answer]), [
       ['2020-12-13',41,'d'],['2020-12-13',42,'c'],['2020-12-13',44,'b'],
       ['2020-12-13',45,'d'],['2020-12-13',46,'c'],['2020-12-13',48,'d'],['2020-12-13',50,'d'],
-      ['2022-06-12',36,'b'],['2022-07-24',43,'c'],['2022-07-24',45,'d'],['2022-07-24',49,'d']])
+      ['2022-06-12',36,'b'],['2022-06-12',50,'d'],['2022-07-24',43,'c'],
+      ['2022-07-24',45,'d'],['2022-07-24',49,'d'],['2022-12-11',43,'d']])
     assert.equal(rows[2].canonical_question_id,rows[7].canonical_question_id)
-    assert.equal(rows[1].canonical_question_id,rows[8].canonical_question_id)
-    assert.equal(rows[3].canonical_question_id,rows[9].canonical_question_id)
-    assert.equal(rows[5].canonical_question_id,rows[10].canonical_question_id)
+    assert.equal(rows[6].canonical_question_id,rows[8].canonical_question_id)
+    assert.equal(rows[1].canonical_question_id,rows[9].canonical_question_id)
+    assert.equal(rows[3].canonical_question_id,rows[10].canonical_question_id)
+    assert.equal(rows[5].canonical_question_id,rows[11].canonical_question_id)
+    assert.equal(rows[0].canonical_question_id,rows[12].canonical_question_id)
     for (const r of rows) {
       assert.equal(JSON.parse(r.answer_json),r.official_answer)
       assert.equal(JSON.parse(r.options_json).length,4)
