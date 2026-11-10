@@ -24,16 +24,18 @@ test('2020 exemption questions and exact 2022 repeats preserve keys, history and
       JOIN questions q ON q.id=o.canonical_question_id ORDER BY o.sitting_date,o.original_question`).all()
     assert.deepEqual(rows.map(r=>[r.sitting_date,r.original_question,r.official_answer]),[
       ['2020-12-13',51,'c'],['2020-12-13',54,'d'],['2020-12-13',55,'a'],
-      ['2020-12-13',60,'a'],['2020-12-13',69,'d'],['2022-07-24',54,'d'],['2022-07-24',55,'a']])
-    assert.equal(rows[1].canonical_question_id,rows[5].canonical_question_id)
-    assert.equal(rows[2].canonical_question_id,rows[6].canonical_question_id)
+      ['2020-12-13',56,'d'],['2020-12-13',57,'c'],['2020-12-13',58,'d'],['2020-12-13',59,'c'],
+      ['2020-12-13',60,'a'],['2020-12-13',61,'a'],['2020-12-13',62,'d'],['2020-12-13',65,'c'],
+      ['2020-12-13',66,'a'],['2020-12-13',69,'d'],['2022-07-24',54,'d'],['2022-07-24',55,'a']])
+    assert.equal(rows[1].canonical_question_id,rows[13].canonical_question_id)
+    assert.equal(rows[2].canonical_question_id,rows[14].canonical_question_id)
     for (const row of rows) {
       assert.equal(JSON.parse(row.answer_json),row.official_answer)
       assert.equal(JSON.parse(row.options_json).length,4)
       assert.match(row.explanation,/中文解析/)
       assert.doesNotMatch(row.explanation,/\\n/)
     }
-    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM mock_question_pool WHERE exam_origin='fe_exemption'").get().n,5)
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM mock_question_pool WHERE exam_origin='fe_exemption'").get().n,13)
     assert.equal(db.prepare("SELECT prompt FROM questions WHERE id='existing'").get().prompt,'unchanged')
     assert.equal(db.prepare('SELECT count(*) AS n FROM study_attempts').get().n,1)
     assert.doesNotMatch(migration,/\b(?:DELETE|UPDATE|REPLACE|DROP)\b/i)
