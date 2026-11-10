@@ -8,3 +8,7 @@ INSERT OR IGNORE INTO fe_exemption_occurrences (sitting_date,original_question,f
 ('2020-12-13',44,2020,'fe-exempt-2020-20201213-q44','b','https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20201213_FE.pdf','https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20201213_FE.pdf'),
 ('2020-12-13',45,2020,'fe-exempt-2020-20201213-q45','d','https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20201213_FE.pdf','https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20201213_FE.pdf'),
 ('2020-12-13',48,2020,'fe-exempt-2020-20201213-q48','d','https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20201213_FE.pdf','https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20201213_FE.pdf');
+-- The same questions recur in 2022 with unchanged option order and official keys.
+INSERT OR IGNORE INTO fe_exemption_occurrences (sitting_date,original_question,fiscal_year,canonical_question_id,official_answer,question_url,answer_url) VALUES
+('2022-06-12',36,2022,'fe-exempt-2020-20201213-q44','b','https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20220612_FE.pdf','https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20220612_FE.pdf'),
+('2022-07-24',49,2022,'fe-exempt-2020-20201213-q48','d','https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20220724_FE.pdf','https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20220724_FE.pdf');

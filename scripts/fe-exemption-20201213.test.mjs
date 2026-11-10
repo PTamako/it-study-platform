@@ -22,9 +22,13 @@ test('December 2020 batch retains official answer keys and is safe to apply twic
     db.exec(pool)
     db.exec(migration)
     db.exec(migration)
-    const rows = db.prepare(`SELECT o.original_question,o.official_answer,q.answer_json,q.options_json,q.exam_origin,q.explanation
-      FROM fe_exemption_occurrences o JOIN questions q ON q.id=o.canonical_question_id ORDER BY o.original_question`).all()
-    assert.deepEqual(rows.map(r => [r.original_question,r.official_answer]), [[44,'b'],[45,'d'],[48,'d']])
+    const rows = db.prepare(`SELECT o.sitting_date,o.original_question,o.official_answer,o.canonical_question_id,q.answer_json,q.options_json,q.exam_origin,q.explanation
+      FROM fe_exemption_occurrences o JOIN questions q ON q.id=o.canonical_question_id ORDER BY o.sitting_date,o.original_question`).all()
+    assert.deepEqual(rows.map(r => [r.sitting_date,r.original_question,r.official_answer]), [
+      ['2020-12-13',44,'b'],['2020-12-13',45,'d'],['2020-12-13',48,'d'],
+      ['2022-06-12',36,'b'],['2022-07-24',49,'d']])
+    assert.equal(rows[0].canonical_question_id,rows[3].canonical_question_id)
+    assert.equal(rows[2].canonical_question_id,rows[4].canonical_question_id)
     for (const r of rows) {
       assert.equal(JSON.parse(r.answer_json),r.official_answer)
       assert.equal(JSON.parse(r.options_json).length,4)
