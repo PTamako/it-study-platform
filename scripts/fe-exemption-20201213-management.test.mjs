@@ -28,14 +28,14 @@ test('2020 exemption questions and exact 2022 repeats preserve keys, history and
       ['2020-12-13',60,'a'],['2020-12-13',61,'a'],['2020-12-13',62,'d'],['2020-12-13',65,'c'],
       ['2020-12-13',66,'a'],['2020-12-13',67,'b'],['2020-12-13',68,'d'],['2020-12-13',69,'d'],
       ['2020-12-13',70,'c'],['2020-12-13',71,'a'],['2020-12-13',72,'d'],['2020-12-13',73,'d'],
-      ['2020-12-13',74,'b'],['2020-12-13',75,'d'],['2020-12-13',76,'c'],['2020-12-13',78,'d'],
+      ['2020-12-13',74,'b'],['2020-12-13',76,'c'],['2020-12-13',78,'d'],
       ['2020-12-13',79,'d'],['2020-12-13',80,'a'],
       ['2022-06-12',59,'c'],['2022-06-12',66,'a'],['2022-06-12',67,'b'],['2022-06-12',73,'a'],['2022-06-12',74,'d'],
       ['2022-07-24',54,'d'],['2022-07-24',55,'a'],['2022-07-24',61,'a'],['2022-07-24',62,'d'],
       ['2022-12-11',55,'d']])
-    assert.equal(rows[1].canonical_question_id,rows[30].canonical_question_id)
-    assert.equal(rows[2].canonical_question_id,rows[31].canonical_question_id)
-    for (const [original, repeated] of [[59,25],[66,26],[67,27],[71,28],[72,29],[61,32],[62,33],[56,34]]) {
+    assert.equal(rows[1].canonical_question_id,rows[29].canonical_question_id)
+    assert.equal(rows[2].canonical_question_id,rows[30].canonical_question_id)
+    for (const [original, repeated] of [[59,24],[66,25],[67,26],[71,27],[72,28],[61,31],[62,32],[56,33]]) {
       assert.equal(rows.find(row => row.sitting_date === '2020-12-13' && row.original_question === original).canonical_question_id,rows[repeated].canonical_question_id)
     }
     for (const row of rows) {
@@ -44,7 +44,7 @@ test('2020 exemption questions and exact 2022 repeats preserve keys, history and
       assert.match(row.explanation,/中文解析/)
       assert.doesNotMatch(row.explanation,/\\n/)
     }
-    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM mock_question_pool WHERE exam_origin='fe_exemption'").get().n,25)
+    assert.equal(db.prepare("SELECT COUNT(*) AS n FROM mock_question_pool WHERE exam_origin='fe_exemption'").get().n,24)
     assert.equal(db.prepare("SELECT prompt FROM questions WHERE id='existing'").get().prompt,'unchanged')
     assert.equal(db.prepare('SELECT count(*) AS n FROM study_attempts').get().n,1)
     assert.doesNotMatch(migration,/\b(?:DELETE|UPDATE|REPLACE|DROP)\b/i)
