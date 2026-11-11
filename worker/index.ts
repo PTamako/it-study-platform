@@ -1,3 +1,4 @@
+import {documentAssistantBridge} from './document-assistant-bridge'
 import { checkWriteRateLimit, handleAuthRequest, requireAuth } from './auth'
 import { feSeeds, seedUrl } from './fe-question-bank'
 import { eligibleChineseWord, fetchChineseWordMetadata } from './chinese-word-dictionary'
@@ -40,6 +41,9 @@ export interface Env {
   ASSETS?: Fetcher
   AI?: Ai
   APP_ENV?: string
+  JPDA_BRIDGE_ENABLED?: string
+  JPDA_BRIDGE_SECRET?: string
+  JPDA_BRIDGE_STUDY_ACTOR_ID?: string
   AUTH_PASSWORD?: string
   AUTH_SESSION_SECRET?: string
   // Owner-deployed Google Apps Script Web App. Optional; keep its URL and token server-side.
@@ -1199,6 +1203,8 @@ async function dictionaryAiHash(value: string): Promise<string> {
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
+
+    if (url.pathname === '/api/bridge/document-assistant') return documentAssistantBridge(request, env)
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: { 'allow': 'GET, POST, DELETE, OPTIONS' } })
