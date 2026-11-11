@@ -22,7 +22,7 @@ test('shared sample mappings preserve canonical questions and progress, match ke
       db.prepare('INSERT INTO question_review_state VALUES (?, 1)').run(id)
       db.prepare('INSERT INTO study_attempts VALUES (?, ?)').run('attempt-'+n,id)
     }
-    for (const [id,answer] of [['fe-ipa-official-2019-autumn-a-06','c'], ['fe-ipa-2019-spring-am-adapt-50','a'], ['fe-ipa-2019-spring-am-adapt-76','d']]) {
+    for (const [id,answer] of [['fe-ipa-official-2019-autumn-a-06','c'], ['fe-ipa-2019-spring-am-adapt-50','a'], ['fe-ipa-2019-spring-am-adapt-76','d'], ['fe-ipa-2019-spring-am-adapt-25','c'], ['fe-ipa-2019-spring-am-adapt-30','d']]) {
       db.prepare('INSERT INTO questions VALUES (?, ?, ?)').run(id, JSON.stringify(answer), 'existing legacy')
       db.prepare('INSERT INTO question_review_state VALUES (?, 1)').run(id)
       db.prepare('INSERT INTO study_attempts VALUES (?, ?)').run('attempt-'+id,id)
@@ -39,14 +39,17 @@ test('shared sample mappings preserve canonical questions and progress, match ke
       ['2020-12-13',18,'fe-ipa-sample-2022-a-015','d','d'],
       ['2020-12-13',19,'fe-ipa-sample-2022-a-018','d','d'],
       ['2020-12-13',20,'fe-ipa-sample-2022-a-019','d','d'],
+      ['2020-12-13',24,'fe-ipa-2019-spring-am-adapt-25','c','c'],
+      ['2020-12-13',29,'fe-ipa-2019-spring-am-adapt-30','d','d'],
       ['2020-12-13',49,'fe-ipa-2019-spring-am-adapt-50','a','a'],
       ['2020-12-13',75,'fe-ipa-2019-spring-am-adapt-76','d','d'],
       ['2022-06-12',17,'fe-ipa-sample-2022-a-015','d','d'],
       ['2022-06-12',20,'fe-ipa-sample-2022-a-019','d','d'],
+      ['2022-06-12',29,'fe-ipa-2019-spring-am-adapt-30','d','d'],
     ])
-    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM questions').get().n,8)
-    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM study_attempts').get().n,8)
-    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM question_review_state WHERE mastered=1').get().n,8)
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM questions').get().n,10)
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM study_attempts').get().n,10)
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM question_review_state WHERE mastered=1').get().n,10)
     assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0)
   } finally { db.close() }
 })
