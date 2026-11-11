@@ -16,11 +16,16 @@ test('shared sample mappings preserve canonical questions and progress, match ke
         fiscal_year INTEGER NOT NULL, canonical_question_id TEXT NOT NULL REFERENCES questions(id),
         official_answer TEXT NOT NULL, question_url TEXT NOT NULL, answer_url TEXT NOT NULL,
         PRIMARY KEY(sitting_date, original_question));`)
-    for (const n of ['002','015','018','019']) {
+    for (const n of ['002','006','015','018','019']) {
       const id='fe-ipa-sample-2022-a-'+n
       db.prepare('INSERT INTO questions VALUES (?, ?, ?)').run(id, '"d"', 'original sample '+n)
       db.prepare('INSERT INTO question_review_state VALUES (?, 1)').run(id)
       db.prepare('INSERT INTO study_attempts VALUES (?, ?)').run('attempt-'+n,id)
+    }
+    for (const [id,answer] of [['fe-ipa-official-2019-autumn-a-06','c'], ['fe-ipa-2019-spring-am-adapt-50','a'], ['fe-ipa-2019-spring-am-adapt-76','d']]) {
+      db.prepare('INSERT INTO questions VALUES (?, ?, ?)').run(id, JSON.stringify(answer), 'existing legacy')
+      db.prepare('INSERT INTO question_review_state VALUES (?, 1)').run(id)
+      db.prepare('INSERT INTO study_attempts VALUES (?, ?)').run('attempt-'+id,id)
     }
     db.exec(migration)
     db.exec(migration)
@@ -29,15 +34,19 @@ test('shared sample mappings preserve canonical questions and progress, match ke
       FROM fe_exemption_occurrences JOIN questions ON id=canonical_question_id ORDER BY sitting_date,original_question`).all()
     assert.deepEqual(rows.map(r=>[r.sitting_date,r.original_question,r.canonical_question_id,r.official_answer,r.canonical_answer]), [
       ['2020-12-13',1,'fe-ipa-sample-2022-a-002','d','d'],
+      ['2020-12-13',4,'fe-ipa-official-2019-autumn-a-06','c','c'],
+      ['2020-12-13',8,'fe-ipa-sample-2022-a-006','d','d'],
       ['2020-12-13',18,'fe-ipa-sample-2022-a-015','d','d'],
       ['2020-12-13',19,'fe-ipa-sample-2022-a-018','d','d'],
       ['2020-12-13',20,'fe-ipa-sample-2022-a-019','d','d'],
+      ['2020-12-13',49,'fe-ipa-2019-spring-am-adapt-50','a','a'],
+      ['2020-12-13',75,'fe-ipa-2019-spring-am-adapt-76','d','d'],
       ['2022-06-12',17,'fe-ipa-sample-2022-a-015','d','d'],
       ['2022-06-12',20,'fe-ipa-sample-2022-a-019','d','d'],
     ])
-    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM questions').get().n,4)
-    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM study_attempts').get().n,4)
-    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM question_review_state WHERE mastered=1').get().n,4)
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM questions').get().n,8)
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM study_attempts').get().n,8)
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM question_review_state WHERE mastered=1').get().n,8)
     assert.equal(db.prepare('PRAGMA foreign_key_check').all().length,0)
   } finally { db.close() }
 })
@@ -45,7 +54,7 @@ test('shared sample mappings preserve canonical questions and progress, match ke
 test('existing sample adaptations retain the same option ordering and official answer', () => {
   const read = name => JSON.parse(readFileSync(new URL('../scripts/data/'+name, import.meta.url), 'utf8')).items
   const items = [...read('fe-2022-official-samples-a-remaining28.json'), ...read('fe-2022-official-samples-part1.json')]
-  for (const number of [2,15,18,19]) {
+  for (const number of [2,6,15,18,19]) {
     const item=items.find(q=>q.question_number===number)
     assert.ok(item, `sample ${number} exists`)
     assert.equal(item.answer,3)
