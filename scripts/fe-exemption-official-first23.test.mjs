@@ -75,7 +75,7 @@ test('practice filters isolate 修了試験 from official samples, original CBT 
  assert.match(app,/exemption_question_count/)
  assert.match(app,/2022, 2021, 2020, 2019/)
  assert.match(worker,/exemption_question_count/)
- assert.match(worker,/WHEN 'exemption' THEN (q\.)?exam_origin = 'fe_exemption'/)
+ assert.match(worker,/WHEN 'exemption' THEN (q\.)?id IN \(SELECT canonical_question_id FROM fe_exemption_occurrences\)/)
  assert.match(worker,/AND (q\.)?exam_origin = 'general'/)
  assert.match(worker,/exam_origin/)
  assert.doesNotMatch(importSql,/DROP TABLE|DELETE FROM|REPLACE INTO|UPDATE questions/i)
