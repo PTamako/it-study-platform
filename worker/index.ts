@@ -1426,7 +1426,7 @@ export default {
                   COALESCE(q.official_question_count, 0) AS official_question_count,
                   COALESCE(q.prediction_question_count, 0) AS prediction_question_count,
                   COALESCE(q.adapted_question_count, 0) AS adapted_question_count,
-                  COALESCE(q.exemption_question_count, 0) AS exemption_question_count,
+                  CASE WHEN st.id = 'exam-fe' THEN (SELECT COUNT(DISTINCT canonical_question_id) FROM fe_exemption_occurrences) ELSE 0 END AS exemption_question_count,
                   COALESCE(q.sample_question_count, 0) AS sample_question_count
            FROM study_tracks st
            LEFT JOIN (
@@ -1434,7 +1434,6 @@ export default {
                     SUM(CASE WHEN source_type = 'official' THEN 1 ELSE 0 END) AS official_question_count,
                     SUM(CASE WHEN source_type = 'generated' THEN 1 ELSE 0 END) AS prediction_question_count,
                     SUM(CASE WHEN source_type = 'licensed' AND question_kind = 'standard' AND exam_origin = 'general' THEN 1 ELSE 0 END) AS adapted_question_count,
-                    SUM(CASE WHEN exam_origin = 'fe_exemption' THEN 1 ELSE 0 END) AS exemption_question_count,
                     SUM(CASE WHEN question_kind = 'official_sample' THEN 1 ELSE 0 END) AS sample_question_count
              FROM questions GROUP BY track_id
            ) q ON q.track_id = st.id
@@ -2235,8 +2234,8 @@ export default {
                   (SELECT MAX(wa.answered_at) FROM study_attempts wa WHERE wa.question_id = q.id AND wa.is_correct = 0) AS last_wrong_at,
                   COUNT(*) OVER() AS filtered_total
            FROM questions q
-           LEFT JOIN question_review_state s ON s.question_id = q.id           WHERE q.track_id = ? AND (CASE ? WHEN '' THEN 1 WHEN 'sample' THEN q.question_kind = 'official_sample' WHEN 'exemption' THEN q.exam_origin = 'fe_exemption' WHEN 'licensed' THEN q.source_type = 'licensed' AND q.question_kind = 'standard' AND q.exam_origin = 'general' ELSE q.source_type = ? END)
-             AND (? = '' OR (q.exam_origin = 'fe_exemption' AND q.id IN (SELECT canonical_question_id FROM fe_exemption_occurrences WHERE fiscal_year = CAST(? AS INTEGER))) OR (q.exam_origin <> 'fe_exemption' AND q.id LIKE ?))
+           LEFT JOIN question_review_state s ON s.question_id = q.id           WHERE q.track_id = ? AND (CASE ? WHEN '' THEN 1 WHEN 'sample' THEN q.question_kind = 'official_sample' WHEN 'exemption' THEN q.id IN (SELECT canonical_question_id FROM fe_exemption_occurrences) WHEN 'licensed' THEN q.source_type = 'licensed' AND q.question_kind = 'standard' AND q.exam_origin = 'general' ELSE q.source_type = ? END)
+             AND (? = '' OR ((? IN ('', 'all', 'exemption') OR q.exam_origin = 'fe_exemption') AND q.id IN (SELECT canonical_question_id FROM fe_exemption_occurrences WHERE fiscal_year = CAST(? AS INTEGER))) OR (? <> 'exemption' AND q.exam_origin <> 'fe_exemption' AND q.id LIKE ?))
              AND (? = '' OR q.id IN (SELECT canonical_question_id FROM fe_exemption_occurrences WHERE sitting_date = ?))
              AND (? = '' OR q.exam_section = ?)
              AND (? = '' OR q.topic = ?)
@@ -2256,7 +2255,7 @@ export default {
            ORDER BY CASE WHEN COALESCE(s.last_result, 'again') = 'again' THEN 0 ELSE 1 END,
                     wrong_count DESC, next_review_at ASC, q.id
            LIMIT ? OFFSET ?`,
-        ).bind(trackId, source, source, year, year, yearPattern, sitting, sitting, section, section, selectedTopic, selectedTopic, mode, mode, mode, mode, mode, limit, offset).all()
+        ).bind(trackId, source, source, year, source, year, source, yearPattern, sitting, sitting, section, section, selectedTopic, selectedTopic, mode, mode, mode, mode, mode, limit, offset).all()
         const rows = results as Record<string, unknown>[]
         const matchedTotal = Number(rows[0]?.filtered_total || 0)
         return json({
@@ -2594,13 +2593,13 @@ export default {
         const { results } = await env.DB.prepare(
           `SELECT topic, COUNT(*) AS question_count
            FROM questions
-           WHERE track_id = ? AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'exemption' THEN exam_origin = 'fe_exemption' WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' AND exam_origin = 'general' ELSE source_type = ? END)
-             AND (? = '' OR (exam_origin = 'fe_exemption' AND id IN (SELECT canonical_question_id FROM fe_exemption_occurrences WHERE fiscal_year = CAST(? AS INTEGER))) OR (exam_origin <> 'fe_exemption' AND id LIKE ?))
+           WHERE track_id = ? AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'exemption' THEN id IN (SELECT canonical_question_id FROM fe_exemption_occurrences) WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' AND exam_origin = 'general' ELSE source_type = ? END)
+             AND (? = '' OR ((? IN ('all', 'exemption') OR exam_origin = 'fe_exemption') AND id IN (SELECT canonical_question_id FROM fe_exemption_occurrences WHERE fiscal_year = CAST(? AS INTEGER))) OR (? <> 'exemption' AND exam_origin <> 'fe_exemption' AND id LIKE ?))
              AND (? = '' OR id IN (SELECT canonical_question_id FROM fe_exemption_occurrences WHERE sitting_date = ?))
              AND (? = '' OR exam_section = ?)
            GROUP BY topic
            ORDER BY topic`,
-        ).bind(trackId, source, source, year, year, yearPattern, sitting, sitting, section, section).all()
+        ).bind(trackId, source, source, year, source, year, source, yearPattern, sitting, sitting, section, section).all()
         return json({ items: results })
       } catch {
         return json({ items: [], error: '题库分类暂不可用，请确认数据库迁移已应用。' }, 503)
@@ -2618,7 +2617,7 @@ export default {
                   COALESCE(exam_section_method, 'unclassified') AS method,
                   COUNT(*) AS question_count
            FROM questions
-           WHERE track_id = ? AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'exemption' THEN exam_origin = 'fe_exemption' WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' AND exam_origin = 'general' ELSE source_type = ? END)
+           WHERE track_id = ? AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'exemption' THEN id IN (SELECT canonical_question_id FROM fe_exemption_occurrences) WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' AND exam_origin = 'general' ELSE source_type = ? END)
            GROUP BY COALESCE(exam_section, 'unclassified'),
                     COALESCE(exam_section_method, 'unclassified')
            ORDER BY exam_section, method`,
@@ -2668,7 +2667,7 @@ export default {
         ? sampleSecurityIds : topic === 'FE算法与程序设计' ? sampleAlgorithmIds : []
       const sourceClause = `(CASE ? WHEN 'all' THEN 1
         WHEN 'sample' THEN p.question_kind = 'official_sample'
-        WHEN 'exemption' THEN p.exam_origin = 'fe_exemption'
+        WHEN 'exemption' THEN p.question_id IN (SELECT canonical_question_id FROM fe_exemption_occurrences)
         WHEN 'licensed' THEN p.source_type = 'licensed' AND p.question_kind = 'standard' AND p.exam_origin = 'general'
         ELSE p.source_type = ? END)`
       type MockPool = { section: 'A' | 'B'; count: number; explicit?: boolean; topic?: string }
@@ -2795,11 +2794,11 @@ export default {
         const totalRow = await env.DB.prepare(
           `SELECT COUNT(*) AS total FROM questions
            WHERE track_id = ? AND (? = '' OR topic = ?)
-             AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'exemption' THEN exam_origin = 'fe_exemption' WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' AND exam_origin = 'general' ELSE source_type = ? END)
-             AND (? = '' OR (exam_origin = 'fe_exemption' AND id IN (SELECT canonical_question_id FROM fe_exemption_occurrences WHERE fiscal_year = CAST(? AS INTEGER))) OR (exam_origin <> 'fe_exemption' AND id LIKE ?))
+             AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'exemption' THEN id IN (SELECT canonical_question_id FROM fe_exemption_occurrences) WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' AND exam_origin = 'general' ELSE source_type = ? END)
+             AND (? = '' OR ((? IN ('all', 'exemption') OR exam_origin = 'fe_exemption') AND id IN (SELECT canonical_question_id FROM fe_exemption_occurrences WHERE fiscal_year = CAST(? AS INTEGER))) OR (? <> 'exemption' AND exam_origin <> 'fe_exemption' AND id LIKE ?))
              AND (? = '' OR id IN (SELECT canonical_question_id FROM fe_exemption_occurrences WHERE sitting_date = ?))
              AND (? = '' OR exam_section = ?)`,
-        ) .bind(trackId, topic, topic, source, source, year, year, yearPattern, sitting, sitting, section, section).first() as { total?: number } | null
+        ) .bind(trackId, topic, topic, source, source, year, source, year, source, yearPattern, sitting, sitting, section, section).first() as { total?: number } | null
         const { results } = await env.DB.prepare(
           `SELECT id, track_id, topic, difficulty, question_type, prompt,
                   options_json, answer_json, explanation, source_type, source_reference, language, question_kind, exam_origin,
@@ -2807,8 +2806,8 @@ export default {
                   (CASE WHEN ? <> '' THEN (SELECT MIN(e.original_question) FROM fe_exemption_occurrences e WHERE e.sitting_date = ? AND e.canonical_question_id = questions.id) ELSE NULL END) AS original_question
            FROM questions
            WHERE track_id = ? AND (? = '' OR topic = ?)
-             AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'exemption' THEN exam_origin = 'fe_exemption' WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' AND exam_origin = 'general' ELSE source_type = ? END)
-             AND (? = '' OR (exam_origin = 'fe_exemption' AND id IN (SELECT canonical_question_id FROM fe_exemption_occurrences WHERE fiscal_year = CAST(? AS INTEGER))) OR (exam_origin <> 'fe_exemption' AND id LIKE ?))
+             AND (CASE ? WHEN 'all' THEN 1 WHEN 'sample' THEN question_kind = 'official_sample' WHEN 'exemption' THEN id IN (SELECT canonical_question_id FROM fe_exemption_occurrences) WHEN 'licensed' THEN source_type = 'licensed' AND question_kind = 'standard' AND exam_origin = 'general' ELSE source_type = ? END)
+             AND (? = '' OR ((? IN ('all', 'exemption') OR exam_origin = 'fe_exemption') AND id IN (SELECT canonical_question_id FROM fe_exemption_occurrences WHERE fiscal_year = CAST(? AS INTEGER))) OR (? <> 'exemption' AND exam_origin <> 'fe_exemption' AND id LIKE ?))
              AND (? = '' OR id IN (SELECT canonical_question_id FROM fe_exemption_occurrences WHERE sitting_date = ?))
              AND (? = '' OR exam_section = ?)
            ORDER BY CASE WHEN ? = 'ordered' AND ? <> '' THEN original_question END,
@@ -2821,7 +2820,7 @@ export default {
                        + length(id) * 991 + ? * 10007) % 104729
                     ) END, id
            LIMIT ? OFFSET ?`,
-        ).bind(sitting, sitting, trackId, topic, topic, source, source, year, year, yearPattern, sitting, sitting, section, section, mode, sitting, mode, mode, seed, limit, offset).all()
+        ).bind(sitting, sitting, trackId, topic, topic, source, source, year, source, year, source, yearPattern, sitting, sitting, section, section, mode, sitting, mode, mode, seed, limit, offset).all()
         const total = Number(totalRow?.total || 0)
         return json({
           items: results.map((row: Record<string, unknown>) => ({

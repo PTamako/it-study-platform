@@ -41,7 +41,7 @@ function setup() {
   insert.run('sg-prediction-2026-001','exam-sg','情報セキュリティ','sg-pred','generated','A')
   sql.exec("ALTER TABLE questions ADD COLUMN question_kind TEXT NOT NULL DEFAULT 'standard' CHECK(question_kind IN ('standard','official_sample')); ALTER TABLE questions ADD COLUMN exam_origin TEXT NOT NULL DEFAULT 'general' CHECK(exam_origin IN ('general','fe_exemption'))")
   sql.exec("CREATE TABLE fe_exemption_occurrences (sitting_date TEXT NOT NULL, original_question INTEGER NOT NULL, fiscal_year INTEGER NOT NULL, canonical_question_id TEXT NOT NULL, official_answer TEXT, question_url TEXT, answer_url TEXT, PRIMARY KEY(sitting_date, original_question)); CREATE INDEX idx_fe_exemption_occurrences_year_question ON fe_exemption_occurrences(fiscal_year, canonical_question_id)")
-  return { sql, env: { DB: { prepare(query) { return { bind(...args) { return {
+  return { sql, env: { DB: { prepare(query) { return { all: async () => ({ results: sql.prepare(query).all() }), bind(...args) { return {
     all: async () => ({ results: sql.prepare(query).all(...args) }),
     first: async () => sql.prepare(query).get(...args),
   } } } } } } }
@@ -265,4 +265,50 @@ test('FE exemption sitting selector appears only for its source and passes date 
   assert.match(app,/params.set\('sitting', practiceSitting.value\)/)
   assert.match(app,/original_question/)
   assert.doesNotMatch(app,/960 道已入库/)
+})
+
+test('exemption occurrence can reference a legacy or sample canonical question without changing its identity or original source', async () => {
+  const {sql,env}=setup()
+  const legacy='fe-ipa-official-2025-a-01'
+  const sample='fe-ipa-sample-2022-a-001'
+  sql.prepare("INSERT INTO questions (id,track_id,topic,difficulty,question_type,prompt,options_json,answer_json,explanation,source_type,source_reference,language,exam_section,exam_section_method,question_kind) VALUES (?,'exam-fe','sample','standard','single_choice','sample','[]','\"a\"','proof','licensed','https://www.ipa.go.jp/','ja','A','explicit','official_sample')").run(sample)
+  const occ=sql.prepare('INSERT INTO fe_exemption_occurrences (sitting_date,original_question,fiscal_year,canonical_question_id,official_answer) VALUES (?,?,?,?,?)')
+  occ.run('2020-12-13',4,2020,legacy,'a')
+  occ.run('2020-12-13',18,2020,sample,'a')
+  occ.run('2022-06-12',4,2022,legacy,'a')
+  sql.prepare("INSERT INTO study_attempts VALUES ('attempt',?,0,'2025-01-01')").run(legacy)
+  sql.exec("CREATE TABLE study_tracks (id TEXT, kind TEXT, title TEXT, subtitle TEXT, enabled INTEGER); INSERT INTO study_tracks VALUES ('exam-fe','exam','FE','',1)")
+  const tracks=await get(env,'/api/tracks')
+  assert.equal(tracks.status,200)
+  assert.equal(tracks.body.items[0].exemption_question_count,2)
+  const route='track=exam-fe&source=exemption&year=2020&sitting=2020-12-13'
+  const items=await get(env,'/api/questions?'+route+'&mode=ordered')
+  assert.equal(items.status,200)
+  assert.deepEqual(items.body.items.map(x=>[x.id,x.original_question,x.exam_origin]),[[legacy,4,'general'],[sample,18,'general']])
+  const categories=await get(env,'/api/question-categories?'+route)
+  assert.equal(categories.body.items.reduce((n,x)=>n+x.question_count,0),2)
+  const wrong=await get(env,'/api/wrong-questions?'+route+'&mode=wrong')
+  assert.deepEqual(wrong.body.items.map(x=>x.id),[legacy])
+  const unlearned=await get(env,'/api/wrong-questions?'+route+'&mode=unlearned')
+  assert.deepEqual(unlearned.body.items.map(x=>x.id),[sample])
+  const stats=await get(env,'/api/question-classification-stats?track=exam-fe&source=exemption')
+  assert.equal(stats.body.counts.A,2)
+  assert.equal((await get(env,'/api/questions?track=exam-fe&source=exemption&year=2025')).body.total,0)
+  assert.equal((await get(env,'/api/questions?track=exam-fe&source=all&year=2020')).body.total,2)
+  assert.deepEqual((await get(env,'/api/questions?track=exam-fe&source=sample&year=2022')).body.items.map(x=>x.id),[sample])
+  assert.deepEqual((await get(env,'/api/questions?track=exam-fe&source=official&year=2025')).body.items.map(x=>x.id),[legacy])
+})
+
+test('exemption mock draws cross-origin canonical questions once without exposing answers', async () => {
+  const {sql,env}=setup()
+  sql.exec('CREATE TABLE mock_question_pool (question_id TEXT PRIMARY KEY, track_id TEXT, exam_section TEXT, exam_section_method TEXT, topic TEXT, question_kind TEXT, exam_origin TEXT, source_type TEXT, draw_key INTEGER)')
+  const q=sql.prepare("INSERT INTO questions (id,track_id,topic,difficulty,question_type,prompt,options_json,answer_json,explanation,source_type,source_reference,language,exam_section,exam_section_method,question_kind,exam_origin) VALUES (?,'exam-fe','sample','standard','single_choice','prompt','[]','\"a\"','proof','licensed','https://www.ipa.go.jp/','ja','A','explicit','official_sample','general')")
+  const pool=sql.prepare("INSERT INTO mock_question_pool VALUES (?,'exam-fe','A','explicit','sample','official_sample','general','licensed',?)")
+  const occ=sql.prepare("INSERT INTO fe_exemption_occurrences (sitting_date,original_question,fiscal_year,canonical_question_id,official_answer) VALUES ('2020-12-13',?,2020,?,'a')")
+  for(let n=1;n<=60;n++) { const id='sample-'+n; q.run(id); pool.run(id,n*1000000); occ.run(n,id) }
+  const response=await get(env,'/api/mock-exam-questions?track=exam-fe&section=A&source=exemption')
+  assert.equal(response.status,200)
+  assert.equal(response.body.items.length,60)
+  assert.equal(new Set(response.body.items.map(x=>x.id)).size,60)
+  assert.ok(response.body.items.every(x=>!('answer' in x) && !('answer_json' in x) && !('explanation' in x)))
 })
