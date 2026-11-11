@@ -24,14 +24,16 @@ test('shared sample mappings preserve canonical questions and progress, match ke
     }
     db.exec(migration)
     db.exec(migration)
-    const rows=db.prepare(`SELECT original_question,canonical_question_id,official_answer,
+    const rows=db.prepare(`SELECT sitting_date,original_question,canonical_question_id,official_answer,
       json_extract(answer_json,'$') AS canonical_answer
-      FROM fe_exemption_occurrences JOIN questions ON id=canonical_question_id ORDER BY original_question`).all()
-    assert.deepEqual(rows.map(r=>[r.original_question,r.canonical_question_id,r.official_answer,r.canonical_answer]), [
-      [1,'fe-ipa-sample-2022-a-002','d','d'],
-      [18,'fe-ipa-sample-2022-a-015','d','d'],
-      [19,'fe-ipa-sample-2022-a-018','d','d'],
-      [20,'fe-ipa-sample-2022-a-019','d','d'],
+      FROM fe_exemption_occurrences JOIN questions ON id=canonical_question_id ORDER BY sitting_date,original_question`).all()
+    assert.deepEqual(rows.map(r=>[r.sitting_date,r.original_question,r.canonical_question_id,r.official_answer,r.canonical_answer]), [
+      ['2020-12-13',1,'fe-ipa-sample-2022-a-002','d','d'],
+      ['2020-12-13',18,'fe-ipa-sample-2022-a-015','d','d'],
+      ['2020-12-13',19,'fe-ipa-sample-2022-a-018','d','d'],
+      ['2020-12-13',20,'fe-ipa-sample-2022-a-019','d','d'],
+      ['2022-06-12',17,'fe-ipa-sample-2022-a-015','d','d'],
+      ['2022-06-12',20,'fe-ipa-sample-2022-a-019','d','d'],
     ])
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM questions').get().n,4)
     assert.equal(db.prepare('SELECT COUNT(*) AS n FROM study_attempts').get().n,4)
