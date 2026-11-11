@@ -33,7 +33,8 @@ function setup(records = []) {
       source_type TEXT NOT NULL, source_reference TEXT, language TEXT DEFAULT 'ja',
       exam_section TEXT, exam_section_method TEXT, question_kind TEXT DEFAULT 'standard',
       exam_origin TEXT DEFAULT 'general'
-    );`)
+    );
+    CREATE TABLE fe_exemption_occurrences (canonical_question_id TEXT NOT NULL REFERENCES questions(id));`)
   const insert = sql.prepare(`INSERT INTO questions
     (id,track_id,topic,prompt,options_json,answer_json,explanation,
      source_type,source_reference,exam_section,exam_section_method,question_kind,exam_origin)
@@ -43,6 +44,8 @@ function setup(records = []) {
     insert.run(row.id,row.track_id,row.topic,row.source_type,row.exam_section,
       row.exam_section_method,row.question_kind,row.exam_origin)
   }
+  const addOccurrence = sql.prepare('INSERT INTO fe_exemption_occurrences VALUES (?)')
+  for (const row of records) if (row.exam_origin === 'fe_exemption') addOccurrence.run(row.id)
   sql.exec(migration)
   const measures = { queries: 0, materialized: 0, sql: [] }
   const env = { DB: { prepare(query) {
