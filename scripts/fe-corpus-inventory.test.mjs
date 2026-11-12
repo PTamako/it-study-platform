@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { inspectFePublishedBank } from './audit_fe_published_bank.mjs'
+import { inspectFePublishedBank, publishedQuestionIds } from './audit_fe_published_bank.mjs'
 
 test('FE official-publication inventory detects precisely which 2023-2026 A/B items remain missing', () => {
   const corpus = inspectFePublishedBank()
@@ -25,4 +25,15 @@ test('FE official-publication inventory detects precisely which 2023-2026 A/B it
       assert.equal(new Set(y.sections[sec].present).size, y.sections[sec].present.length)
     }
   }
+})
+
+
+test('only a question row counts as an official original, not an occurrence reference', () => {
+  const sql = `INSERT INTO questions VALUES
+('fe-ipa-official-2024-a-11','exam-fe');
+INSERT INTO fe_exemption_occurrences VALUES
+('2021-06-13',47,'2021','fe-ipa-official-2024-a-11','c');`
+  const entries = [...publishedQuestionIds(sql)]
+  assert.equal(entries.length,1)
+  assert.deepEqual(entries[0].slice(1),['2024','a','11'])
 })
