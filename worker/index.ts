@@ -77,16 +77,23 @@ export async function documentAssistantBridge(request:Request,env:Env):Promise<R
   const id=body.actor_user_id
   if(!env.JPDA_BRIDGE_STUDY_ACTOR_ID||id!==env.JPDA_BRIDGE_STUDY_ACTOR_ID)
     return bridgeJson({ok:false,error:'study_account_not_linked'},403)
-  if(body.source!=='jp-document-assistant'||body.payload?.operation!=='vocabulary'||
+  const kind=body.payload?.operation
+  if(body.source!=='jp-document-assistant'||!['vocabulary','sentence'].includes(kind)||
     !/^jda:zhixue:[a-f0-9]{16,64}$/i.test(body.idempotency_key||'')||
     request.headers.get('Idempotency-Key')!==body.idempotency_key)return bridgeJson({ok:false,error:'invalid_source'},400)
   const p=body.payload
-  if(p.language!=='ja'||p.skip_existing!==true||typeof p.term!=='string'||!p.term.trim()||p.term.length>100||
-    typeof p.meaning_zh!=='string'||!p.meaning_zh.trim()||p.meaning_zh.length>200||
-    /[\d０-９]{5,}|@|〒|\n/.test(p.term))return bridgeJson({ok:false,error:'invalid_vocabulary'},400)
-  const term=p.term.trim()
-  const entry={term,language:'ja',reading:typeof p.reading==='string'?p.reading.slice(0,100):'',
-    zh:p.meaning_zh.trim(),en:'',tag:'文书',source:'jp-document-assistant'}
+  if(p.language!=='ja'||p.skip_existing!==true||
+    typeof p.meaning_zh!=='string'||!p.meaning_zh.trim()||p.meaning_zh.length>400)
+    return bridgeJson({ok:false,error:'invalid_study_content'},400)
+  const value=kind==='sentence'?p.sentence:p.term
+  if(typeof value!=='string'||!value.trim()||value.length>(kind==='sentence'?220:100)||
+    /[\d０-９]{5,}|@|〒|\n/.test(value)||
+    (kind==='sentence'&&p.privacy_confirmed!==true))
+    return bridgeJson({ok:false,error:'privacy_or_content_invalid'},400)
+  const term=value.trim()
+  const entry={term,language:'ja',reading:kind==='vocabulary'&&typeof p.reading==='string'?p.reading.slice(0,100):'',
+    zh:p.meaning_zh.trim(),en:'',tag:kind==='sentence'?'文书例句':'文书',
+    source:'jp-document-assistant',study_kind:kind}
   try{
     const inserted=await env.DB.prepare(`INSERT OR IGNORE INTO saved_vocabulary_entries_v2
       (language,term,entry_json,saved_at) VALUES('ja',?1,?2,CURRENT_TIMESTAMP)`)
