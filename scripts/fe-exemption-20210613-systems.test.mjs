@@ -14,8 +14,8 @@ test('2021 systems questions import idempotently without changing existing study
       INSERT INTO questions(id) VALUES('prior'); INSERT INTO study_attempts VALUES('attempt','prior'); INSERT INTO question_review_state VALUES('prior',1);`)
     const sql = readFileSync(new URL('../migrations/0163_fe_exemption_20210613_systems.sql',import.meta.url),'utf8')
     db.exec(sql); db.exec(sql)
-    const rows=db.prepare('SELECT o.original_question,o.official_answer,q.answer_json,q.options_json FROM fe_exemption_occurrences o JOIN questions q ON q.id=o.canonical_question_id ORDER BY o.original_question').all()
-    assert.deepEqual(rows.map(r=>[r.original_question,r.official_answer]),[[10,'b'],[11,'d'],[12,'b'],[13,'c'],[14,'a'],[15,'a'],[16,'d'],[17,'c'],[18,'d'],[19,'c'],[20,'b'],[21,'c']])
+    const rows=db.prepare('SELECT o.original_question,o.official_answer,q.answer_json,q.options_json FROM fe_exemption_occurrences o JOIN questions q ON q.id=o.canonical_question_id ORDER BY o.sitting_date,o.original_question').all()
+    assert.deepEqual(rows.map(r=>[r.original_question,r.official_answer]),[[10,'b'],[11,'d'],[12,'b'],[13,'c'],[14,'a'],[15,'a'],[16,'d'],[17,'c'],[18,'d'],[19,'c'],[20,'b'],[21,'c'],[13,'b'],[19,'c']])
     for(const r of rows) { assert.equal(JSON.parse(r.answer_json),r.official_answer);assert.equal(JSON.parse(r.options_json).length,4) }
     assert.equal(db.prepare('SELECT COUNT(*) n FROM study_attempts').get().n,1)
     assert.equal(db.prepare('SELECT mastered FROM question_review_state').get().mastered,1)
