@@ -15,7 +15,7 @@ test('2021 systems questions import idempotently without changing existing study
     const sql = readFileSync(new URL('../migrations/0163_fe_exemption_20210613_systems.sql',import.meta.url),'utf8')
     db.exec(sql); db.exec(sql)
     const rows=db.prepare('SELECT o.original_question,o.official_answer,q.answer_json,q.options_json FROM fe_exemption_occurrences o JOIN questions q ON q.id=o.canonical_question_id ORDER BY o.original_question').all()
-    assert.deepEqual(rows.map(r=>[r.original_question,r.official_answer]),[[13,'c'],[14,'a'],[15,'a'],[16,'d'],[17,'c'],[18,'d'],[19,'c'],[20,'b'],[21,'c']])
+    assert.deepEqual(rows.map(r=>[r.original_question,r.official_answer]),[[10,'b'],[11,'d'],[12,'b'],[13,'c'],[14,'a'],[15,'a'],[16,'d'],[17,'c'],[18,'d'],[19,'c'],[20,'b'],[21,'c']])
     for(const r of rows) { assert.equal(JSON.parse(r.answer_json),r.official_answer);assert.equal(JSON.parse(r.options_json).length,4) }
     assert.equal(db.prepare('SELECT COUNT(*) n FROM study_attempts').get().n,1)
     assert.equal(db.prepare('SELECT mastered FROM question_review_state').get().mastered,1)
@@ -30,4 +30,10 @@ test('address width and parallel availability follow from the original values', 
 
 test('the three NAND gates implement OR', () => {
   for (const x of [false,true]) for (const y of [false,true]) assert.equal(!(!(x && x) && !(y && y)), x || y)
+})
+
+test('instruction rate, effective address, and repeated subtraction are correct', () => {
+ assert.equal(1 / (20e-9) / 1e6, 50)
+ assert.equal(({300:1300})[200+100],1300)
+ for(const x of [1,7,11,30]) for(const y of [1,2,3,8]) { let q=0,r=x; while(r>=y){r-=y;q++} assert.equal(q,Math.floor(x/y));assert.equal(r,x%y) }
 })
