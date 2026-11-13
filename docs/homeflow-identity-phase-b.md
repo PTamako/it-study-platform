@@ -52,3 +52,17 @@
 - 提交 `5bd62dd8bfb54e24ad92aba5d0e6c037677c66c2` 只在该测试辅助文件中把 HomeFlow daily import 显式替换成返回 503 的测试替身；未改生产身份授权、旧单用户 API 或新增真实个人 API。
 - 最终最新 [**Validate #43444534566**](https://github.com/PTamako/it-study-platform/actions/runs/43444534566) GitHub Actions **completed / success**。实际 job 中 Run automated regression tests、Type-check and build frontend、Validate complete D1 migration chain locally 全部 **success**。最新本轮 Draft 代码 HEAD 为 `5bd62dd8bfb54e24ad92aba5d0e6c037677c66c2`；文档本身后续 commit 需再核对，但不代表生产上架。
 - 所有新 SSO/每日任务功能在生产默认 OFF，0180/0181/0182 仍未获执行授权，保留 A=用户本人待完成及所有旧记录原样。后继开发者可继续逐表按 user_id 隔离错题、模拟考、语言卡和个人缓存，不重做每日任务模块。
+
+
+## 2026-11-13 Stage E 增量：语言卡掌握和间隔复习逐用户隔离
+
+- 此模块继续在 [原 Draft #179](https://github.com/PTamako/it-study-platform/pull/179) 开发，A 阶段仍由用户本人完成。0180/0181/0182/新增的 **0183_homeflow_language_progress.sql** 全部**只保存在 GitHub，未执行生产 D1 迁移**，未开启新登录/课程开关，未部署 Worker、未建 Preview、未合并 PR。
+- 新 `homeflow_language_mastery` 和 `homeflow_language_reviews` 以 `(homeflow_user_id,card_id)` 为复合主键；二人同学一张卡也各自有掌握状态、复习次数、正确连续次数、三级记忆反馈和到期时间，CAS `version` 防旧设备覆盖；每次更改通过新 `homeflow_language_events` 记录实际 actor 的匿名卡片摘要/时间和审计动作，数据库触发器禁止冒充其它用户，审计不能删除或修改。**旧表 language_card_progress 与 language_card_reviews 一字不动**。
+- 新 `worker/homeflow-language.ts` 用 `verifiedStudyActor` 每次从真实 HomeFlow source-session 核验用户，`HOMEFLOW_STUDY_LANGUAGE_ENABLED` 缺省关闭。独立路由：`/api/homeflow-study/language/status`、`/cards?lang=ja|en&limit=...&after=...`、`/mastery`、`/review`、`/legacy/adopt`；课程文本为已发布公有句子卡，个人进度只能查自己的。正常新身份无法访问旧单用户 /api/language-progress、/api/language-review。
+- 三级复习间隔维持原规则：again 10min、hard 6h、remembered 随连续次数 1/3/7/14 日；hard 的 legacy last_result 仍记 again，另用 last_grade=hard 保留真实反馈。每次复习必须附带唯一 `request_id`、当前 `version`；服务端以 actor+SHA256(request_id) 去重、payload hash 防篡改，同一请求网络重试不会重复增加复习次数/审计。
+- 老 owner（须已验证绑定旧知学签名 Session）`POST /legacy/adopt` 明确 `confirm:true`，按 `kind:mastery|reviews` 分别独立领取旧掌握/复习表，每次 20 条按卡片 ID 游标分页；先整批校验字段，任何坏行 409 不跳过；用 `INSERT OR IGNORE` 不覆盖 owner 已在新表修改的记录。member 不可领取，旧表只读。
+- 新 `src/StudyHomeFlowLanguage.vue` 已挂载已认证的 `StudyHomeFlowAccess.vue`，以 `identity.user_id` keyed remount，支持中日/英语句子卡 12 条分页、掌握按钮、复习三级反馈、同一网络失败提交原样重试、原管理员两种历史明确确认导入；无旧 localStorage/IndexedDB 读写，不让 member 进入未隔离的旧 App 页面。
+- 真实双账号 SQLite 回归在 `scripts/homeflow-sso-isolated.test.mjs` 增四组：两人同卡不同掌握/复习、严格 request_id 去重与多端版本冲突、原历史有坏行必须全页拒绝、超过 20 条连续分页和 disabled/撤销/越权校验；PWA 组件隔离用 `scripts/homeflow-pwa-ui.test.mjs` 静态测试。旧模拟 Worker 的 `scripts/inline-chinese-dictionary.mjs` 仅为新语言模块提供 503 禁用替身，不改生产鉴权。
+- 代码提交（本次）：`e6b86c6d0f162a33024d02db47f62b8ab8562135`（0183）；`2b725b0ca0827e52bd985c60579677e1cd546858`（后端）；`7fdddb35568260d34a0d94dd0cf52229cc37240c`（路由）；`d8f7b8dc66078f5adfe60132bce9bc38b525d127`（旧测试 loader）；`17c78af4f0445cc8e9e860949c5cd52600ab10e0` 和 `5360f8b71fdb687c74c35c4b1ce4abe02d159bb5`（SQLite 双账号）；`4e2d9bff29e96848e45e3e1acb48629d178598cd`、`08f331b70766f9138515be6855ac4c46ff3fe859`（PWA）；`71c0387da16e206b094b8f0e1af07e02c67fe82b`（挂载）、`a2496361868de40e2a7293f0e91cb57433aca1f3`（UI 安全测试）。
+- 第一轮完整 [CI #43447994442](https://github.com/PTamako/it-study-platform/actions/runs/43447994442) **failure**：481/482 项测试通过、仅一项旧 PWA 文案断言还预期“个人学习数据隔离尚未开放”；目前语言卡与每日任务已可独立使用，旧断言需准确表述剩余“考试、错题等仍待隔离”。新语言模块 **4 组 SQLite 全部通过，PWA 新隔离测试通过**。commit `6bac88b4ce8d77111062673e273e68df6e027fff` 已将旧文案断言修正，不改任何业务身份/SQL 逻辑；**下一轮 Validate 仍需核对最终状态，不得先声明全套 CI 成功**。
+- 未完成：题目练习/考试历史/错题/语法/听力各类个人表与客户端脱敏缓存隔离；真正跨 App 全链路共享/审批与 iPhone 双人真机验收。不能把当前独立课程面板的完成写成整个知学双账号上线。
