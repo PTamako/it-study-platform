@@ -1569,8 +1569,9 @@ test('Stage E daily-word state, grades and audit are independently owned and ser
   assert.equal((await scopedWords(f,memberToken,'','POST',{...payload,study_date:'2026-02-30'})).status,400)
   const scored=await scopedWords(f,memberToken,'','POST',payload)
   assert.equal(scored.status,200,await scored.clone().text())
-  assert.deepEqual((await scored.json()).item.streak,0)
-  assert.equal((await scored.json()).item.version,1)
+  const scoredState=await scored.json()
+  assert.equal(scoredState.item.streak,0)
+  assert.equal(scoredState.item.version,1)
   assert.equal((await scopedWords(f,memberToken,'','POST',payload)).status,200,
    'same day same answer must replay without second audit')
   assert.equal((await scopedWords(f,memberToken,'','POST',{...payload,remembered:true})).status,409)
