@@ -9,6 +9,7 @@ import StudyHomeFlowExams from './StudyHomeFlowExams.vue'
 import StudyHomeFlowMock from './StudyHomeFlowMock.vue'
 
 type Identity={user_id:string;household_id:string;role:'owner'|'member';display_name:string}
+const emit=defineEmits<{(event:'identity-changed',userId:string|null):void}>()
 type Pending={state:string;resume_secret:string;expires_at:number}
 const KEY='zhixue:homeflow-sso-pending-v1'
 const hex=/^[a-f0-9]{64}$/i
@@ -56,7 +57,7 @@ async function check(){
   const status=await api('status')
   if(generation!==identityGeneration)return
   enabled.value=status.enabled===true
-  if(!enabled.value){clearPending();return}
+  if(!enabled.value){clearPending();emit('identity-changed',null);return}
   const res=await fetch('/api/homeflow-sso/me',{
    cache:'no-store',credentials:'same-origin'
   })
@@ -65,11 +66,19 @@ async function check(){
    const value=await res.json() as {identity?:Identity}
    if(generation!==identityGeneration)return
    identity.value=value.identity||null
+   emit('identity-changed',identity.value?.user_id||null)
    if(identity.value)clearPending()
+  }else{
+   // Expired or missing HomeFlow cookie: never retain the previous actor.
+   emit('identity-changed',null)
   }
  }catch{
   // A prior user/session response must never re-open panels after sign-out.
-  if(generation===identityGeneration)enabled.value=false
+  if(generation===identityGeneration){
+   enabled.value=false
+   identity.value=null
+   emit('identity-changed',null)
+  }
  }finally{
   if(generation===identityGeneration)loading.value=false
  }
@@ -124,12 +133,27 @@ async function signOut(){
  try{
   await api('logout',{method:'POST'})
   identity.value=null
+  emit('identity-changed',null)
   clearPending()
  }catch(e){error.value=(e as Error).message}
  finally{busy.value=false}
 }
-onMounted(()=>{void check()})
-onUnmounted(()=>{identityGeneration++;identity.value=null})
+function foreground(){
+ if(document.visibilityState!=='visible')return
+ // On Safari/PWA resume always remove the old person's panels first,
+ // including if the account was switched in another window.
+ if(busy.value)return
+ identity.value=null
+ void check()
+}
+onMounted(()=>{
+ void check()
+ document.addEventListener('visibilitychange',foreground)
+})
+onUnmounted(()=>{
+ identityGeneration++;identity.value=null
+ document.removeEventListener('visibilitychange',foreground)
+})
 </script>
 
 <template>
