@@ -43,6 +43,11 @@ writeFileSync(join(dir,'homeflow-grammar.mts'),
 writeFileSync(join(dir,'homeflow-listening.mts'),
  readFileSync(new URL('../worker/homeflow-listening.ts',import.meta.url),'utf8')
   .replace("from './homeflow-identity'","from './homeflow-identity.mts'"))
+writeFileSync(join(dir,'homeflow-daily-words.mts'),
+ readFileSync(new URL('../worker/homeflow-daily-words.ts',import.meta.url),'utf8')
+  .replace("from './homeflow-identity'","from './homeflow-identity.mts'"))
+const {homeflowDailyWords}=
+ await import(pathToFileURL(join(dir,'homeflow-daily-words.mts')))
 const {homeflowListening}=
  await import(pathToFileURL(join(dir,'homeflow-listening.mts')))
 const {homeflowGrammar}=
@@ -73,6 +78,10 @@ function sqliteEnv(){
  raw.exec(readFileSync(new URL('../migrations/0187_homeflow_grammar_answers.sql',import.meta.url),'utf8'))
  raw.exec(readFileSync(new URL('../migrations/0150_daily_listening_answers.sql',import.meta.url),'utf8'))
  raw.exec(readFileSync(new URL('../migrations/0188_homeflow_listening_answers.sql',import.meta.url),'utf8'))
+ raw.exec(readFileSync(new URL('../migrations/0152_daily_word_reviews.sql',import.meta.url),'utf8'))
+ raw.exec(readFileSync(new URL('../migrations/0189_homeflow_daily_word_reviews.sql',import.meta.url),'utf8'))
+ raw.prepare('INSERT INTO daily_word_reviews(word_key,streak,last_date,next_date) VALUES(?,?,?,?)')
+  .run('ja:報告',2,'2026-11-01','2026-11-04')
  raw.prepare('INSERT INTO daily_listening_answers(study_date,language,scene_id,answer_index) VALUES(?,?,?,?)')
   .run('2026-11-13','ja','ja-d5',2)
  raw.prepare('INSERT INTO daily_grammar_answers(study_date,language,question_id,answer_index) VALUES(?,?,?,?)')
@@ -1521,5 +1530,121 @@ test('Stage E listening old owner pages are lossless and any invalid record bloc
   assert.deepEqual(f.raw.prepare('SELECT * FROM daily_listening_answers ORDER BY study_date,language,scene_id').all(),repaired)
   assert.equal((await scopedListening(f,memberToken,'/legacy/adopt','POST',{confirm:true})).status,403)
   assert.equal((await scopedListening(f,ownerToken,'/legacy/adopt','POST',{confirm:true,after_date:'2026-02-30'})).status,400)
+ }finally{f.raw.close()}
+})
+
+function scopedWords(f,cookie,path='',method='GET',data=null,origin=app){
+ const headers={}
+ if(cookie)headers.Cookie='__Host-study_hf='+cookie
+ if(method==='POST'){headers.Origin=origin;headers['Content-Type']='application/json'}
+ return homeflowDailyWords(new Request(app+'/api/homeflow-study/daily-words'+path,{
+  method,headers,body:method==='POST'?JSON.stringify(data??{}):undefined
+ }),f.env)
+}
+test('Stage E daily-word state, grades and audit are independently owned and server-calculated',async()=>{
+ const f=sqliteEnv()
+ try{
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  const today=new Date(Date.now()+9*3600000).toISOString().slice(0,10)
+  const q='?keys='+encodeURIComponent(JSON.stringify(['ja:報告','ja:確認']))
+  assert.equal((await scopedWords(f,ownerToken,q)).status,503)
+  f.env.HOMEFLOW_STUDY_DAILY_WORDS_ENABLED='true'
+  assert.equal((await scopedWords(f,'',q)).status,401)
+  assert.deepEqual((await (await scopedWords(f,ownerToken,q)).json()).items,[])
+  assert.deepEqual((await (await scopedWords(f,memberToken,q)).json()).items,[])
+  const old=f.raw.prepare('SELECT * FROM daily_word_reviews').all()
+  assert.equal((await scopedWords(f,memberToken,'/legacy/adopt','POST',{confirm:true})).status,403)
+  const adopted=await scopedWords(f,ownerToken,'/legacy/adopt','POST',{confirm:true})
+  assert.equal(adopted.status,200,await adopted.clone().text())
+  assert.equal((await adopted.json()).adopted,1)
+  assert.equal((await (await scopedWords(f,ownerToken,'/legacy/adopt','POST',{confirm:true})).json()).adopted,0)
+  assert.equal((await (await scopedWords(f,ownerToken,q)).json()).items[0].streak,2)
+  assert.deepEqual((await (await scopedWords(f,memberToken,q)).json()).items,[])
+  const payload={word_key:'ja:報告',remembered:false,study_date:today,
+   expected_user_id:member,expected_version:0}
+  assert.equal((await scopedWords(f,memberToken,'','POST',payload,'https://evil.invalid')).status,403)
+  assert.equal((await scopedWords(f,memberToken,'','POST',{...payload,expected_user_id:owner})).status,400,
+   'a past-account pending grade cannot run with a new person cookie')
+  assert.equal((await scopedWords(f,memberToken,'','POST',{...payload,homeflow_user_id:owner})).status,400)
+  assert.equal((await scopedWords(f,memberToken,'','POST',{...payload,study_date:'2026-02-30'})).status,400)
+  const scored=await scopedWords(f,memberToken,'','POST',payload)
+  assert.equal(scored.status,200,await scored.clone().text())
+  assert.deepEqual((await scored.json()).item.streak,0)
+  assert.equal((await scored.json()).item.version,1)
+  assert.equal((await scopedWords(f,memberToken,'','POST',payload)).status,200,
+   'same day same answer must replay without second audit')
+  assert.equal((await scopedWords(f,memberToken,'','POST',{...payload,remembered:true})).status,409)
+  const ownerScored=await scopedWords(f,ownerToken,'','POST',
+   {...payload,remembered:true,expected_user_id:owner,expected_version:1})
+  assert.equal(ownerScored.status,200,await ownerScored.clone().text())
+  assert.equal((await ownerScored.json()).item.streak,3)
+  assert.equal((await (await scopedWords(f,ownerToken,q)).json()).items[0].streak,3)
+  assert.equal((await (await scopedWords(f,memberToken,q)).json()).items[0].streak,0)
+  assert.equal(f.raw.prepare("SELECT COUNT(*) n FROM homeflow_daily_word_events WHERE action='graded'").get().n,2)
+  assert.equal(f.raw.prepare("SELECT COUNT(*) n FROM homeflow_daily_word_events WHERE action='legacy_adopted'").get().n,1)
+  assert.deepEqual(f.raw.prepare('SELECT * FROM daily_word_reviews').all(),old)
+  assert.throws(()=>f.raw.prepare("UPDATE homeflow_daily_word_reviews SET streak=4 WHERE word_key='ja:報告'").run(),/DAILY_WORD_INVALID_UPDATE/)
+  assert.throws(()=>f.raw.prepare('DELETE FROM homeflow_daily_word_reviews').run(),/DAILY_WORD_DELETE_FORBIDDEN/)
+  assert.throws(()=>f.raw.prepare('DELETE FROM homeflow_daily_word_events').run(),/IMMUTABLE_DAILY_WORD_AUDIT/)
+  assert.throws(()=>f.raw.prepare('INSERT INTO homeflow_daily_word_reviews(homeflow_user_id,word_key,streak,next_date,last_date,updated_by_user_id) VALUES(?,?,?,?,?,?)')
+   .run(owner,'ja:相談',0,'2026-11-05','2026-11-01',member),/DAILY_WORD_OWNER_REQUIRED/)
+  assert.throws(()=>f.raw.prepare('INSERT OR IGNORE INTO homeflow_daily_word_reviews(homeflow_user_id,word_key,streak,next_date,last_date,updated_by_user_id) VALUES(?,?,?,?,?,?)')
+   .run(owner,'ja:報告',1,'2026-11-05','2026-11-01',owner),/DAILY_WORD_CONFLICT/)
+  f.active.valid=false
+  assert.equal((await scopedWords(f,memberToken,q)).status,401)
+  f.active.valid=true
+  f.env.APP_ENV='preview'
+  assert.equal((await scopedWords(f,memberToken,q)).status,503)
+ }finally{f.raw.close()}
+})
+test('Stage E private word version, due date and invalid cursor fail closed',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_DAILY_WORDS_ENABLED='true'
+  const {memberToken,ownerToken}=await linkedDailyPair(f)
+  const today=new Date(Date.now()+9*3600000).toISOString().slice(0,10)
+  const grade={word_key:'ja:確認',remembered:true,study_date:today,
+   expected_user_id:member,expected_version:0}
+  assert.equal((await scopedWords(f,memberToken,'','POST',{...grade,expected_version:1})).status,409)
+  assert.equal((await scopedWords(f,memberToken,'','POST',grade)).status,200)
+  const version=f.raw.prepare('SELECT version FROM homeflow_daily_word_reviews WHERE homeflow_user_id=? AND word_key=?').get(member,'ja:確認').version
+  assert.equal(version,1)
+  assert.equal((await scopedWords(f,memberToken,'','POST',{...grade,remembered:false})).status,409)
+  assert.equal((await scopedWords(f,memberToken,'?keys=%5B%22ja%3Abad%22%2C%22ja%3Abad%22%5D')).status,400)
+  assert.equal((await scopedWords(f,memberToken,'?after=evil%0Aline')).status,400)
+  assert.equal((await scopedWords(f,ownerToken,'/legacy/adopt','POST',{confirm:false})).status,403)
+  assert.equal((await scopedWords(f,ownerToken,'/legacy/adopt','POST',{confirm:true,after:'en:bad%0A'})).status,400)
+ }finally{f.raw.close()}
+})
+test('Stage E old daily-word pages are owner-only, lossless, and reject any corrupted row',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_DAILY_WORDS_ENABLED='true'
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  const insert=f.raw.prepare('INSERT INTO daily_word_reviews(word_key,streak,last_date,next_date) VALUES(?,?,?,?)')
+  for(let i=1;i<=25;i++)insert.run('en:word'+String(i).padStart(2,'0'),i%6,'2026-10-01','2026-10-04')
+  insert.run('en:bad',2,'2026-02-01','2026-02-30')
+  const original=f.raw.prepare('SELECT * FROM daily_word_reviews ORDER BY word_key').all()
+  const refused=await scopedWords(f,ownerToken,'/legacy/adopt','POST',{confirm:true})
+  assert.equal(refused.status,409,await refused.clone().text())
+  assert.equal((await refused.json()).code,'LEGACY_WORD_REVIEW_REQUIRED')
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_daily_word_reviews').get().n,0)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_daily_word_events').get().n,0)
+  assert.deepEqual(f.raw.prepare('SELECT * FROM daily_word_reviews ORDER BY word_key').all(),original)
+  f.raw.prepare("UPDATE daily_word_reviews SET next_date='2026-02-02' WHERE word_key='en:bad'").run()
+  const fixed=f.raw.prepare('SELECT * FROM daily_word_reviews ORDER BY word_key').all()
+  const first=await scopedWords(f,ownerToken,'/legacy/adopt','POST',{confirm:true})
+  assert.equal(first.status,200,await first.clone().text())
+  const page=await first.json()
+  assert.equal(page.adopted,20);assert.equal(page.has_more,true)
+  assert.equal((await (await scopedWords(f,ownerToken,'/legacy/adopt','POST',{confirm:true})).json()).adopted,0)
+  const second=await scopedWords(f,ownerToken,'/legacy/adopt','POST',{confirm:true,after:page.next_cursor})
+  assert.equal(second.status,200,await second.clone().text())
+  assert.equal((await second.json()).adopted,7)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_daily_word_reviews WHERE homeflow_user_id=?').get(owner).n,27)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_daily_word_reviews WHERE homeflow_user_id=?').get(member).n,0)
+  assert.equal(f.raw.prepare("SELECT COUNT(*) n FROM homeflow_daily_word_events WHERE action='legacy_adopted'").get().n,2)
+  assert.deepEqual(f.raw.prepare('SELECT * FROM daily_word_reviews ORDER BY word_key').all(),fixed)
+  assert.equal((await scopedWords(f,memberToken,'/legacy/adopt','POST',{confirm:true})).status,403)
  }finally{f.raw.close()}
 })
