@@ -5,8 +5,14 @@ import { readFileSync } from 'node:fs'
 // relative imports resolve without network access or special TS loaders.
 const moduleSource = readFileSync(new URL('../worker/chinese-word-dictionary.ts', import.meta.url), 'utf8')
 const providerImport = "import { eligibleChineseWord, fetchChineseWordMetadata } from './chinese-word-dictionary'"
+const studyIdentityImport = "import { homeflowStudyIdentity } from './homeflow-identity'"
 
 export function inlineChineseDictionary(workerSource) {
   if (!workerSource.includes(providerImport)) throw new Error('Chinese dictionary import no longer matches test loader')
-  return workerSource.replace(providerImport, moduleSource)
+  // Existing single-user Worker tests load isolated data: URLs. A relative
+  // identity-only SSO module import cannot resolve there; those tests exercise
+  // only legacy routes and must NEVER treat an SSO token as legacy auth.
+  const withProvider = workerSource.replace(providerImport, moduleSource)
+  return withProvider.replace(studyIdentityImport,
+    "const homeflowStudyIdentity = async () => new Response('SSO disabled', {status:503})")
 }
