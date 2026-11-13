@@ -69,22 +69,24 @@ async function write(req:Request,env:Env,url:URL,actor:Actor){
  if(!validKeys(v,['task_id','study_date','completed','version'])||
   !taskId(v.task_id)||!civilDate(v.study_date)||
   typeof v.completed!=='boolean'||
-  !Number.isSafeInteger(v.version)||Number(v.version)<0||
+  typeof v.version!=='number'||!Number.isSafeInteger(v.version)||v.version<0||
   Number(v.version)>2147483647)return json({code:'INVALID_PROGRESS'},400)
  const task=v.task_id,date=v.study_date,desired=v.completed?1:0
  const expected=Number(v.version),stamp=new Date().toISOString()
  // A stale tab must not overwrite a newer completion. 0 is create-only.
  // A true replay is harmless and emits zero new audit events.
- const steps=await env.DB.batch([
+ const mutation=expected===0?
   env.DB.prepare('INSERT INTO homeflow_daily_task_progress '+
    '(homeflow_user_id,task_id,study_date,completed,version,updated_by_user_id,updated_at) '+
-   'VALUES(?,?,?,?,1,?,?) '+
-   'ON CONFLICT(homeflow_user_id,study_date,task_id) DO UPDATE SET '+
-   'completed=excluded.completed,version=homeflow_daily_task_progress.version+1,'+
-   'updated_by_user_id=excluded.updated_by_user_id,updated_at=excluded.updated_at '+
-   'WHERE homeflow_daily_task_progress.version=? '+
-   'AND homeflow_daily_task_progress.completed<>excluded.completed')
-   .bind(actor.user_id,task,date,desired,actor.user_id,stamp,expected),
+   'VALUES(?,?,?,?,1,?,?) ON CONFLICT(homeflow_user_id,study_date,task_id) DO NOTHING')
+   .bind(actor.user_id,task,date,desired,actor.user_id,stamp):
+  env.DB.prepare('UPDATE homeflow_daily_task_progress SET completed=?,'+
+   'version=version+1,updated_by_user_id=?,updated_at=? '+
+   'WHERE homeflow_user_id=? AND task_id=? AND study_date=? '+
+   'AND version=? AND completed<>?')
+   .bind(desired,actor.user_id,stamp,actor.user_id,task,date,expected,desired)
+ const steps=await env.DB.batch([
+  mutation,
   env.DB.prepare('INSERT INTO homeflow_daily_task_events '+
    '(event_id,actor_user_id,action,resource_sha256,affected_count,created_at) '+
    'SELECT ?,?,?,?,1,? WHERE changes()=1')
@@ -113,11 +115,13 @@ async function adopt(req:Request,env:Env,url:URL,actor:Actor){
  if(!data||data.confirm!==true||
   !validKeys(data,['confirm','after_date','after_task']))
   return json({code:'CONFIRM_REQUIRED'},403)
- const afterDate=data.after_date===undefined?'':data.after_date
- const afterTask=data.after_task===undefined?'':data.after_task
- if((afterDate!==''&&!civilDate(afterDate))||
-  (afterTask!==''&&!taskId(afterTask))||
-  (afterDate===''&&afterTask!==''))return json({code:'INVALID_CURSOR'},400)
+ const rawDate=data.after_date===undefined?'':data.after_date
+ const rawTask=data.after_task===undefined?'':data.after_task
+ if(typeof rawDate!=='string'||typeof rawTask!=='string'||
+  (rawDate!==''&&!civilDate(rawDate))||
+  (rawTask!==''&&!taskId(rawTask))||
+  (rawDate===''&&rawTask!==''))return json({code:'INVALID_CURSOR'},400)
+ const afterDate=rawDate,afterTask=rawTask
  const rows=(await env.DB.prepare(
   'SELECT study_date,task_id,completed,updated_at FROM daily_task_completions '+
   'WHERE study_date>? OR (study_date=? AND task_id>?) '+
