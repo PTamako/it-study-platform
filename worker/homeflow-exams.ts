@@ -83,7 +83,10 @@ async function getSaved(env:Env,actor:Actor,attemptId:string){
 async function attempt(req:Request,env:Env,url:URL,actor:Actor){
  const data=await body(req,url)
  if(!data)return json({code:'BAD_ORIGIN_OR_BODY'},403)
- if(!keyOnly(data,['attempt_id','question_id','answer','duration_seconds'])||
+ // A queued answer can outlive its original Safari HomeFlow cookie.
+ // The original actor MUST match the currently re-verified SSO identity.
+ if(data.expected_user_id!==actor.user_id)return json({code:'ACTOR_CHANGED'},403)
+ if(!keyOnly(data,['attempt_id','question_id','answer','duration_seconds','expected_user_id'])||
   !uuid(data.attempt_id)||!textId(data.question_id)||
   typeof data.answer!=='string'||data.answer.length<1||data.answer.length>10||
   typeof data.duration_seconds!=='number'||!Number.isSafeInteger(data.duration_seconds)||
@@ -195,7 +198,8 @@ async function history(env:Env,actor:Actor,url:URL){
 async function addHistory(req:Request,env:Env,url:URL,actor:Actor){
  const data=await body(req,url)
  if(!data)return json({code:'BAD_ORIGIN_OR_BODY'},403)
- if(!keyOnly(data,['id','date','exam','total','correct'])||
+ if(data.expected_user_id!==actor.user_id)return json({code:'ACTOR_CHANGED'},403)
+ if(!keyOnly(data,['id','date','exam','total','correct','expected_user_id'])||
   typeof data.id!=='string'||!/^[a-zA-Z0-9_-]{8,80}$/.test(data.id)||
   !safeDate(data.date)||typeof data.exam!=='string'||
   data.exam.trim()!==data.exam||data.exam.length<1||data.exam.length>100||
@@ -237,7 +241,9 @@ async function addHistory(req:Request,env:Env,url:URL,actor:Actor){
 async function adopt(req:Request,env:Env,url:URL,actor:Actor){
  if(actor.role!=='owner')return json({code:'ONLY_ORIGINAL_OWNER'},403)
  const data=await body(req,url)
- if(!data||data.confirm!==true||!keyOnly(data,['confirm','kind','after'])||
+ if(!data)return json({code:'BAD_ORIGIN_OR_BODY'},403)
+ if(data.expected_user_id!==actor.user_id)return json({code:'ACTOR_CHANGED'},403)
+ if(data.confirm!==true||!keyOnly(data,['confirm','kind','after','expected_user_id'])||
   !['attempts','reviews','history'].includes(String(data.kind)))
   return json({code:'CONFIRM_REQUIRED'},403)
  const kind=String(data.kind) as 'attempts'|'reviews'|'history'
