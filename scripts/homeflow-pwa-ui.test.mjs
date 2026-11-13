@@ -303,3 +303,40 @@ test('legacy daily rollover and localStorage progress writers never run for Home
  assert.match(app,/void probeHomeflowIdentity\(\).then\(active=>\{[\s\S]*?if\(!active&&legacyWritesAllowed\(\)\)\{[\s\S]*?rolloverDailyTasks\(\)/)
  assert.match(app,/await checkAuth\(\)[\s\S]*?if \(legacyWritesAllowed\(\)\) \{[\s\S]*?rolloverDailyTasks\(\)/)
 });
+
+test('legacy language, dictionary and offline cache writers require original password space',()=>{
+ const watchers=[
+  ['questionExplanationTranslations','zhixue:question-explanation-zh'],
+  ['scenarioExplanationTranslations','zhixue:scenario-explanations-zh'],
+  ['studyLanguage','zhixue:study-language'],
+  ['completedLanguageCards','zhixue:completed-language-cards'],
+  ['languageReviews','zhixue:language-reviews'],
+  ['recentDictionaryEntries','zhixue:recent-dictionary'],
+  ['savedDictionaryEntries','zhixue:saved-dictionary-entries'],
+  ['savedWords','zhixue:saved-words']
+ ]
+ for(const [ref,key] of watchers){
+  const begin=app.indexOf('watch('+ref+',')
+  assert.ok(begin>=0,'missing watcher '+ref)
+  const end=app.indexOf('})',begin)
+  const body=app.slice(begin,begin+320)
+  assert.ok(body.includes('legacyWritesAllowed()'),ref+' must be gated')
+  assert.ok(body.includes("localStorage.setItem('"+key),ref+' writer must persist its original key')
+ }
+ const dailyPending=app.slice(app.indexOf('function persistDailyPending()'),
+  app.indexOf('async function saveDailyTask('))
+ assert.match(dailyPending,/if\(!legacyWritesAllowed\(\)\)return/)
+ const mock=app.slice(app.indexOf('function persistActiveMockExam()'),
+  app.indexOf('watch([mockStarted, mockAnswers]'))
+ assert.match(mock,/if\(!legacyWritesAllowed\(\)\|\|!mockStarted.value\)return/)
+ const words=app.slice(app.indexOf('function persistDailyWordState()'),
+  app.indexOf('function parseDailyWordCloud'))
+ assert.match(words,/if\(!legacyWritesAllowed\(\)\)return/)
+ for(const key of [
+  'zhixue:daily-word-selections-v1','zhixue:daily-scene-assignments-v1'
+ ]){
+  const lines=app.split('\n').filter(line=>line.includes("localStorage.setItem('"+key))
+  assert.ok(lines.length>0)
+  assert.ok(lines.every(line=>line.includes('legacyWritesAllowed()')),key+' must not update under SSO')
+ }
+})
