@@ -40,6 +40,11 @@ const {homeflowDailyTasks}=
 writeFileSync(join(dir,'homeflow-grammar.mts'),
  readFileSync(new URL('../worker/homeflow-grammar.ts',import.meta.url),'utf8')
   .replace("from './homeflow-identity'","from './homeflow-identity.mts'"))
+writeFileSync(join(dir,'homeflow-listening.mts'),
+ readFileSync(new URL('../worker/homeflow-listening.ts',import.meta.url),'utf8')
+  .replace("from './homeflow-identity'","from './homeflow-identity.mts'"))
+const {homeflowListening}=
+ await import(pathToFileURL(join(dir,'homeflow-listening.mts')))
 const {homeflowGrammar}=
  await import(pathToFileURL(join(dir,'homeflow-grammar.mts')))
 const {homeflowLanguage}=
@@ -66,6 +71,10 @@ function sqliteEnv(){
  raw.exec(readFileSync(new URL('../migrations/0182_homeflow_user_daily_tasks.sql',import.meta.url),'utf8'))
  raw.exec(readFileSync(new URL('../migrations/0133_daily_grammar_answers.sql',import.meta.url),'utf8'))
  raw.exec(readFileSync(new URL('../migrations/0187_homeflow_grammar_answers.sql',import.meta.url),'utf8'))
+ raw.exec(readFileSync(new URL('../migrations/0150_daily_listening_answers.sql',import.meta.url),'utf8'))
+ raw.exec(readFileSync(new URL('../migrations/0188_homeflow_listening_answers.sql',import.meta.url),'utf8'))
+ raw.prepare('INSERT INTO daily_listening_answers(study_date,language,scene_id,answer_index) VALUES(?,?,?,?)')
+  .run('2026-11-13','ja','ja-d5',2)
  raw.prepare('INSERT INTO daily_grammar_answers(study_date,language,question_id,answer_index) VALUES(?,?,?,?)')
   .run('2026-11-13','ja','ja-01:today:0',2)
  raw.exec(`CREATE TABLE language_cards(
@@ -1413,5 +1422,104 @@ test('HomeFlow grammar migration rejects broken pages and resumes 20-row batches
   assert.deepEqual(f.raw.prepare('SELECT * FROM daily_grammar_answers ORDER BY study_date,language,question_id').all(),repaired)
   assert.equal((await scopedGrammar(f,memberToken,'/legacy/adopt','POST',{confirm:true})).status,403)
   assert.equal((await scopedGrammar(f,ownerToken,'/legacy/adopt','POST',{confirm:true,after_date:'2026-02-30'})).status,400)
+ }finally{f.raw.close()}
+})
+
+function scopedListening(f,cookie,path='',method='GET',data=null,origin=app){
+ const headers={}
+ if(cookie)headers.Cookie='__Host-study_hf='+cookie
+ if(method==='POST'){headers.Origin=origin;headers['Content-Type']='application/json'}
+ return homeflowListening(new Request(app+'/api/homeflow-study/listening'+path,{
+  method,headers,body:method==='POST'?JSON.stringify(data??{}):undefined
+ }),f.env)
+}
+test('Stage E private daily listening validates true source identity and locks each spouse answers',async()=>{
+ const f=sqliteEnv()
+ try{
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  const date='2026-11-13',day='?date='+date+'&language=ja'
+  assert.equal((await scopedListening(f,ownerToken,day)).status,503)
+  assert.equal((await (await scopedListening(f,memberToken,'/status')).json()).enabled,false)
+  f.env.HOMEFLOW_STUDY_LISTENING_ENABLED='true'
+  assert.equal((await scopedListening(f,'',day)).status,401)
+  assert.deepEqual((await (await scopedListening(f,ownerToken,day)).json()).items,[])
+  assert.deepEqual((await (await scopedListening(f,memberToken,day)).json()).items,[])
+  const legacy=f.raw.prepare('SELECT * FROM daily_listening_answers').all()
+  assert.equal((await scopedListening(f,memberToken,'/legacy/adopt','POST',{confirm:true})).status,403)
+  const migrated=await scopedListening(f,ownerToken,'/legacy/adopt','POST',{confirm:true})
+  assert.equal(migrated.status,200,await migrated.clone().text())
+  assert.equal((await migrated.json()).adopted,1)
+  assert.equal((await (await scopedListening(f,ownerToken,'/legacy/adopt','POST',{confirm:true})).json()).adopted,0)
+  assert.equal((await (await scopedListening(f,ownerToken,day)).json()).items[0].answer_index,2)
+  assert.deepEqual((await (await scopedListening(f,memberToken,day)).json()).items,[])
+  const payload={date,language:'ja',expected_user_id:member,
+   answers:[{scene_id:'ja-d5',answer_index:1},{scene_id:'ja-w5',answer_index:3}]}
+  assert.equal((await scopedListening(f,memberToken,'','POST',payload,'https://evil.invalid')).status,403)
+  assert.equal((await scopedListening(f,memberToken,'','POST',{...payload,expected_user_id:owner})).status,400)
+  assert.equal((await scopedListening(f,memberToken,'','POST',{...payload,homeflow_user_id:owner})).status,400)
+  assert.equal((await scopedListening(f,memberToken,'','POST',{...payload,date:'2026-02-30'})).status,400)
+  assert.equal((await scopedListening(f,memberToken,'','POST',{...payload,
+   answers:[{scene_id:'ja-d1',answer_index:1}]})).status,400,'wrong day cannot submit another scene')
+  const saved=await scopedListening(f,memberToken,'','POST',payload)
+  assert.equal(saved.status,200,await saved.clone().text())
+  assert.deepEqual((await (await scopedListening(f,memberToken,day)).json()).items.map(x=>x.answer_index),[1,3])
+  assert.equal((await (await scopedListening(f,ownerToken,day)).json()).items[0].answer_index,2)
+  assert.equal((await scopedListening(f,memberToken,'','POST',payload)).status,200)
+  assert.equal((await scopedListening(f,memberToken,'','POST',{...payload,
+   answers:[{scene_id:'ja-d5',answer_index:0}]})).status,409)
+  assert.equal(f.raw.prepare("SELECT COUNT(*) n FROM homeflow_listening_events WHERE action='answered'").get().n,2)
+  assert.equal(f.raw.prepare("SELECT COUNT(*) n FROM homeflow_listening_events WHERE action='legacy_adopted'").get().n,1)
+  assert.deepEqual(f.raw.prepare('SELECT * FROM daily_listening_answers').all(),legacy)
+  assert.throws(()=>f.raw.prepare('UPDATE homeflow_listening_answers SET answer_index=3').run(),/IMMUTABLE_LISTENING_ANSWER/)
+  assert.throws(()=>f.raw.prepare('DELETE FROM homeflow_listening_events').run(),/IMMUTABLE_LISTENING_AUDIT/)
+  assert.throws(()=>f.raw.prepare('INSERT INTO homeflow_listening_answers(homeflow_user_id,study_date,language,scene_id,answer_index,updated_by_user_id) VALUES(?,?,?,?,?,?)')
+   .run(owner,date,'ja','ja-w5',1,member),/LISTENING_OWNER_REQUIRED/)
+  assert.throws(()=>f.raw.prepare('INSERT OR IGNORE INTO homeflow_listening_answers(homeflow_user_id,study_date,language,scene_id,answer_index,updated_by_user_id) VALUES(?,?,?,?,?,?)')
+   .run(owner,date,'ja','ja-d5',1,owner),/LISTENING_ANSWER_CONFLICT/)
+  f.active.valid=false
+  assert.equal((await scopedListening(f,memberToken,day)).status,401)
+  f.active.valid=true
+  f.env.APP_ENV='preview'
+  assert.equal((await scopedListening(f,memberToken,day)).status,503)
+ }finally{f.raw.close()}
+})
+test('Stage E listening old owner pages are lossless and any invalid record blocks the full page',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_LISTENING_ENABLED='true'
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  const insert=f.raw.prepare('INSERT INTO daily_listening_answers(study_date,language,scene_id,answer_index) VALUES(?,?,?,?)')
+  for(let i=1;i<=25;i++){
+   const d='2026-10-'+String(i).padStart(2,'0')
+   const n=Math.floor(Date.parse(d+'T00:00:00Z')/86400000)%6+1
+   insert.run(d,'en','en-w'+n,i%4)
+  }
+  insert.run('2026-02-30','ja','ja-d2',1)
+  const old=f.raw.prepare('SELECT * FROM daily_listening_answers ORDER BY study_date,language,scene_id').all()
+  const stopped=await scopedListening(f,ownerToken,'/legacy/adopt','POST',{confirm:true})
+  assert.equal(stopped.status,409,await stopped.clone().text())
+  assert.equal((await stopped.json()).code,'LEGACY_LISTENING_REVIEW_REQUIRED')
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_listening_answers').get().n,0)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_listening_events').get().n,0)
+  assert.deepEqual(f.raw.prepare('SELECT * FROM daily_listening_answers ORDER BY study_date,language,scene_id').all(),old)
+  const fixedDate='2026-02-28'
+  const fixedIndex=Math.floor(Date.parse(fixedDate+'T00:00:00Z')/86400000)%6+1
+  f.raw.prepare("UPDATE daily_listening_answers SET study_date=?,scene_id=? WHERE study_date='2026-02-30'")
+   .run(fixedDate,'ja-d'+fixedIndex)
+  const repaired=f.raw.prepare('SELECT * FROM daily_listening_answers ORDER BY study_date,language,scene_id').all()
+  const first=await scopedListening(f,ownerToken,'/legacy/adopt','POST',{confirm:true})
+  assert.equal(first.status,200,await first.clone().text())
+  const one=await first.json()
+  assert.equal(one.adopted,20);assert.equal(one.has_more,true)
+  assert.equal((await (await scopedListening(f,ownerToken,'/legacy/adopt','POST',{confirm:true})).json()).adopted,0)
+  const second=await scopedListening(f,ownerToken,'/legacy/adopt','POST',{confirm:true,...one.next_cursor})
+  assert.equal(second.status,200,await second.clone().text())
+  assert.equal((await second.json()).adopted,7)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_listening_answers WHERE homeflow_user_id=?').get(owner).n,27)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_listening_answers WHERE homeflow_user_id=?').get(member).n,0)
+  assert.equal(f.raw.prepare("SELECT COUNT(*) n FROM homeflow_listening_events WHERE action='legacy_adopted'").get().n,2)
+  assert.deepEqual(f.raw.prepare('SELECT * FROM daily_listening_answers ORDER BY study_date,language,scene_id').all(),repaired)
+  assert.equal((await scopedListening(f,memberToken,'/legacy/adopt','POST',{confirm:true})).status,403)
+  assert.equal((await scopedListening(f,ownerToken,'/legacy/adopt','POST',{confirm:true,after_date:'2026-02-30'})).status,400)
  }finally{f.raw.close()}
 })
