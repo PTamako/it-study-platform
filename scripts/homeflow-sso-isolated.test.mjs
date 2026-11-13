@@ -37,6 +37,11 @@ const {homeflowVocabulary}=
  await import(pathToFileURL(join(dir,'homeflow-vocabulary.mts')))
 const {homeflowDailyTasks}=
  await import(pathToFileURL(join(dir,'homeflow-daily-tasks.mts')))
+writeFileSync(join(dir,'homeflow-grammar.mts'),
+ readFileSync(new URL('../worker/homeflow-grammar.ts',import.meta.url),'utf8')
+  .replace("from './homeflow-identity'","from './homeflow-identity.mts'"))
+const {homeflowGrammar}=
+ await import(pathToFileURL(join(dir,'homeflow-grammar.mts')))
 const {homeflowLanguage}=
  await import(pathToFileURL(join(dir,'homeflow-language.mts')))
 const {homeflowExams}=
@@ -59,6 +64,10 @@ function sqliteEnv(){
  raw.exec(readFileSync(new URL('../migrations/0180_homeflow_identity_isolation.sql',import.meta.url),'utf8'))
  raw.exec(readFileSync(new URL('../migrations/0181_homeflow_user_vocabulary.sql',import.meta.url),'utf8'))
  raw.exec(readFileSync(new URL('../migrations/0182_homeflow_user_daily_tasks.sql',import.meta.url),'utf8'))
+ raw.exec(readFileSync(new URL('../migrations/0133_daily_grammar_answers.sql',import.meta.url),'utf8'))
+ raw.exec(readFileSync(new URL('../migrations/0187_homeflow_grammar_answers.sql',import.meta.url),'utf8'))
+ raw.prepare('INSERT INTO daily_grammar_answers(study_date,language,question_id,answer_index) VALUES(?,?,?,?)')
+  .run('2026-11-13','ja','ja-01:today:0',2)
  raw.exec(`CREATE TABLE language_cards(
   id TEXT PRIMARY KEY, language TEXT NOT NULL, content_type TEXT NOT NULL,
   category TEXT NOT NULL DEFAULT '', term TEXT NOT NULL DEFAULT '',
@@ -1311,5 +1320,93 @@ test('Stage E conflicting existing personal receipt fails closed and preserves i
   assert.deepEqual(f.raw.prepare('SELECT * FROM homeflow_mock_exam_submissions').all(),before)
   assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_mock_legacy_adoptions').get().n,0)
   assert.equal((await (await scopedReceipts(f,memberToken,'/receipts')).json()).items.length,0)
+ }finally{f.raw.close()}
+})
+
+function scopedGrammar(f,cookie,path='',method='GET',data=null,origin=app){
+ const headers={}
+ if(cookie)headers.Cookie='__Host-study_hf='+cookie
+ if(method==='POST'){headers.Origin=origin;headers['Content-Type']='application/json'}
+ return homeflowGrammar(new Request(app+'/api/homeflow-study/grammar'+path,{
+  method,headers,body:method==='POST'?JSON.stringify(data??{}):undefined
+ }),f.env)
+}
+test('HomeFlow grammar answers separate owner and member, first answer wins, legacy owner alone may adopt',async()=>{
+ const f=sqliteEnv()
+ try{
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  const day='?date=2026-11-13&language=ja'
+  assert.equal((await scopedGrammar(f,ownerToken,day)).status,503,'feature default OFF')
+  f.env.HOMEFLOW_STUDY_GRAMMAR_ENABLED='true'
+  assert.equal((await scopedGrammar(f,'',day)).status,401)
+  assert.deepEqual((await (await scopedGrammar(f,ownerToken,day)).json()).items,[])
+  assert.deepEqual((await (await scopedGrammar(f,memberToken,day)).json()).items,[])
+  const old=f.raw.prepare('SELECT * FROM daily_grammar_answers').all()
+  assert.equal((await scopedGrammar(f,memberToken,'/legacy/adopt','POST',{confirm:true})).status,403)
+  const migration=await scopedGrammar(f,ownerToken,'/legacy/adopt','POST',{confirm:true})
+  assert.equal(migration.status,200,await migration.clone().text())
+  assert.equal((await migration.json()).adopted,1)
+  assert.equal((await (await scopedGrammar(f,ownerToken,'/legacy/adopt','POST',{confirm:true})).json()).adopted,0)
+  assert.equal((await (await scopedGrammar(f,ownerToken,day)).json()).items[0].answer_index,2)
+  assert.deepEqual((await (await scopedGrammar(f,memberToken,day)).json()).items,[])
+  const payload={date:'2026-11-13',language:'ja',expected_user_id:member,
+   answers:[{question_id:'ja-01:today:0',answer_index:1}]}
+  assert.equal((await scopedGrammar(f,memberToken,'','POST',payload,'https://evil.invalid')).status,403)
+  assert.equal((await scopedGrammar(f,memberToken,'','POST',{...payload,expected_user_id:owner})).status,400,
+   'old PWA queued request must not commit under a newly authenticated cookie')
+  assert.equal((await scopedGrammar(f,memberToken,'','POST',{...payload,homeflow_user_id:owner})).status,400)
+  assert.equal((await scopedGrammar(f,memberToken,'','POST',{...payload,date:'2026-02-30'})).status,400)
+  const saved=await scopedGrammar(f,memberToken,'','POST',payload)
+  assert.equal(saved.status,200,await saved.clone().text())
+  assert.equal((await (await scopedGrammar(f,memberToken,day)).json()).items[0].answer_index,1)
+  assert.equal((await (await scopedGrammar(f,ownerToken,day)).json()).items[0].answer_index,2)
+  assert.equal((await scopedGrammar(f,memberToken,'','POST',payload)).status,200)
+  assert.equal((await scopedGrammar(f,memberToken,'','POST',{...payload,
+   answers:[{question_id:'ja-01:today:0',answer_index:3}]})).status,409)
+  assert.equal(f.raw.prepare("SELECT COUNT(*) n FROM homeflow_grammar_events WHERE action='answered'").get().n,1)
+  assert.equal(f.raw.prepare("SELECT COUNT(*) n FROM homeflow_grammar_events WHERE action='legacy_adopted'").get().n,1)
+  assert.deepEqual(f.raw.prepare('SELECT * FROM daily_grammar_answers').all(),old)
+  assert.throws(()=>f.raw.prepare('UPDATE homeflow_grammar_answers SET answer_index=3').run(),/IMMUTABLE_GRAMMAR_ANSWER/)
+  assert.throws(()=>f.raw.prepare('DELETE FROM homeflow_grammar_events').run(),/IMMUTABLE_GRAMMAR_AUDIT/)
+  assert.throws(()=>f.raw.prepare('INSERT INTO homeflow_grammar_answers(homeflow_user_id,study_date,language,question_id,answer_index,updated_by_user_id) VALUES(?,?,?,?,?,?)')
+   .run(owner,'2026-11-13','ja','ja-02:today:0',1,member),/GRAMMAR_OWNER_REQUIRED/)
+  f.active.valid=false
+  assert.equal((await scopedGrammar(f,memberToken,day)).status,401)
+  f.active.valid=true
+  f.env.APP_ENV='preview'
+  assert.equal((await scopedGrammar(f,memberToken,day)).status,503)
+ }finally{f.raw.close()}
+})
+test('HomeFlow grammar migration rejects broken pages and resumes 20-row batches without data loss',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_GRAMMAR_ENABLED='true'
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  const insert=f.raw.prepare('INSERT INTO daily_grammar_answers(study_date,language,question_id,answer_index) VALUES(?,?,?,?)')
+  for(let i=0;i<24;i++)insert.run('2026-10-'+String(i+1).padStart(2,'0'),'en','en-01:today:0',i%4)
+  insert.run('2026-02-30','ja','ja-broken',0)
+  const original=f.raw.prepare('SELECT * FROM daily_grammar_answers ORDER BY study_date,language,question_id').all()
+  const stopped=await scopedGrammar(f,ownerToken,'/legacy/adopt','POST',{confirm:true})
+  assert.equal(stopped.status,409,await stopped.clone().text())
+  assert.equal((await stopped.json()).code,'LEGACY_GRAMMAR_REVIEW_REQUIRED')
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_grammar_answers').get().n,0)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_grammar_events').get().n,0)
+  assert.deepEqual(f.raw.prepare('SELECT * FROM daily_grammar_answers ORDER BY study_date,language,question_id').all(),original)
+  f.raw.prepare("UPDATE daily_grammar_answers SET study_date='2026-02-28' WHERE study_date='2026-02-30'").run()
+  const repaired=f.raw.prepare('SELECT * FROM daily_grammar_answers ORDER BY study_date,language,question_id').all()
+  const first=await scopedGrammar(f,ownerToken,'/legacy/adopt','POST',{confirm:true})
+  assert.equal(first.status,200,await first.clone().text())
+  const page=await first.json()
+  assert.equal(page.adopted,20);assert.equal(page.has_more,true)
+  assert.equal((await (await scopedGrammar(f,ownerToken,'/legacy/adopt','POST',{confirm:true})).json()).adopted,0)
+  const second=await scopedGrammar(f,ownerToken,'/legacy/adopt','POST',{confirm:true,...page.next_cursor})
+  assert.equal(second.status,200,await second.clone().text())
+  assert.equal((await second.json()).adopted,6)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_grammar_answers WHERE homeflow_user_id=?').get(owner).n,26)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_grammar_answers WHERE homeflow_user_id=?').get(member).n,0)
+  assert.equal(f.raw.prepare("SELECT COUNT(*) n FROM homeflow_grammar_events WHERE action='legacy_adopted'").get().n,2)
+  assert.deepEqual(f.raw.prepare('SELECT * FROM daily_grammar_answers ORDER BY study_date,language,question_id').all(),repaired)
+  assert.equal((await scopedGrammar(f,memberToken,'/legacy/adopt','POST',{confirm:true})).status,403)
+  assert.equal((await scopedGrammar(f,ownerToken,'/legacy/adopt','POST',{confirm:true,after_date:'2026-02-30'})).status,400)
  }finally{f.raw.close()}
 })
