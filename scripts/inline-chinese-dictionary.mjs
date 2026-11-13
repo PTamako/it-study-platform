@@ -7,6 +7,7 @@ const moduleSource = readFileSync(new URL('../worker/chinese-word-dictionary.ts'
 const providerImport = "import { eligibleChineseWord, fetchChineseWordMetadata } from './chinese-word-dictionary'"
 const studyIdentityImport = "import { homeflowStudyIdentity } from './homeflow-identity'"
 const studyVocabularyImport = "import { homeflowVocabulary } from './homeflow-vocabulary'"
+const studyDailyImport = "import { homeflowDailyTasks } from './homeflow-daily-tasks'"
 
 export function inlineChineseDictionary(workerSource) {
   if (!workerSource.includes(providerImport)) throw new Error('Chinese dictionary import no longer matches test loader')
@@ -19,4 +20,6 @@ export function inlineChineseDictionary(workerSource) {
       "const homeflowStudyIdentity = async () => new Response('SSO disabled', {status:503})")
     .replace(studyVocabularyImport,
       "const homeflowVocabulary = async () => new Response('per-user vocabulary disabled', {status:503})")
+    .replace(studyDailyImport,
+      "const homeflowDailyTasks = async () => new Response('per-user daily tasks disabled', {status:503})")
 }
