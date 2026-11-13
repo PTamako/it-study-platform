@@ -1124,3 +1124,26 @@ test('Stage E FE mock A and B require exact question distributions and preserve 
   assert.equal((await scopedMock(f,memberToken,'/questions?track=exam-fe&section=A')).status,503)
  }finally{f.raw.close()}
 })
+
+
+test('long legacy mock receipt-derived attempt ids remain lossless under owner adoption',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_EXAMS_ENABLED='true'
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  const longId='12345678-1234-4123-8123-123456789abc:'+ 'q'.repeat(111)
+  assert.ok(longId.length>120&&longId.length<240)
+  f.raw.prepare('INSERT INTO study_attempts(id,question_id,user_answer_json,is_correct,duration_seconds) VALUES(?,?,?,?,?)')
+   .run(longId,'sg-example-001','"b"',1,14)
+  const old=f.raw.prepare('SELECT * FROM study_attempts ORDER BY id').all()
+  const migrated=await scopedExams(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'attempts'})
+  assert.equal(migrated.status,200,await migrated.clone().text())
+  assert.equal((await migrated.json()).adopted,2)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_study_attempts WHERE homeflow_user_id=? AND id=?')
+   .get(owner,longId).n,1)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_study_attempts WHERE homeflow_user_id=?')
+   .get(member).n,0)
+  assert.deepEqual(f.raw.prepare('SELECT * FROM study_attempts ORDER BY id').all(),old)
+ }finally{f.raw.close()}
+})
