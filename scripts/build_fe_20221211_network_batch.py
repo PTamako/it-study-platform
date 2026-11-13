@@ -1,0 +1,42 @@
+import json
+from pathlib import Path
+
+# Prompts and distractors are adapted from the IPA paper, in original order.
+rows = [
+ (23,'自然言語インタフェース','列車予約で、利用者が「5月28日、名古屋から東京まで大人2名」と音声で伝え、コンピュータが普通の言葉で確認する。用いられるインタフェースはどれか。',['感性インタフェース','自然言語インタフェース','ノンバーバルインタフェース','マルチモーダルインタフェース'],'b','日常の言葉でやり取りする自然言語インタフェース。音声だけなので複数方式の併用ではない。中文：人和计算机使用日常语言对话，属于自然语言接口。'),
+ (24,'PCM標本化','PCMで音声のアナログ信号を一定周期ごとに、アナログ値のまま取り出す処理はどれか。',['逆量子化','標本化','符号化','量子化'],'b','一定間隔で値を取り出すのが標本化。量子化は値を段階化し、符号化はビット列にする。中文：按固定时间间隔取样是采样；量化将幅值离散化。'),
+ (25,'SQL権限','表に対するSQLのGRANT文の役割はどれか。',['パスワードを設定してデータベース接続を制限する','ビューを作成してアクセス可能な行や列を制限する','表のデータを暗号化して内容を隠す','利用者に問合せ、更新、追加、削除などの権限を与える'],'d','GRANTは権限付与、REVOKEは取り消し。中文：GRANT用于向用户授予查询、修改等权限。'),
+ (28,'外部キー','関係データベースで外部キーを定義する目的はどれか。',['関連する表のレコード間の参照整合性を維持する','関連する表の格納場所を近づけて検索と更新を高速化する','障害で破損したレコードを表間の関係から復旧する','追加や削除による格納領域の断片化を防ぐ'],'a','外部キー制約は、参照先のキーが存在するなどの参照整合性を保つ。中文：外键约束用于保持相关表记录之间的引用完整性。'),
+ (29,'障害復旧','データベースの障害復旧について適切な記述はどれか。',['システム障害時はトランザクション途中のスナップショットから再開する','媒体障害時はバックアップを復元し、更新後情報を使いロールフォワードする','デッドロック時には排他制御を解除すればよい','更新途中の異常終了時は更新後情報でロールバックする'],'b','媒体障害はバックアップ復元後に更新後ログを再適用する。ロールバックには更新前情報を用いる。中文：介质故障先恢复备份，再用更新后的日志前滚；回滚使用更新前信息。'),
+ (30,'ルーティング','ルータがパケットの経路決定に使う情報はどれか。',['宛先IPアドレス','宛先MACアドレス','発信元IPアドレス','発信元MACアドレス'],'a','ルータは宛先IPアドレスを経路表と照合する。中文：路由器依据目标IP地址查询路由表选择路径。'),
+ (31,'ARP','TCP/IPネットワークで用いるARPの説明はどれか。',['IPアドレスからMACアドレスを取得する','IPアドレスからホスト名を取得する','MACアドレスからIPアドレスを取得する','ホスト名からIPアドレスを取得する'],'a','ARPは同一リンク上でIPv4アドレスに対応するMACアドレスを求める。中文：ARP根据IPv4地址查找同一链路上的MAC地址。'),
+ (32,'ping','ネットワーク機器の接続状態を調べるpingが用いるプロトコルはどれか。',['DHCP','ICMP','SMTP','SNMP'],'b','pingはICMPのエコー要求と応答を利用する。中文：ping使用ICMP回显请求和应答确认连通性。'),
+ (33,'イーサネットとIP','ホストA（MAC1/IP1）はLAN1、ホストB（MAC2/IP2）はLAN2にあり、両LANはルータで接続される。ルータのLAN1側はMAC3/IP3、LAN2側はMAC4/IP4。AからBへの通信でLAN1上のフレーム宛先MACとIPデータグラム宛先IPの組合せはどれか。',['MAC2 / IP2','MAC2 / IP3','MAC3 / IP2','MAC3 / IP3'],'c','LAN1のフレーム宛先は次の中継先MAC3、IP宛先は最終宛先IP2。中文：链路层目的地址指向下一跳路由器MAC3，IP目的地址仍是主机B的IP2。'),
+ (34,'無線LANチャネル','2.4GHz帯のアクセスポイントを複数設置する際、周波数チャネルの割当てとして適切なものはどれか。',['移動時の設定変更を避けるため全て同じチャネルにする','電波干渉を避けるため隣接する機器には1、6、11など離れたチャネルを割り当てる','SSIDが異なれば干渉しないので全て出荷時設定を使う','障害時の識別を容易にするため隣接機器を1、2、3の順にする'],'b','2.4GHz帯は隣接チャネルが重なりやすいため、干渉しにくいチャネルを選ぶ。中文：2.4GHz相邻信道可能重叠，应给邻近设备分配间隔较远的信道。'),
+ (35,'ブルートフォース攻撃','共通鍵暗号の鍵を探すブルートフォース攻撃はどれか。',['平文と暗号文の組を使い鍵候補を一つずつ試す','平文と暗号文と鍵の代数的関係を手掛かりにする','平文と暗号文の統計的相関を利用する','平文の一定の変化による暗号文の変化を利用する'],'a','総当たりで鍵候補を順番に試す攻撃。中文：暴力破解逐个尝试可能的密钥。'),
+ (36,'リスクベース認証','リスクベース認証の特徴はどれか。',['利用条件に関係なく常に二つの認証方式を使う','利用条件に関係なく認証方法を変えない','普段と異なる利用条件と判断した場合に追加の本人認証を行う','認証情報を忘れた緊急時には認証なしで利用を許可する'],'c','端末や場所などのリスクが高い場合に追加認証を求める。中文：当设备、地点等条件异常时，根据风险追加身份验证。'),
+ (37,'バックドア','攻撃者が企業ネットワークやサーバへ再侵入するために組み込むものはどれか。',['シンクライアントエージェント','ストリクトルーティング','ディジタルフォレンジックス','バックドア'],'d','バックドアは通常の認証経路を迂回して再侵入するための入口。中文：后门为攻击者绕过正常入口再次访问提供途径。'),
+ (39,'制御ネットワークとDMZ','化学プラントの情報ネットワークと制御ネットワークの境界にDMZを作る。情報ネットワークとの通信が必要なためDMZへ移す機器はどれか。',['温度や圧力を計測するセンサ','測定値を監視し目標値を入力する操作端末','測定値が設定値に一致するよう調整するコントローラ','情報ネットワークから取得した更新ソフトを制御側機器へ提供するパッチ管理サーバ'],'d','外部側とのソフト取得が必要なパッチ管理サーバを境界へ置き、制御機器を分離する。中文：需要从信息网络获取更新的补丁服务器适合放在DMZ，控制设备保留在控制网络内。'),
+ (40,'S/MIME','電子メールに用いられるS/MIMEの機能はどれか。',['ウイルスを検出する','改ざんされた内容を復元する','迷惑メールをフィルタリングする','内容を暗号化しディジタル署名を付ける'],'d','S/MIMEは電子メールの暗号化と電子署名に用いられる。中文：S/MIME支持邮件加密和数字签名。'),
+ (42,'VPNプロトコル階層','VPNで用いるIPsec、L2TP、TLSをOSI基本参照モデルの相対的位置で上位から下位に並べるとどれか。',['IPsec、L2TP、TLS','IPsec、TLS、L2TP','TLS、IPsec、L2TP','TLS、L2TP、IPsec'],'c','TLSはトランスポート層の上、IPsecはネットワーク層、L2TPはその下位の位置関係として示される。中文：按本题的相对层次，TLS位于IPsec之上，L2TP位于其下。'),
+]
+
+paper='https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20221211_FE.pdf'
+answer='https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20221211_FE.pdf'
+def sql(x): return "'"+str(x).replace("'","''")+"'"
+q=[]; occ=[]
+for n,topic,prompt,options,key,explanation in rows:
+    ident=f'fe-exempt-2022-20221211-q{n:02}'
+    opts=json.dumps([dict(id='abcd'[i],text=x) for i,x in enumerate(options)],ensure_ascii=False,separators=(',',':'))
+    values=[ident,'exam-fe',topic,'standard','single_choice',f'【IPA 2022年度 修了認定試験 2022-12-11 問{n}・改編】'+prompt,opts,json.dumps(key),explanation,'licensed',paper,'ja','A','explicit','standard','fe_exemption']
+    q.append('('+','.join(map(sql,values))+')')
+    occ.append('('+','.join(map(sql,['2022-12-11',n,'2022',ident,key,paper,answer]))+')')
+for old,new,key in [(33,30,'a'),(34,31,'a'),(37,35,'a'),(39,37,'d')]:
+    oldpaper='https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20210725_FE.pdf'
+    oldanswer='https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20210725_FE.pdf'
+    ident=f'fe-exempt-2022-20221211-q{new:02}'
+    occ.append('('+','.join(map(sql,['2021-07-25',old,'2021',ident,key,oldpaper,oldanswer]))+')')
+out='-- IPA 2022 December: source-reviewed interface, database, network and security questions.\n'
+out+='INSERT OR IGNORE INTO questions (id,track_id,topic,difficulty,question_type,prompt,options_json,answer_json,explanation,source_type,source_reference,language,exam_section,exam_section_method,question_kind,exam_origin) VALUES\n'+',\n'.join(q)+';\n'
+out+='INSERT OR IGNORE INTO fe_exemption_occurrences (sitting_date,original_question,fiscal_year,canonical_question_id,official_answer,question_url,answer_url) VALUES\n'+',\n'.join(occ)+';\n'
+Path(__file__).resolve().parents[1].joinpath('migrations/0173_fe_exemption_20221211_network.sql').write_text(out,encoding='utf-8')
