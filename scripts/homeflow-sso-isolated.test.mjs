@@ -1614,7 +1614,7 @@ test('Stage E private word version, due date and invalid cursor fail closed',asy
   assert.equal((await scopedWords(f,memberToken,'?keys=%5B%22ja%3Abad%22%2C%22ja%3Abad%22%5D')).status,400)
   assert.equal((await scopedWords(f,memberToken,'?after=evil%0Aline')).status,400)
   assert.equal((await scopedWords(f,ownerToken,'/legacy/adopt','POST',{confirm:false})).status,403)
-  assert.equal((await scopedWords(f,ownerToken,'/legacy/adopt','POST',{confirm:true,after:'en:bad%0A'})).status,400)
+  assert.equal((await scopedWords(f,ownerToken,'/legacy/adopt','POST',{confirm:true,after:'en:bad\n'})).status,400)
  }finally{f.raw.close()}
 })
 test('Stage E old daily-word pages are owner-only, lossless, and reject any corrupted row',async()=>{
