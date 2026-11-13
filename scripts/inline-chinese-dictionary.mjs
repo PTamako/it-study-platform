@@ -9,6 +9,7 @@ const studyIdentityImport = "import { homeflowStudyIdentity } from './homeflow-i
 const studyVocabularyImport = "import { homeflowVocabulary } from './homeflow-vocabulary'"
 const studyDailyImport = "import { homeflowDailyTasks } from './homeflow-daily-tasks'"
 const studyGrammarImport = "import { homeflowGrammar } from './homeflow-grammar'"
+const studyListeningImport = "import { homeflowListening } from './homeflow-listening'"
 const studyLanguageImport = "import { homeflowLanguage } from './homeflow-language'"
 const studyExamsImport = "import { homeflowExams } from './homeflow-exams'"
 const studyMockImport = "import { homeflowMockExam } from './homeflow-mock'"
@@ -29,6 +30,8 @@ export function inlineChineseDictionary(workerSource) {
       "const homeflowDailyTasks = async () => new Response('per-user daily tasks disabled', {status:503})")
     .replace(studyGrammarImport,
       "const homeflowGrammar = async () => new Response('per-user grammar disabled', {status:503})")
+    .replace(studyListeningImport,
+      "const homeflowListening = async () => new Response('per-user listening disabled', {status:503})")
     .replace(studyLanguageImport,
       "const homeflowLanguage = async () => new Response('per-user language disabled', {status:503})")
     .replace(studyExamsImport,
