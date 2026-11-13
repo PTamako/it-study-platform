@@ -11,7 +11,7 @@ type Wrong=Question&{answer:string;explanation:string;next_review_at:string}
 type History={id:string;date:string;exam:string;correct:number;total:number;created_at:string}
 type Kind='attempts'|'reviews'|'history'
 type Adoption={after:string;total:number;done:boolean;started:boolean}
-defineProps<{userId:string;role:'owner'|'member'}>()
+const props=defineProps<{userId:string;role:'owner'|'member'}>()
 const tab=ref<'practice'|'wrong'|'history'>('practice')
 const track=ref<Track>('exam-sg'),enabled=ref(false),loading=ref(false),busy=ref(false)
 const error=ref(''),info=ref('')
