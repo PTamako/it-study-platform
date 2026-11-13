@@ -6,6 +6,7 @@ const ui=readFileSync(new URL('../src/StudyHomeFlowAccess.vue',import.meta.url),
 const app=readFileSync(new URL('../src/App.vue',import.meta.url),'utf8')
 const daily=readFileSync(new URL('../src/StudyHomeFlowDailyTasks.vue',import.meta.url),'utf8')
 const grammar=readFileSync(new URL('../src/StudyHomeFlowGrammar.vue',import.meta.url),'utf8')
+const listening=readFileSync(new URL('../src/StudyHomeFlowListening.vue',import.meta.url),'utf8')
 const language=readFileSync(new URL('../src/StudyHomeFlowLanguage.vue',import.meta.url),'utf8')
 const exams=readFileSync(new URL('../src/StudyHomeFlowExams.vue',import.meta.url),'utf8')
 const mock=readFileSync(new URL('../src/StudyHomeFlowMock.vue',import.meta.url),'utf8')
@@ -19,7 +20,7 @@ test('HomeFlow PWA entry remains feature gated and cannot authenticate legacy st
  assert.match(app,/<StudyHomeFlowAccess \/>/)
  assert.match(app,/<StudyHomeFlowAccess v-if="activeModule==='home'"/)
  assert.doesNotMatch(ui,/authenticated\.value\s*=\s*true/)
- assert.match(ui,/每日任务、每日语法、语言卡、练习错题、成绩与 SG\/FE 模拟考试使用独立身份接口/)
+ assert.match(ui,/每日任务、语法、听力、语言卡、练习错题、成绩与 SG\/FE 模拟考试使用独立身份接口/)
 })
 
 test('Safari-to-installed-PWA resume uses only short-lived one-time proof, not bearer token',()=>{
@@ -160,3 +161,20 @@ test('personal grammar PWA uses scoped online-only API, explicit owner adoption,
  assert.doesNotMatch(grammar,/localStorage\.|sessionStorage\.|indexedDB\.|\/api\/grammar-progress/)
  assert.doesNotMatch(grammar,/document\.cookie|access_token|session_assertion/)
 });
+
+test('Stage E listening PWA is private account keyed and avoids all shared old caches',()=>{
+ assert.match(ui,/import StudyHomeFlowListening from '.\/StudyHomeFlowListening.vue'/)
+ assert.match(ui,/<StudyHomeFlowListening v-if="identity" :key="'listening:'\+identity.user_id"/)
+ assert.match(listening,/\/api\/homeflow-study\/listening\/status/)
+ assert.match(listening,/status.enabled===true&&status.scope==='user'&&status.legacy_access===false/)
+ assert.match(listening,/\/api\/homeflow-study\/listening\?date=/)
+ assert.match(listening,/\/api\/homeflow-study\/listening\/legacy\/adopt/)
+ assert.match(listening,/expected_user_id:props.userId/)
+ assert.match(listening,/props.role!=='owner'/)
+ assert.match(listening,/window.confirm\(/)
+ assert.match(listening,/document.addEventListener\('visibilitychange',foreground\)/)
+ assert.match(listening,/active=false;revision\+\+;rows.value=\[\]/)
+ assert.match(listening,/window.speechSynthesis.speak\(speech\)/)
+ assert.doesNotMatch(listening,/localStorage\.|sessionStorage\.|indexedDB\.|\/api\/listening-progress/)
+ assert.doesNotMatch(listening,/access_token|session_assertion|document\.cookie|MediaRecorder|getUserMedia/)
+})
