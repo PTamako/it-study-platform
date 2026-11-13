@@ -242,9 +242,9 @@ async function adopt(req:Request,env:Env,url:URL,actor:Actor){
   return json({code:'CONFIRM_REQUIRED'},403)
  const kind=String(data.kind) as 'attempts'|'reviews'|'history'
  const after=data.after===undefined?'':data.after
- if(typeof after!=='string'||after.length>120||
+ if(typeof after!=='string'||after.length>(kind==='attempts'?240:120)||
   (after!==''&&(kind==='attempts'||kind==='history'?
-   !/^[a-zA-Z0-9_:-]{8,120}$/.test(after):!textId(after))))
+   !/^[a-zA-Z0-9_:-]{8,240}$/.test(after):!textId(after))))
   return json({code:'INVALID_CURSOR'},400)
  const table=kind==='attempts'?'study_attempts':
   kind==='reviews'?'question_review_state':'exam_history'
@@ -256,7 +256,7 @@ async function adopt(req:Request,env:Env,url:URL,actor:Actor){
   if(kind==='attempts'){
    try{
     const decoded=JSON.parse(String(row.user_answer_json))
-    return typeof row.id==='string'&&row.id.length>=8&&row.id.length<=120&&
+    return typeof row.id==='string'&&row.id.length>=8&&row.id.length<=240&&
      textId(row.question_id)&&typeof row.user_answer_json==='string'&&
      decoded!==undefined&&(row.is_correct===0||row.is_correct===1)&&
      Number.isSafeInteger(row.duration_seconds)&&Number(row.duration_seconds)>=0&&
