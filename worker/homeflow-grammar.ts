@@ -29,7 +29,7 @@ const submittedId=(v:unknown,l:'ja'|'en')=>id(v)&&
  new RegExp('^'+l+'-(?:0[1-9]|1[0-2]):(?:today|review):[01]$').test(v)
 const answerIndex=(v:unknown):v is number=>typeof v==='number'&&
  Number.isInteger(v)&&v>=0&&v<=3
-const keys=(o:Record<string,unknown>,allowed:string[])=>
+const keys=(o:object,allowed:string[])=>
  Object.keys(o).every(k=>allowed.includes(k))
 async function body(req:Request,url:URL){
  if(req.headers.get('origin')!==url.origin||
@@ -60,7 +60,7 @@ async function submit(req:Request,env:Env,url:URL,actor:Actor){
   !Array.isArray(data.answers)||data.answers.length<1||data.answers.length>3)
   return json({code:'INVALID_GRAMMAR_REQUEST_OR_ACCOUNT_CHANGED'},400)
  const studyDate=data.date,language=data.language
- const answers=data.answers as Array<Record<string,unknown>>
+ const answers=data.answers as Answer[]
  if(answers.some(a=>!a||typeof a!=='object'||Array.isArray(a)||
   !keys(a,['question_id','answer_index'])||
   !submittedId(a.question_id,language)||!answerIndex(a.answer_index))||
