@@ -625,7 +625,7 @@ const MOCK_REVIEW_KEY = 'zhixue:mock-review-v1'
 const mockStorageWarning = ref('')
 let mockTimer: ReturnType<typeof setInterval> | undefined
 function persistActiveMockExam() {
-  if (!mockStarted.value) return
+  if(!legacyWritesAllowed()||!mockStarted.value)return
   const snapshot: MockSnapshot<PracticeQuestion> = {
     track: selectedTrackId.value === 'exam-fe' ? 'exam-fe' : 'exam-sg',
     section: selectedTrackId.value === 'exam-fe' ? feMockSection.value : 'SG',
@@ -1512,7 +1512,7 @@ function pinDailyWords(language: 'ja' | 'en', date: string, words: DictionaryEnt
   if (dailyWordSelections.value[key]?.length === 5 || words.length < 5) return
   const next = { ...dailyWordSelections.value, [key]: words.slice(0, 5).map(word => word.term) }
   dailyWordSelections.value = Object.fromEntries(Object.entries(next).sort().slice(-8))
-  try { localStorage.setItem('zhixue:daily-word-selections-v1', JSON.stringify(dailyWordSelections.value)) } catch { /* optional local cache */ }
+  try { if(legacyWritesAllowed())localStorage.setItem('zhixue:daily-word-selections-v1', JSON.stringify(dailyWordSelections.value)) } catch { /* optional local cache */ }
 }
 function dailyWordStatus(language: 'ja' | 'en', term: string): string {
   const review = dailyWordProgress.value[dailyWordKey(language, term)]
@@ -1600,6 +1600,7 @@ let dailyWordHydrationRun = 0
 let dailyWordFlushJob: Promise<void> | null = null
 
 function persistDailyWordState() {
+  if(!legacyWritesAllowed())return
   try {
     localStorage.setItem('zhixue:daily-word-review-v1', JSON.stringify(dailyWordProgress.value))
     localStorage.setItem('zhixue:daily-word-pending-v1', JSON.stringify(dailyWordPending.value))
@@ -1730,7 +1731,7 @@ async function hydrateDailyWordProgress() {
           delete selections[key]
       }
       dailyWordSelections.value = selections
-      try { localStorage.setItem('zhixue:daily-word-selections-v1', JSON.stringify(selections)) } catch { /* local cache is optional */ }
+      try { if(legacyWritesAllowed())localStorage.setItem('zhixue:daily-word-selections-v1', JSON.stringify(selections)) } catch { /* local cache is optional */ }
     }
     dailyWordProgress.value = merged
     dailyWordPending.value = pending
@@ -1849,7 +1850,7 @@ watch(dailyLanguageScenes, scenes => {
   if (!changed) return
   // Keep recent assignments bounded; all past cards remain in the full library.
   dailySceneAssignments.value = Object.fromEntries(Object.entries(next).sort().slice(-16))
-  try { localStorage.setItem('zhixue:daily-scene-assignments-v1', JSON.stringify(dailySceneAssignments.value)) } catch { /* optional cache */ }
+  try { if(legacyWritesAllowed())localStorage.setItem('zhixue:daily-scene-assignments-v1', JSON.stringify(dailySceneAssignments.value)) } catch { /* optional cache */ }
 })
 const isLanguageCardUnlearned = (card: LanguageCard) => {
   const review = languageReviewByCardId.value.get(card.id)
