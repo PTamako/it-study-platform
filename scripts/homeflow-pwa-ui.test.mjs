@@ -285,7 +285,7 @@ test('legacy cache remains unclaimed and invisible after HomeFlow identity switc
   app.indexOf('function onHomeflowIdentityChanged('))
  assert.doesNotMatch(body,/localStorage.removeItem\(/)
  assert.doesNotMatch(body,/localStorage.clear\(/)
- assert.doesNotMatch(body,/homeflow_user_id|/api/homeflow-study/)
+ assert.doesNotMatch(body,/homeflow_user_id|\/api\/homeflow-study/)
  assert.match(ui,/defineEmits<\{\(event:'identity-changed',userId:string\|null\):void\}>/)
  assert.match(ui,/emit\('identity-changed',identity.value\?\.user_id\|\|null\)/)
  assert.match(ui,/emit\('identity-changed',null\)/)
