@@ -195,3 +195,19 @@ test('Stage E personal daily-word UI uses only actor-scoped CAS, not legacy PWA 
  assert.doesNotMatch(words,/localStorage\.|sessionStorage\.|indexedDB\.|\/api\/daily-word-reviews/)
  assert.doesNotMatch(words,/access_token|session_assertion|document\.cookie/)
 });
+
+
+test('PWA ignores stale HomeFlow identity probes after signout, account switch or unmount',()=>{
+ assert.match(ui,/let identityGeneration=0/)
+ assert.match(ui,/const generation=\+\+identityGeneration/)
+ assert.match(ui,/const status=await api\('status'\)[\s\S]*?if\(generation!==identityGeneration\)return/)
+ assert.match(ui,/const res=await fetch\('\/api\/homeflow-sso\/me',[\s\S]*?if\(generation!==identityGeneration\)return/)
+ assert.match(ui,/const value=await res\.json\(\) as \{identity\?:Identity\}[\s\S]*?if\(generation!==identityGeneration\)return/)
+ assert.match(ui,/if\(generation===identityGeneration\)loading\.value=false/)
+ assert.match(ui,/async function signOut\(\)\{[\s\S]*?identityGeneration\+\+[\s\S]*?await api\('logout',\{method:'POST'\}\)/)
+ assert.match(ui,/onUnmounted\(\(\)=>\{identityGeneration\+\+;identity\.value=null\}\)/)
+ // The app still does not store credentials, identity or learning data in
+ // shared localStorage, and its per-person children remain key-remounted.
+ assert.doesNotMatch(ui,/localStorage\.setItem\([^\n]*(?:identity|access_token|session_assertion)/i)
+ assert.match(ui,/:key="identity.user_id"/)
+})
