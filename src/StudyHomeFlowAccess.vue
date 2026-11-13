@@ -3,6 +3,7 @@ import {onMounted,ref} from 'vue'
 import StudyHomeFlowDailyTasks from './StudyHomeFlowDailyTasks.vue'
 import StudyHomeFlowGrammar from './StudyHomeFlowGrammar.vue'
 import StudyHomeFlowListening from './StudyHomeFlowListening.vue'
+import StudyHomeFlowDailyWords from './StudyHomeFlowDailyWords.vue'
 import StudyHomeFlowLanguage from './StudyHomeFlowLanguage.vue'
 import StudyHomeFlowExams from './StudyHomeFlowExams.vue'
 import StudyHomeFlowMock from './StudyHomeFlowMock.vue'
@@ -126,7 +127,7 @@ onMounted(()=>{void check()})
    {{ identity.display_name }} · {{ identity.role==='owner'?'家庭管理员':'家庭成员' }}
   </p>
   <p v-else class="hf-description">使用已有 HomeFlow 账号授权，不需要新建知学密码。</p>
-  <p v-if="identity" class="hf-note">每日任务、语法、听力、语言卡、练习错题、成绩与 SG/FE 模拟考试使用独立身份接口；其余模块仍待隔离。</p>
+  <p v-if="identity" class="hf-note">每日任务、语法、听力、单词、语言卡、练习错题、成绩与 SG/FE 模拟考试使用独立身份接口；原本机队列仍待隔离。</p>
   <p v-else-if="pending" class="hf-note">在 Safari 完成授权后，返回此 PWA 点击「完成登录」。</p>
   <p v-if="error" class="hf-error" role="alert">{{ error }}</p>
   <div class="hf-actions">
@@ -146,6 +147,8 @@ onMounted(()=>{void check()})
   <StudyHomeFlowGrammar v-if="identity" :key="'grammar:'+identity.user_id"
    :user-id="identity.user_id" :role="identity.role" />
   <StudyHomeFlowListening v-if="identity" :key="'listening:'+identity.user_id"
+   :user-id="identity.user_id" :role="identity.role" />
+  <StudyHomeFlowDailyWords v-if="identity" :key="'daily-words:'+identity.user_id"
    :user-id="identity.user_id" :role="identity.role" />
   <StudyHomeFlowLanguage v-if="identity" :key="'language:'+identity.user_id"
    :user-id="identity.user_id" :role="identity.role" />
