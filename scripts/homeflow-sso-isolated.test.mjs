@@ -816,3 +816,181 @@ test('Stage E language catalogue and legacy import have bounded cursors, gated a
   assert.equal((await scopedLanguage(f,memberToken,'/cards?lang=ja')).status,503)
  }finally{f.raw.close()}
 })
+
+
+function scopedExams(f,cookie,path='',method='GET',data=null,origin=app){
+ const headers={}
+ if(cookie)headers.Cookie='__Host-study_hf='+cookie
+ if(method==='POST'){
+  headers.Origin=origin
+  headers['Content-Type']='application/json'
+ }
+ return homeflowExams(new Request(app+'/api/homeflow-study/exams'+path,{
+  method,headers,body:method==='POST'?JSON.stringify(data??{}):undefined
+ }),f.env)
+}
+test('Stage E exams isolate practice, wrong answers and manual history between spouses',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_EXAMS_ENABLED='true'
+  assert.equal((await scopedExams(f,'','/questions')).status,401)
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  const originalAttempts=f.raw.prepare('SELECT * FROM study_attempts').all()
+  const originalReviews=f.raw.prepare('SELECT * FROM question_review_state').all()
+  const originalHistory=f.raw.prepare('SELECT * FROM exam_history').all()
+  const qs=await scopedExams(f,memberToken,'/questions?track=exam-sg')
+  assert.equal(qs.status,200,await qs.clone().text())
+  const publicCards=(await qs.json()).items
+  assert.equal(publicCards.length,2)
+  assert.ok(!Object.keys(publicCards[0]).includes('answer'),
+   'practice question must never include the answer before grading')
+  assert.equal(publicCards[0].wrong_count,0,
+   'member never inherits owner old wrong answers')
+  const save=await scopedExams(f,memberToken,'/attempts','POST',{
+   attempt_id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+   question_id:'sg-example-001',answer:'a',duration_seconds:21})
+  assert.equal(save.status,201,await save.clone().text())
+  const result=await save.json()
+  assert.equal(result.correct,false)
+  assert.equal(result.answer,'b')
+  assert.equal(result.progress.review_count,1)
+  const memberWrong=await scopedExams(f,memberToken,'/wrong?track=exam-sg')
+  assert.equal(memberWrong.status,200)
+  assert.deepEqual((await memberWrong.json()).items.map(q=>[q.id,q.wrong_count]),
+   [['sg-example-001',1]])
+  assert.equal((await (await scopedExams(f,ownerToken,'/wrong?track=exam-sg')).json()).items.length,0,
+   'owner must explicitly adopt historical wrong answers')
+  const ownerAdopt=await scopedExams(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'attempts'})
+  assert.equal(ownerAdopt.status,200,await ownerAdopt.clone().text())
+  assert.equal((await ownerAdopt.json()).adopted,1)
+  assert.equal((await (await scopedExams(f,ownerToken,'/wrong?track=exam-sg')).json()).items.length,1)
+  assert.equal((await (await scopedExams(f,memberToken,'/wrong?track=exam-fe')).json()).items.length,0)
+  assert.deepEqual(f.raw.prepare('SELECT * FROM study_attempts').all(),originalAttempts)
+  assert.deepEqual(f.raw.prepare('SELECT * FROM question_review_state').all(),originalReviews)
+  assert.deepEqual(f.raw.prepare('SELECT * FROM exam_history').all(),originalHistory)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_study_attempts WHERE homeflow_user_id=?').get(owner).n,1)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_study_attempts WHERE homeflow_user_id=?').get(member).n,1)
+  assert.equal(f.raw.prepare("SELECT actor_user_id FROM homeflow_exam_events WHERE action='attempt'").get().actor_user_id,member)
+  assert.equal((await scopedExams(f,memberToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'attempts'})).status,403)
+  f.active.valid=false
+  assert.equal((await scopedExams(f,memberToken,'/wrong')).status,401,
+   'HomeFlow session revocation blocks all private question data')
+ }finally{f.raw.close()}
+})
+
+test('Stage E practice answer idempotency protects scores, review streaks and actor audit',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_EXAMS_ENABLED='true'
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  const answer={attempt_id:'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+   question_id:'sg-example-002',answer:'b',duration_seconds:8}
+  assert.equal((await scopedExams(f,memberToken,'/attempts','POST',answer,'https://bad.example')).status,403)
+  assert.equal((await scopedExams(f,memberToken,'/attempts','POST',{...answer,actor_user_id:owner})).status,400)
+  assert.equal((await scopedExams(f,memberToken,'/attempts','POST',{...answer,duration_seconds:-1})).status,400)
+  assert.equal((await scopedExams(f,memberToken,'/attempts','POST',{...answer,question_id:'missing'})).status,404)
+  const save=await scopedExams(f,memberToken,'/attempts','POST',answer)
+  assert.equal(save.status,201,await save.clone().text())
+  assert.equal((await save.json()).progress.correct_streak,1)
+  assert.equal((await (await scopedExams(f,memberToken,'/attempts','POST',answer)).json()).replayed,true)
+  assert.equal((await scopedExams(f,memberToken,'/attempts','POST',{...answer,answer:'a'})).status,409)
+  assert.equal(f.raw.prepare("SELECT COUNT(*) n FROM homeflow_exam_events WHERE actor_user_id=? AND action='attempt'").get(member).n,1)
+  assert.equal(f.raw.prepare('SELECT review_count FROM homeflow_question_review_state WHERE homeflow_user_id=? AND question_id=?')
+   .get(member,'sg-example-002').review_count,1)
+  const ownerSame=await scopedExams(f,ownerToken,'/attempts','POST',answer)
+  assert.equal(ownerSame.status,201,'one attempt_id is safe across separate owner partitions')
+  const second=await scopedExams(f,memberToken,'/attempts','POST',
+   {...answer,attempt_id:'cccccccc-cccc-4ccc-8ccc-cccccccccccc'})
+  assert.equal(second.status,201)
+  const third=await scopedExams(f,memberToken,'/attempts','POST',
+   {...answer,attempt_id:'dddddddd-dddd-4ddd-8ddd-dddddddddddd'})
+  assert.equal(third.status,201)
+  const row=f.raw.prepare('SELECT review_count,correct_streak,mastered FROM homeflow_question_review_state WHERE homeflow_user_id=? AND question_id=?')
+   .get(member,'sg-example-002')
+  assert.deepEqual([row.review_count,row.correct_streak,row.mastered],[3,3,1])
+  const ownerRow=f.raw.prepare('SELECT review_count,correct_streak,mastered FROM homeflow_question_review_state WHERE homeflow_user_id=? AND question_id=?')
+   .get(owner,'sg-example-002')
+  assert.deepEqual([ownerRow.review_count,ownerRow.correct_streak,ownerRow.mastered],[1,1,0])
+  assert.throws(()=>f.raw.prepare('DELETE FROM homeflow_exam_events').run(),/IMMUTABLE_EXAM_AUDIT/)
+  assert.throws(()=>f.raw.prepare('UPDATE homeflow_exam_events SET affected_count=4').run(),/IMMUTABLE_EXAM_AUDIT/)
+ }finally{f.raw.close()}
+})
+
+test('Stage E exam history stays personal, immutable on conflicting ID and retains both old and new receipts',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_EXAMS_ENABLED='true'
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  assert.deepEqual((await (await scopedExams(f,memberToken,'/history')).json()).items,[])
+  assert.deepEqual((await (await scopedExams(f,ownerToken,'/history')).json()).items,[])
+  const ownerOld=await scopedExams(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'history'})
+  assert.equal(ownerOld.status,200,await ownerOld.clone().text())
+  assert.equal((await ownerOld.json()).adopted,1)
+  assert.equal((await (await scopedExams(f,memberToken,'/history')).json()).items.length,0)
+  const entry={id:'exam-score-0000001',date:'2026-11-13',exam:'SG 模拟练习',
+   total:60,correct:50}
+  const saved=await scopedExams(f,memberToken,'/history','POST',entry)
+  assert.equal(saved.status,201,await saved.clone().text())
+  assert.equal((await saved.json()).replayed,false)
+  assert.equal((await (await scopedExams(f,memberToken,'/history','POST',entry)).json()).replayed,true)
+  assert.equal((await scopedExams(f,memberToken,'/history','POST',
+   {...entry,correct:42})).status,409)
+  assert.equal((await scopedExams(f,memberToken,'/history','POST',
+   {...entry,date:'2026-02-30'})).status,400)
+  const memberHistory=(await (await scopedExams(f,memberToken,'/history')).json()).items
+  assert.equal(memberHistory.length,1)
+  assert.equal(memberHistory[0].correct,50)
+  const ownerHistory=(await (await scopedExams(f,ownerToken,'/history')).json()).items
+  assert.equal(ownerHistory.length,1)
+  assert.equal(ownerHistory[0].id,'legacy-history-001')
+  assert.equal(f.raw.prepare("SELECT COUNT(*) n FROM homeflow_exam_events WHERE actor_user_id=? AND action='history_added'").get(member).n,1)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM exam_history').get().n,1)
+ }finally{f.raw.close()}
+})
+
+test('Stage E owner exam adoption refuses damaged source pages without partial writes',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_EXAMS_ENABLED='true'
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  f.raw.prepare('UPDATE study_attempts SET user_answer_json=? WHERE id=?')
+   .run('not-json','legacy-attempt-0001')
+  const bad=await scopedExams(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'attempts'})
+  assert.equal(bad.status,409)
+  assert.equal((await bad.json()).code,'LEGACY_EXAM_REVIEW_REQUIRED')
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_study_attempts').get().n,0)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_exam_events').get().n,0)
+  assert.equal(f.raw.prepare('SELECT user_answer_json FROM study_attempts').get().user_answer_json,'not-json')
+  f.raw.prepare('UPDATE study_attempts SET user_answer_json=?').run('"a"')
+  const repair=await scopedExams(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'attempts'})
+  assert.equal(repair.status,200,await repair.clone().text())
+  assert.equal((await repair.json()).adopted,1)
+  f.raw.prepare('UPDATE question_review_state SET correct_streak=-2').run()
+  const reviews=await scopedExams(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'reviews'})
+  assert.equal(reviews.status,409)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_question_review_state').get().n,0)
+  f.raw.prepare('UPDATE question_review_state SET correct_streak=0').run()
+  const goodReview=await scopedExams(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'reviews'})
+  assert.equal(goodReview.status,200,await goodReview.clone().text())
+  assert.equal((await goodReview.json()).adopted,1)
+  assert.equal((await scopedExams(f,memberToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'reviews'})).status,403)
+  assert.equal((await scopedExams(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'history',after:42})).status,400)
+  assert.equal((await scopedExams(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:false,kind:'history'})).status,403)
+  assert.equal((await scopedExams(f,memberToken,'/questions?track=exam-ap')).status,400)
+  assert.equal((await scopedExams(f,memberToken,'/wrong?limit=100')).status,400)
+  f.env.HOMEFLOW_STUDY_EXAMS_ENABLED='false'
+  assert.equal((await scopedExams(f,ownerToken,'/wrong')).status,503)
+  f.env.HOMEFLOW_STUDY_EXAMS_ENABLED='true';f.env.APP_ENV='preview'
+  assert.equal((await scopedExams(f,memberToken,'/history')).status,503)
+ }finally{f.raw.close()}
+})
