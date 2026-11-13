@@ -496,6 +496,9 @@ async function linkedDailyPair(f){
  assert.equal(memberLogin.status,200,await memberLogin.clone().text())
  const memberToken=memberLogin.headers.get('set-cookie')
   .match(/__Host-study_hf=([0-9a-f]{64})/)[1]
+ // Test helper tracks the real fixture's signed cookie actor, never a
+ // caller-provided body field. Explicit mismatch test payload overrides this.
+ f.homeflowActors=new Map([[ownerToken,owner],[memberToken,member]])
  return {ownerToken,memberToken}
 }
 function scopedDaily(f,cookie,path='',method='GET',data=null,origin=app){
@@ -650,8 +653,10 @@ function scopedLanguage(f,cookie,path='',method='GET',data=null,origin=app){
  const headers={}
  if(cookie)headers.Cookie='__Host-study_hf='+cookie
  if(method==='POST'){headers.Origin=origin;headers['Content-Type']='application/json'}
+ const typed=method==='POST'&&data&&f.homeflowActors?.get(cookie)
+  ?{expected_user_id:f.homeflowActors.get(cookie),...data}:data
  return homeflowLanguage(new Request(app+'/api/homeflow-study/language'+path,{
-  method,headers,body:method==='POST'?JSON.stringify(data??{}):undefined
+  method,headers,body:method==='POST'?JSON.stringify(typed??{}):undefined
  }),f.env)
 }
 
@@ -883,8 +888,10 @@ function scopedExams(f,cookie,path='',method='GET',data=null,origin=app){
   headers.Origin=origin
   headers['Content-Type']='application/json'
  }
+ const typed=method==='POST'&&data&&f.homeflowActors?.get(cookie)
+  ?{expected_user_id:f.homeflowActors.get(cookie),...data}:data
  return homeflowExams(new Request(app+'/api/homeflow-study/exams'+path,{
-  method,headers,body:method==='POST'?JSON.stringify(data??{}):undefined
+  method,headers,body:method==='POST'?JSON.stringify(typed??{}):undefined
  }),f.env)
 }
 test('Stage E exams isolate practice, wrong answers and manual history between spouses',async()=>{
