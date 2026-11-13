@@ -25,6 +25,9 @@ writeFileSync(join(dir,'homeflow-language.mts'),
 writeFileSync(join(dir,'homeflow-exams.mts'),
  readFileSync(new URL('../worker/homeflow-exams.ts',import.meta.url),'utf8')
   .replace("from './homeflow-identity'","from './homeflow-identity.mts'"))
+writeFileSync(join(dir,'homeflow-mock.mts'),
+ readFileSync(new URL('../worker/homeflow-mock.ts',import.meta.url),'utf8')
+  .replace("from './homeflow-identity'","from './homeflow-identity.mts'"))
 const {homeflowStudyIdentity,homeflowStudyReady}=
  await import(pathToFileURL(join(dir,'homeflow-identity.mts')))
 const {homeflowVocabulary}=
@@ -35,6 +38,8 @@ const {homeflowLanguage}=
  await import(pathToFileURL(join(dir,'homeflow-language.mts')))
 const {homeflowExams}=
  await import(pathToFileURL(join(dir,'homeflow-exams.mts')))
+const {homeflowMockExam}=
+ await import(pathToFileURL(join(dir,'homeflow-mock.mts')))
 process.on('exit',()=>{rmSync(dir,{recursive:true,force:true})})
 const app='https://study.example.test',hf='https://homeflow.example.test'
 const owner='11111111-1111-4111-8111-111111111111'
@@ -68,7 +73,8 @@ function sqliteEnv(){
  topic TEXT NOT NULL DEFAULT '',difficulty TEXT NOT NULL DEFAULT 'standard',
  question_type TEXT NOT NULL DEFAULT 'single_choice',prompt TEXT NOT NULL DEFAULT '',
  options_json TEXT NOT NULL DEFAULT '[]',answer_json TEXT NOT NULL,
- explanation TEXT NOT NULL DEFAULT '');
+ explanation TEXT NOT NULL DEFAULT '',exam_section TEXT NOT NULL DEFAULT '',
+ source_type TEXT NOT NULL DEFAULT 'generated');
  CREATE TABLE study_attempts(id TEXT PRIMARY KEY,question_id TEXT REFERENCES questions(id),
  user_answer_json TEXT NOT NULL,is_correct INTEGER NOT NULL,duration_seconds INTEGER NOT NULL DEFAULT 0,
  answered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
@@ -81,6 +87,8 @@ function sqliteEnv(){
  question_count INTEGER NOT NULL,correct_count INTEGER NOT NULL,
  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);`)
  raw.exec(readFileSync(new URL('../migrations/0184_homeflow_exam_progress.sql',import.meta.url),'utf8'))
+ raw.exec(readFileSync(new URL('../migrations/0185_homeflow_mock_exam_submissions.sql',import.meta.url),'utf8'))
+ raw.exec("CREATE TABLE mock_question_pool(question_id TEXT PRIMARY KEY REFERENCES questions(id),track_id TEXT,exam_section TEXT,exam_section_method TEXT,topic TEXT,source_type TEXT,question_kind TEXT,draw_key INTEGER);")
  const tracks=raw.prepare('INSERT INTO study_tracks(id,kind,title) VALUES(?,?,?)')
  tracks.run('exam-sg','exam','SG');tracks.run('exam-fe','exam','FE')
  const question=raw.prepare('INSERT INTO questions(id,track_id,topic,prompt,options_json,answer_json,explanation) VALUES(?,?,?,?,?,?,?)')
@@ -90,6 +98,22 @@ function sqliteEnv(){
   '[{"id":"a","text":"全部开放"},{"id":"b","text":"最小权限"}]','"b"','只授予必要权限')
  question.run('fe-example-001','exam-fe','算法','哪项是确定性算法？',
   '[{"id":"a","text":"A"},{"id":"b","text":"B"}]','"a"','正确答案 A')
+ // Separate indexed mock paper fixture: 48+12 SG, FE A60, FE B16+4.
+ const mockQuestion=raw.prepare('INSERT INTO questions(id,track_id,topic,exam_section,prompt,options_json,answer_json) VALUES(?,?,?,?,?,?,?)')
+ const mockPool=raw.prepare('INSERT INTO mock_question_pool(question_id,track_id,exam_section,exam_section_method,topic,source_type,question_kind,draw_key) VALUES(?,?,?,?,?,?,?,?)')
+ const allMocks=[
+  ...Array.from({length:48},(_,i)=>({id:'sg-mock-a-'+String(i+1).padStart(3,'0'),track:'exam-sg',section:'A',topic:'SG安全'})),
+  ...Array.from({length:12},(_,i)=>({id:'sg-mock-b-'+String(i+1).padStart(3,'0'),track:'exam-sg',section:'B',topic:'SG管理'})),
+  ...Array.from({length:60},(_,i)=>({id:'fe-mock-a-'+String(i+1).padStart(3,'0'),track:'exam-fe',section:'A',topic:'FE理论'})),
+  ...Array.from({length:16},(_,i)=>({id:'fe-mock-b-algo-'+String(i+1).padStart(3,'0'),track:'exam-fe',section:'B',topic:'FE算法与程序设计'})),
+  ...Array.from({length:4},(_,i)=>({id:'fe-mock-b-security-'+String(i+1).padStart(3,'0'),track:'exam-fe',section:'B',topic:'FE信息安全'}))
+ ]
+ for(let i=0;i<allMocks.length;i++){
+  const row=allMocks[i]
+  mockQuestion.run(row.id,row.track,row.topic,row.section,'题目 '+row.id,
+   '[{"id":"a","text":"错误答案"},{"id":"b","text":"正确答案"}]','"b"')
+  mockPool.run(row.id,row.track,row.section,'explicit',row.topic,'generated','standard',(i+1)*1000000)
+ }
  raw.prepare('INSERT INTO study_attempts(id,question_id,user_answer_json,is_correct) VALUES(?,?,?,?)')
   .run('legacy-attempt-0001','sg-example-001','"a"',0)
  raw.prepare('INSERT INTO question_review_state(question_id,track_id,review_count,correct_streak,last_result,mastered) VALUES(?,?,?,?,?,?)')
