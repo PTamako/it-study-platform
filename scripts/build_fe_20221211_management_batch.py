@@ -26,6 +26,7 @@ for n,topic,prompt,options,key,explanation in rows:
     occurrences.append('('+','.join(map(sql,['2022-12-11',n,'2022',ident,key,paper,answer]))+')')
 # IPA's 2022 A sample question 42 reproduces this exact sitting question.
 occurrences.append('('+','.join(map(sql,['2022-12-11',51,'2022','fe-ipa-sample-2022-a-042','d',paper,answer]))+')')
+occurrences.append('('+','.join(map(sql,['2022-12-11',41,'2022','fe-ipa-sample-2022-a-036','a',paper,answer]))+')')
 out='-- IPA 2022 December: source-reviewed development and management questions.\n'
 out+='INSERT OR IGNORE INTO questions (id,track_id,topic,difficulty,question_type,prompt,options_json,answer_json,explanation,source_type,source_reference,language,exam_section,exam_section_method,question_kind,exam_origin) VALUES\n'+',\n'.join(questions)+';\n'
 out+='INSERT OR IGNORE INTO fe_exemption_occurrences (sitting_date,original_question,fiscal_year,canonical_question_id,official_answer,question_url,answer_url) VALUES\n'+',\n'.join(occurrences)+';\n'
