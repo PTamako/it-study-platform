@@ -4,6 +4,7 @@ import { homeflowVocabulary } from './homeflow-vocabulary'
 import { homeflowDailyTasks } from './homeflow-daily-tasks'
 import { homeflowGrammar } from './homeflow-grammar'
 import { homeflowListening } from './homeflow-listening'
+import { homeflowDailyWords } from './homeflow-daily-words'
 import { homeflowLanguage } from './homeflow-language'
 import { homeflowExams } from './homeflow-exams'
 import { homeflowMockExam } from './homeflow-mock'
@@ -1359,6 +1360,11 @@ export default {
         url.pathname === '/api/homeflow-study/listening/status' ||
         url.pathname === '/api/homeflow-study/listening/legacy/adopt')
       return homeflowListening(request, env)
+    // Personal word recall is always derived from the verified HomeFlow actor.
+    if (url.pathname === '/api/homeflow-study/daily-words' ||
+        url.pathname === '/api/homeflow-study/daily-words/status' ||
+        url.pathname === '/api/homeflow-study/daily-words/legacy/adopt')
+      return homeflowDailyWords(request, env)
     // HomeFlow accounts have their own language mastery/review tables;
     // never accept this session as the old single-user study session.
     if (url.pathname === '/api/homeflow-study/language/status' ||
