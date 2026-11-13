@@ -160,8 +160,11 @@ async function adopt(req:Request,env:Env,url:URL,actor:Actor){
 }
 export async function homeflowDailyTasks(req:Request,env:Env):Promise<Response>{
  const url=new URL(req.url)
- if(!homeflowStudyReady(env,url)||env.HOMEFLOW_STUDY_DAILY_PROGRESS_ENABLED!=='true')
-  return json({code:'STUDY_DAILY_DISABLED'},503)
+ const ready=homeflowStudyReady(env,url)
+ const enabled=ready&&env.HOMEFLOW_STUDY_DAILY_PROGRESS_ENABLED==='true'
+ if(url.pathname==='/api/homeflow-study/daily-tasks/status'&&req.method==='GET')
+  return json({enabled,scope:'user',legacy_access:false})
+ if(!enabled)return json({code:'STUDY_DAILY_DISABLED'},503)
  try{
   const actor=await verifiedStudyActor(req,env)
   if(!actor)return json({code:'SSO_NOT_AUTHENTICATED'},401)
