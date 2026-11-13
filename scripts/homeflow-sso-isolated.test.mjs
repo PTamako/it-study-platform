@@ -28,6 +28,9 @@ writeFileSync(join(dir,'homeflow-exams.mts'),
 writeFileSync(join(dir,'homeflow-mock.mts'),
  readFileSync(new URL('../worker/homeflow-mock.ts',import.meta.url),'utf8')
   .replace("from './homeflow-identity'","from './homeflow-identity.mts'"))
+writeFileSync(join(dir,'homeflow-mock-receipts.mts'),
+ readFileSync(new URL('../worker/homeflow-mock-receipts.ts',import.meta.url),'utf8')
+  .replace("from './homeflow-identity'","from './homeflow-identity.mts'"))
 const {homeflowStudyIdentity,homeflowStudyReady}=
  await import(pathToFileURL(join(dir,'homeflow-identity.mts')))
 const {homeflowVocabulary}=
@@ -40,6 +43,8 @@ const {homeflowExams}=
  await import(pathToFileURL(join(dir,'homeflow-exams.mts')))
 const {homeflowMockExam}=
  await import(pathToFileURL(join(dir,'homeflow-mock.mts')))
+const {homeflowMockReceipts}=
+ await import(pathToFileURL(join(dir,'homeflow-mock-receipts.mts')))
 process.on('exit',()=>{rmSync(dir,{recursive:true,force:true})})
 const app='https://study.example.test',hf='https://homeflow.example.test'
 const owner='11111111-1111-4111-8111-111111111111'
@@ -88,6 +93,8 @@ function sqliteEnv(){
  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);`)
  raw.exec(readFileSync(new URL('../migrations/0184_homeflow_exam_progress.sql',import.meta.url),'utf8'))
  raw.exec(readFileSync(new URL('../migrations/0185_homeflow_mock_exam_submissions.sql',import.meta.url),'utf8'))
+ raw.exec(readFileSync(new URL('../migrations/0088_mock_exam_submissions.sql',import.meta.url),'utf8'))
+ raw.exec(readFileSync(new URL('../migrations/0186_homeflow_mock_receipt_adoption.sql',import.meta.url),'utf8'))
  raw.exec("CREATE TABLE mock_question_pool(question_id TEXT PRIMARY KEY REFERENCES questions(id),track_id TEXT,exam_section TEXT,exam_section_method TEXT,topic TEXT,source_type TEXT,question_kind TEXT,draw_key INTEGER);")
  const tracks=raw.prepare('INSERT INTO study_tracks(id,kind,title) VALUES(?,?,?)')
  tracks.run('exam-sg','exam','SG');tracks.run('exam-fe','exam','FE')
