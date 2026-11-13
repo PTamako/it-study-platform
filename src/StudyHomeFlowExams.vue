@@ -18,7 +18,7 @@ const error=ref(''),info=ref('')
 const questions=ref<Question[]>([]),wrong=ref<Wrong[]>([]),history=ref<History[]>([])
 const cursor=ref<string|null>(null),selected=reactive<Record<string,string>>({})
 const graded=reactive<Record<string,{correct:boolean;answer:string}>>({})
-type Pending={attempt_id:string;question_id:string;answer:string;duration_seconds:number}
+type Pending={attempt_id:string;question_id:string;answer:string;duration_seconds:number;expected_user_id:string}
 const pending=ref<Pending|null>(null)
 const importKinds:Kind[]=['attempts','reviews','history']
 const adoption=reactive<Record<Kind,Adoption>>({
@@ -72,34 +72,41 @@ async function check(){
 async function answer(question:Question){
  if(busy.value||pending.value||!selected[question.id]||graded[question.id])return
  pending.value={attempt_id:crypto.randomUUID(),question_id:question.id,
-  answer:selected[question.id],duration_seconds:0}
+  answer:selected[question.id],duration_seconds:0,expected_user_id:props.userId}
  await send()
 }
 async function send(){
  if(!pending.value||busy.value)return
- const current=pending.value
+ const current=pending.value,rev=generation
+ if(current.expected_user_id!==props.userId){
+  error.value='当前 HomeFlow 用户与原答题用户不一致，已阻止串号重试';return
+ }
  busy.value=true;error.value=''
  try{
   const data=await request('/attempts',post(current))
+  if(rev!==generation||current.expected_user_id!==props.userId)return
   if(data.ok!==true||data.scope!=='user')throw Error('答题保存需要核验')
   graded[current.question_id]={correct:data.correct===true,answer:String(data.answer)}
   pending.value=null
   info.value=data.correct?'回答正确':'已记录错题，可以在错题列表复习'
- }catch(e){error.value=(e as Error).message}
- finally{busy.value=false}
+ }catch(e){if(rev===generation)error.value=(e as Error).message}
+ finally{if(rev===generation)busy.value=false}
 }
 async function addScore(){
  if(busy.value)return
+ const rev=generation,actor=props.userId
  busy.value=true;error.value='';info.value=''
  try{
   const item={id:crypto.randomUUID().replace(/-/g,''),date:score.date,
-   exam:score.exam.trim(),total:Number(score.total),correct:Number(score.correct)}
+   exam:score.exam.trim(),total:Number(score.total),correct:Number(score.correct),
+   expected_user_id:actor}
   const res=await request('/history',post(item))
+  if(rev!==generation||actor!==props.userId)return
   if(res.ok!==true)throw Error('成绩记录失败')
   info.value='个人成绩已保存'
   await load()
- }catch(e){error.value=(e as Error).message}
- finally{busy.value=false}
+ }catch(e){if(rev===generation)error.value=(e as Error).message}
+ finally{if(rev===generation)busy.value=false}
 }
 async function adopt(kind:Kind){
  const state=adoption[kind]
@@ -109,7 +116,7 @@ async function adopt(kind:Kind){
   '复制到你的 HomeFlow 账号。旧记录不会删除，确认吗？'))return
  busy.value=true;error.value=''
  try{
-  const data=await request('/legacy/adopt',post({confirm:true,kind,
+  const data=await request('/legacy/adopt',post({confirm:true,kind,expected_user_id:props.userId,
    ...(state.after?{after:state.after}:{})}))
   if(data.ok!==true||data.scope!=='owner_only')throw Error('旧记录导入失败')
   state.started=true;state.total+=Number(data.adopted||0)
