@@ -1,6 +1,7 @@
 import { checkWriteRateLimit, handleAuthRequest, requireAuth } from './auth'
 import { homeflowStudyIdentity } from './homeflow-identity'
 import { homeflowVocabulary } from './homeflow-vocabulary'
+import { homeflowDailyTasks } from './homeflow-daily-tasks'
 import { feSeeds, seedUrl } from './fe-question-bank'
 import { eligibleChineseWord, fetchChineseWordMetadata } from './chinese-word-dictionary'
 
@@ -49,6 +50,7 @@ export interface Env {
   AUTH_SESSION_SECRET?: string
   HOMEFLOW_STUDY_SSO_ENABLED?: string
   HOMEFLOW_STUDY_VOCAB_ENABLED?: string
+  HOMEFLOW_STUDY_DAILY_PROGRESS_ENABLED?: string
   STUDY_PUBLIC_ORIGIN?: string
   HOMEFLOW_OAUTH_ORIGIN?: string
   STUDY_SSO_ENCRYPTION_KEY?: string
@@ -1331,6 +1333,11 @@ export default {
     if (url.pathname === '/api/homeflow-study/vocabulary' ||
         url.pathname === '/api/homeflow-study/vocabulary/legacy/adopt')
       return homeflowVocabulary(request, env)
+    // A separate per-person daily progress namespace; never let the new HF
+    // cookie authorize legacy /api/daily-tasks until all old caches isolate.
+    if (url.pathname === '/api/homeflow-study/daily-tasks' ||
+        url.pathname === '/api/homeflow-study/daily-tasks/legacy/adopt')
+      return homeflowDailyTasks(request, env)
     const authResponse = await handleAuthRequest(request, env)
     if (authResponse) return authResponse
 
