@@ -307,3 +307,40 @@ test('Stage E vocabulary fails closed on origin, feature gate, invalid payload a
   assert.equal((await req()).status,503)
  }finally{f.raw.close()}
 })
+
+
+test('legacy adoption rejects malformed JSON before copying any part of the page',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_VOCAB_ENABLED='true'
+  const malformed='{not-valid-json'
+  f.raw.prepare('INSERT INTO saved_vocabulary_entries_v2(language,term,entry_json) VALUES(?,?,?)')
+   .run('en','broken',malformed)
+  const original=f.raw.prepare('SELECT * FROM saved_vocabulary_entries_v2 ORDER BY language,term').all()
+  const flow=await f.begin(true)
+  assert.equal((await f.callback(flow)).status,200)
+  const login=await f.finish(flow,{legacy:true})
+  assert.equal(login.status,200)
+  const cookie=login.headers.get('set-cookie')
+   .match(/__Host-study_hf=([0-9a-f]{64})/)[1]
+  const adopt=()=>homeflowVocabulary(new Request(
+   app+'/api/homeflow-study/vocabulary/legacy/adopt',{
+    method:'POST',headers:{Origin:app, Cookie:'__Host-study_hf='+cookie,
+     'Content-Type':'application/json'},
+    body:JSON.stringify({confirm:true})
+   }),f.env)
+  const stopped=await adopt()
+  assert.equal(stopped.status,409)
+  assert.equal((await stopped.json()).code,'LEGACY_CONTENT_REVIEW_REQUIRED')
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_saved_vocabulary').get().n,0)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_vocabulary_events').get().n,0)
+  assert.deepEqual(f.raw.prepare('SELECT * FROM saved_vocabulary_entries_v2 ORDER BY language,term').all(),original)
+  // Simulate explicit human repair in the local fixture, not automatic production rewriting.
+  f.raw.prepare('UPDATE saved_vocabulary_entries_v2 SET entry_json=? WHERE language=? AND term=?')
+   .run(JSON.stringify({term:'broken',zh:'已核验'}),'en','broken')
+  const resumed=await adopt()
+  assert.equal(resumed.status,200)
+  assert.equal((await resumed.json()).adopted,2)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_saved_vocabulary').get().n,2)
+ }finally{f.raw.close()}
+})
