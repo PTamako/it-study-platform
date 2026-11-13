@@ -62,6 +62,6 @@ test('migration is idempotent and stores no user/progress fallback mappings',()=
   }
   assert.match(sql,/has_legacy_owner_proof/)
   assert.match(sql,/legacy_session_hash/)
-  assert.match(sql,/proof_scope/)
+  assert.match(sql,/assertion_scope/)
  }finally{db.close()}
 })
