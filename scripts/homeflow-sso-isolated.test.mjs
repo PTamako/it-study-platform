@@ -22,6 +22,9 @@ writeFileSync(join(dir,'homeflow-daily-tasks.mts'),
 writeFileSync(join(dir,'homeflow-language.mts'),
  readFileSync(new URL('../worker/homeflow-language.ts',import.meta.url),'utf8')
   .replace("from './homeflow-identity'","from './homeflow-identity.mts'"))
+writeFileSync(join(dir,'homeflow-exams.mts'),
+ readFileSync(new URL('../worker/homeflow-exams.ts',import.meta.url),'utf8')
+  .replace("from './homeflow-identity'","from './homeflow-identity.mts'"))
 const {homeflowStudyIdentity,homeflowStudyReady}=
  await import(pathToFileURL(join(dir,'homeflow-identity.mts')))
 const {homeflowVocabulary}=
@@ -30,6 +33,8 @@ const {homeflowDailyTasks}=
  await import(pathToFileURL(join(dir,'homeflow-daily-tasks.mts')))
 const {homeflowLanguage}=
  await import(pathToFileURL(join(dir,'homeflow-language.mts')))
+const {homeflowExams}=
+ await import(pathToFileURL(join(dir,'homeflow-exams.mts')))
 process.on('exit',()=>{rmSync(dir,{recursive:true,force:true})})
 const app='https://study.example.test',hf='https://homeflow.example.test'
 const owner='11111111-1111-4111-8111-111111111111'
@@ -58,6 +63,39 @@ function sqliteEnv(){
   next_review_at TEXT,last_reviewed_at TEXT,last_result TEXT,last_grade TEXT,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);`)
  raw.exec(readFileSync(new URL('../migrations/0183_homeflow_language_progress.sql',import.meta.url),'utf8'))
+ raw.exec(`CREATE TABLE study_tracks(id TEXT PRIMARY KEY,kind TEXT,title TEXT,subtitle TEXT);
+ CREATE TABLE questions(id TEXT PRIMARY KEY,track_id TEXT REFERENCES study_tracks(id),
+ topic TEXT NOT NULL DEFAULT '',difficulty TEXT NOT NULL DEFAULT 'standard',
+ question_type TEXT NOT NULL DEFAULT 'single_choice',prompt TEXT NOT NULL DEFAULT '',
+ options_json TEXT NOT NULL DEFAULT '[]',answer_json TEXT NOT NULL,
+ explanation TEXT NOT NULL DEFAULT '');
+ CREATE TABLE study_attempts(id TEXT PRIMARY KEY,question_id TEXT REFERENCES questions(id),
+ user_answer_json TEXT NOT NULL,is_correct INTEGER NOT NULL,duration_seconds INTEGER NOT NULL DEFAULT 0,
+ answered_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+ CREATE TABLE question_review_state(question_id TEXT PRIMARY KEY REFERENCES questions(id),
+ track_id TEXT NOT NULL REFERENCES study_tracks(id),review_count INTEGER NOT NULL DEFAULT 0,
+ correct_streak INTEGER NOT NULL DEFAULT 0,last_result TEXT NOT NULL DEFAULT 'again',
+ next_review_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,mastered INTEGER NOT NULL DEFAULT 0,
+ updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+ CREATE TABLE exam_history(id TEXT PRIMARY KEY,study_date TEXT NOT NULL,exam_name TEXT NOT NULL,
+ question_count INTEGER NOT NULL,correct_count INTEGER NOT NULL,
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);`)
+ raw.exec(readFileSync(new URL('../migrations/0184_homeflow_exam_progress.sql',import.meta.url),'utf8'))
+ const tracks=raw.prepare('INSERT INTO study_tracks(id,kind,title) VALUES(?,?,?)')
+ tracks.run('exam-sg','exam','SG');tracks.run('exam-fe','exam','FE')
+ const question=raw.prepare('INSERT INTO questions(id,track_id,topic,prompt,options_json,answer_json,explanation) VALUES(?,?,?,?,?,?,?)')
+ question.run('sg-example-001','exam-sg','安全','最适合的安全措施是哪项？',
+  '[{"id":"a","text":"选项 A"},{"id":"b","text":"选项 B"}]','"b"','答案 B 有正确的风险控制')
+ question.run('sg-example-002','exam-sg','网络','哪项符合最小权限？',
+  '[{"id":"a","text":"全部开放"},{"id":"b","text":"最小权限"}]','"b"','只授予必要权限')
+ question.run('fe-example-001','exam-fe','算法','哪项是确定性算法？',
+  '[{"id":"a","text":"A"},{"id":"b","text":"B"}]','"a"','正确答案 A')
+ raw.prepare('INSERT INTO study_attempts(id,question_id,user_answer_json,is_correct) VALUES(?,?,?,?)')
+  .run('legacy-attempt-0001','sg-example-001','"a"',0)
+ raw.prepare('INSERT INTO question_review_state(question_id,track_id,review_count,correct_streak,last_result,mastered) VALUES(?,?,?,?,?,?)')
+  .run('sg-example-001','exam-sg',3,0,'again',0)
+ raw.prepare('INSERT INTO exam_history(id,study_date,exam_name,question_count,correct_count) VALUES(?,?,?,?,?)')
+  .run('legacy-history-001','2026-11-12','SG 模拟考试',60,41)
  const card=raw.prepare('INSERT INTO language_cards(id,language,content_type,category,term,meaning_zh,example) VALUES(?,?,?,?,?,?,?)')
  card.run('ja-sentence-001','ja','sentence','职场','報告いたします','向您报告','進捗をご報告します。')
  card.run('ja-sentence-002','ja','sentence','日常','少々お待ちください','请稍等','少々お待ちください。')
