@@ -84,3 +84,16 @@
 - **此处首次记录时最新 GitHub Actions Validate 未得最终结果；不能声称已通过**。下一步必须实际查看最终 CI、修复所有测试/TypeScript/D1 问题，只有成功后才将本模块标记为「代码与自动化测试验收通过」，不能因此自动部署。
 
 尚未完工：原账号模拟交卷**原始 receipt** 的完整迁移（旧答题/错题/考试摘要已可分三类领取）、部分 FE B 题库来源分布差异、跨端断线续考并隔离本地待提交队列、SG/FE 所有真实 iPhone 账户切换验收、剩余听力/语法/词卡相关个人记录分区、四 App 端到端审批。生产禁令和 A 用户备份责任持续有效。
+
+
+## 2026-11-14 Stage E：每日语法 HomeFlow 个人答案隔离（未上线）
+
+- 继续原 Draft #179、原分支 `feature/homeflow-identity-isolated-20261113`，不合并、不生产部署。用户负责 A 阶段备份恢复；`0180～0187` 仍全部仅是未执行 SQL 文件。未启用 `HOMEFLOW_STUDY_SSO_ENABLED` / `HOMEFLOW_STUDY_GRAMMAR_ENABLED`，新增开关默认 OFF。
+- 原私人数据实际源头：`0133_daily_grammar_answers.sql` 的 `daily_grammar_answers(study_date,language,question_id,answer_index,updated_at)`，旧 `/api/grammar-progress` 和 `DailyGrammarLesson.vue` 的 `zhixue:daily-grammar-v1:date:language`/IndexedDB（共用数据库）。这三个旧路径均继续仅由旧学习密码会话授权，绝不可因 HomeFlow SSO 激活而让 member 使用。
+- 新 `0187_homeflow_grammar_answers.sql`：`homeflow_grammar_answers` 以 `(homeflow_user_id,study_date,language,question_id)` 为主键，独立每个人的第一次答案、原更新时间与真实 `updated_by_user_id`；`homeflow_grammar_events` 持久不可变地记录实际写入及旧数据领取的 actor 与数量。数据库层拒绝跨人伪写、更新删除、同题同账号不同答案的并发静默忽略。主键复合索引复用，不增加重复 D1 读写索引；旧表不修改不清空。
+- `worker/homeflow-grammar.ts` 及 `worker/index.ts`：独立 `GET/POST /api/homeflow-study/grammar`、`GET /status`、`POST /legacy/adopt`。每次读写都先经真正的 HomeFlow HttpOnly Cookie 与后端 source-session introspection，绝不使用浏览器传入 ID 作授权；写请求要求 `expected_user_id` 和真实认证身份相等，从而拒绝 iPhone 切换账号后以新 Cookie 重放旧账号待提交请求。同源 JSON、长度、题号、答案和日期均校验。写入只采用 first-write-wins，不修改原答题。
+- 管理员原历史须拥有旧学习会话绑定证明并显式 `confirm:true` 后才能领取；成员返回 403。历史按 `study_date,language,question_id` 稳定游标、每批 20 条、整批先校验；任一损坏整批 409 无写入；同键不同内容拒绝，重入相同内容不重复审计。源原文和旧个人缓存不动，客户端不会自动复制历史。
+- 新 `StudyHomeFlowGrammar.vue` 只在 `StudyHomeFlowAccess.vue` 已验证身份、`:key="'grammar:'+identity.user_id"` 的新隔离区挂载，并检查独立后端开关。展示日英双语每日语法三道题、正确反馈、本人服务端进度、管理员手动分页领取；无新 `localStorage/sessionStorage/IndexedDB`、无离线队列，断网明确失败需当前本人在线重试，切号/卸载清空内存状态。**旧 `DailyGrammarLesson.vue` 仍保留旧用户的离线模式，没有被本模块重新分区；整站本地缓存隔离未完成。**
+- 自动验证：`scripts/homeflow-sso-isolated.test.mjs` 使用实际 SQLite 两个 HomeFlow 账号和真实 source-session 模拟，覆盖同题不同答案、旧 owner 唯一领取、重复入账和审计、成员越权、错误来源/账号/日期、身份撤销、数据库不可变约束、损坏旧页拒绝和 20+6 分页原文保存；`scripts/homeflow-pwa-ui.test.mjs` 静态检查 user-keyed、关闭门槛、零旧缓存/零旧 API。旧 Worker 数据 URL 测试 loader 只加 503 隔离 stub，不改变生产授权。
+- 提交：`33f91daa`（0187 初始）、`4c5d85c4`（Worker）、`e0e396c3`（路由）、`02236c19`（SQLite）、`b6a04340`（PWA）、`1eea0dd9`（集成）、`f2980878`（PWA 测试）、`7525bfb8`（数据库竞争保护）、`9a367a7f`（并发回归）、`3b239bf4`（TS 类型）、`9c09f180`（D1 索引成本）、`7ba73128`（PWA 反馈）、`0e266dba`（旧测试 loader）。**最终 CI 以此后最新 HEAD 的 Actions 结论为准；本段不虚报成功。**
+- 尚未完成：每日听力与每日单词隔离、旧 App 全部 localStorage/IndexedDB/离线队列按人隔离、跨账号 PWA 真机和双设备验收、完整发布回滚流程，四应用其他 B～E 功能也均未整体完成。
