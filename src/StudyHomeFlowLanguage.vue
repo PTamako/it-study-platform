@@ -19,7 +19,7 @@ const adoption=reactive<Record<Kind,ImportProgress>>({
  reviews:{after:'',total:0,started:false,done:false}
 })
 type PendingReview={card_id:string;grade:'again'|'hard'|'remembered';
- version:number;request_id:string}
+ version:number;request_id:string;expected_user_id:string}
 const pendingReview=ref<PendingReview|null>(null)
 let epoch=0
 async function api(url:string,options:RequestInit={}){
@@ -63,34 +63,45 @@ async function check(){
 }
 async function setMastery(card:Card){
  if(!enabled.value||busy.value)return
+ const revision=epoch,actor=props.userId
  busy.value=true;error.value=''
  try{
   const payload=await api('/api/homeflow-study/language/mastery',{
    method:'POST',headers:{'Content-Type':'application/json'},
    body:JSON.stringify({card_id:card.id,mastered:!card.mastered,
-    version:card.mastery_version})
+    version:card.mastery_version,expected_user_id:actor})
   })
+  if(revision!==epoch||actor!==props.userId)return
   if(payload.ok!==true||payload.scope!=='user')throw Error('掌握状态保存失败')
   card.mastered=payload.mastered===true
   card.mastery_version=Number(payload.version)
- }catch(e){const message=(e as Error).message;await load();error.value=message}
- finally{busy.value=false}
+ }catch(e){
+  if(revision===epoch){
+   const message=(e as Error).message
+   await load();error.value=message
+  }
+ }finally{if(revision===epoch)busy.value=false}
 }
 async function grade(card:Card,value:'again'|'hard'|'remembered'){
  if(!enabled.value||busy.value||pendingReview.value)return
  pendingReview.value={card_id:card.id,grade:value,version:card.review_version,
-  request_id:crypto.randomUUID().replace(/-/g,'')}
+  request_id:crypto.randomUUID().replace(/-/g,''),expected_user_id:props.userId}
  await submitGrade()
 }
 async function submitGrade(){
  const attempt=pendingReview.value
  if(!attempt||busy.value)return
+ const revision=epoch
+ if(attempt.expected_user_id!==props.userId){
+  error.value='原复习记录的 HomeFlow 用户已改变，禁止跨账号重试';return
+ }
  busy.value=true;error.value=''
  try{
   const payload=await api('/api/homeflow-study/language/review',{
    method:'POST',headers:{'Content-Type':'application/json'},
    body:JSON.stringify(attempt)
   })
+  if(revision!==epoch||attempt.expected_user_id!==props.userId)return
   if(payload.ok!==true||payload.scope!=='user'||!payload.review)
    throw Error('复习记录保存失败')
   const card=cards.value.find(c=>c.id===attempt.card_id)
@@ -102,8 +113,8 @@ async function submitGrade(){
    card.next_review_at=String(payload.review.next_review_at)
   }
   pendingReview.value=null
- }catch(e){error.value=(e as Error).message}
- finally{busy.value=false}
+ }catch(e){if(revision===epoch)error.value=(e as Error).message}
+ finally{if(revision===epoch)busy.value=false}
 }
 async function importLegacy(kind:Kind){
  if(!enabled.value||props.role!=='owner'||busy.value||adoption[kind].done)return
@@ -116,7 +127,8 @@ async function importLegacy(kind:Kind){
  try{
   const payload=await api('/api/homeflow-study/language/legacy/adopt',{
    method:'POST',headers:{'Content-Type':'application/json'},
-   body:JSON.stringify({confirm:true,kind,...(state.after?{after:state.after}:{})})
+   body:JSON.stringify({confirm:true,kind,expected_user_id:props.userId,
+    ...(state.after?{after:state.after}:{})})
   })
   if(payload.ok!==true||payload.scope!=='owner_only'||payload.kind!==kind)
    throw Error('历史导入未完成')
