@@ -224,3 +224,35 @@ test('mock handoff rejects previous-account pending submissions even after Cooki
  assert.match(worker,/\['submission_id','track','section','study_date',[\s\S]*?'expected_user_id'\]/)
  assert.doesNotMatch(mock,/localStorage\.|sessionStorage\.|indexedDB\./)
 })
+
+test('practice and language member writes carry the originating actor and discard stale PWA replies',()=>{
+ const examApi=readFileSync(new URL('../worker/homeflow-exams.ts',import.meta.url),'utf8')
+ const languageApi=readFileSync(new URL('../worker/homeflow-language.ts',import.meta.url),'utf8')
+ for(const worker of [examApi,languageApi]){
+  assert.equal((worker.match(/data.expected_user_id!==actor.user_id/g)||[]).length,3,
+   'three mutation routes must reject an old cookie after account switch')
+  assert.equal((worker.match(/code:'ACTOR_CHANGED'/g)||[]).length,3)
+  assert.equal((worker.match(/'expected_user_id'/g)||[]).length,3)
+ }
+ assert.match(exams,/type Pending=\{[^}]*expected_user_id:string\}/)
+ assert.match(exams,/answer:selected\[question.id\],duration_seconds:0,expected_user_id:props.userId/)
+ assert.match(exams,/current.expected_user_id!==props.userId/)
+ assert.match(exams,/rev!==generation\|\|current.expected_user_id!==props.userId/)
+ assert.match(exams,/const rev=generation,actor=props.userId/)
+ assert.match(exams,/expected_user_id:actor/)
+ assert.match(exams,/confirm:true,kind,expected_user_id:props.userId/)
+ assert.match(exams,/onUnmounted\(\(\)=>\{[\s\S]*?generation\+\+/)
+ assert.match(language,/type PendingReview=\{[\s\S]*?expected_user_id:string\}/)
+ assert.match(language,/version:card.mastery_version,expected_user_id:actor/)
+ assert.match(language,/request_id:crypto.randomUUID\(\).replace\(\/-\/g,''\),expected_user_id:props.userId/)
+ assert.match(language,/attempt.expected_user_id!==props.userId/)
+ assert.match(language,/revision!==epoch\|\|attempt.expected_user_id!==props.userId/)
+ assert.match(language,/confirm:true,kind,expected_user_id:props.userId/)
+ assert.match(language,/busy.value=false[\s\S]*?await load\(\)/)
+ // New SSO panels are online-only. Never persist queued answers in a
+ // legacy cache and silently replay them as the newly logged-in person.
+ for(const component of [exams,language]){
+  assert.doesNotMatch(component,/localStorage\.|sessionStorage\.|indexedDB\./)
+  assert.doesNotMatch(component,/document.cookie|access_token|session_assertion/)
+ }
+})
