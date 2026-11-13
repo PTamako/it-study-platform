@@ -76,9 +76,13 @@ async function setMastery(card:Card){
   card.mastered=payload.mastered===true
   card.mastery_version=Number(payload.version)
  }catch(e){
-  if(revision===epoch){
+  if(revision===epoch&&actor===props.userId){
    const message=(e as Error).message
-   await load();error.value=message
+   // A refresh advances epoch, so release the mutation lock before reloading.
+   // Otherwise a failed write leaves Safari stuck on "处理中" forever.
+   busy.value=false
+   await load()
+   if(epoch===revision+1&&actor===props.userId)error.value=message
   }
  }finally{if(revision===epoch)busy.value=false}
 }
