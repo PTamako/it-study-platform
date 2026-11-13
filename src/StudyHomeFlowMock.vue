@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {computed,onMounted,onUnmounted,reactive,ref} from 'vue'
 import {tokyoDate} from './daily-tasks'
+import StudyHomeFlowMockReceipts from './StudyHomeFlowMockReceipts.vue'
 
 type Track='exam-sg'|'exam-fe'
 type Section='SG'|'A'|'B'
@@ -11,7 +12,7 @@ type Pending={submission_id:string;track:Track;section:Section;study_date:string
  duration_seconds:number;answers:Array<{question_id:string;answer:string}>}
 type Result={correct_count:number;total:number;review:Array<{
  id:string;answer:string;explanation:string}>;exam_name:string}
-defineProps<{userId:string;role:'owner'|'member'}>()
+const props=defineProps<{userId:string;role:'owner'|'member'}>()
 const enabled=ref(false),track=ref<Track>('exam-sg'),section=ref<Section>('SG')
 const busy=ref(false),loading=ref(false),error=ref(''),paper=ref<Paper|null>(null)
 const page=ref(0),result=ref<Result|null>(null),pending=ref<Pending|null>(null)
@@ -159,6 +160,8 @@ onUnmounted(()=>{
    <button v-if="result" type="button" @click="reset">完成 · 返回选卷</button>
    <small v-else>试卷暂存在当前页面；刷新或关闭前请先交卷。</small>
   </template>
+  <StudyHomeFlowMockReceipts :key="props.userId"
+   :user-id="props.userId" :role="props.role" />
   <p v-if="error" class="hf-error" role="alert">{{error}}</p>
  </section>
 </template>
