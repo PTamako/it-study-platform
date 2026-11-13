@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs'
 const moduleSource = readFileSync(new URL('../worker/chinese-word-dictionary.ts', import.meta.url), 'utf8')
 const providerImport = "import { eligibleChineseWord, fetchChineseWordMetadata } from './chinese-word-dictionary'"
 const studyIdentityImport = "import { homeflowStudyIdentity } from './homeflow-identity'"
+const studyVocabularyImport = "import { homeflowVocabulary } from './homeflow-vocabulary'"
 
 export function inlineChineseDictionary(workerSource) {
   if (!workerSource.includes(providerImport)) throw new Error('Chinese dictionary import no longer matches test loader')
@@ -13,6 +14,9 @@ export function inlineChineseDictionary(workerSource) {
   // identity-only SSO module import cannot resolve there; those tests exercise
   // only legacy routes and must NEVER treat an SSO token as legacy auth.
   const withProvider = workerSource.replace(providerImport, moduleSource)
-  return withProvider.replace(studyIdentityImport,
-    "const homeflowStudyIdentity = async () => new Response('SSO disabled', {status:503})")
+  return withProvider
+    .replace(studyIdentityImport,
+      "const homeflowStudyIdentity = async () => new Response('SSO disabled', {status:503})")
+    .replace(studyVocabularyImport,
+      "const homeflowVocabulary = async () => new Response('per-user vocabulary disabled', {status:503})")
 }
