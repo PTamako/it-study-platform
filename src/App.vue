@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, shallowRef, watch } from 'vue'
 import { hydrateMastery, mergeExamHistory, restoreMasteredCard } from './progress-sync'
+import { recordsMissingOnCloud } from './exam-history-sync'
 import { tokyoDate, mergeDailyTaskStates, mergeDailyTaskTemplates } from './daily-tasks'
 import { utcReviewMillis } from './review-time'
 import { fetchVocabularySnapshot, vocabularyKey, parseVocabularyKey } from './vocabulary-sync'
@@ -351,22 +352,36 @@ async function syncExamHistory() {
       return { ...record, id }
     })
     examRecords.value = localRecords
+    // Fetch cloud IDs first. Reposting the entire history on every sign-in
+    // wastes D1 rows/writes and hits the 60-write/minute protection on long histories.
+    const initialResponse = await fetch('/api/exam-history', { cache: 'no-store' })
+    if (!initialResponse.ok) throw new Error('云端考试历史暂不可用')
+    const initial = await initialResponse.json() as { items?: Array<ExamRecord & { id: string }> }
+    if (!Array.isArray(initial.items)) throw new Error('云端考试历史数据异常')
+    const missing = recordsMissingOnCloud(localRecords, initial.items)
     let uploadFailed = false
-    for (const record of localRecords) {
+    let uploaded = false
+    for (const record of missing) {
       try {
         const response = await fetch('/api/exam-history', {
           method: 'POST', headers: { 'content-type': 'application/json' },
           body: JSON.stringify(record),
         })
         if (!response.ok) uploadFailed = true
+        else uploaded = true
       } catch { uploadFailed = true }
     }
-    const response = await fetch('/api/exam-history')
-    if (!response.ok) throw new Error('云端考试历史暂不可用')
-    const data = await response.json() as { items?: Array<ExamRecord & { id: string }> }
-    // If any upload failed, do not replace local data with an incomplete cloud list.
+    // Refresh only if something actually changed. Never discard unsynced local records.
+    let cloudRecords = initial.items
+    if (uploaded && !uploadFailed) {
+      const finalResponse = await fetch('/api/exam-history', { cache: 'no-store' })
+      if (!finalResponse.ok) throw new Error('云端考试历史复核失败')
+      const finalData = await finalResponse.json() as { items?: Array<ExamRecord & { id: string }> }
+      if (!Array.isArray(finalData.items)) throw new Error('云端考试历史复核数据异常')
+      cloudRecords = finalData.items
+    }
     if (!uploadFailed) {
-      examRecords.value = mergeExamHistory(data.items || [], examRecords.value, localRecords.map(record => record.id))
+      examRecords.value = mergeExamHistory(cloudRecords, examRecords.value, localRecords.map(record => record.id))
     } else {
       cloudDashboardError.value = '部分本地考试记录尚未同步，原始记录仍保留在本设备。'
     }

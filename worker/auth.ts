@@ -204,8 +204,8 @@ export async function checkWriteRateLimit(request: Request, env: AuthEnv): Promi
   const ip = request.headers.get('cf-connecting-ip') || 'unknown-client'
   const key = base64url(await hmac(env.AUTH_SESSION_SECRET!, `write:${ip}:${windowStart}`))
   try {
-    // Prune expired write buckets during normal authenticated writes as well as logins.
-    await env.DB.prepare('DELETE FROM auth_write_rate_limits WHERE expires_at <= ?').bind(now).run()
+    // Prune on the first request in each IP/time bucket, not on every write.
+    // Keep atomic per-minute admission and fail-closed behavior unchanged.
     const row = await env.DB.prepare(`INSERT INTO auth_write_rate_limits (bucket_key, requests, expires_at)
       VALUES (?, 1, ?)
       ON CONFLICT(bucket_key) DO UPDATE SET
@@ -214,6 +214,9 @@ export async function checkWriteRateLimit(request: Request, env: AuthEnv): Promi
       RETURNING requests`).bind(key, (windowStart + 1) * 60).first<{ requests: number }>()
     if (Number(row?.requests || 0) > 60) {
       return json({ error: '操作过于频繁，请稍后再试。' }, 429, { 'retry-after': String(Math.max(1, (windowStart + 1) * 60 - now)) })
+    }
+    if (Number(row?.requests) === 1) {
+      await env.DB.prepare('DELETE FROM auth_write_rate_limits WHERE expires_at <= ?').bind(now).run()
     }
     return null
   } catch {

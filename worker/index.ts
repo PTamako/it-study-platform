@@ -597,8 +597,23 @@ async function requestAppsScriptTranslation(
   }
 }
 
+// Shared daily inference budget: both opt-in dictionary AI and explicit
+// examination-explanation fallback draw from one bounded JST-day allowance.
+async function reserveTranslationAiFallback(env: Env): Promise<boolean> {
+  try {
+    const row = await env.DB.prepare(
+      'INSERT INTO dictionary_ai_daily_usage (study_date, used) VALUES (?, 1) '
+      + 'ON CONFLICT(study_date) DO UPDATE SET used = used + 1 WHERE used < ? RETURNING used',
+    ).bind(dictionaryAiJapanDay(), DICTIONARY_AI_DAILY_LIMIT).first<{ used: number }>()
+    return Boolean(row && Number(row.used) >= 1 && Number(row.used) <= DICTIONARY_AI_DAILY_LIMIT)
+  } catch {
+    // Never perform unmetered inference when the D1 quota table is unavailable.
+    return false
+  }
+}
+
 async function translateText(text: string, source: string, target: string, ai?: Ai,
-  gasUrl?: string, gasToken?: string): Promise<string> {
+  gasUrl?: string, gasToken?: string, reserveAi?: () => Promise<boolean>): Promise<string> {
   const valid = (value: string) =>
     Boolean(value && value.trim() && !/MYMEMORY WARNING|QUERY LENGTH LIMIT|translation unavailable/i.test(value))
     && value.trim().toLocaleLowerCase() !== text.trim().toLocaleLowerCase()
@@ -697,7 +712,7 @@ async function translateText(text: string, source: string, target: string, ai?: 
   // MyMemory has a small anonymous daily quota, and the public Google endpoint is best-effort.
   // Use Cloudflare-hosted M2M100 as a final fallback so explanation translation does not depend
   // solely on third-party public endpoints. AI is only invoked after both existing providers fail.
-  if (!translated && ai) {
+  if (!translated && ai && reserveAi && await reserveAi()) {
     try {
       const response = await ai.run('@cf/meta/m2m100-1.2b', {
         text,
@@ -1567,7 +1582,7 @@ export default {
       if (remaining) chunks.push(remaining)
       try {
         const translatedChunks = await Promise.all(chunks.map(chunk => translateText(chunk, source, 'zh-CN', env.AI,
-          env.GAS_TRANSLATOR_URL, env.GAS_TRANSLATOR_TOKEN)))
+          env.GAS_TRANSLATOR_URL, env.GAS_TRANSLATOR_TOKEN, () => reserveTranslationAiFallback(env))))
         if (translatedChunks.some(value => !value.trim())) {
           return json({ error: '在线翻译暂时不可用，请稍后重试。' }, 503)
         }
@@ -1737,8 +1752,13 @@ export default {
 
     // 中日英互译词典：IT 词条先查本地 D1；普通词使用在线词典和翻译。
     if (url.pathname === '/api/dictionary') {
-      const quotaFailure = await checkPublicDictionaryQuota(request, env)
-      if (quotaFailure) return quotaFailure
+      // Owner sessions already have HMAC authentication and do not need the
+      // anonymous-IP D1 throttle. Keep the quota on all public requests.
+      const ownerSession = !(await requireAuth(request, env))
+      if (!ownerSession) {
+        const quotaFailure = await checkPublicDictionaryQuota(request, env)
+        if (quotaFailure) return quotaFailure
+      }
       const query = (url.searchParams.get('q') || '').trim()
       if (!query) return json({ items: [], error: '请提供要查询的词语。' }, 400)
       if (query.length > 100) return json({ items: [], error: '查询内容不能超过 100 个字符。' }, 400)
@@ -1749,8 +1769,7 @@ export default {
       try {
         // Public lookups still use the free anonymous providers; only the logged-in
         // owner can consume Google Apps Script's daily LanguageApp.translate quota.
-        const authorizedForAppsScript = env.GAS_TRANSLATOR_URL && env.GAS_TRANSLATOR_TOKEN
-          ? !(await requireAuth(request, env)) : false
+        const authorizedForAppsScript = Boolean(ownerSession && env.GAS_TRANSLATOR_URL && env.GAS_TRANSLATOR_TOKEN)
         const items = await lookupDictionary(query, requestedLanguage as 'auto' | 'ja' | 'en' | 'zh' | 'it', env.DB,
           authorizedForAppsScript ? env.GAS_TRANSLATOR_URL : undefined,
           authorizedForAppsScript ? env.GAS_TRANSLATOR_TOKEN : undefined,
