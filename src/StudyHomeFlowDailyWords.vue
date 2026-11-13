@@ -50,12 +50,13 @@ async function load(){
    next[row.word_key]=row
   }
   records.value=next
-  const words=await Promise.all(terms.value.map(async term=>{
+  const selectedTerms=[...terms.value]
+  const words=await Promise.all(selectedTerms.map(async term=>{
    try{return await findStaticLearnerEntry(term,lang)}catch{return null}
   }))
   if(!active||run!==revision)return
-  entries.value=Object.fromEntries(words.filter((v):v is LexiconDisplayEntry=>v!==null)
-   .map(v=>[lang+':'+v.term,v]))
+  entries.value=Object.fromEntries(words.flatMap((word,i)=>
+   word?[ [lang+':'+selectedTerms[i],word] as const ]:[]))
  }catch(e){if(active&&run===revision){records.value={};error.value=(e as Error).message}}
  finally{if(active&&run===revision)loading.value=false}
 }
