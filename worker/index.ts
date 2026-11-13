@@ -1,5 +1,6 @@
 import { checkWriteRateLimit, handleAuthRequest, requireAuth } from './auth'
 import { homeflowStudyIdentity } from './homeflow-identity'
+import { homeflowVocabulary } from './homeflow-vocabulary'
 import { feSeeds, seedUrl } from './fe-question-bank'
 import { eligibleChineseWord, fetchChineseWordMetadata } from './chinese-word-dictionary'
 
@@ -47,6 +48,7 @@ export interface Env {
   AUTH_PASSWORD?: string
   AUTH_SESSION_SECRET?: string
   HOMEFLOW_STUDY_SSO_ENABLED?: string
+  HOMEFLOW_STUDY_VOCAB_ENABLED?: string
   STUDY_PUBLIC_ORIGIN?: string
   HOMEFLOW_OAUTH_ORIGIN?: string
   STUDY_SSO_ENCRYPTION_KEY?: string
@@ -1324,6 +1326,11 @@ export default {
     // personal study APIs until every personal D1 key and PWA cache is scoped.
     if (url.pathname.startsWith('/api/homeflow-sso/'))
       return homeflowStudyIdentity(request, env)
+    // New, strictly scoped per-user vocabulary API; legacy personal endpoints
+    // still require the old session and are never unlocked by the HF cookie.
+    if (url.pathname === '/api/homeflow-study/vocabulary' ||
+        url.pathname === '/api/homeflow-study/vocabulary/legacy/adopt')
+      return homeflowVocabulary(request, env)
     const authResponse = await handleAuthRequest(request, env)
     if (authResponse) return authResponse
 
