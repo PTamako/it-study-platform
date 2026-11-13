@@ -2,6 +2,7 @@ import { checkWriteRateLimit, handleAuthRequest, requireAuth } from './auth'
 import { homeflowStudyIdentity } from './homeflow-identity'
 import { homeflowVocabulary } from './homeflow-vocabulary'
 import { homeflowDailyTasks } from './homeflow-daily-tasks'
+import { homeflowLanguage } from './homeflow-language'
 import { feSeeds, seedUrl } from './fe-question-bank'
 import { eligibleChineseWord, fetchChineseWordMetadata } from './chinese-word-dictionary'
 
@@ -51,6 +52,7 @@ export interface Env {
   HOMEFLOW_STUDY_SSO_ENABLED?: string
   HOMEFLOW_STUDY_VOCAB_ENABLED?: string
   HOMEFLOW_STUDY_DAILY_PROGRESS_ENABLED?: string
+  HOMEFLOW_STUDY_LANGUAGE_ENABLED?: string
   STUDY_PUBLIC_ORIGIN?: string
   HOMEFLOW_OAUTH_ORIGIN?: string
   STUDY_SSO_ENCRYPTION_KEY?: string
@@ -1339,6 +1341,14 @@ export default {
         url.pathname === '/api/homeflow-study/daily-tasks/status' ||
         url.pathname === '/api/homeflow-study/daily-tasks/legacy/adopt')
       return homeflowDailyTasks(request, env)
+    // HomeFlow accounts have their own language mastery/review tables;
+    // never accept this session as the old single-user study session.
+    if (url.pathname === '/api/homeflow-study/language/status' ||
+        url.pathname === '/api/homeflow-study/language/cards' ||
+        url.pathname === '/api/homeflow-study/language/mastery' ||
+        url.pathname === '/api/homeflow-study/language/review' ||
+        url.pathname === '/api/homeflow-study/language/legacy/adopt')
+      return homeflowLanguage(request, env)
     const authResponse = await handleAuthRequest(request, env)
     if (authResponse) return authResponse
 
