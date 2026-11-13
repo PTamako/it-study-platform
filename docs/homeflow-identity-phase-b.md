@@ -1,18 +1,24 @@
-# 知学统一账号 Stage B：安全身份表预备（未上线）
+# 知学 HomeFlow 统一身份 B 阶段（独立登录 API · Draft，未上线）
 
-> 2026-11-13 仅完成**生产迁移前的数据库草案和自动测试**。此分支尚不具备可用的 HomeFlow 登录、业务权限隔离或 PWA UI；不得因为它被创建而授权第二位家庭成员访问学习数据。用户将在有电脑后亲自完成生产备份/恢复验证，在此之前**不得执行迁移或合并**。
+> 2026-11-13 根据 Google Drive 四应用统一账号开发实施设计书 v1.1。用户有电脑后会亲自完成四 D1/R2 的加密持久备份和隔离恢复；**本分支所有迁移未执行，正式 OAuth 未开启，不合并/部署、不创建 Preview**。
 
-- 选用 `0180_homeflow_identity_isolation.sql`，为现有未合并的题库 Draft PR #178 所使用的 `0177_fe_exemption_20200614_systems.sql` 保留编号，避免覆盖另一个 Chat 的题库工作。0180 不依赖 0177 表，正式合并次序应在题库 PR/后续迁移编号审查完成后再确认。
-- 新表存 HomeFlow 真实 user_id、household_id、role、昵称和账户绑定状态；owner 一家庭仅一个。角色/归属不可更新，禁止通过昵称或 email 重绑历史。
-- 新增拟议的 5 分钟一次性 OAuth/原 PWA 续接状态、独立的短期身份会话（服务端加密断言）、身份事件 actor_user_id；**没有启用服务端路由**，没有建立连接，没有在任何旧业务 SQL 接受新的身份会话。
-- 不改写 `saved_vocabulary_entries_v2`、错题/考试、学习进度、公共题库、文书同步例句或任何前端缓存。丈夫不应从此功能获得既有 owner 学习数据。
-- `scripts/homeflow-identity-foundation.test.mjs` 在内存 SQLite 验证迁移重复执行、旧数据不变、双 owner 不可建立、关联不可更改、没有真实 actor 不得写审计。
+## 已写入 GitHub 的功能
 
-## 继续开发前必须完成
+- `migrations/0180_homeflow_identity_isolation.sql`：只追加 HomeFlow 真 user_id、household_id、role、昵称、不可变身份映射、5 分钟原 PWA 授权态、15 分钟密文服务端 session 和 actor audit。保留并避免冲突其他 Chat 的 0177 FE 题库 PR #178；0180 未迁移。
+- `worker/homeflow-identity.ts` + `worker/index.ts` 新独立 `/api/homeflow-sso/*` 路由：`status/start/callback/complete/me/logout`；默认关闭，没有 `HOMEFLOW_STUDY_SSO_ENABLED='true'`、`APP_ENV='production'`、严格 HTTPS 正式 origin、独立 32-byte AES 密钥和 HomeFlow Service Binding 均返回 503。此处只支持在原安装 PWA 完成身份验证：
+  - `start`：HomeFlow Authorization Code + PKCE S256，原 PWA 保留单独随机一次性续接凭证；既有 owner 首次绑定还需要当下签名有效的知学 12h 旧登录 Cookie。
+  - `callback`：Safari 接受一次性 code，AES-GCM 加密暂存，**不向浏览器发送知学登录 Cookie**。
+  - `complete`：只由持有续接凭证的原 PWA 完成后端 HomeFlow token/userinfo 核验；owner 首次链接必须在开始/完成同时持有有效旧 Cookie；member 必须等 owner 验证绑定后才能获得**独立空身份**，不从 owner 的昵称或密码推断其学习数据。
+  - `me`：HomeFlow backend `/api/oauth/session-introspect` 逐次核验原 HomeFlow source session、家庭、role、用户；Logout/禁用/成员关系变化后拒绝继续使用。身份 Cookie 完全独立 `__Host-study_hf`，仅返回 `study_access:false,requires_stage_e:true`。
+  - `logout`：原 PWA 单次撤销身份 session，记录 actor，不清除原旧登录 Cookie。
+- **绝不允许新 SSO 身份直接访问旧学习 API**。原 `requireAuth` 仍只验证旧 `__Host-study_session`，其背后所有学习表主键目前均无 user_id；要在 E 阶段无损扩展按用户隔离并完善端侧缓存切换后才实现学习数据访问。
+- 新 `scripts/homeflow-sso-isolated.test.mjs`：本地真实 D1 SQLite 测试 HomeFlow 两人授权、首次旧登录、Safari/PWA 一次性续接、无 member 先行、已撤销 source session、角色变化、学习数据不变与无入侵。
+- 既有 `scripts/homeflow-identity-foundation.test.mjs` 测试身份与历史互不影响、避免身份重绑/伪造事件。
+- `scripts/inline-chinese-dictionary.mjs` 仅对测试装载的 data-URL Worker 旧业务模拟 SSO-disabled 分支，避免试验性独立 OAuth 导入破坏原有 FE、词典、听力等自动测试；生产路由仍使用真实 SSO 模块。
 
-1. 用户完成四生产 D1/R2 的加密、持久、可恢复备份和隔离恢复证明，**此前不运行知学 0180 或激活 HomeFlow 开关**。
-2. 阶段 B：参考 HomeFlow Draft #305 后端 PKCE 和两个 App 的原 PWA 一次性回传，加入真实受控登录/注销，绝不能继承旧 `AUTH_PASSWORD` 的默认私人学习数据；HomeFlow session-introspect 对每次敏感读取实时校验。
-3. 阶段 E：全部个人学习表及 `saved_vocabulary_entries_v2(language,term)` 等复合主键无损迁移为按 user_id 隔离；旧学习数据只归现有 owner，member 新空间为空。个人缓存、学习卡、文书同步必须一并改造、完成同词并发回归后才开 UI。
-4. 阶段 F：iPhone Safari/PWA 双人实测、切号端侧缓存隔离后，逐步撤下旧单人密码入口。
+## 生产与下一阶段硬门槛
 
-**状态**：Stage B schema/test only；Draft，未合并，未迁移，未部署，未改动 Cloudflare 生产或 Preview。
+- 先由用户执行四 D1/R2 的持久加密备份、校验哈希和隔离恢复；之后才可评估 0180 正式迁移、HomeFlow OAuth 客户端回调 allowlist 和必要 Secret、Service Binding。
+- E 阶段必须逐张表无损保留 owner 的历史生词、错题、模拟考、听力和语言学习数据，member 的独立空间为空；迁移 `saved_vocabulary_entries_v2(language,term)` 等无 user_id 的当前主键和所有相关 API/文书同步桥接。原学习历史 **不能因为 SSO 身份表出现就自动共享**。
+- PWA UI 和真实 iPhone/Safari OAuth 切换、端侧 IndexedDB/LocalStorage 按 user_id 隔离、同步/退出后私有缓存清理，以及单人密码注销改造均未完成。
+- CI 最终结果见本 Draft PR #179 最新 GitHub Actions，任何进行中或失败的 CI 不能记作已验收。本开发已提交代码，但没有生产用户启用功能。
