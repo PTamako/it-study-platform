@@ -55,6 +55,9 @@ function quarantineLegacyStudy(userId:string){
  masterySyncGeneration++
  dailyWordHydrationRun++
 }
+function legacyWritesAllowed(){
+ return authenticated.value&&!legacyRequiresPassword.value&&!homeflowIdentityUser.value
+}
 function onHomeflowIdentityChanged(userId:string|null){
  if(userId){quarantineLegacyStudy(userId);return}
  if(homeflowIdentityUser.value){
@@ -143,6 +146,7 @@ async function login() {
     legacyRequiresPassword.value=false
     try{localStorage.removeItem(LEGACY_QUARANTINE)}catch{/* memory state unlocks only after password */}
     authenticated.value = true
+    rolloverDailyTasks()
     dailyWordSyncState.value = 'loading'
     dailyWordSyncError.value = ''
     authPassword.value = ''
@@ -304,6 +308,7 @@ async function saveDailyTask(task: StudyTask, previousDone: boolean, replay?: Pe
 }
 let dailyHydrationRun = 0
 function rolloverDailyTasks() {
+  if(!legacyWritesAllowed())return
   const next = tokyoDate()
   if (next === todayKey.value) return
   // The synchronous watcher has already persisted the prior day's latest value.
@@ -392,10 +397,12 @@ function onDailyVisibilityChange() {
     // Check HomeFlow before refreshing any legacy PWA learner data.
     if(authenticated.value){
      void probeHomeflowIdentity().then(active=>{
-      if(!active&&authenticated.value)void hydrateDailyWordProgress()
+      if(!active&&legacyWritesAllowed()){
+       rolloverDailyTasks()
+       void hydrateDailyWordProgress()
+      }
      })
     }
-    rolloverDailyTasks()
     reviewClockNow.value = Date.now()
   }
 }
@@ -421,8 +428,14 @@ const curveRecords = computed(() => {
   }
   return days
 })
-watch(tasks, value => { try { localStorage.setItem('zhixue:tasks:' + todayKey.value, JSON.stringify(value)) } catch { cloudDashboardError.value = '本设备存储不可用，每日任务可能无法离线保留。' } }, { deep: true, flush: 'sync' })
-watch(examRecords, value => localStorage.setItem('zhixue:exam-records', JSON.stringify(value)), { deep: true })
+watch(tasks, value => {
+  if(!legacyWritesAllowed())return
+  try { localStorage.setItem('zhixue:tasks:' + todayKey.value, JSON.stringify(value)) }
+  catch { cloudDashboardError.value = '本设备存储不可用，每日任务可能无法离线保留。' }
+}, { deep: true, flush: 'sync' })
+watch(examRecords, value => {
+ if(legacyWritesAllowed())localStorage.setItem('zhixue:exam-records', JSON.stringify(value))
+}, { deep: true })
 
 // 将旧版本保存在浏览器的手动成绩记录迁移到 D1。先上传，再读取云端；每条记录带稳定 ID，失败时保留本地副本。
 let examHistorySyncStarted = false
@@ -2149,7 +2162,10 @@ onMounted(async () => {
     // Speech playback will report its own browser/device error when requested.
   }
   await checkAuth()
-  if (authenticated.value) { restoreMockReview(); restoreActiveMockExam(); void syncExamHistory(); void hydrateCloudProgress(); void hydrateDailyWordProgress(); void refreshDailyTasks(todayKey.value); void reconcilePriorDailyTasks(); void syncPendingMockSubmission(); void syncPendingPracticeAttempt(); void syncPendingScenarioAttempt() }
+  if (legacyWritesAllowed()) {
+   rolloverDailyTasks()
+   restoreMockReview(); restoreActiveMockExam(); void syncExamHistory(); void hydrateCloudProgress(); void hydrateDailyWordProgress(); void refreshDailyTasks(todayKey.value); void reconcilePriorDailyTasks(); void syncPendingMockSubmission(); void syncPendingPracticeAttempt(); void syncPendingScenarioAttempt()
+  }
 })
 
 type DictionaryEntry = {
