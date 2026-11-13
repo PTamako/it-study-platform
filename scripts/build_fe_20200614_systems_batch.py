@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 rows=[
+ (13,'ストライピング','データを細分化して複数台の磁気ディスクに格納する方式を何というか。例えばb0〜b15をこの順に記録し、ディスク1にb0,b4,b8,b12、ディスク2にb1,b5,b9,b13、ディスク3にb2,b6,b10,b14、ディスク4にb3,b7,b11,b15を格納する。',['ストライピング','ディスクキャッシュ','ブロック化','ミラーリング'],'a','データを分割し複数ディスクに分散する方式がストライピング。中文：条带化将数据切分并分布到多个磁盘。'),
  (15,'キャッシュの平均応答時間','キャッシュサーバにヒットすると0.2秒、ヒットしないと2.2秒かかる。現在の平均は1.0秒。3年後にヒット率が現在の半分になると予測されるとき、平均応答時間は何秒か。他のオーバヘッドは考慮しない。',['1.1','1.3','1.6','1.9'],'c','現在のヒット率hは0.2h+2.2(1−h)=1.0より0.6。半分の0.3では0.2×0.3+2.2×0.7=1.6秒。中文：当前命中率为60%，减半后为30%，平均响应时间为1.6秒。'),
  (16,'並列システムの稼働率','並列接続した同一システムは少なくとも1台が稼働すればよい。稼働率が最も高い構成はどれか。',['稼働率70%の装置を4台並列','稼働率80%の装置を3台並列','稼働率90%の装置を2台並列','稼働率99%の装置を1台'],'b','各装置の停止が独立とすると順に99.19%、99.2%、99%、99%。最大は3台並列。中文：并联系统可用率为1减去全部同时故障的概率，B为99.2%最高。'),
  (17,'固定長メモリプール','多様なサイズのメモリ資源を使うリアルタイムシステムのメモリプール管理で、可変長方式と比べた固定長方式の特徴はどれか。',['メモリ効率が良く、獲得・返却が遅く一定','メモリ効率が良く、獲得・返却が遅く不定','メモリ効率が悪く、獲得・返却が速く一定','メモリ効率が悪く、獲得・返却が速く不定'],'c','固定長は内部断片化が生じる一方、獲得・返却を高速かつ一定時間で行いやすい。中文：固定块可能浪费空间，但分配和释放通常快速且时间稳定。'),
@@ -25,7 +26,7 @@ for n,topic,prompt,options,key,explanation in rows:
  vals=[ident,'exam-fe',topic,'standard','single_choice',f'【IPA 2020年度 修了認定試験 2020-06-14 問{n}・改編】'+prompt,opts,json.dumps(key),explanation,'licensed',paper,'ja','A','explicit','standard','fe_exemption']
  questions.append('('+','.join(map(sql,vals))+')')
  occ.append('('+','.join(map(sql,['2020-06-14',n,'2020',ident,key,paper,answer]))+')')
-for n,ident,key in [(14,'fe-ipa-2019-spring-am-adapt-11','d'),(18,'fe-ipa-2019-spring-am-adapt-18','d'),(19,'fe-ipa-2019-spring-am-adapt-19','a'),(23,'fe-ipa-2019-spring-am-adapt-24','c'),(28,'fe-ipa-2019-spring-am-adapt-27','b')]:
+for n,ident,key in [(11,'fe-ipa-sample-2022-a-010','c'),(12,'fe-ipa-sample-2022-a-011','c'),(14,'fe-ipa-2019-spring-am-adapt-11','d'),(18,'fe-ipa-2019-spring-am-adapt-18','d'),(19,'fe-ipa-2019-spring-am-adapt-19','a'),(23,'fe-ipa-2019-spring-am-adapt-24','c'),(28,'fe-ipa-2019-spring-am-adapt-27','b')]:
  occ.append('('+','.join(map(sql,['2020-06-14',n,'2020',ident,key,paper,answer]))+')')
 out='-- IPA 2020 June source-reviewed questions and verified 2019 spring repeats.\n'
 out+='INSERT OR IGNORE INTO questions (id,track_id,topic,difficulty,question_type,prompt,options_json,answer_json,explanation,source_type,source_reference,language,exam_section,exam_section_method,question_kind,exam_origin) VALUES\n'+',\n'.join(questions)+';\n'
