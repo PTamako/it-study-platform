@@ -355,3 +355,167 @@ test('legacy adoption rejects malformed JSON before copying any part of the page
   assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_saved_vocabulary').get().n,2)
  }finally{f.raw.close()}
 })
+
+
+async function linkedDailyPair(f){
+ const ownerFlow=await f.begin(true)
+ assert.equal((await f.callback(ownerFlow)).status,200)
+ const ownerLogin=await f.finish(ownerFlow,{legacy:true})
+ assert.equal(ownerLogin.status,200,await ownerLogin.clone().text())
+ const ownerToken=ownerLogin.headers.get('set-cookie')
+  .match(/__Host-study_hf=([0-9a-f]{64})/)[1]
+ f.active.user=member;f.active.role='member';f.active.nickname='鸡毛'
+ const memberFlow=await f.begin()
+ assert.equal((await f.callback(memberFlow)).status,200)
+ const memberLogin=await f.finish(memberFlow)
+ assert.equal(memberLogin.status,200,await memberLogin.clone().text())
+ const memberToken=memberLogin.headers.get('set-cookie')
+  .match(/__Host-study_hf=([0-9a-f]{64})/)[1]
+ return {ownerToken,memberToken}
+}
+function scopedDaily(f,cookie,path='',method='GET',data=null,origin=app){
+ const headers={}
+ if(cookie)headers.Cookie='__Host-study_hf='+cookie
+ if(method==='POST'){
+  headers.Origin=origin
+  headers['Content-Type']='application/json'
+ }
+ return homeflowDailyTasks(new Request(app+'/api/homeflow-study/daily-tasks'+path,{
+  method,headers,body:method==='POST'?JSON.stringify(data??{}):undefined
+ }),f.env)
+}
+
+test('Stage E daily tasks isolate same date and task between spouses and preserve old source',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_DAILY_PROGRESS_ENABLED='true'
+  assert.equal((await scopedDaily(f,'','?date=2026-11-13')).status,401)
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  const ownerRead=await scopedDaily(f,ownerToken,'?date=2026-11-13')
+  assert.equal(ownerRead.status,200)
+  assert.deepEqual((await ownerRead.json()).items,[],
+   'verified owner must explicitly adopt legacy rows, not implicitly claim them')
+  assert.deepEqual((await (await scopedDaily(f,memberToken,'?date=2026-11-13')).json()).items,[])
+  const old=f.raw.prepare('SELECT * FROM daily_task_completions ORDER BY study_date,task_id').all()
+  assert.equal((await scopedDaily(f,memberToken,'/legacy/adopt','POST',{confirm:true})).status,403)
+  const adopted=await scopedDaily(f,ownerToken,'/legacy/adopt','POST',{confirm:true})
+  assert.equal(adopted.status,200,await adopted.clone().text())
+  assert.equal((await adopted.json()).adopted,2)
+  const ownerTasks=(await (await scopedDaily(f,ownerToken,'?date=2026-11-13')).json()).items
+  assert.deepEqual(ownerTasks.map(x=>[x.task_id,x.completed,x.version]),
+   [['daily-grammar',true,1],['daily-listening',false,1]])
+  assert.deepEqual((await (await scopedDaily(f,memberToken,'?date=2026-11-13')).json()).items,[],
+   'owner-only historic completions must not leak to spouse')
+  const saved=await scopedDaily(f,memberToken,'','POST',{
+   task_id:'daily-listening',study_date:'2026-11-13',completed:true,version:0
+  })
+  assert.equal(saved.status,200,await saved.clone().text())
+  assert.equal((await saved.json()).version,1)
+  const ownerUnchanged=(await (await scopedDaily(f,ownerToken,'?date=2026-11-13')).json()).items
+  assert.equal(ownerUnchanged[1].completed,false)
+  const memberTasks=(await (await scopedDaily(f,memberToken,'?date=2026-11-13')).json()).items
+  assert.equal(memberTasks.length,1)
+  assert.equal(memberTasks[0].completed,true)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_daily_task_progress WHERE homeflow_user_id=?').get(member).n,1)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_daily_task_progress WHERE homeflow_user_id=?').get(owner).n,2)
+  assert.deepEqual(f.raw.prepare('SELECT * FROM daily_task_completions ORDER BY study_date,task_id').all(),old)
+  assert.equal(f.raw.prepare("SELECT actor_user_id FROM homeflow_daily_task_events WHERE action='legacy_adopted'").get().actor_user_id,owner)
+  assert.equal(f.raw.prepare("SELECT actor_user_id FROM homeflow_daily_task_events WHERE action='completed'").get().actor_user_id,member)
+  assert.throws(()=>f.raw.prepare('UPDATE homeflow_daily_task_events SET actor_user_id=?').run(owner),/IMMUTABLE_DAILY_AUDIT/)
+  assert.throws(()=>f.raw.prepare('DELETE FROM homeflow_daily_task_events').run(),/IMMUTABLE_DAILY_AUDIT/)
+  assert.throws(()=>f.raw.prepare('INSERT INTO homeflow_daily_task_progress(homeflow_user_id,task_id,study_date,completed,updated_by_user_id) VALUES(?,?,?,?,?)')
+   .run(owner,'cross-user','2026-11-13',1,member),/DAILY_OWNER_REQUIRED/)
+  f.active.valid=false
+  assert.equal((await scopedDaily(f,memberToken,'?date=2026-11-13')).status,401,
+   'revoking HomeFlow session invalidates all scoped personal reads')
+ }finally{f.raw.close()}
+})
+
+test('Stage E daily task CAS prevents stale updates, duplicate audit and unauthorized writes',async()=>{
+ const f=sqliteEnv()
+ try{
+  const {memberToken,ownerToken}=await linkedDailyPair(f)
+  f.env.HOMEFLOW_STUDY_DAILY_PROGRESS_ENABLED='true'
+  const payload={task_id:'task-same-day',study_date:'2026-11-13',completed:true,version:0}
+  assert.equal((await scopedDaily(f,memberToken,'','POST',payload,'https://evil.test')).status,403)
+  assert.equal((await scopedDaily(f,memberToken,'','POST',{...payload,homeflow_user_id:owner})).status,400)
+  assert.equal((await scopedDaily(f,memberToken,'','POST',{...payload,study_date:'2026-02-30'})).status,400)
+  assert.equal((await scopedDaily(f,memberToken,'','POST',{...payload,version:1.5})).status,400)
+  assert.equal((await scopedDaily(f,memberToken,'?limit=999')).status,400)
+  assert.equal((await scopedDaily(f,memberToken,'?date=2026-02-30')).status,400)
+  const save=await scopedDaily(f,memberToken,'','POST',payload)
+  assert.equal(save.status,200,await save.clone().text())
+  assert.equal((await save.json()).version,1)
+  const replay=await scopedDaily(f,memberToken,'','POST',payload)
+  assert.equal(replay.status,200)
+  assert.equal((await replay.json()).replayed,true)
+  assert.equal(f.raw.prepare("SELECT COUNT(*) n FROM homeflow_daily_task_events WHERE actor_user_id=?").get(member).n,1)
+  const reopen=await scopedDaily(f,memberToken,'','POST',{...payload,completed:false,version:1})
+  assert.equal(reopen.status,200,await reopen.clone().text())
+  assert.equal((await reopen.json()).version,2)
+  assert.equal((await scopedDaily(f,memberToken,'','POST',{...payload,version:1})).status,409,
+   'stale tab may not overwrite newer reopened state')
+  assert.equal((await scopedDaily(f,memberToken,'','POST',{...payload,version:5})).status,409)
+  assert.equal((await scopedDaily(f,memberToken,'','POST',{...payload,completed:false,version:0})).status,200)
+  assert.equal(f.raw.prepare("SELECT COUNT(*) n FROM homeflow_daily_task_events WHERE actor_user_id=?").get(member).n,2)
+  const row=(await (await scopedDaily(f,memberToken,'?date=2026-11-13')).json()).items[0]
+  assert.equal(row.version,2)
+  assert.equal(row.completed,false)
+  assert.equal((await (await scopedDaily(f,ownerToken,'?date=2026-11-13')).json()).items.length,0)
+  f.env.HOMEFLOW_STUDY_DAILY_PROGRESS_ENABLED='false'
+  assert.equal((await scopedDaily(f,memberToken,'?date=2026-11-13')).status,503)
+  assert.equal((await scopedDaily(f,memberToken,'','POST',payload)).status,503)
+ }finally{f.raw.close()}
+})
+
+test('Stage E owner daily adoption paginates, fails closed on malformed legacy and never silently skips',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_DAILY_PROGRESS_ENABLED='true'
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  for(let i=0;i<24;i++){
+   f.raw.prepare('INSERT INTO daily_task_completions(task_id,study_date,completed) VALUES(?,?,?)')
+    .run('task-'+String(i).padStart(2,'0'),'2026-11-14',i%2)
+  }
+  const original=f.raw.prepare('SELECT * FROM daily_task_completions ORDER BY study_date,task_id').all()
+  const first=await scopedDaily(f,ownerToken,'/legacy/adopt','POST',{confirm:true})
+  assert.equal(first.status,200,await first.clone().text())
+  const p1=await first.json()
+  assert.equal(p1.adopted,20)
+  assert.equal(p1.has_more,true)
+  assert.deepEqual(Object.keys(p1.next_cursor),['after_date','after_task'])
+  const second=await scopedDaily(f,ownerToken,'/legacy/adopt','POST',{
+   confirm:true,...p1.next_cursor})
+  assert.equal(second.status,200,await second.clone().text())
+  const p2=await second.json()
+  assert.equal(p2.adopted,6)
+  assert.equal(p2.has_more,false)
+  assert.equal((await (await scopedDaily(f,ownerToken,'/legacy/adopt','POST',{
+   confirm:true,...p1.next_cursor})).json()).adopted,0)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_daily_task_progress WHERE homeflow_user_id=?').get(owner).n,26)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_daily_task_progress WHERE homeflow_user_id=?').get(member).n,0)
+  assert.deepEqual(f.raw.prepare('SELECT * FROM daily_task_completions ORDER BY study_date,task_id').all(),original)
+  const counts=f.raw.prepare("SELECT SUM(affected_count) n FROM homeflow_daily_task_events WHERE action='legacy_adopted'").get().n
+  assert.equal(counts,26)
+  // One damaged row in a newly requested cursor page blocks *all* copies
+  // on that page; no cursor or audit should advance until repaired.
+  f.raw.prepare('INSERT INTO daily_task_completions(task_id,study_date,completed) VALUES(?,?,?)')
+   .run('bad-task','2026-11-15',7)
+  f.raw.prepare('INSERT INTO daily_task_completions(task_id,study_date,completed) VALUES(?,?,?)')
+   .run('good-task','2026-11-15',1)
+  const page={confirm:true,after_date:'2026-11-14',after_task:'task-23'}
+  const beforeProgress=f.raw.prepare('SELECT COUNT(*) n FROM homeflow_daily_task_progress').get().n
+  const beforeAudit=f.raw.prepare('SELECT COUNT(*) n FROM homeflow_daily_task_events').get().n
+  const fail=await scopedDaily(f,ownerToken,'/legacy/adopt','POST',page)
+  assert.equal(fail.status,409)
+  assert.equal((await fail.json()).code,'LEGACY_PROGRESS_REVIEW_REQUIRED')
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_daily_task_progress').get().n,beforeProgress)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_daily_task_events').get().n,beforeAudit)
+  assert.equal(f.raw.prepare('SELECT completed FROM daily_task_completions WHERE task_id=?').get('bad-task').completed,7)
+  f.raw.prepare('UPDATE daily_task_completions SET completed=0 WHERE task_id=?').run('bad-task')
+  const recovered=await scopedDaily(f,ownerToken,'/legacy/adopt','POST',page)
+  assert.equal(recovered.status,200,await recovered.clone().text())
+  assert.equal((await recovered.json()).adopted,2)
+  assert.equal((await scopedDaily(f,memberToken,'/legacy/adopt','POST',page)).status,403)
+ }finally{f.raw.close()}
+})
