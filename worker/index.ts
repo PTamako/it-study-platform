@@ -1,4 +1,5 @@
 import { checkWriteRateLimit, handleAuthRequest, requireAuth } from './auth'
+import { homeflowStudyIdentity } from './homeflow-identity'
 import { feSeeds, seedUrl } from './fe-question-bank'
 import { eligibleChineseWord, fetchChineseWordMetadata } from './chinese-word-dictionary'
 
@@ -45,6 +46,11 @@ export interface Env {
   JPDA_BRIDGE_STUDY_ACTOR_ID?: string
   AUTH_PASSWORD?: string
   AUTH_SESSION_SECRET?: string
+  HOMEFLOW_STUDY_SSO_ENABLED?: string
+  STUDY_PUBLIC_ORIGIN?: string
+  HOMEFLOW_OAUTH_ORIGIN?: string
+  STUDY_SSO_ENCRYPTION_KEY?: string
+  HOMEFLOW_STUDY_SERVICE?: Fetcher
   // Owner-deployed Google Apps Script Web App. Optional; keep its URL and token server-side.
   GAS_TRANSLATOR_URL?: string
   GAS_TRANSLATOR_TOKEN?: string
@@ -1314,6 +1320,10 @@ export default {
       return new Response(null, { status: 204, headers: { 'allow': 'GET, POST, DELETE, OPTIONS' } })
     }
 
+    // Identity-only HomeFlow SSO is separated from all existing single-user
+    // personal study APIs until every personal D1 key and PWA cache is scoped.
+    if (url.pathname.startsWith('/api/homeflow-sso/'))
+      return homeflowStudyIdentity(request, env)
     const authResponse = await handleAuthRequest(request, env)
     if (authResponse) return authResponse
 
