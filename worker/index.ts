@@ -104,6 +104,41 @@ export async function documentAssistantBridge(request:Request,env:Env):Promise<R
   }catch{return bridgeJson({ok:false,error:'vocabulary_database_unavailable'},503)}
 }
 
+// Read-only, explicit-consent Japanese → Chinese translation for the document
+// assistant. The existing signed bridge secret and existing Apps Script secrets
+// are reused: no second Google deployment, new account, or payment setup.
+// Important: unlike dictionary lookups, never fall back to MyMemory, unofficial
+// Google endpoints, or Workers AI with private document contents.
+export async function documentAssistantTranslateBridge(request:Request,env:Env):Promise<Response>{
+  if(env.JPDA_BRIDGE_ENABLED!=='true')return bridgeJson({ok:false,error:'bridge_disabled'},404)
+  if(request.method!=='POST')return bridgeJson({ok:false,error:'method_not_allowed'},405)
+  const secret=env.JPDA_BRIDGE_SECRET
+  if(!secret||secret.length<32)return bridgeJson({ok:false,error:'bridge_not_configured'},503)
+  const stamp=request.headers.get('X-DA-Timestamp')||''
+  if(!/^\d{13}$/.test(stamp)||Math.abs(Date.now()-Number(stamp))>300000)
+    return bridgeJson({ok:false,error:'expired_signature'},401)
+  const raw=await request.text()
+  if(raw.length>3500)return bridgeJson({ok:false,error:'too_large'},413)
+  if(!await verifyBridgeSignature(secret,`${stamp}\n${raw}`,request.headers.get('X-DA-Signature')||''))
+    return bridgeJson({ok:false,error:'invalid_signature'},401)
+  let body:Record<string,unknown>
+  try{body=JSON.parse(raw) as Record<string,unknown>}
+  catch{return bridgeJson({ok:false,error:'invalid_json'},400)}
+  if(body.source!=='jp-document-assistant'||body.operation!=='translate_chunk'
+    ||body.source_language!=='ja'||body.target_language!=='zh-CN'
+    ||typeof body.text!=='string'||!body.text.trim()||body.text.length>1400)
+    return bridgeJson({ok:false,error:'invalid_input'},400)
+  // Translation is intentionally unavailable without both configured secrets.
+  if(!env.GAS_TRANSLATOR_URL||!env.GAS_TRANSLATOR_TOKEN)
+    return bridgeJson({ok:false,error:'translator_not_configured'},503)
+  const result=await requestAppsScriptTranslation(
+    body.text,'ja','zh-CN',env.GAS_TRANSLATOR_URL,env.GAS_TRANSLATOR_TOKEN)
+  if(result.status!=='ok'||!result.translation.trim())
+    return bridgeJson({ok:false,error:result.status==='not_configured'?
+      'translator_not_configured':'translation_unavailable'},503)
+  return bridgeJson({ok:true,translation:result.translation,provider:'google_apps_script'})
+}
+
 // 统一返回 JSON，并添加基础安全响应头。
 const json = (data: unknown, status = 200) =>
   new Response(JSON.stringify(data), {
@@ -1258,6 +1293,7 @@ export default {
     const url = new URL(request.url)
 
     if (url.pathname === '/api/bridge/document-assistant') return documentAssistantBridge(request, env)
+    if (url.pathname === '/api/bridge/document-assistant/translate') return documentAssistantTranslateBridge(request, env)
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: { 'allow': 'GET, POST, DELETE, OPTIONS' } })
