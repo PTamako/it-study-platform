@@ -80,10 +80,18 @@ async function probeHomeflowIdentity(){
     return true
    }
   }
+  if(res.ok){
+   // A successful identity endpoint without an actor violates its contract.
+   // Do not fall back to the unscoped legacy cache automatically.
+   legacyRequiresPassword.value=true
+   try{localStorage.setItem(LEGACY_QUARANTINE,'1')}catch{/* keep lock in memory */}
+  }
   homeflowIdentityUser.value=null
   return false
  }catch{
-  // An uncertain check cannot unlock quarantined legacy data.
+  // Network uncertainty must never unlock an old owner's offline cache.
+  legacyRequiresPassword.value=true
+  try{localStorage.setItem(LEGACY_QUARANTINE,'1')}catch{/* keep lock in memory */}
   return Boolean(homeflowIdentityUser.value)
  }
 }
@@ -129,6 +137,9 @@ async function login() {
     })
     const result = await response.json() as { error?: string; authenticated?: boolean }
     if (!response.ok || result.authenticated !== true) throw new Error(result.error || '登录失败，请稍后重试。')
+    // A simultaneous HomeFlow login may finish while legacy password was
+    // checked. Its verified identity always wins the display scope.
+    if(homeflowIdentityUser.value)throw Error('已切换到 HomeFlow，旧学习空间继续隔离')
     legacyRequiresPassword.value=false
     try{localStorage.removeItem(LEGACY_QUARANTINE)}catch{/* memory state unlocks only after password */}
     authenticated.value = true
