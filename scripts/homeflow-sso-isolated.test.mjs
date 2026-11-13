@@ -1155,3 +1155,161 @@ test('long legacy mock receipt-derived attempt ids remain lossless under owner a
   assert.deepEqual(f.raw.prepare('SELECT * FROM study_attempts ORDER BY id').all(),old)
  }finally{f.raw.close()}
 })
+
+
+function scopedReceipts(f,cookie,path='',method='GET',data=null,origin=app){
+ const headers={}
+ if(cookie)headers.Cookie='__Host-study_hf='+cookie
+ if(method==='POST'){headers.Origin=origin;headers['Content-Type']='application/json'}
+ return homeflowMockReceipts(new Request(app+'/api/homeflow-study/exams/mock'+path,{
+  method,headers,body:method==='POST'?JSON.stringify(data??{}):undefined
+ }),f.env)
+}
+function legacyMockFixture(f,i){
+ const receiptId=String(i).padStart(8,'0')+'-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+ const ids=[...Array.from({length:48},(_,n)=>'sg-mock-a-'+String(n+1).padStart(3,'0')),
+  ...Array.from({length:12},(_,n)=>'sg-mock-b-'+String(n+1).padStart(3,'0'))]
+ const answers=ids.map((id,n)=>({question_id:id,answer:n===0?'a':'b'}))
+ const payload=JSON.stringify({track:'exam-sg',section:'SG',date:'2026-11-11',
+  duration:3000+i,answers})
+ const review=ids.map(id=>({id,answer:'b',explanation:'原复习解析 '+id}))
+ const result=JSON.stringify({ok:true,submission_id:receiptId,track:'exam-sg',
+  section:'SG',correct_count:59,total:60,exam_name:'SG 模擬試験',
+  study_date:'2026-11-11',review})
+ f.raw.prepare('INSERT INTO mock_exam_submissions(id,track_id,exam_section,payload_json,result_json) VALUES(?,?,?,?,?)')
+  .run(receiptId,'exam-sg','SG',payload,result)
+ return {id:receiptId,payload,result,answers}
+}
+
+test('Stage E original mock receipt adoption copies raw bytes only to the proved owner',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_EXAMS_ENABLED='true'
+  f.env.HOMEFLOW_STUDY_MOCK_ENABLED='true'
+  const old=Array.from({length:6},(_,i)=>legacyMockFixture(f,i+1))
+  const original=f.raw.prepare('SELECT * FROM mock_exam_submissions ORDER BY id').all()
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  assert.equal((await scopedReceipts(f,'','/receipts')).status,401)
+  assert.deepEqual((await (await scopedReceipts(f,ownerToken,'/receipts')).json()).items,[])
+  assert.deepEqual((await (await scopedReceipts(f,memberToken,'/receipts')).json()).items,[])
+  assert.equal((await scopedReceipts(f,memberToken,'/legacy/adopt','POST',{confirm:true})).status,403)
+  assert.equal((await scopedReceipts(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true},'https://evil.test')).status,403)
+  assert.equal((await scopedReceipts(f,ownerToken,'/legacy/adopt','POST',{confirm:false})).status,403)
+  const first=await scopedReceipts(f,ownerToken,'/legacy/adopt','POST',{confirm:true})
+  assert.equal(first.status,200,await first.clone().text())
+  const page=await first.json()
+  assert.equal(page.adopted,5)
+  assert.equal(page.has_more,true)
+  assert.equal(page.next_cursor,old[4].id)
+  assert.equal(page.legacy_changed,false)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_mock_legacy_adoptions WHERE actor_user_id=?').get(owner).n,5)
+  const replay=await scopedReceipts(f,ownerToken,'/legacy/adopt','POST',{confirm:true})
+  assert.equal(replay.status,200,await replay.clone().text())
+  assert.equal((await replay.json()).skipped_identical,5)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_mock_legacy_adoptions').get().n,5)
+  const second=await scopedReceipts(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,after:page.next_cursor})
+  assert.equal(second.status,200,await second.clone().text())
+  assert.equal((await second.json()).adopted,1)
+  assert.equal((await (await scopedReceipts(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,after:page.next_cursor})).json()).adopted,0)
+  const list=await scopedReceipts(f,ownerToken,'/receipts?limit=3')
+  assert.equal(list.status,200)
+  const listed=await list.json()
+  assert.equal(listed.items.length,3)
+  assert.equal(listed.items[0].correct,59)
+  assert.equal(listed.items[0].legacy_imported,true)
+  assert.equal((await (await scopedReceipts(f,ownerToken,
+   '/receipts?limit=3&after='+listed.next_cursor)).json()).items.length,3)
+  assert.deepEqual((await (await scopedReceipts(f,memberToken,'/receipts')).json()).items,[])
+  assert.equal((await scopedReceipts(f,memberToken,
+   '/receipt?id='+old[0].id)).status,404)
+  const view=await scopedReceipts(f,ownerToken,'/receipt?id='+old[0].id)
+  assert.equal(view.status,200,await view.clone().text())
+  const details=await view.json()
+  assert.equal(details.scope,'user')
+  assert.equal(details.legacy_imported,true)
+  assert.equal(details.result.review.length,60)
+  assert.equal(details.result.correct_count,59)
+  assert.equal(details.result.scope,'user')
+  const target=f.raw.prepare('SELECT * FROM homeflow_mock_exam_submissions WHERE homeflow_user_id=? AND id=?')
+   .get(owner,old[0].id)
+  assert.equal(target.payload_json,old[0].payload,'retain source payload byte-for-byte')
+  assert.equal(target.result_json,old[0].result,'retain source result byte-for-byte')
+  assert.deepEqual(f.raw.prepare('SELECT * FROM mock_exam_submissions ORDER BY id').all(),original)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_mock_exam_submissions WHERE homeflow_user_id=?').get(member).n,0)
+  const audit=f.raw.prepare('SELECT * FROM homeflow_mock_legacy_adoptions WHERE actor_user_id=? ORDER BY original_submission_id').all(owner)
+  assert.equal(audit.length,6)
+  assert.ok(audit.every(x=>x.payload_sha256.length===64&&x.result_sha256.length===64))
+  assert.throws(()=>f.raw.prepare('UPDATE homeflow_mock_legacy_adoptions SET original_submission_id=?').run(old[0].id),/IMMUTABLE_MOCK_ADOPTION_AUDIT/)
+  assert.throws(()=>f.raw.prepare('DELETE FROM homeflow_mock_legacy_adoptions').run(),/IMMUTABLE_MOCK_ADOPTION_AUDIT/)
+  const retried=await scopedMock(f,ownerToken,'/submit','POST',{
+   submission_id:old[0].id,track:'exam-sg',section:'SG',
+   study_date:'2026-11-11',duration_seconds:3001,answers:old[0].answers})
+  assert.equal(retried.status,200,await retried.clone().text())
+  assert.equal((await retried.json()).scope,'user',
+   'legacy receipt replay receives new scoped envelope without modifying old bytes')
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_study_attempts WHERE homeflow_user_id=?').get(owner).n,0,
+   'receipts never regrade or duplicate separately adopted attempts')
+ }finally{f.raw.close()}
+})
+
+test('Stage E malformed old mock receipt blocks entire adoption page and never advances cursor',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_EXAMS_ENABLED='true'
+  f.env.HOMEFLOW_STUDY_MOCK_ENABLED='true'
+  const r1=legacyMockFixture(f,1)
+  const r2=legacyMockFixture(f,2)
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  const corrupted=JSON.parse(r2.result)
+  corrupted.correct_count=60
+  f.raw.prepare('UPDATE mock_exam_submissions SET result_json=? WHERE id=?')
+   .run(JSON.stringify(corrupted),r2.id)
+  const original=f.raw.prepare('SELECT * FROM mock_exam_submissions ORDER BY id').all()
+  const fail=await scopedReceipts(f,ownerToken,'/legacy/adopt','POST',{confirm:true})
+  assert.equal(fail.status,409,await fail.clone().text())
+  assert.equal((await fail.json()).code,'LEGACY_MOCK_RECEIPT_REVIEW_REQUIRED')
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_mock_exam_submissions').get().n,0)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_mock_legacy_adoptions').get().n,0)
+  assert.deepEqual(f.raw.prepare('SELECT * FROM mock_exam_submissions ORDER BY id').all(),original)
+  f.raw.prepare('UPDATE mock_exam_submissions SET result_json=? WHERE id=?')
+   .run(r2.result,r2.id)
+  const fixed=await scopedReceipts(f,ownerToken,'/legacy/adopt','POST',{confirm:true})
+  assert.equal(fixed.status,200,await fixed.clone().text())
+  assert.equal((await fixed.json()).adopted,2)
+  assert.equal((await scopedReceipts(f,memberToken,'/receipt?id='+r1.id)).status,404)
+  assert.equal((await scopedReceipts(f,ownerToken,'/receipts?limit=999')).status,400)
+  assert.equal((await scopedReceipts(f,ownerToken,'/receipt?id=../../private')).status,400)
+  assert.equal((await scopedReceipts(f,ownerToken,'/legacy/adopt','POST',{confirm:true,after:'bad'})).status,400)
+  assert.equal((await scopedReceipts(f,ownerToken,'/legacy/adopt','POST',{confirm:true,actor_user_id:member})).status,403)
+  f.active.valid=false
+  assert.equal((await scopedReceipts(f,ownerToken,'/receipts')).status,401)
+  f.active.valid=true
+  f.env.HOMEFLOW_STUDY_MOCK_ENABLED='false'
+  assert.equal((await scopedReceipts(f,ownerToken,'/receipts')).status,503)
+ }finally{f.raw.close()}
+})
+
+test('Stage E conflicting existing personal receipt fails closed and preserves immutable data',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_EXAMS_ENABLED='true'
+  f.env.HOMEFLOW_STUDY_MOCK_ENABLED='true'
+  const old=legacyMockFixture(f,1)
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  const existingResult=JSON.stringify({ok:true,scope:'user',total:60,correct_count:59})
+  f.raw.prepare('INSERT INTO homeflow_mock_exam_submissions '+
+   '(homeflow_user_id,id,track_id,exam_section,study_date,payload_json,result_json,created_at) '+
+   'VALUES(?,?,?,?,?,?,?,CURRENT_TIMESTAMP)')
+   .run(owner,old.id,'exam-sg','SG','2026-11-11',old.payload,existingResult)
+  const before=f.raw.prepare('SELECT * FROM homeflow_mock_exam_submissions').all()
+  const out=await scopedReceipts(f,ownerToken,'/legacy/adopt','POST',{confirm:true})
+  assert.equal(out.status,409)
+  assert.equal((await out.json()).code,'MOCK_RECEIPT_CONFLICT')
+  assert.deepEqual(f.raw.prepare('SELECT * FROM homeflow_mock_exam_submissions').all(),before)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_mock_legacy_adoptions').get().n,0)
+  assert.equal((await (await scopedReceipts(f,memberToken,'/receipts')).json()).items.length,0)
+ }finally{f.raw.close()}
+})
