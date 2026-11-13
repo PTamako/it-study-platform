@@ -41,9 +41,13 @@ async function load(){
    throw Error('语法记录身份或格式无效')
   const allowed=new Set(questions.value.map(q=>q.id)),seen=new Set<string>()
   const received=result.items as AnswerRow[]
-  if(received.some(r=>!allowed.has(r.question_id)||seen.has(r.question_id)||
-   (seen.add(r.question_id),false)||!Number.isInteger(r.answer_index)||
-   r.answer_index<0||r.answer_index>3))throw Error('历史语法题号需要核验')
+  if(received.length>3)throw Error('历史语法条数需要核验')
+  for(const row of received){
+   if(!allowed.has(row.question_id)||seen.has(row.question_id)||
+    !Number.isInteger(row.answer_index)||row.answer_index<0||row.answer_index>3)
+    throw Error('历史语法题号需要核验')
+   seen.add(row.question_id)
+  }
   rows.value=received
  }catch(e){if(rev===generation){rows.value=[];error.value=(e as Error).message}}
  finally{if(rev===generation)loading.value=false}
@@ -70,7 +74,7 @@ async function answer(questionId:string,answerIndex:number){
   })
   if(result.ok!==true||result.scope!=='user')throw Error('答案归属需要核验')
   await load()
- }catch(e){error.value=(e as Error).message;await load()}
+ }catch(e){const message=(e as Error).message;await load();error.value=message}
  finally{busy.value=false}
 }
 async function adopt(){
