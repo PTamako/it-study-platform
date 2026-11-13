@@ -28,6 +28,17 @@ CREATE TRIGGER IF NOT EXISTS trg_hf_grammar_answers_insert
   NOT EXISTS (SELECT 1 FROM homeflow_identity_links l
    WHERE l.homeflow_user_id=NEW.homeflow_user_id AND l.state='active')
  BEGIN SELECT RAISE(ABORT,'GRAMMAR_OWNER_REQUIRED'); END;
+-- A concurrent conflicting first answer is not allowed to be silently ignored.
+-- RAISE(ABORT) aborts the whole atomic D1 batch, including adoption audit.
+CREATE TRIGGER IF NOT EXISTS trg_hf_grammar_conflicting_insert
+ BEFORE INSERT ON homeflow_grammar_answers
+ WHEN EXISTS (SELECT 1 FROM homeflow_grammar_answers existing
+  WHERE existing.homeflow_user_id=NEW.homeflow_user_id
+   AND existing.study_date=NEW.study_date
+   AND existing.language=NEW.language
+   AND existing.question_id=NEW.question_id
+   AND existing.answer_index<>NEW.answer_index)
+ BEGIN SELECT RAISE(ABORT,'GRAMMAR_ANSWER_CONFLICT'); END;
 CREATE TRIGGER IF NOT EXISTS trg_hf_grammar_answers_no_update
  BEFORE UPDATE ON homeflow_grammar_answers
  BEGIN SELECT RAISE(ABORT,'IMMUTABLE_GRAMMAR_ANSWER'); END;
