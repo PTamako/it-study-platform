@@ -261,6 +261,7 @@ function applyPendingDailyTasks(date: string) {
 }
 applyPendingDailyTasks(todayKey.value)
 function persistDailyPending() {
+  if(!legacyWritesAllowed())return
   try { localStorage.setItem('zhixue:daily-pending-v1', JSON.stringify([...pendingDailyTasks.values()])) }
   catch { cloudDashboardError.value = '本设备存储不可用，待同步任务可能无法保留。' }
 }
@@ -561,7 +562,9 @@ type QuestionExplanationTranslation = { source_text: string; translation_zh: str
 const questionExplanationTranslations = ref<Record<string, QuestionExplanationTranslation>>(readStored('zhixue:question-explanation-zh', {}))
 const questionExplanationTranslating = ref<Record<string, boolean>>({})
 const questionExplanationTranslationErrors = ref<Record<string, string>>({})
-watch(questionExplanationTranslations, value => localStorage.setItem('zhixue:question-explanation-zh', JSON.stringify(value)), { deep: true })
+watch(questionExplanationTranslations, value => {
+  if(legacyWritesAllowed())localStorage.setItem('zhixue:question-explanation-zh', JSON.stringify(value))
+}, { deep: true })
 const quizQuestions = ref<PracticeQuestion[]>([])
 const quizIndex = ref(0)
 const selectedOption = ref('')
@@ -852,7 +855,7 @@ const scenarioExplanationTranslations = ref<Record<string, ScenarioExplanationTr
 const scenarioExplanationTranslating = ref<Record<string, boolean>>({})
 const scenarioExplanationTranslationErrors = ref<Record<string, string>>({})
 watch(scenarioExplanationTranslations, value => {
-  localStorage.setItem('zhixue:scenario-explanations-zh', JSON.stringify(value))
+  if(legacyWritesAllowed())localStorage.setItem('zhixue:scenario-explanations-zh', JSON.stringify(value))
 }, { deep: true })
 const currentScenario = computed(() => visibleScenarios.value.find(item => item.id === selectedScenarioId.value) || visibleScenarios.value[0] || null)
 const practicalPosition = computed(() => currentScenario.value
@@ -2087,12 +2090,16 @@ async function toggleLanguageCard(id: string) {
   }
 }
 watch(studyLanguage, value => {
-  localStorage.setItem('zhixue:study-language', JSON.stringify(value))
+  if(legacyWritesAllowed())localStorage.setItem('zhixue:study-language', JSON.stringify(value))
   selectedLanguageCategory.value = '全部'
   void loadLanguageCards()
 })
-watch(completedLanguageCards, value => localStorage.setItem('zhixue:completed-language-cards', JSON.stringify(value)), { deep: true })
-watch(languageReviews, value => localStorage.setItem('zhixue:language-reviews', JSON.stringify(value)), { deep: true })
+watch(completedLanguageCards, value => {
+  if(legacyWritesAllowed())localStorage.setItem('zhixue:completed-language-cards', JSON.stringify(value))
+}, { deep: true })
+watch(languageReviews, value => {
+  if(legacyWritesAllowed())localStorage.setItem('zhixue:language-reviews', JSON.stringify(value))
+}, { deep: true })
 async function hydrateCloudProgress() {
   void hydrateVocabulary()
   const generation = ++masterySyncGeneration
@@ -2270,8 +2277,12 @@ watch(authenticated, () => dictionaryOnlineCache.clear())
 
 const speechPaused = ref(false)
 const speechPlaying = ref(false)
-watch(recentDictionaryEntries, value => localStorage.setItem('zhixue:recent-dictionary', JSON.stringify(value)), { deep: true })
-watch(savedDictionaryEntries, value => localStorage.setItem('zhixue:saved-dictionary-entries', JSON.stringify(value)), { deep: true })
+watch(recentDictionaryEntries, value => {
+  if(legacyWritesAllowed())localStorage.setItem('zhixue:recent-dictionary', JSON.stringify(value))
+}, { deep: true })
+watch(savedDictionaryEntries, value => {
+  if(legacyWritesAllowed())localStorage.setItem('zhixue:saved-dictionary-entries', JSON.stringify(value))
+}, { deep: true })
 const savedVocabularyEntries = computed(() => savedWords.value.map(key=>{
  const {term,language}=parseVocabularyKey(key)
  return savedDictionaryEntries.value.find(entry=>vocabularyKey(entry.term,entry.language||'auto')===key)||
@@ -2738,7 +2749,9 @@ function setDictionaryLanguage(language: 'auto' | 'ja' | 'en' | 'zh' | 'it') {
   speechStatus.value = ''
   speechStatusTarget.value = ''
 }
-watch(savedWords, value => localStorage.setItem('zhixue:saved-words', JSON.stringify(value)), { deep: true })
+watch(savedWords, value => {
+  if(legacyWritesAllowed())localStorage.setItem('zhixue:saved-words', JSON.stringify(value))
+}, { deep: true })
 
 function navigate(id: ModuleId) {
   stopSpeech()
