@@ -1665,3 +1665,64 @@ test('Stage E old daily-word pages are owner-only, lossless, and reject any corr
   assert.equal((await scopedWords(f,memberToken,'/legacy/adopt','POST',{confirm:true})).status,403)
  }finally{f.raw.close()}
 })
+
+test('Stage E rejects stale exam and language mutations after a HomeFlow cookie switch, before D1 writes',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_EXAMS_ENABLED='true'
+  f.env.HOMEFLOW_STUDY_LANGUAGE_ENABLED='true'
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  const snapshots={
+   attempts:f.raw.prepare('SELECT COUNT(*) n FROM homeflow_study_attempts').get().n,
+   history:f.raw.prepare('SELECT COUNT(*) n FROM homeflow_exam_history').get().n,
+   examEvents:f.raw.prepare('SELECT COUNT(*) n FROM homeflow_exam_events').get().n,
+   mastery:f.raw.prepare('SELECT COUNT(*) n FROM homeflow_language_mastery').get().n,
+   reviews:f.raw.prepare('SELECT COUNT(*) n FROM homeflow_language_reviews').get().n,
+   languageEvents:f.raw.prepare('SELECT COUNT(*) n FROM homeflow_language_events').get().n
+  }
+  const examBody={attempt_id:'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+   question_id:'sg-example-001',answer:'a',duration_seconds:11}
+  const historyBody={id:'stale-owner-history-001',date:'2026-11-13',
+   exam:'SG 模拟练习',total:60,correct:40}
+  const reviewBody={card_id:'ja-sentence-001',grade:'remembered',
+   version:0,request_id:'f'.repeat(32)}
+  const masteryBody={card_id:'ja-sentence-001',mastered:true,version:0}
+  // A previous owner's queued request must not post under the member cookie,
+  // even if it passes the current Cookie authentication.
+  for(const [family,path,payload] of [
+   ['exam','/attempts',examBody],
+   ['exam','/history',historyBody],
+   ['exam','/legacy/adopt',{confirm:true,kind:'history'}],
+   ['language','/mastery',masteryBody],
+   ['language','/review',reviewBody],
+   ['language','/legacy/adopt',{confirm:true,kind:'mastery'}]
+  ]){
+   const call=family==='exam'?scopedExams:scopedLanguage
+   const switched=await call(f,ownerToken,path,'POST',
+    {...payload,expected_user_id:member})
+   assert.equal(switched.status,403,
+    family+path+' must reject old cookie/user payload before database access')
+   assert.equal((await switched.json()).code,'ACTOR_CHANGED')
+   const missing=await call(f,ownerToken,path,'POST',
+    {...payload,expected_user_id:undefined})
+   assert.equal(missing.status,403,family+path+' must require original actor')
+   assert.equal((await missing.json()).code,'ACTOR_CHANGED')
+  }
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_study_attempts').get().n,
+   snapshots.attempts)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_exam_history').get().n,
+   snapshots.history)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_exam_events').get().n,
+   snapshots.examEvents)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_language_mastery').get().n,
+   snapshots.mastery)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_language_reviews').get().n,
+   snapshots.reviews)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_language_events').get().n,
+   snapshots.languageEvents)
+  // Rechecking the real session on ordinary reads remains allowed, and an
+  // owner never silently imports their legacy single-user data into a spouse.
+  assert.equal((await scopedExams(f,memberToken,'/history')).status,200)
+  assert.equal((await scopedLanguage(f,memberToken,'/cards?lang=ja')).status,200)
+ }finally{f.raw.close()}
+})
