@@ -18,7 +18,7 @@ test('HomeFlow PWA entry remains feature gated and cannot authenticate legacy st
  assert.match(ui,/enabled\.value=status\.enabled===true/)
  assert.match(ui,/<section v-if="enabled"/)
  assert.match(app,/import StudyHomeFlowAccess from '.\/StudyHomeFlowAccess.vue'/)
- assert.match(app,/<StudyHomeFlowAccess \/>/)
+ assert.match(app,/<StudyHomeFlowAccess @identity-changed="onHomeflowIdentityChanged" \/>/)
  assert.match(app,/<StudyHomeFlowAccess v-if="activeModule==='home'"/)
  assert.doesNotMatch(ui,/authenticated\.value\s*=\s*true/)
  assert.match(ui,/每日任务、语法、听力、单词、语言卡、练习错题、成绩与 SG\/FE 模拟考试使用独立身份接口/)
@@ -205,7 +205,7 @@ test('PWA ignores stale HomeFlow identity probes after signout, account switch o
  assert.match(ui,/const value=await res\.json\(\) as \{identity\?:Identity\}[\s\S]*?if\(generation!==identityGeneration\)return/)
  assert.match(ui,/if\(generation===identityGeneration\)loading\.value=false/)
  assert.match(ui,/async function signOut\(\)\{[\s\S]*?identityGeneration\+\+[\s\S]*?await api\('logout',\{method:'POST'\}\)/)
- assert.match(ui,/onUnmounted\(\(\)=>\{identityGeneration\+\+;identity\.value=null\}\)/)
+ assert.match(ui,/onUnmounted\(\(\)=>\{[\s\S]*?identityGeneration\+\+;identity\.value=null/)
  // The app still does not store credentials, identity or learning data in
  // shared localStorage, and its per-person children remain key-remounted.
  assert.doesNotMatch(ui,/localStorage\.setItem\([^\n]*(?:identity|access_token|session_assertion)/i)
@@ -255,4 +255,38 @@ test('practice and language member writes carry the originating actor and discar
   assert.doesNotMatch(component,/localStorage\.|sessionStorage\.|indexedDB\./)
   assert.doesNotMatch(component,/document.cookie|access_token|session_assertion/)
  }
+})
+
+test('legacy cache remains unclaimed and invisible after HomeFlow identity switch on a shared PWA',()=>{
+ // The old single-user storage has no proof of ownership. The new HomeFlow
+ // identity must never silently adopt its queue or rewrite its keys.
+ assert.match(app,/const LEGACY_QUARANTINE='zhixue:legacy-cache-quarantine-v1'/)
+ assert.match(app,/legacyRequiresPassword=ref/)
+ assert.match(app,/function quarantineLegacyStudy\(userId:string\)/)
+ assert.match(app,/homeflowIdentityUser.value=userId/)
+ assert.match(app,/localStorage.setItem\(LEGACY_QUARANTINE,'1'\)/)
+ assert.match(app,/authenticated.value=false/)
+ assert.match(app,/authPassword.value=''/)
+ assert.match(app,/dailyHydrationRun\+\+/)
+ assert.match(app,/masterySyncGeneration\+\+/)
+ assert.match(app,/dailyWordHydrationRun\+\+/)
+ assert.match(app,/if\(await probeHomeflowIdentity\(\)\|\|legacyRequiresPassword.value\)/)
+ assert.match(app,/!homeflowIdentityUser.value&&!legacyRequiresPassword.value&&/)
+ assert.match(app,/if\(await probeHomeflowIdentity\(\)\)/)
+ assert.match(app,/localStorage.removeItem\(LEGACY_QUARANTINE\)/)
+ assert.match(app,/v-if="homeflowIdentityUser" class="auth-card"/)
+ assert.match(app,/旧版学习资料不会自动显示或归属其他家庭成员/)
+ assert.match(app,/<StudyHomeFlowAccess @identity-changed="onHomeflowIdentityChanged"/)
+ assert.match(app,/@identity-changed="onHomeflowIdentityChanged"/)
+ const body=app.slice(app.indexOf('function quarantineLegacyStudy('),
+  app.indexOf('function onHomeflowIdentityChanged('))
+ assert.doesNotMatch(body,/localStorage.removeItem\(/)
+ assert.doesNotMatch(body,/localStorage.clear\(/)
+ assert.doesNotMatch(body,/homeflow_user_id|/api/homeflow-study/)
+ assert.match(ui,/defineEmits<\{\(event:'identity-changed',userId:string\|null\):void\}>/)
+ assert.match(ui,/emit\('identity-changed',identity.value\?\.user_id\|\|null\)/)
+ assert.match(ui,/emit\('identity-changed',null\)/)
+ assert.match(ui,/identity.value=null[\s\S]*?void check\(\)/)
+ assert.match(ui,/document.addEventListener\('visibilitychange',foreground\)/)
+ assert.match(ui,/document.removeEventListener\('visibilitychange',foreground\)/)
 })
