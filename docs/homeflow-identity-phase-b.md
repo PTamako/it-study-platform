@@ -31,3 +31,16 @@
 - scripts/homeflow-sso-isolated.test.mjs 扩充双账号 SQLite、owner 独占旧历史、member 空新词本、两人同词不同解释、删除/重复请求、失效源会话、越权 audit、默认 OFF/Origin 约束。旧 Worker data-URL 测试装载脚本相应更新；完整 PR CI 请以最新 Actions 结论为准。
 - **仍未完成**：其余错误题/模拟考/进度/学习卡/听力/文书同步的 user_id SQL 隔离，PWA 本机缓存/双人界面/旧账无损一键迁移确认及真实端到端测试。新生词本仅是 E 阶段第一个按账号隔离的数据模块，绝不宣称知学两人可以完整使用。
 - **用户最新决定**：A=待用户完成，由用户有空时自行备份+恢复；开发者不再执行 A 或反复询问。0180/0181 均未在正式 D1 迁移，HomeFlow 和知学新功能开关 OFF，Draft PR #179 不合并、不部署、不重建 Preview。
+
+
+## 2026-11-13 Stage E 增量：每日任务个人隔离与独立 PWA 面板
+
+> 仍在原 [Draft #179](https://github.com/PTamako/it-study-platform/pull/179) 开发，**仅代码与自动测试**：没有执行 0180/0181/0182 生产 D1 迁移、启用 HomeFlow SSO、合并 PR、部署 Worker 或建立任何 Preview。A 阶段仍由用户自行完成后再另行放行。
+
+- 新增 `migrations/0182_homeflow_user_daily_tasks.sql`：`homeflow_daily_task_progress` 的复合主键 `(homeflow_user_id,study_date,task_id)`，CAS `version`、`updated_by_user_id`、按本人日期查询索引、不可变 `homeflow_daily_task_events`，以及服务端同一 actor 的数据库触发器。原 `daily_task_completions` **零修改、零删除、零重分配**；owner 旧记录只归 owner，member 在新表从空白开始。
+- `worker/homeflow-daily-tasks.ts`：新 `/api/homeflow-study/daily-tasks` 用户本人日期列表与 POST 完成状态（含准确日本日期、20 默认/最多 50 条 cursor、version=0 新建/当前 version 修改、重试状态不变不新增审计、旧设备旧版本不能覆盖新进度）；新 `/status` 不读 D1，feature 默认关闭；新 `/legacy/adopt` 仅真实 HomeFlow owner 明确确认后，一页最多 20 条按 `study_date,task_id` 无损复制原有历史，输入原数据无效时全页 409 且零写/游标不前进，旧数据仍原样保留，重复调用 `INSERT OR IGNORE` 不覆盖用户后续改动。所有身份经后台 `verifiedStudyActor()` 获取，禁止客户端自报 actor/role，匿名和已被 HomeFlow 撤销源会话均不可读写。
+- `worker/index.ts` 注册全新私有路径，原单用户 `/api/daily-tasks` 和原 App 缓存保持 legacy-only；新 `HOMEFLOW_STUDY_DAILY_PROGRESS_ENABLED` 必须与 `HOMEFLOW_STUDY_SSO_ENABLED` 等同时显式开启，且 `APP_ENV=production`。新页面 **无法**通过 HomeFlow cookie 获得原学习 API 权限。
+- `src/StudyHomeFlowDailyTasks.vue` 挂载在已认证 `StudyHomeFlowAccess.vue` 内，按 `identity.user_id` keyed remount；只从当前用户专用 D1 API 查询当天 SG/日语/英语任务，用户主动勾选后服务端保存，iPhone PWA 前台再读取，不写/读 `zhixue:tasks` 等旧共享 localStorage；owner 可点击明确确认的旧历史分页导入，member 没有导入入口。旧普通学习页面暂不做全量多账号放行。
+- `scripts/homeflow-sso-isolated.test.mjs` 新真实 SQLite/模拟双 HomeFlow 身份回归：夫妻相同日期/ID 互不影响，owner 旧记录不自动泄漏，成员不可采用旧历史，版本冲突与无变化重试、真实 actor 追踪、不可变审计、损坏旧数据全页拒绝、20 条游标分页、源会话撤销、非法来源/日期/用户 ID 注入；`scripts/homeflow-pwa-ui.test.mjs` 新 PWA 私有缓存/按账号卸载/独立路由门槛测试。
+- 首批提交：`6fa428fe0bbad317f1ccd608e761df7c086c417c`、`5099ce60f4a4257a0b9f1427137d35388f561824`、`eacfaade12d573fd9f6c337403b23ae6a423c7e7`、`52bb92d19792cfcc3ac64eae3ad5402058c8d715`、`e950bc9d52b67f252c1bf97a9519404887e1604e`、`bef879e3d4ac1ef80358b80db23d7f2a421f9cc7`、`127612613a4ea2dc05b1313bead51f12c2a63e6a`、`306230e3a4ec5e496eb838f43fceda33c603cd28`、`81ae94ff7eaa217663d8fe43e083de9344ffd314`、`1183a3bd10e48d56056aec9df8ee23169722c391`、`86e6f26b7a2942953bb2fe2512c96dffdff1fe4d`。
+- 当前 [CI #43443153465](https://github.com/PTamako/it-study-platform/actions/runs/43443153465) **本记录时 in_progress**；后续必须以最新 Workflow 结果实查。尚未完成：语言卡复习、错题/考试作答、模拟考和每日词/语法/听力等表，旧 App 的 IndexedDB/localStorage 按 user_id 切换与真机两人交替登录。不能因为此每日任务模块通过而声称整个知学个人隔离完成。
