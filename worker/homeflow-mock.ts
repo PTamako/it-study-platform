@@ -107,6 +107,12 @@ async function receipt(env:Env,actor:Actor,submissionId:string){
   'WHERE homeflow_user_id=? AND id=?')
   .bind(actor.user_id,submissionId).first<{payload_json:string;result_json:string}>()
 }
+function ownReceiptResult(raw:string){
+ // Original single-user receipts did not have scope:'user'. Adapt only the
+ // response envelope; do not modify the imported original result bytes.
+ const result=JSON.parse(raw) as Record<string,unknown>
+ return {...result,scope:'user'}
+}
 async function submit(req:Request,env:Env,url:URL,actor:Actor){
  if(req.headers.get('origin')!==url.origin||
   req.headers.get('content-type')?.split(';')[0].trim().toLowerCase()!=='application/json')
@@ -137,7 +143,7 @@ async function submit(req:Request,env:Env,url:URL,actor:Actor){
   answers})
  const previous=await receipt(env,actor,submissionId)
  if(previous)return previous.payload_json===payload?
-  json(JSON.parse(previous.result_json)):
+  json(ownReceiptResult(previous.result_json)):
   json({code:'MOCK_SUBMISSION_ID_REUSED'},409)
  const marks=ids.map(()=>'?').join(',')
  const result=await env.DB.prepare(
@@ -221,7 +227,7 @@ async function submit(req:Request,env:Env,url:URL,actor:Actor){
  }catch{
   const committed=await receipt(env,actor,submissionId)
   if(committed)return committed.payload_json===payload?
-   json(JSON.parse(committed.result_json)):
+   json(ownReceiptResult(committed.result_json)):
    json({code:'MOCK_SUBMISSION_ID_REUSED'},409)
   return json({code:'MOCK_SUBMIT_UNAVAILABLE'},503)
  }
