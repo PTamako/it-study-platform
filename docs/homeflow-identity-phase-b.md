@@ -22,3 +22,12 @@
 - E 阶段必须逐张表无损保留 owner 的历史生词、错题、模拟考、听力和语言学习数据，member 的独立空间为空；迁移 `saved_vocabulary_entries_v2(language,term)` 等无 user_id 的当前主键和所有相关 API/文书同步桥接。原学习历史 **不能因为 SSO 身份表出现就自动共享**。
 - PWA UI 和真实 iPhone/Safari OAuth 切换、端侧 IndexedDB/LocalStorage 按 user_id 隔离、同步/退出后私有缓存清理，以及单人密码注销改造均未完成。
 - CI 最终结果见本 Draft PR #179 最新 GitHub Actions，任何进行中或失败的 CI 不能记作已验收。本开发已提交代码，但没有生产用户启用功能。
+
+## 2026-11-13 Stage E 增量：HomeFlow 双人生词本隔离（Draft，绝不生产迁移）
+
+- 新增 **0181_homeflow_user_vocabulary.sql**：独立 homeflow_saved_vocabulary 表，主键 (homeflow_user_id,language,term)；不同 HomeFlow 用户同语种同词相互独立，保存真实 updated_by_user_id；homeflow_vocabulary_events 仅在更改时写 append-only 审计，历史表 saved_vocabulary_entries_v2 未改也未删除。
+- worker/homeflow-identity.ts 的 verifiedStudyActor() 每次经加密新 Session + HomeFlow 后端 source-session introspection 拿到真实 user_id/role；绝不根据昵称、浏览器 payload、旧密码推断，撤销后不能访问。新 worker/homeflow-vocabulary.ts 只使用该 ID 读取/写入新表，支持 20 条内的 indexed cursor 分页、显式收藏、删除 tombstone、相同内容重试不重复 audit。
+- 已链接原旧学习数据的 owner 可 POST /api/homeflow-study/vocabulary/legacy/adopt 携带 confirm:true、可选 after 执行有边界的 20 行增量复制；INSERT OR IGNORE 保留已更改/已删除的个人新状态，原 saved_vocabulary_entries_v2 完全不变；member 禁止导入旧数据。新接口 /api/homeflow-study/vocabulary 默认由 HOMEFLOW_STUDY_VOCAB_ENABLED=OFF 关闭，不会使用/改写旧 /api/vocabulary/saved。
+- scripts/homeflow-sso-isolated.test.mjs 扩充双账号 SQLite、owner 独占旧历史、member 空新词本、两人同词不同解释、删除/重复请求、失效源会话、越权 audit、默认 OFF/Origin 约束。旧 Worker data-URL 测试装载脚本相应更新；完整 PR CI 请以最新 Actions 结论为准。
+- **仍未完成**：其余错误题/模拟考/进度/学习卡/听力/文书同步的 user_id SQL 隔离，PWA 本机缓存/双人界面/旧账无损一键迁移确认及真实端到端测试。新生词本仅是 E 阶段第一个按账号隔离的数据模块，绝不宣称知学两人可以完整使用。
+- **用户最新决定**：A=待用户完成，由用户有空时自行备份+恢复；开发者不再执行 A 或反复询问。0180/0181 均未在正式 D1 迁移，HomeFlow 和知学新功能开关 OFF，Draft PR #179 不合并、不部署、不重建 Preview。
