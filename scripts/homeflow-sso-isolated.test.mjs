@@ -548,3 +548,234 @@ test('Stage E owner daily adoption paginates, fails closed on malformed legacy a
   assert.equal((await scopedDaily(f,memberToken,'/legacy/adopt','POST',page)).status,403)
  }finally{f.raw.close()}
 })
+
+
+function scopedLanguage(f,cookie,path='',method='GET',data=null,origin=app){
+ const headers={}
+ if(cookie)headers.Cookie='__Host-study_hf='+cookie
+ if(method==='POST'){headers.Origin=origin;headers['Content-Type']='application/json'}
+ return homeflowLanguage(new Request(app+'/api/homeflow-study/language'+path,{
+  method,headers,body:method==='POST'?JSON.stringify(data??{}):undefined
+ }),f.env)
+}
+
+test('Stage E language mastery and grades stay independent between spouses',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_LANGUAGE_ENABLED='true'
+  assert.equal((await scopedLanguage(f,'','/cards?lang=ja')).status,401)
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  const legacyMastery=f.raw.prepare('SELECT * FROM language_card_progress ORDER BY card_id').all()
+  const legacyReview=f.raw.prepare('SELECT * FROM language_card_reviews ORDER BY card_id').all()
+  const before=await scopedLanguage(f,ownerToken,'/cards?lang=ja')
+  assert.equal(before.status,200)
+  assert.equal((await before.json()).items[0].mastered,false,
+   'existing owner must explicitly adopt old progress')
+  assert.equal((await scopedLanguage(f,memberToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'mastery'})).status,403)
+  const adoptMaster=await scopedLanguage(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'mastery'})
+  assert.equal(adoptMaster.status,200,await adoptMaster.clone().text())
+  assert.equal((await adoptMaster.json()).adopted,2)
+  const adoptReview=await scopedLanguage(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'reviews'})
+  assert.equal(adoptReview.status,200,await adoptReview.clone().text())
+  assert.equal((await adoptReview.json()).adopted,2)
+  const afterOwner=(await (await scopedLanguage(f,ownerToken,'/cards?lang=ja')).json()).items
+  assert.equal(afterOwner[0].mastered,true)
+  assert.equal(afterOwner[0].review_count,3)
+  assert.equal(afterOwner[0].last_grade,'hard')
+  const afterMember=(await (await scopedLanguage(f,memberToken,'/cards?lang=ja')).json()).items
+  assert.equal(afterMember[0].mastered,false)
+  assert.equal(afterMember[0].review_count,0)
+  assert.equal(afterMember[0].review_version,0)
+  const master=await scopedLanguage(f,memberToken,'/mastery','POST',
+   {card_id:'ja-sentence-001',mastered:true,version:0})
+  assert.equal(master.status,200,await master.clone().text())
+  assert.equal((await master.json()).version,1)
+  const grade=await scopedLanguage(f,memberToken,'/review','POST',{
+   card_id:'ja-sentence-001',grade:'remembered',version:0,request_id:'a'.repeat(32)})
+  assert.equal(grade.status,200,await grade.clone().text())
+  assert.equal((await grade.json()).review.review_count,1)
+  assert.equal((await grade.json().catch(()=>({}))).review,undefined) // response body cannot be read twice
+  const ownerStill=(await (await scopedLanguage(f,ownerToken,'/cards?lang=ja')).json()).items
+  assert.equal(ownerStill[0].review_count,3)
+  assert.equal(ownerStill[0].mastery_version,1)
+  const memberNow=(await (await scopedLanguage(f,memberToken,'/cards?lang=ja')).json()).items
+  assert.equal(memberNow[0].review_count,1)
+  assert.equal(memberNow[0].mastered,true)
+  assert.deepEqual(f.raw.prepare('SELECT * FROM language_card_progress ORDER BY card_id').all(),legacyMastery)
+  assert.deepEqual(f.raw.prepare('SELECT * FROM language_card_reviews ORDER BY card_id').all(),legacyReview)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_language_reviews WHERE homeflow_user_id=?').get(owner).n,2)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_language_reviews WHERE homeflow_user_id=?').get(member).n,1)
+  assert.equal(f.raw.prepare("SELECT actor_user_id FROM homeflow_language_events WHERE action='graded'").get().actor_user_id,member)
+  assert.equal(f.raw.prepare("SELECT SUM(affected_count) n FROM homeflow_language_events WHERE action='legacy_mastery_adopted'").get().n,2)
+  assert.throws(()=>f.raw.prepare('DELETE FROM homeflow_language_events').run(),/IMMUTABLE_LANGUAGE_AUDIT/)
+  assert.throws(()=>f.raw.prepare('UPDATE homeflow_language_events SET affected_count=9').run(),/IMMUTABLE_LANGUAGE_AUDIT/)
+  assert.throws(()=>f.raw.prepare('INSERT INTO homeflow_language_mastery(homeflow_user_id,card_id,mastered,updated_by_user_id) VALUES(?,?,?,?)')
+   .run(owner,'ja-sentence-002',1,member),/LANGUAGE_OWNER_REQUIRED/)
+  assert.throws(()=>f.raw.prepare('INSERT INTO homeflow_language_reviews(homeflow_user_id,card_id,last_result,last_grade,updated_by_user_id) VALUES(?,?,?,?,?)')
+   .run(owner,'ja-sentence-002','again','hard',member),/LANGUAGE_OWNER_REQUIRED/)
+  f.active.valid=false
+  assert.equal((await scopedLanguage(f,memberToken,'/cards?lang=ja')).status,401,
+   'revoking original HomeFlow session invalidates personal lessons')
+ }finally{f.raw.close()}
+})
+
+test('Stage E language review grading is idempotent and CAS guards stale devices',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_LANGUAGE_ENABLED='true'
+  const {memberToken,ownerToken}=await linkedDailyPair(f)
+  const payload={card_id:'ja-sentence-002',grade:'remembered',
+   version:0,request_id:'b'.repeat(32)}
+  assert.equal((await scopedLanguage(f,memberToken,'/review','POST',payload,'https://evil.example')).status,403)
+  assert.equal((await scopedLanguage(f,memberToken,'/review','POST',
+   {...payload,actor_user_id:owner})).status,400)
+  assert.equal((await scopedLanguage(f,memberToken,'/review','POST',
+   {...payload,version:1.5})).status,400)
+  assert.equal((await scopedLanguage(f,memberToken,'/review','POST',
+   {...payload,request_id:'short'})).status,400)
+  assert.equal((await scopedLanguage(f,memberToken,'/mastery','POST',
+   {card_id:'ja-sentence-001',mastered:true,version:0,homeflow_user_id:owner})).status,400)
+  assert.equal((await scopedLanguage(f,memberToken,'/mastery','POST',
+   {card_id:'unknown',mastered:true,version:0})).status,404)
+  const initial=await scopedLanguage(f,memberToken,'/review','POST',payload)
+  assert.equal(initial.status,200,await initial.clone().text())
+  const first=await initial.json()
+  assert.equal(first.review.version,1)
+  assert.equal(first.review.correct_streak,1)
+  assert.equal(first.review.review_count,1)
+  assert.equal(first.review.last_grade,'remembered')
+  const tomorrow=new Date(first.review.next_review_at.replace(' ','T')+'Z').getTime()
+  assert.ok(tomorrow>Date.now()+23*3600000)
+  const same=await scopedLanguage(f,memberToken,'/review','POST',payload)
+  assert.equal(same.status,200)
+  assert.equal((await same.json()).replayed,true)
+  assert.equal((await scopedLanguage(f,memberToken,'/review','POST',
+   {...payload,grade:'again'})).status,409,'reusing same request id with another grade must reject')
+  assert.equal((await scopedLanguage(f,memberToken,'/review','POST',
+   {...payload,request_id:'c'.repeat(32)})).status,409,'stale version zero cannot re-grade')
+  let count=f.raw.prepare("SELECT COUNT(*) n FROM homeflow_language_events WHERE actor_user_id=? AND action='graded'").get(member).n
+  assert.equal(count,1)
+  const hard=await scopedLanguage(f,memberToken,'/review','POST',
+   {...payload,grade:'hard',version:1,request_id:'c'.repeat(32)})
+  assert.equal(hard.status,200,await hard.clone().text())
+  const latest=await hard.json()
+  assert.equal(latest.review.version,2)
+  assert.equal(latest.review.correct_streak,0)
+  assert.equal(latest.review.last_result,'again','hard keeps legacy last_result compatible')
+  assert.equal(latest.review.last_grade,'hard')
+  const hardNext=new Date(latest.review.next_review_at.replace(' ','T')+'Z').getTime()
+  assert.ok(hardNext>Date.now()+5*3600000&&hardNext<Date.now()+7*3600000)
+  const replayAfter=await scopedLanguage(f,memberToken,'/review','POST',payload)
+  assert.equal(replayAfter.status,200)
+  assert.equal((await replayAfter.json()).replayed,true)
+  assert.equal(f.raw.prepare("SELECT COUNT(*) n FROM homeflow_language_events WHERE actor_user_id=? AND action='graded'").get(member).n,2)
+  const oneMaster={card_id:'ja-sentence-002',mastered:true,version:0}
+  assert.equal((await scopedLanguage(f,memberToken,'/mastery','POST',oneMaster)).status,200)
+  assert.equal((await (await scopedLanguage(f,memberToken,'/mastery','POST',oneMaster)).json()).replayed,true)
+  const unmastered=await scopedLanguage(f,memberToken,'/mastery','POST',
+   {...oneMaster,mastered:false,version:1})
+  assert.equal(unmastered.status,200)
+  assert.equal((await unmastered.json()).version,2)
+  assert.equal((await scopedLanguage(f,memberToken,'/mastery','POST',
+   {...oneMaster,version:1})).status,409)
+  assert.equal(f.raw.prepare("SELECT COUNT(*) n FROM homeflow_language_events WHERE actor_user_id=? AND action IN ('mastered','unmastered')").get(member).n,2)
+  const ownerReview=await scopedLanguage(f,ownerToken,'/review','POST',payload)
+  assert.equal(ownerReview.status,200,'same client request id on another account is independent')
+  assert.equal((await ownerReview.json()).review.review_count,1)
+ }finally{f.raw.close()}
+})
+
+test('Stage E owner language adoption detects corrupt legacy rows before copying a page',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_LANGUAGE_ENABLED='true'
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  const oldProgress=f.raw.prepare("SELECT * FROM language_card_progress ORDER BY card_id").all()
+  f.raw.prepare('UPDATE language_card_progress SET mastered=7 WHERE card_id=?')
+   .run('ja-sentence-001')
+  const before=f.raw.prepare("SELECT * FROM language_card_progress ORDER BY card_id").all()
+  const invalid=await scopedLanguage(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'mastery'})
+  assert.equal(invalid.status,409)
+  assert.equal((await invalid.json()).code,'LEGACY_LANGUAGE_REVIEW_REQUIRED')
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_language_mastery').get().n,0)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_language_events').get().n,0)
+  assert.deepEqual(f.raw.prepare('SELECT * FROM language_card_progress ORDER BY card_id').all(),before)
+  f.raw.prepare('UPDATE language_card_progress SET mastered=1 WHERE card_id=?')
+   .run('ja-sentence-001')
+  const repaired=await scopedLanguage(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'mastery'})
+  assert.equal(repaired.status,200,await repaired.clone().text())
+  assert.equal((await repaired.json()).adopted,2)
+  f.raw.prepare('UPDATE language_card_reviews SET last_grade=? WHERE card_id=?')
+   .run('invalid-grade','ja-sentence-001')
+  const r=await scopedLanguage(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'reviews'})
+  assert.equal(r.status,409)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_language_reviews').get().n,0)
+  f.raw.prepare('UPDATE language_card_reviews SET last_grade=? WHERE card_id=?')
+   .run('hard','ja-sentence-001')
+  assert.equal((await scopedLanguage(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'reviews'})).status,200)
+  assert.equal((await scopedLanguage(f,memberToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'reviews'})).status,403)
+  assert.equal((await scopedLanguage(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'mastery',after:123})).status,400)
+  assert.equal((await scopedLanguage(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:false,kind:'mastery'})).status,403)
+  assert.equal((await scopedLanguage(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'mastery',limit:900})).status,403)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_language_mastery').get().n,2)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_language_reviews').get().n,2)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_language_events WHERE action LIKE ?').get('legacy_%').n,2)
+ }finally{f.raw.close()}
+})
+
+test('Stage E language catalogue and legacy import have bounded cursors, gated access',async()=>{
+ const f=sqliteEnv()
+ try{
+  assert.equal((await scopedLanguage(f,'','/status').then(x=>x.json())).enabled,false)
+  assert.equal((await scopedLanguage(f,'','/cards')).status,503)
+  f.env.HOMEFLOW_STUDY_LANGUAGE_ENABLED='true'
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  const addCard=f.raw.prepare('INSERT INTO language_cards(id,language,content_type,term) VALUES(?,?,?,?)')
+  const addMaster=f.raw.prepare('INSERT INTO language_card_progress(card_id,mastered) VALUES(?,?)')
+  for(let i=3;i<=26;i++){
+   const id='ja-sentence-'+String(i).padStart(3,'0')
+   addCard.run(id,'ja','sentence','日本語'+i)
+   addMaster.run(id,i%2)
+  }
+  const first=await scopedLanguage(f,memberToken,'/cards?lang=ja&limit=5')
+  assert.equal(first.status,200)
+  const firstBody=await first.json()
+  assert.equal(firstBody.items.length,5)
+  assert.ok(firstBody.next_cursor)
+  assert.equal(firstBody.items[0].mastery_version,0)
+  assert.equal((await scopedLanguage(f,memberToken,'/cards?lang=ja&limit=5&after='+encodeURIComponent(firstBody.next_cursor))).status,200)
+  assert.equal((await scopedLanguage(f,memberToken,'/cards?lang=ja&limit=100')).status,400)
+  assert.equal((await scopedLanguage(f,memberToken,'/cards?lang=xx')).status,400)
+  const p1=await scopedLanguage(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'mastery'})
+  assert.equal(p1.status,200)
+  const a1=await p1.json()
+  assert.equal(a1.adopted,20)
+  assert.equal(a1.has_more,true)
+  const p2=await scopedLanguage(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'mastery',after:a1.next_cursor})
+  assert.equal(p2.status,200)
+  assert.equal((await p2.json()).adopted,6)
+  assert.equal((await (await scopedLanguage(f,ownerToken,'/legacy/adopt','POST',
+   {confirm:true,kind:'mastery',after:a1.next_cursor})).json()).adopted,0)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_language_mastery WHERE homeflow_user_id=?').get(owner).n,26)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_language_mastery WHERE homeflow_user_id=?').get(member).n,0)
+  assert.equal((await scopedLanguage(f,memberToken,'/status').then(x=>x.json())).enabled,true)
+  f.env.HOMEFLOW_STUDY_LANGUAGE_ENABLED='false'
+  assert.equal((await scopedLanguage(f,memberToken,'/cards?lang=ja')).status,503)
+  f.env.HOMEFLOW_STUDY_LANGUAGE_ENABLED='true'
+  f.env.APP_ENV='preview'
+  assert.equal((await scopedLanguage(f,memberToken,'/cards?lang=ja')).status,503)
+ }finally{f.raw.close()}
+})
