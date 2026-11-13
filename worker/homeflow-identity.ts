@@ -298,3 +298,22 @@ export async function homeflowStudyIdentity(req:Request,env:StudyEnv):Promise<Re
   return json({code:'NOT_FOUND'},404)
  }catch{return json({code:'SSO_INTERNAL_ERROR'},503)}
 }
+
+
+// A B-stage HomeFlow identity-only cookie is NOT a legacy study session.
+// Stage E modules can use this separately to scope every private SQL key;
+// never substitute nickname or a client-provided actor ID for this result.
+export async function verifiedStudyActor(req:Request,env:StudyEnv):Promise<{
+ user_id:string;household_id:string;role:'owner'|'member';display_name:string
+}|null>{
+ if(!homeflowStudyReady(env,new URL(req.url)))return null
+ const response=await me(req,env)
+ if(response.status!==200)return null
+ const body=await response.json() as Record<string,unknown>
+ const actor=body.identity as Record<string,unknown>|undefined
+ if(body.ok!==true||!actor||typeof actor.user_id!=='string'||
+  typeof actor.household_id!=='string'||typeof actor.display_name!=='string'||
+  (actor.role!=='owner'&&actor.role!=='member'))return null
+ return {user_id:actor.user_id,household_id:actor.household_id,
+  role:actor.role,display_name:actor.display_name}
+}
