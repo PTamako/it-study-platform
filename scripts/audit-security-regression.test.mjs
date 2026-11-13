@@ -7,7 +7,8 @@ import ts from 'typescript'
 import { webcrypto } from 'node:crypto'
 if (!globalThis.crypto) globalThis.crypto = webcrypto
 let source = readFileSync(new URL('../worker/index.ts', import.meta.url), 'utf8')
-source = source.replace("import { checkWriteRateLimit, handleAuthRequest, requireAuth } from './auth'", "const checkWriteRateLimit=async()=>null; const handleAuthRequest=async()=>null; const requireAuth=async()=>null;")
+source = source.replace("import { checkWriteRateLimit, handleAuthRequest, requireAuth } from './auth'",
+  "const checkWriteRateLimit=async()=>null; const handleAuthRequest=async()=>null; const requireAuth=async(request)=>request.url.includes('/api/dictionary') && request.headers.get('x-test-auth')!=='yes'?new Response('unauthorized',{status:401}):null;")
 source = source.replace("import { feSeeds, seedUrl } from './fe-question-bank'", "const feSeeds=[]; const seedUrl=()=>'';")
 source = inlineChineseDictionary(source)
 const worker = (await import('data:text/javascript;base64,' + Buffer.from(ts.transpile(source, {target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext})).toString('base64'))).default
@@ -39,6 +40,14 @@ test('public dictionary rate limit is atomic and returns retry-after; other API 
     const rows=sqlite.prepare('SELECT bucket_key FROM public_dictionary_rate_limits').all()
     assert.equal(rows.length,2)
     assert.ok(rows.every(row=>/^[a-f0-9]{64}$/.test(row.bucket_key)))
+    // Authenticated owner requests use HMAC auth, not the anonymous D1 limiter.
+    for (let i=0; i<35; i++) {
+      const owner = await worker.fetch(new Request(base+'/api/dictionary?q=hello&lang=en', {
+        headers: {'cf-connecting-ip':'192.0.2.1','x-test-auth':'yes'},
+      }),env)
+      assert.equal(owner.status,200)
+    }
+    assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM public_dictionary_rate_limits').get().n,2)
   } finally {globalThis.fetch=originalFetch}
 })
 test('the exam history delete endpoint requires server-side confirmation',async()=>{
