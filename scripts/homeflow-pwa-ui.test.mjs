@@ -8,6 +8,7 @@ const daily=readFileSync(new URL('../src/StudyHomeFlowDailyTasks.vue',import.met
 const language=readFileSync(new URL('../src/StudyHomeFlowLanguage.vue',import.meta.url),'utf8')
 const exams=readFileSync(new URL('../src/StudyHomeFlowExams.vue',import.meta.url),'utf8')
 const mock=readFileSync(new URL('../src/StudyHomeFlowMock.vue',import.meta.url),'utf8')
+const receipts=readFileSync(new URL('../src/StudyHomeFlowMockReceipts.vue',import.meta.url),'utf8')
 
 test('HomeFlow PWA entry remains feature gated and cannot authenticate legacy study APIs',()=>{
  assert.match(ui,/api\('status'\)/)
@@ -123,4 +124,22 @@ test('HomeFlow mock exam only sends full privately answered paper to the actor s
  assert.doesNotMatch(mock,/localStorage\.(?:getItem|setItem)|sessionStorage\.(?:getItem|setItem)/)
  assert.doesNotMatch(mock,/\/api\/mock-exam\/(?:submit|questions)/)
  assert.doesNotMatch(mock,/document\.cookie|access_token|session_assertion/)
+});
+
+
+test('private mock receipt history is actor-scoped, lazy loaded and never enters legacy cache',()=>{
+ assert.match(mock,/import StudyHomeFlowMockReceipts from '.\/StudyHomeFlowMockReceipts.vue'/)
+ assert.match(mock,/<StudyHomeFlowMockReceipts :key="props.userId"/)
+ assert.match(receipts,/\/api\/homeflow-study\/exams\/mock/)
+ assert.match(receipts,/\/receipts\?limit=10/)
+ assert.match(receipts,/\/receipt\?id=/)
+ assert.match(receipts,/\/legacy\/adopt/)
+ assert.match(receipts,/props.role!=='owner'/)
+ assert.match(receipts,/window.confirm\(/)
+ assert.match(receipts,/adoptionFinished/)
+ assert.match(receipts,/revision\+\+/)
+ assert.match(receipts,/onUnmounted\(\(\)=>\{revision\+\+;chosen.value=null/)
+ assert.doesNotMatch(receipts,/localStorage\.|sessionStorage\./)
+ assert.doesNotMatch(receipts,/\/api\/mock-exam\/(?:submit|questions)/)
+ assert.doesNotMatch(receipts,/document\.cookie|access_token|session_assertion/)
 });
