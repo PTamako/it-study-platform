@@ -597,7 +597,6 @@ test('Stage E language mastery and grades stay independent between spouses',asyn
    card_id:'ja-sentence-001',grade:'remembered',version:0,request_id:'a'.repeat(32)})
   assert.equal(grade.status,200,await grade.clone().text())
   assert.equal((await grade.json()).review.review_count,1)
-  assert.equal((await grade.json().catch(()=>({}))).review,undefined) // response body cannot be read twice
   const ownerStill=(await (await scopedLanguage(f,ownerToken,'/cards?lang=ja')).json()).items
   assert.equal(ownerStill[0].review_count,3)
   assert.equal(ownerStill[0].mastery_version,1)
