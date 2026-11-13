@@ -80,7 +80,9 @@ async function catalog(env:Env,url:URL,actor:Actor){
 async function mastery(req:Request,env:Env,url:URL,actor:Actor){
  const data=await readBody(req,url)
  if(!data)return json({code:'BAD_ORIGIN_OR_BODY'},403)
- if(!only(data,['card_id','mastered','version'])||
+ // SSO session may change between Safari PWA save and a queued retry.
+ if(data.expected_user_id!==actor.user_id)return json({code:'ACTOR_CHANGED'},403)
+ if(!only(data,['card_id','mastered','version','expected_user_id'])||
   !cardId(data.card_id)||typeof data.mastered!=='boolean'||!version(data.version))
   return json({code:'INVALID_MASTERY'},400)
  const card=data.card_id,desired=data.mastered?1:0,expected=data.version
@@ -124,7 +126,8 @@ async function currentReview(env:Env,actor:Actor,card:string){
 async function review(req:Request,env:Env,url:URL,actor:Actor){
  const data=await readBody(req,url)
  if(!data)return json({code:'BAD_ORIGIN_OR_BODY'},403)
- if(!only(data,['card_id','grade','version','request_id'])||
+ if(data.expected_user_id!==actor.user_id)return json({code:'ACTOR_CHANGED'},403)
+ if(!only(data,['card_id','grade','version','request_id','expected_user_id'])||
   !cardId(data.card_id)||!version(data.version)||
   !['again','hard','remembered'].includes(String(data.grade))||
   typeof data.request_id!=='string'||!/^[A-Za-z0-9_-]{20,96}$/.test(data.request_id))
@@ -198,8 +201,10 @@ function validLegacy(row:RecordValue,kind:'mastery'|'reviews'){
 async function adopt(req:Request,env:Env,url:URL,actor:Actor){
  if(actor.role!=='owner')return json({code:'ONLY_ORIGINAL_OWNER'},403)
  const data=await readBody(req,url)
- if(!data||data.confirm!==true||
-  !only(data,['confirm','kind','after'])||
+ if(!data)return json({code:'BAD_ORIGIN_OR_BODY'},403)
+ if(data.expected_user_id!==actor.user_id)return json({code:'ACTOR_CHANGED'},403)
+ if(data.confirm!==true||
+  !only(data,['confirm','kind','after','expected_user_id'])||
   !['mastery','reviews'].includes(String(data.kind)))
   return json({code:'CONFIRM_REQUIRED'},403)
  const kind=data.kind as 'mastery'|'reviews'
