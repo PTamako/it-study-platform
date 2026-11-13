@@ -30,6 +30,63 @@ type ModuleId = 'home' | 'exam' | 'practical' | 'language' | 'dictionary'
 
 const authenticated = ref(false)
 const authReady = ref(false)
+// The old single-password PWA has unlabelled localStorage/queued work.
+// Never auto-claim any of it for a new HomeFlow user or silently show it
+// after switching HomeFlow accounts on a shared iPhone.
+const LEGACY_QUARANTINE='zhixue:legacy-cache-quarantine-v1'
+const homeflowIdentityUser=ref<string|null>(null)
+const legacyRequiresPassword=ref((()=>{
+ try{return localStorage.getItem(LEGACY_QUARANTINE)==='1'}
+ catch{return false}
+})())
+let homeflowProbeGeneration=0
+function quarantineLegacyStudy(userId:string){
+ homeflowIdentityUser.value=userId
+ if(!legacyRequiresPassword.value){
+  legacyRequiresPassword.value=true
+  try{localStorage.setItem(LEGACY_QUARANTINE,'1')}catch{/* fail closed in memory */}
+ }
+ // Hide old single-user content while HomeFlow identity is active.
+ // Keep the existing storage bytes intact; only the original password
+ // holder may explicitly reopen that legacy study workspace.
+ authenticated.value=false
+ authPassword.value=''
+ dailyHydrationRun++
+ masterySyncGeneration++
+ dailyWordHydrationRun++
+}
+function onHomeflowIdentityChanged(userId:string|null){
+ if(userId){quarantineLegacyStudy(userId);return}
+ if(homeflowIdentityUser.value){
+  homeflowIdentityUser.value=null
+  authenticated.value=false
+  // Never auto-open the old owner cache after a member logs out.
+  // The legacy password form remains available by explicit choice.
+ }
+}
+async function probeHomeflowIdentity(){
+ const generation=++homeflowProbeGeneration
+ try{
+  const res=await fetch('/api/homeflow-sso/me',{
+   credentials:'same-origin',cache:'no-store'
+  })
+  if(generation!==homeflowProbeGeneration)return Boolean(homeflowIdentityUser.value)
+  if(res.ok){
+   const data=await res.json() as {identity?:{user_id?:unknown}}
+   if(generation!==homeflowProbeGeneration)return Boolean(homeflowIdentityUser.value)
+   const id=data.identity?.user_id
+   if(typeof id==='string'&&id.length>0&&id.length<=128){
+    quarantineLegacyStudy(id)
+    return true
+   }
+  }
+  homeflowIdentityUser.value=null
+  return false
+ }catch{
+  // An uncertain check cannot unlock quarantined legacy data.
+  return Boolean(homeflowIdentityUser.value)
+ }
+}
 const authConfigured = ref(true)
 const authPassword = ref('')
 const authError = ref('')
@@ -40,10 +97,15 @@ function applyAppUpdate() { window.location.reload() }
 
 async function checkAuth() {
   try {
+    if(await probeHomeflowIdentity()||legacyRequiresPassword.value){
+     authenticated.value=false
+     return
+    }
     const response = await fetch('/api/auth/session', { cache: 'no-store' })
     const result = await response.json() as { authenticated?: boolean; configured?: boolean }
     authConfigured.value = result.configured !== false
-    authenticated.value = response.ok && result.authenticated === true
+    authenticated.value = !homeflowIdentityUser.value&&!legacyRequiresPassword.value&&
+     response.ok && result.authenticated === true
   } catch {
     authenticated.value = false
     dailyHydrationRun++
@@ -54,9 +116,12 @@ async function checkAuth() {
 }
 
 async function login() {
+  if(authLoading.value)return
   authLoading.value = true
   authError.value = ''
   try {
+    if(await probeHomeflowIdentity())
+     throw Error('已连接 HomeFlow 身份，请先退出 HomeFlow 才能使用旧密码学习空间')
     const response = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -64,6 +129,8 @@ async function login() {
     })
     const result = await response.json() as { error?: string; authenticated?: boolean }
     if (!response.ok || result.authenticated !== true) throw new Error(result.error || '登录失败，请稍后重试。')
+    legacyRequiresPassword.value=false
+    try{localStorage.removeItem(LEGACY_QUARANTINE)}catch{/* memory state unlocks only after password */}
     authenticated.value = true
     dailyWordSyncState.value = 'loading'
     dailyWordSyncError.value = ''
@@ -310,10 +377,15 @@ let dailyRolloverTimer: ReturnType<typeof setInterval> | undefined
 function onDailyNetworkOnline() { if (authenticated.value) void hydrateDailyWordProgress() }
 function onDailyVisibilityChange() {
   if (document.visibilityState === 'visible') {
+    // A Safari account switch may occur while this installed PWA is asleep.
+    // Check HomeFlow before refreshing any legacy PWA learner data.
+    if(authenticated.value){
+     void probeHomeflowIdentity().then(active=>{
+      if(!active&&authenticated.value)void hydrateDailyWordProgress()
+     })
+    }
     rolloverDailyTasks()
-    // iOS may throttle background intervals: refresh due cards immediately on resume.
     reviewClockNow.value = Date.now()
-    if (authenticated.value) void hydrateDailyWordProgress()
   }
 }
 const examRecords = ref<ExamRecord[]>(readStored('zhixue:exam-records', []))
@@ -2914,7 +2986,11 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
     <div class="auth-card"><div class="auth-mark"><BookOpen :size="28" /></div><h1>知学</h1><p>正在确认登录状态…</p></div>
   </section>
   <section v-else-if="!authenticated" class="auth-screen">
-    <form class="auth-card" @submit.prevent="login">
+    <p v-if="homeflowIdentityUser" class="auth-card" role="status">
+      当前已连接 HomeFlow，旧版学习资料不会自动显示或归属其他家庭成员。
+      如需进入旧学习空间，请先退出 HomeFlow，再用原密码登录。
+    </p>
+    <form v-else class="auth-card" @submit.prevent="login">
       <div class="auth-mark"><ShieldCheck :size="28" /></div>
           <h1>欢迎回来</h1>
 
@@ -2927,7 +3003,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
       </button>
 
     </form>
-    <StudyHomeFlowAccess />
+    <StudyHomeFlowAccess @identity-changed="onHomeflowIdentityChanged" />
   </section>
   <div v-else class="app-shell">
     <aside class="sidebar">
@@ -2968,7 +3044,8 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
       </nav>
 
       <div class="content-wrap">
-        <StudyHomeFlowAccess v-if="activeModule==='home'" />
+        <StudyHomeFlowAccess v-if="activeModule==='home'"
+          @identity-changed="onHomeflowIdentityChanged" />
         <section class="welcome-row">
           <div>
             
