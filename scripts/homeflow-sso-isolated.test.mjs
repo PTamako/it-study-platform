@@ -16,10 +16,15 @@ writeFileSync(join(dir,'auth.mts'),readFileSync(new URL('../worker/auth.ts',impo
 writeFileSync(join(dir,'homeflow-vocabulary.mts'),
  readFileSync(new URL('../worker/homeflow-vocabulary.ts',import.meta.url),'utf8')
   .replace("from './homeflow-identity'","from './homeflow-identity.mts'"))
+writeFileSync(join(dir,'homeflow-daily-tasks.mts'),
+ readFileSync(new URL('../worker/homeflow-daily-tasks.ts',import.meta.url),'utf8')
+  .replace("from './homeflow-identity'","from './homeflow-identity.mts'"))
 const {homeflowStudyIdentity,homeflowStudyReady}=
  await import(pathToFileURL(join(dir,'homeflow-identity.mts')))
 const {homeflowVocabulary}=
  await import(pathToFileURL(join(dir,'homeflow-vocabulary.mts')))
+const {homeflowDailyTasks}=
+ await import(pathToFileURL(join(dir,'homeflow-daily-tasks.mts')))
 process.on('exit',()=>{rmSync(dir,{recursive:true,force:true})})
 const app='https://study.example.test',hf='https://homeflow.example.test'
 const owner='11111111-1111-4111-8111-111111111111'
@@ -33,7 +38,13 @@ function sqliteEnv(){
  raw.exec('PRAGMA foreign_keys=ON;')
  raw.exec(readFileSync(new URL('../migrations/0180_homeflow_identity_isolation.sql',import.meta.url),'utf8'))
  raw.exec(readFileSync(new URL('../migrations/0181_homeflow_user_vocabulary.sql',import.meta.url),'utf8'))
+ raw.exec(readFileSync(new URL('../migrations/0182_homeflow_user_daily_tasks.sql',import.meta.url),'utf8'))
  raw.exec("CREATE TABLE saved_vocabulary_entries_v2(language TEXT,term TEXT,entry_json TEXT,saved_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(language,term));")
+ raw.exec("CREATE TABLE daily_task_completions(task_id TEXT NOT NULL,study_date TEXT NOT NULL,completed INTEGER NOT NULL DEFAULT 0,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(task_id,study_date));")
+ raw.prepare("INSERT INTO daily_task_completions(task_id,study_date,completed) VALUES(?,?,?)")
+  .run('daily-grammar','2026-11-13',1)
+ raw.prepare("INSERT INTO daily_task_completions(task_id,study_date,completed) VALUES(?,?,?)")
+  .run('daily-listening','2026-11-13',0)
  raw.prepare('INSERT INTO saved_vocabulary_entries_v2(language,term,entry_json) VALUES(?,?,?)')
   .run('ja','報告',JSON.stringify({term:'報告',zh:'报告（原主人的旧生词）'}))
  const db={prepare(sql){
