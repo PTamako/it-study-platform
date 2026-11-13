@@ -242,7 +242,7 @@ test('Stage E new vocabulary is per-actor; owner adopts old terms but member sta
    .match(/__Host-study_hf=([0-9a-f]{64})/)[1]
   read=await scoped(memberCookie)
   assert.equal(read.status,200)
-  assert.equal((await read.json()).items.length,0,'member never inherits original owner's vocabulary')
+  assert.equal((await read.json()).items.length,0,"member never inherits original owner's vocabulary")
   assert.equal((await scoped(memberCookie,'/legacy/adopt','POST',{confirm:true})).status,403)
   const save=async(cookie,meaning)=>scoped(cookie,'','POST',{
    language:'ja',term:'報告',action:'save',explicit:true,
