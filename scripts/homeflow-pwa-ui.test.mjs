@@ -5,6 +5,7 @@ import {readFileSync} from 'node:fs'
 const ui=readFileSync(new URL('../src/StudyHomeFlowAccess.vue',import.meta.url),'utf8')
 const app=readFileSync(new URL('../src/App.vue',import.meta.url),'utf8')
 const daily=readFileSync(new URL('../src/StudyHomeFlowDailyTasks.vue',import.meta.url),'utf8')
+const grammar=readFileSync(new URL('../src/StudyHomeFlowGrammar.vue',import.meta.url),'utf8')
 const language=readFileSync(new URL('../src/StudyHomeFlowLanguage.vue',import.meta.url),'utf8')
 const exams=readFileSync(new URL('../src/StudyHomeFlowExams.vue',import.meta.url),'utf8')
 const mock=readFileSync(new URL('../src/StudyHomeFlowMock.vue',import.meta.url),'utf8')
@@ -18,7 +19,7 @@ test('HomeFlow PWA entry remains feature gated and cannot authenticate legacy st
  assert.match(app,/<StudyHomeFlowAccess \/>/)
  assert.match(app,/<StudyHomeFlowAccess v-if="activeModule==='home'"/)
  assert.doesNotMatch(ui,/authenticated\.value\s*=\s*true/)
- assert.match(ui,/每日任务、语言卡、练习错题、成绩与 SG\/FE 模拟考试已独立隔离；其余学习模块仍待完成/)
+ assert.match(ui,/每日任务、每日语法、语言卡、练习错题、成绩与 SG\/FE 模拟考试使用独立身份接口/)
 })
 
 test('Safari-to-installed-PWA resume uses only short-lived one-time proof, not bearer token',()=>{
@@ -142,4 +143,20 @@ test('private mock receipt history is actor-scoped, lazy loaded and never enters
  assert.doesNotMatch(receipts,/localStorage\.|sessionStorage\./)
  assert.doesNotMatch(receipts,/\/api\/mock-exam\/(?:submit|questions)/)
  assert.doesNotMatch(receipts,/document\.cookie|access_token|session_assertion/)
+});
+
+test('personal grammar PWA uses scoped online-only API, explicit owner adoption, no old cache',()=>{
+ assert.match(ui,/import StudyHomeFlowGrammar from '.\/StudyHomeFlowGrammar.vue'/)
+ assert.match(ui,/<StudyHomeFlowGrammar v-if="identity" :key="'grammar:'\+identity.user_id"/)
+ assert.match(grammar,/\/api\/homeflow-study\/grammar\/status/)
+ assert.match(grammar,/status.enabled===true&&status.scope==='user'/)
+ assert.match(grammar,/\/api\/homeflow-study\/grammar\?date=/)
+ assert.match(grammar,/\/api\/homeflow-study\/grammar\/legacy\/adopt/)
+ assert.match(grammar,/expected_user_id:props.userId/)
+ assert.match(grammar,/props.role!=='owner'/)
+ assert.match(grammar,/window.confirm\(/)
+ assert.match(grammar,/onUnmounted\(\(\)=>\{generation\+\+;rows.value=\[\]/)
+ assert.match(grammar,/document.addEventListener\('visibilitychange',foreground\)/)
+ assert.doesNotMatch(grammar,/localStorage\.|sessionStorage\.|indexedDB\.|\/api\/grammar-progress/)
+ assert.doesNotMatch(grammar,/document\.cookie|access_token|session_assertion/)
 });
