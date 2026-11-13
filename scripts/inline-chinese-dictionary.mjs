@@ -8,6 +8,7 @@ const providerImport = "import { eligibleChineseWord, fetchChineseWordMetadata }
 const studyIdentityImport = "import { homeflowStudyIdentity } from './homeflow-identity'"
 const studyVocabularyImport = "import { homeflowVocabulary } from './homeflow-vocabulary'"
 const studyDailyImport = "import { homeflowDailyTasks } from './homeflow-daily-tasks'"
+const studyGrammarImport = "import { homeflowGrammar } from './homeflow-grammar'"
 const studyLanguageImport = "import { homeflowLanguage } from './homeflow-language'"
 const studyExamsImport = "import { homeflowExams } from './homeflow-exams'"
 const studyMockImport = "import { homeflowMockExam } from './homeflow-mock'"
@@ -26,6 +27,8 @@ export function inlineChineseDictionary(workerSource) {
       "const homeflowVocabulary = async () => new Response('per-user vocabulary disabled', {status:503})")
     .replace(studyDailyImport,
       "const homeflowDailyTasks = async () => new Response('per-user daily tasks disabled', {status:503})")
+    .replace(studyGrammarImport,
+      "const homeflowGrammar = async () => new Response('per-user grammar disabled', {status:503})")
     .replace(studyLanguageImport,
       "const homeflowLanguage = async () => new Response('per-user language disabled', {status:503})")
     .replace(studyExamsImport,
