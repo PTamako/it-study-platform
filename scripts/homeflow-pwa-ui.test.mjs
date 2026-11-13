@@ -7,6 +7,7 @@ const app=readFileSync(new URL('../src/App.vue',import.meta.url),'utf8')
 const daily=readFileSync(new URL('../src/StudyHomeFlowDailyTasks.vue',import.meta.url),'utf8')
 const language=readFileSync(new URL('../src/StudyHomeFlowLanguage.vue',import.meta.url),'utf8')
 const exams=readFileSync(new URL('../src/StudyHomeFlowExams.vue',import.meta.url),'utf8')
+const mock=readFileSync(new URL('../src/StudyHomeFlowMock.vue',import.meta.url),'utf8')
 
 test('HomeFlow PWA entry remains feature gated and cannot authenticate legacy study APIs',()=>{
  assert.match(ui,/api\('status'\)/)
@@ -16,7 +17,7 @@ test('HomeFlow PWA entry remains feature gated and cannot authenticate legacy st
  assert.match(app,/<StudyHomeFlowAccess \/>/)
  assert.match(app,/<StudyHomeFlowAccess v-if="activeModule==='home'"/)
  assert.doesNotMatch(ui,/authenticated\.value\s*=\s*true/)
- assert.match(ui,/每日任务、语言卡、练习错题与成绩可独立使用；完整模拟考试与其他学习模块仍待隔离/)
+ assert.match(ui,/每日任务、语言卡、练习错题、成绩与 SG\/FE 模拟考试已独立隔离；其余学习模块仍待完成/)
 })
 
 test('Safari-to-installed-PWA resume uses only short-lived one-time proof, not bearer token',()=>{
@@ -101,4 +102,25 @@ test('Stage E exams UI is isolated per verified HomeFlow user and never exposes 
  assert.doesNotMatch(exams,/localStorage\.(?:getItem|setItem)/)
  assert.doesNotMatch(exams,/\/api\/(?:attempts|wrong-questions|exam-history|question-progress|mock-exam\/submit)(?![\w/-])/)
  assert.doesNotMatch(exams,/document\.cookie|access_token|session_assertion/)
+});
+
+
+test('HomeFlow mock exam only sends full privately answered paper to the actor scoped backend',()=>{
+ assert.match(ui,/import StudyHomeFlowMock from '.\/StudyHomeFlowMock.vue'/)
+ assert.match(ui,/<StudyHomeFlowMock v-if="identity" :key="'mock:'\+identity.user_id"/)
+ assert.match(mock,/\/api\/homeflow-study\/exams\/mock/)
+ assert.match(mock,/res.enabled===true&&res.scope==='user'&&res.legacy_access===false|data.enabled===true&&data.scope==='user'&&data.legacy_access===false/)
+ assert.match(mock,/\/questions\?track=/)
+ assert.match(mock,/\/submit/)
+ assert.match(mock,/crypto.randomUUID\(\)/)
+ assert.match(mock,/pending.value=null/)
+ assert.match(mock,/重试同一次交卷（不会重复计分）/)
+ assert.match(mock,/new Set\(data.items.map/)
+ assert.match(mock,/window.confirm\(/)
+ assert.match(mock,/result.review.find/)
+ assert.match(mock,/document.addEventListener\('visibilitychange',foreground\)/)
+ assert.match(mock,/document.removeEventListener\('visibilitychange',foreground\)/)
+ assert.doesNotMatch(mock,/localStorage\.(?:getItem|setItem)|sessionStorage\.(?:getItem|setItem)/)
+ assert.doesNotMatch(mock,/\/api\/mock-exam\/(?:submit|questions)/)
+ assert.doesNotMatch(mock,/document\.cookie|access_token|session_assertion/)
 });
