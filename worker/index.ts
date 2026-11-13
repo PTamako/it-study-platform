@@ -3,6 +3,7 @@ import { homeflowStudyIdentity } from './homeflow-identity'
 import { homeflowVocabulary } from './homeflow-vocabulary'
 import { homeflowDailyTasks } from './homeflow-daily-tasks'
 import { homeflowGrammar } from './homeflow-grammar'
+import { homeflowListening } from './homeflow-listening'
 import { homeflowLanguage } from './homeflow-language'
 import { homeflowExams } from './homeflow-exams'
 import { homeflowMockExam } from './homeflow-mock'
@@ -1353,6 +1354,11 @@ export default {
         url.pathname === '/api/homeflow-study/grammar/status' ||
         url.pathname === '/api/homeflow-study/grammar/legacy/adopt')
       return homeflowGrammar(request, env)
+    // Listening is a new person-scoped namespace, not legacy /api/listening-progress.
+    if (url.pathname === '/api/homeflow-study/listening' ||
+        url.pathname === '/api/homeflow-study/listening/status' ||
+        url.pathname === '/api/homeflow-study/listening/legacy/adopt')
+      return homeflowListening(request, env)
     // HomeFlow accounts have their own language mastery/review tables;
     // never accept this session as the old single-user study session.
     if (url.pathname === '/api/homeflow-study/language/status' ||
