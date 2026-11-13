@@ -8,6 +8,7 @@ type Card={
  last_grade:string|null;next_review_at:string|null;review_version:number
 }
 type Kind='mastery'|'reviews'
+const importKinds:Kind[]=['mastery','reviews']
 type ImportProgress={after:string;total:number;started:boolean;done:boolean}
 const props=defineProps<{userId:string;role:'owner'|'member'}>()
 const enabled=ref(false),loading=ref(false),busy=ref(false),error=ref('')
@@ -172,7 +173,7 @@ onUnmounted(()=>{
    @click="load(false)">加载更多课程</button>
   <div v-if="role==='owner'" class="hf-import">
    <strong>迁移原有学习记录</strong>
-   <div v-for="kind in (['mastery','reviews'] as const)" :key="kind">
+   <div v-for="kind in importKinds" :key="kind">
     <button v-if="!adoption[kind].done" type="button" :disabled="busy||loading"
      @click="importLegacy(kind)">
      {{adoption[kind].started?'继续导入':'导入'}}{{kind==='mastery'?'掌握记录':'复习记录'}}
