@@ -44,3 +44,11 @@
 - `scripts/homeflow-sso-isolated.test.mjs` 新真实 SQLite/模拟双 HomeFlow 身份回归：夫妻相同日期/ID 互不影响，owner 旧记录不自动泄漏，成员不可采用旧历史，版本冲突与无变化重试、真实 actor 追踪、不可变审计、损坏旧数据全页拒绝、20 条游标分页、源会话撤销、非法来源/日期/用户 ID 注入；`scripts/homeflow-pwa-ui.test.mjs` 新 PWA 私有缓存/按账号卸载/独立路由门槛测试。
 - 首批提交：`6fa428fe0bbad317f1ccd608e761df7c086c417c`、`5099ce60f4a4257a0b9f1427137d35388f561824`、`eacfaade12d573fd9f6c337403b23ae6a423c7e7`、`52bb92d19792cfcc3ac64eae3ad5402058c8d715`、`e950bc9d52b67f252c1bf97a9519404887e1604e`、`bef879e3d4ac1ef80358b80db23d7f2a421f9cc7`、`127612613a4ea2dc05b1313bead51f12c2a63e6a`、`306230e3a4ec5e496eb838f43fceda33c603cd28`、`81ae94ff7eaa217663d8fe43e083de9344ffd314`、`1183a3bd10e48d56056aec9df8ee23169722c391`、`86e6f26b7a2942953bb2fe2512c96dffdff1fe4d`。
 - 当前 [CI #43443153465](https://github.com/PTamako/it-study-platform/actions/runs/43443153465) **本记录时 in_progress**；后续必须以最新 Workflow 结果实查。尚未完成：语言卡复习、错题/考试作答、模拟考和每日词/语法/听力等表，旧 App 的 IndexedDB/localStorage 按 user_id 切换与真机两人交替登录。不能因为此每日任务模块通过而声称整个知学个人隔离完成。
+
+
+### 本次每日任务隔离最终 CI 核验
+
+- 原 [#179 Validate #43443670594](https://github.com/PTamako/it-study-platform/actions/runs/43443670594) 的失败是 16 个共用旧测试环境无法解析新增 `homeflow-daily-tasks` 相对 import；每日任务的三个真实 SQLite 双账号测试、PWA 隔离测试当时已成功。旧测试 `data:` URL 和临时 `.mts` 都使用 `scripts/inline-chinese-dictionary.mjs` 加载 Worker。
+- 提交 `5bd62dd8bfb54e24ad92aba5d0e6c037677c66c2` 只在该测试辅助文件中把 HomeFlow daily import 显式替换成返回 503 的测试替身；未改生产身份授权、旧单用户 API 或新增真实个人 API。
+- 最终最新 [**Validate #43444534566**](https://github.com/PTamako/it-study-platform/actions/runs/43444534566) GitHub Actions **completed / success**。实际 job 中 Run automated regression tests、Type-check and build frontend、Validate complete D1 migration chain locally 全部 **success**。最新本轮 Draft 代码 HEAD 为 `5bd62dd8bfb54e24ad92aba5d0e6c037677c66c2`；文档本身后续 commit 需再核对，但不代表生产上架。
+- 所有新 SSO/每日任务功能在生产默认 OFF，0180/0181/0182 仍未获执行授权，保留 A=用户本人待完成及所有旧记录原样。后继开发者可继续逐表按 user_id 隔离错题、模拟考、语言卡和个人缓存，不重做每日任务模块。
