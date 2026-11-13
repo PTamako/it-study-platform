@@ -1366,6 +1366,11 @@ test('HomeFlow grammar answers separate owner and member, first answer wins, leg
   assert.equal(f.raw.prepare("SELECT COUNT(*) n FROM homeflow_grammar_events WHERE action='answered'").get().n,1)
   assert.equal(f.raw.prepare("SELECT COUNT(*) n FROM homeflow_grammar_events WHERE action='legacy_adopted'").get().n,1)
   assert.deepEqual(f.raw.prepare('SELECT * FROM daily_grammar_answers').all(),old)
+  assert.throws(()=>f.raw.prepare(
+   'INSERT OR IGNORE INTO homeflow_grammar_answers '+
+   '(homeflow_user_id,study_date,language,question_id,answer_index,updated_by_user_id) VALUES(?,?,?,?,?,?)')
+   .run(owner,'2026-11-13','ja','ja-01:today:0',3,owner),/GRAMMAR_ANSWER_CONFLICT/,
+   'even a raced INSERT OR IGNORE must never silently discard different old answers')
   assert.throws(()=>f.raw.prepare('UPDATE homeflow_grammar_answers SET answer_index=3').run(),/IMMUTABLE_GRAMMAR_ANSWER/)
   assert.throws(()=>f.raw.prepare('DELETE FROM homeflow_grammar_events').run(),/IMMUTABLE_GRAMMAR_AUDIT/)
   assert.throws(()=>f.raw.prepare('INSERT INTO homeflow_grammar_answers(homeflow_user_id,study_date,language,question_id,answer_index,updated_by_user_id) VALUES(?,?,?,?,?,?)')
