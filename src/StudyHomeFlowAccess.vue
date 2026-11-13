@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {onMounted,ref} from 'vue'
+import {onMounted,onUnmounted,ref} from 'vue'
 import StudyHomeFlowDailyTasks from './StudyHomeFlowDailyTasks.vue'
 import StudyHomeFlowGrammar from './StudyHomeFlowGrammar.vue'
 import StudyHomeFlowListening from './StudyHomeFlowListening.vue'
@@ -18,6 +18,9 @@ const busy=ref(false)
 const error=ref('')
 const identity=ref<Identity|null>(null)
 const pending=ref<Pending|null>(null)
+// Invalidate in-flight identity probes on logout/unmount, so an old PWA
+// response cannot re-open the previous person's private panels.
+let identityGeneration=0
 
 // This is a five-minute, one-time PWA resume proof, never a HomeFlow access
 // token or study session. It must survive Safari leaving the installed PWA.
@@ -46,24 +49,30 @@ async function api(path:string,options:RequestInit={}){
  return value
 }
 async function check(){
+ const generation=++identityGeneration
  loading.value=true;error.value='';identity.value=null
  restorePending()
  try{
   const status=await api('status')
+  if(generation!==identityGeneration)return
   enabled.value=status.enabled===true
   if(!enabled.value){clearPending();return}
   const res=await fetch('/api/homeflow-sso/me',{
    cache:'no-store',credentials:'same-origin'
   })
+  if(generation!==identityGeneration)return
   if(res.ok){
    const value=await res.json() as {identity?:Identity}
+   if(generation!==identityGeneration)return
    identity.value=value.identity||null
    if(identity.value)clearPending()
   }
  }catch{
-  // The feature remains invisible while its backend is disabled/unavailable.
-  enabled.value=false
- }finally{loading.value=false}
+  // A prior user/session response must never re-open panels after sign-out.
+  if(generation===identityGeneration)enabled.value=false
+ }finally{
+  if(generation===identityGeneration)loading.value=false
+ }
 }
 async function begin(){
  if(busy.value||!enabled.value)return
@@ -107,6 +116,10 @@ async function complete(){
 }
 async function signOut(){
  if(busy.value)return
+ // Ignore any earlier /status or /me response, including a delayed Safari
+ // PWA response from a previous session. Do not claim logout on failure.
+ identityGeneration++
+ loading.value=false
  busy.value=true;error.value=''
  try{
   await api('logout',{method:'POST'})
@@ -116,6 +129,7 @@ async function signOut(){
  finally{busy.value=false}
 }
 onMounted(()=>{void check()})
+onUnmounted(()=>{identityGeneration++;identity.value=null})
 </script>
 
 <template>
