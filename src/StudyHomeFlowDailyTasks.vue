@@ -78,7 +78,7 @@ async function toggle(t:Task){
   })
   if(data.ok!==true||data.scope!=='user')throw Error('任务保存需要核验')
   await load()
- }catch(e){error.value=(e as Error).message;await load()}
+ }catch(e){const message=(e as Error).message;await load();error.value=message}
  finally{busy.value=false}
 }
 async function adopt(){
