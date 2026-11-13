@@ -13,10 +13,17 @@ function harness(fetch, date = '2026-10-28', day = date, storage = new Map()) {
     defaultTasks: [{ id: 'x', done: false }], mergeDailyTaskTemplates: (items, templates) => mergeDailyTaskTemplates(items, templates), cloudDashboardError: { value: '' },
     tokyoDate: () => day, readStored: (key, fallback) => storage.has(key) ? JSON.parse(storage.get(key)) : fallback,
     localStorage: { setItem: (key, value) => storage.set(key, value) },
+    legacyRequiresPassword: { value: false },
+    homeflowIdentityUser: { value: null },
     mergeDailyTaskStates: (current, cloud, unchanged) => current.map(t => {
       const row = cloud.find(x => x.task_id === t.id)
       return row && unchanged(t.id) ? { ...t, done: Boolean(row.completed) } : t
     }), loadCloudDashboard: async () => {} })
+  // App.vue defines this guard above the sliced daily-task runtime segment.
+  // Supply the real account/legacy-password invariant to the VM instead of
+  // bypassing the new HomeFlow cache-isolation behavior in these tests.
+  context.legacyWritesAllowed = () => context.authenticated.value &&
+    !context.legacyRequiresPassword.value && !context.homeflowIdentityUser.value
   vm.runInContext(stripTypeScriptTypes(segment, { mode: 'strip' }) + '\nthis.api = { rolloverDailyTasks, toggleDailyTask, refreshDailyTasks, reconcilePriorDailyTasks, retryPendingDailyTask, intents: pendingDailyTasks, invalidate: () => { dailyHydrationRun++ }, pending: dailyTaskSaveQueues }', context)
   return context
 }
@@ -147,4 +154,25 @@ test('prior-day successful write does not clear next-day pending intent', async 
   assert.equal(remaining.length,1)
   assert.equal(remaining[0].date,'2026-10-29')
   assert.equal(remaining[0].completed,false)
+})
+
+test('HomeFlow member or unverified legacy owner cannot roll over the old daily cache', async () => {
+  const storage = new Map()
+  const c = harness(async () => { throw Error('legacy cloud should not be touched') },
+    '2026-10-28', '2026-10-29', storage)
+  c.homeflowIdentityUser.value = '22222222-2222-4222-8222-222222222222'
+  c.api.rolloverDailyTasks()
+  assert.equal(c.todayKey.value, '2026-10-28',
+    'HomeFlow member cannot mutate unlabelled legacy daily task state')
+  assert.equal(storage.size, 0)
+  c.homeflowIdentityUser.value = null
+  c.legacyRequiresPassword.value = true
+  c.api.rolloverDailyTasks()
+  assert.equal(c.todayKey.value, '2026-10-28',
+    'unverified legacy password must not unlock old local cache')
+  assert.equal(storage.size, 0)
+  c.legacyRequiresPassword.value = false
+  c.api.rolloverDailyTasks()
+  assert.equal(c.todayKey.value, '2026-10-29',
+    'explicitly unlocked original legacy owner retains normal midnight behavior')
 })
