@@ -2,6 +2,7 @@ import { checkWriteRateLimit, handleAuthRequest, requireAuth } from './auth'
 import { homeflowStudyIdentity } from './homeflow-identity'
 import { homeflowVocabulary } from './homeflow-vocabulary'
 import { homeflowDailyTasks } from './homeflow-daily-tasks'
+import { homeflowGrammar } from './homeflow-grammar'
 import { homeflowLanguage } from './homeflow-language'
 import { homeflowExams } from './homeflow-exams'
 import { homeflowMockExam } from './homeflow-mock'
@@ -1346,6 +1347,12 @@ export default {
         url.pathname === '/api/homeflow-study/daily-tasks/status' ||
         url.pathname === '/api/homeflow-study/daily-tasks/legacy/adopt')
       return homeflowDailyTasks(request, env)
+    // Personal grammar answers must not inherit the single-user legacy session
+    // or its shared browser cache. Feature is OFF until release approval.
+    if (url.pathname === '/api/homeflow-study/grammar' ||
+        url.pathname === '/api/homeflow-study/grammar/status' ||
+        url.pathname === '/api/homeflow-study/grammar/legacy/adopt')
+      return homeflowGrammar(request, env)
     // HomeFlow accounts have their own language mastery/review tables;
     // never accept this session as the old single-user study session.
     if (url.pathname === '/api/homeflow-study/language/status' ||
