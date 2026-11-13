@@ -31,6 +31,11 @@ for n,topic,prompt,options,key,explanation in rows:
     values=[ident,'exam-fe',topic,'standard','single_choice',f'【IPA 2022年度 修了認定試験 2022-12-11 問{n}・改編】'+prompt,opts,json.dumps(key),explanation,'licensed',paper,'ja','A','explicit','standard','fe_exemption']
     q.append('('+','.join(map(sql,values))+')')
     occ.append('('+','.join(map(sql,['2022-12-11',n,'2022',ident,key,paper,answer]))+')')
+for old,new,key in [(33,30,'a'),(34,31,'a'),(37,35,'a'),(39,37,'d')]:
+    oldpaper='https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_Mondai_20210725_FE.pdf'
+    oldanswer='https://www.ipa.go.jp/shiken/about/ug65p90000001bq0-att/tokurei_ans_20210725_FE.pdf'
+    ident=f'fe-exempt-2022-20221211-q{new:02}'
+    occ.append('('+','.join(map(sql,['2021-07-25',old,'2021',ident,key,oldpaper,oldanswer]))+')')
 out='-- IPA 2022 December: source-reviewed interface, database, network and security questions.\n'
 out+='INSERT OR IGNORE INTO questions (id,track_id,topic,difficulty,question_type,prompt,options_json,answer_json,explanation,source_type,source_reference,language,exam_section,exam_section_method,question_kind,exam_origin) VALUES\n'+',\n'.join(q)+';\n'
 out+='INSERT OR IGNORE INTO fe_exemption_occurrences (sitting_date,original_question,fiscal_year,canonical_question_id,official_answer,question_url,answer_url) VALUES\n'+',\n'.join(occ)+';\n'
