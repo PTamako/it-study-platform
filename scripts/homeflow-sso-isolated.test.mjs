@@ -19,12 +19,17 @@ writeFileSync(join(dir,'homeflow-vocabulary.mts'),
 writeFileSync(join(dir,'homeflow-daily-tasks.mts'),
  readFileSync(new URL('../worker/homeflow-daily-tasks.ts',import.meta.url),'utf8')
   .replace("from './homeflow-identity'","from './homeflow-identity.mts'"))
+writeFileSync(join(dir,'homeflow-language.mts'),
+ readFileSync(new URL('../worker/homeflow-language.ts',import.meta.url),'utf8')
+  .replace("from './homeflow-identity'","from './homeflow-identity.mts'"))
 const {homeflowStudyIdentity,homeflowStudyReady}=
  await import(pathToFileURL(join(dir,'homeflow-identity.mts')))
 const {homeflowVocabulary}=
  await import(pathToFileURL(join(dir,'homeflow-vocabulary.mts')))
 const {homeflowDailyTasks}=
  await import(pathToFileURL(join(dir,'homeflow-daily-tasks.mts')))
+const {homeflowLanguage}=
+ await import(pathToFileURL(join(dir,'homeflow-language.mts')))
 process.on('exit',()=>{rmSync(dir,{recursive:true,force:true})})
 const app='https://study.example.test',hf='https://homeflow.example.test'
 const owner='11111111-1111-4111-8111-111111111111'
@@ -39,6 +44,30 @@ function sqliteEnv(){
  raw.exec(readFileSync(new URL('../migrations/0180_homeflow_identity_isolation.sql',import.meta.url),'utf8'))
  raw.exec(readFileSync(new URL('../migrations/0181_homeflow_user_vocabulary.sql',import.meta.url),'utf8'))
  raw.exec(readFileSync(new URL('../migrations/0182_homeflow_user_daily_tasks.sql',import.meta.url),'utf8'))
+ raw.exec(`CREATE TABLE language_cards(
+  id TEXT PRIMARY KEY, language TEXT NOT NULL, content_type TEXT NOT NULL,
+  category TEXT NOT NULL DEFAULT '', term TEXT NOT NULL DEFAULT '',
+  reading TEXT NOT NULL DEFAULT '', meaning_zh TEXT NOT NULL DEFAULT '',
+  example TEXT NOT NULL DEFAULT '', example_meaning_zh TEXT NOT NULL DEFAULT '');
+ CREATE TABLE language_card_progress(
+  card_id TEXT PRIMARY KEY REFERENCES language_cards(id), mastered INTEGER,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+ CREATE TABLE language_card_reviews(
+  card_id TEXT PRIMARY KEY REFERENCES language_cards(id),
+  review_count INTEGER,correct_streak INTEGER,
+  next_review_at TEXT,last_reviewed_at TEXT,last_result TEXT,last_grade TEXT,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);`)
+ raw.exec(readFileSync(new URL('../migrations/0183_homeflow_language_progress.sql',import.meta.url),'utf8'))
+ const card=raw.prepare('INSERT INTO language_cards(id,language,content_type,category,term,meaning_zh,example) VALUES(?,?,?,?,?,?,?)')
+ card.run('ja-sentence-001','ja','sentence','职场','報告いたします','向您报告','進捗をご報告します。')
+ card.run('ja-sentence-002','ja','sentence','日常','少々お待ちください','请稍等','少々お待ちください。')
+ card.run('en-sentence-001','en','sentence','Work','Keep me posted','及时同步','Keep me posted.')
+ const lp=raw.prepare('INSERT INTO language_card_progress(card_id,mastered) VALUES(?,?)')
+ lp.run('ja-sentence-001',1)
+ lp.run('en-sentence-001',0)
+ const lr=raw.prepare('INSERT INTO language_card_reviews(card_id,review_count,correct_streak,next_review_at,last_reviewed_at,last_result,last_grade) VALUES(?,?,?,?,?,?,?)')
+ lr.run('ja-sentence-001',3,0,'2026-11-18 00:00:00','2026-11-12 00:00:00','again','hard')
+ lr.run('en-sentence-001',2,2,'2026-11-20 00:00:00','2026-11-12 00:00:00','remembered','remembered')
  raw.exec("CREATE TABLE saved_vocabulary_entries_v2(language TEXT,term TEXT,entry_json TEXT,saved_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(language,term));")
  raw.exec("CREATE TABLE daily_task_completions(task_id TEXT NOT NULL,study_date TEXT NOT NULL,completed INTEGER NOT NULL DEFAULT 0,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(task_id,study_date));")
  raw.prepare("INSERT INTO daily_task_completions(task_id,study_date,completed) VALUES(?,?,?)")
