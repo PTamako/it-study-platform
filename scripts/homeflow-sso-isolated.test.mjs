@@ -1083,7 +1083,14 @@ test('Stage E SG FE personal mock exams preserve graded receipts and never revea
    'the test paper must never leak answer keys')
   const answers=sgPaper.items.map((q,i)=>({question_id:q.id,answer:i===0?'a':'b'}))
   const post={submission_id:'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
-   track:'exam-sg',section:'SG',study_date:'2026-11-13',duration_seconds:7200,answers}
+   track:'exam-sg',section:'SG',study_date:'2026-11-13',duration_seconds:7200,
+   expected_user_id:member,answers}
+  assert.equal((await scopedMock(f,memberToken,'/submit','POST',
+   {...post,expected_user_id:owner})).status,403,
+   'a queued exam from another account must not post under this member')
+  assert.equal((await scopedMock(f,ownerToken,'/submit','POST',post)).status,403,
+   'a member exam cannot be replayed under an owner session')
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_mock_exam_submissions').get().n,0)
   const saved=await scopedMock(f,memberToken,'/submit','POST',post)
   assert.equal(saved.status,201,await saved.clone().text())
   const grade=await saved.json()
@@ -1102,7 +1109,8 @@ test('Stage E SG FE personal mock exams preserve graded receipts and never revea
   assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_exam_history WHERE homeflow_user_id=?').get(member).n,1)
   assert.equal(f.raw.prepare("SELECT COUNT(*) n FROM homeflow_exam_events WHERE actor_user_id=? AND action='mock_submitted'").get(member).n,1)
   assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_mock_exam_submissions WHERE homeflow_user_id=?').get(owner).n,0)
-  const ownerSame=await scopedMock(f,ownerToken,'/submit','POST',post)
+  const ownerSame=await scopedMock(f,ownerToken,'/submit','POST',
+   {...post,expected_user_id:owner})
   assert.equal(ownerSame.status,201,'same id across independent HomeFlow users is allowed')
   assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_mock_exam_submissions').get().n,2)
   assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM study_attempts').get().n,1,
@@ -1136,7 +1144,7 @@ test('Stage E FE mock A and B require exact question distributions and preserve 
   const bAnswers=paperB.items.map(q=>({question_id:q.id,answer:'b'}))
   const payload={submission_id:'ffffffff-ffff-4fff-8fff-ffffffffffff',
    track:'exam-fe',section:'B',study_date:'2026-11-13',
-   duration_seconds:4800,answers:bAnswers}
+   duration_seconds:4800,expected_user_id:member,answers:bAnswers}
   assert.equal((await scopedMock(f,memberToken,'/submit','POST',payload,'https://evil.example')).status,403)
   assert.equal((await scopedMock(f,memberToken,'/submit','POST',{...payload,actor_user_id:owner})).status,400)
   assert.equal((await scopedMock(f,memberToken,'/submit','POST',{...payload,study_date:'2026-02-30'})).status,400)
@@ -1273,7 +1281,8 @@ test('Stage E original mock receipt adoption copies raw bytes only to the proved
   assert.throws(()=>f.raw.prepare('DELETE FROM homeflow_mock_legacy_adoptions').run(),/IMMUTABLE_MOCK_ADOPTION_AUDIT/)
   const retried=await scopedMock(f,ownerToken,'/submit','POST',{
    submission_id:old[0].id,track:'exam-sg',section:'SG',
-   study_date:'2026-11-11',duration_seconds:3001,answers:old[0].answers})
+   study_date:'2026-11-11',duration_seconds:3001,
+    expected_user_id:owner,answers:old[0].answers})
   assert.equal(retried.status,200,await retried.clone().text())
   assert.equal((await retried.json()).scope,'user',
    'legacy receipt replay receives new scoped envelope without modifying old bytes')
