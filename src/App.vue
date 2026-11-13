@@ -19,6 +19,7 @@ import { parseMockSnapshot, type MockSnapshot } from './mock-recovery'
 import ExamScratchTools from './ExamScratchTools.vue'
 import DailyGrammarLesson from './DailyGrammarLesson.vue'
 import DailyListeningPractice from './DailyListeningPractice.vue'
+import StudyHomeFlowAccess from './StudyHomeFlowAccess.vue'
 import {
   BookOpen, Languages, Search, GraduationCap,
   ChevronRight, ChevronDown, Sparkles, Clock3, Flame, Bookmark, Volume2, ArrowRight,
@@ -2926,6 +2927,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
       </button>
 
     </form>
+    <StudyHomeFlowAccess />
   </section>
   <div v-else class="app-shell">
     <aside class="sidebar">
@@ -2966,6 +2968,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
       </nav>
 
       <div class="content-wrap">
+        <StudyHomeFlowAccess v-if="activeModule==='home'" />
         <section class="welcome-row">
           <div>
             
