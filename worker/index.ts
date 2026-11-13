@@ -3,6 +3,7 @@ import { homeflowStudyIdentity } from './homeflow-identity'
 import { homeflowVocabulary } from './homeflow-vocabulary'
 import { homeflowDailyTasks } from './homeflow-daily-tasks'
 import { homeflowLanguage } from './homeflow-language'
+import { homeflowExams } from './homeflow-exams'
 import { feSeeds, seedUrl } from './fe-question-bank'
 import { eligibleChineseWord, fetchChineseWordMetadata } from './chinese-word-dictionary'
 
@@ -53,6 +54,7 @@ export interface Env {
   HOMEFLOW_STUDY_VOCAB_ENABLED?: string
   HOMEFLOW_STUDY_DAILY_PROGRESS_ENABLED?: string
   HOMEFLOW_STUDY_LANGUAGE_ENABLED?: string
+  HOMEFLOW_STUDY_EXAMS_ENABLED?: string
   STUDY_PUBLIC_ORIGIN?: string
   HOMEFLOW_OAUTH_ORIGIN?: string
   STUDY_SSO_ENCRYPTION_KEY?: string
@@ -1349,6 +1351,14 @@ export default {
         url.pathname === '/api/homeflow-study/language/review' ||
         url.pathname === '/api/homeflow-study/language/legacy/adopt')
       return homeflowLanguage(request, env)
+    // No new HomeFlow exam identity may authorize old single-user attempts.
+    if (url.pathname === '/api/homeflow-study/exams/status' ||
+        url.pathname === '/api/homeflow-study/exams/questions' ||
+        url.pathname === '/api/homeflow-study/exams/attempts' ||
+        url.pathname === '/api/homeflow-study/exams/wrong' ||
+        url.pathname === '/api/homeflow-study/exams/history' ||
+        url.pathname === '/api/homeflow-study/exams/legacy/adopt')
+      return homeflowExams(request, env)
     const authResponse = await handleAuthRequest(request, env)
     if (authResponse) return authResponse
 
