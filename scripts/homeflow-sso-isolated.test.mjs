@@ -1018,3 +1018,109 @@ test('Stage E owner exam adoption refuses damaged source pages without partial w
   assert.equal((await scopedExams(f,memberToken,'/history')).status,503)
  }finally{f.raw.close()}
 })
+
+
+function scopedMock(f,cookie,path='',method='GET',data=null,origin=app){
+ const headers={}
+ if(cookie)headers.Cookie='__Host-study_hf='+cookie
+ if(method==='POST'){headers.Origin=origin;headers['Content-Type']='application/json'}
+ return homeflowMockExam(new Request(app+'/api/homeflow-study/exams/mock'+path,{
+  method,headers,body:method==='POST'?JSON.stringify(data??{}):undefined
+ }),f.env)
+}
+test('Stage E SG FE personal mock exams preserve graded receipts and never reveal answers before submit',async()=>{
+ const f=sqliteEnv()
+ try{
+  assert.equal((await scopedMock(f,'','/status').then(x=>x.json())).enabled,false)
+  assert.equal((await scopedMock(f,'','/questions')).status,503)
+  f.env.HOMEFLOW_STUDY_EXAMS_ENABLED='true'
+  f.env.HOMEFLOW_STUDY_MOCK_ENABLED='true'
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  const sg=await scopedMock(f,memberToken,'/questions?track=exam-sg&section=SG')
+  assert.equal(sg.status,200,await sg.clone().text())
+  const sgPaper=await sg.json()
+  assert.equal(sgPaper.total,60)
+  assert.equal(sgPaper.section,'SG')
+  assert.equal(sgPaper.items.length,60)
+  assert.equal(sgPaper.items.filter(q=>q.exam_section==='A').length,48)
+  assert.equal(sgPaper.items.filter(q=>q.exam_section==='B').length,12)
+  assert.ok(!sgPaper.items.some(q=>'answer' in q||'answer_json' in q||'explanation' in q),
+   'the test paper must never leak answer keys')
+  const answers=sgPaper.items.map((q,i)=>({question_id:q.id,answer:i===0?'a':'b'}))
+  const post={submission_id:'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+   track:'exam-sg',section:'SG',study_date:'2026-11-13',duration_seconds:7200,answers}
+  const saved=await scopedMock(f,memberToken,'/submit','POST',post)
+  assert.equal(saved.status,201,await saved.clone().text())
+  const grade=await saved.json()
+  assert.equal(grade.correct_count,59)
+  assert.equal(grade.total,60)
+  assert.equal(grade.review.length,60)
+  assert.ok(grade.review[0].answer)
+  const repeated=await scopedMock(f,memberToken,'/submit','POST',post)
+  assert.equal(repeated.status,200)
+  assert.deepEqual(await repeated.json(),grade)
+  assert.equal((await scopedMock(f,memberToken,'/submit','POST',
+   {...post,answers:answers.map(q=>({...q,answer:'b'}))})).status,409)
+  const attempts=f.raw.prepare('SELECT COUNT(*) n FROM homeflow_study_attempts WHERE homeflow_user_id=?').get(member).n
+  assert.equal(attempts,60)
+  assert.equal(f.raw.prepare('SELECT SUM(review_count) n FROM homeflow_question_review_state WHERE homeflow_user_id=?').get(member).n,60)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_exam_history WHERE homeflow_user_id=?').get(member).n,1)
+  assert.equal(f.raw.prepare("SELECT COUNT(*) n FROM homeflow_exam_events WHERE actor_user_id=? AND action='mock_submitted'").get(member).n,1)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_mock_exam_submissions WHERE homeflow_user_id=?').get(owner).n,0)
+  const ownerSame=await scopedMock(f,ownerToken,'/submit','POST',post)
+  assert.equal(ownerSame.status,201,'same id across independent HomeFlow users is allowed')
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_mock_exam_submissions').get().n,2)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM study_attempts').get().n,1,
+   'legacy study attempts unchanged')
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM exam_history').get().n,1,
+   'legacy exam history unchanged')
+  assert.throws(()=>f.raw.prepare('DELETE FROM homeflow_mock_exam_submissions').run(),/IMMUTABLE_MOCK_RECEIPT/)
+  assert.throws(()=>f.raw.prepare('UPDATE homeflow_mock_exam_submissions SET study_date=?').run('2026-11-14'),/IMMUTABLE_MOCK_RECEIPT/)
+ }finally{f.raw.close()}
+})
+
+test('Stage E FE mock A and B require exact question distributions and preserve private scores',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_EXAMS_ENABLED='true'
+  f.env.HOMEFLOW_STUDY_MOCK_ENABLED='true'
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  assert.equal((await scopedMock(f,memberToken,'/questions?track=exam-ap&section=SG')).status,400)
+  assert.equal((await scopedMock(f,memberToken,'/questions?track=exam-fe&section=SG')).status,400)
+  const a=await scopedMock(f,memberToken,'/questions?track=exam-fe&section=A')
+  assert.equal(a.status,200,await a.clone().text())
+  const paperA=await a.json()
+  assert.equal(paperA.items.length,60)
+  assert.ok(paperA.items.every(q=>q.exam_section==='A'))
+  const b=await scopedMock(f,memberToken,'/questions?track=exam-fe&section=B')
+  assert.equal(b.status,200,await b.clone().text())
+  const paperB=await b.json()
+  assert.equal(paperB.total,20)
+  assert.equal(paperB.items.filter(q=>q.topic==='FE算法与程序设计').length,16)
+  assert.equal(paperB.items.filter(q=>q.topic==='FE信息安全').length,4)
+  const bAnswers=paperB.items.map(q=>({question_id:q.id,answer:'b'}))
+  const payload={submission_id:'ffffffff-ffff-4fff-8fff-ffffffffffff',
+   track:'exam-fe',section:'B',study_date:'2026-11-13',
+   duration_seconds:4800,answers:bAnswers}
+  assert.equal((await scopedMock(f,memberToken,'/submit','POST',payload,'https://evil.example')).status,403)
+  assert.equal((await scopedMock(f,memberToken,'/submit','POST',{...payload,actor_user_id:owner})).status,400)
+  assert.equal((await scopedMock(f,memberToken,'/submit','POST',{...payload,study_date:'2026-02-30'})).status,400)
+  assert.equal((await scopedMock(f,memberToken,'/submit','POST',
+   {...payload,answers:bAnswers.slice(0,19)})).status,400)
+  assert.equal((await scopedMock(f,memberToken,'/submit','POST',
+   {...payload,answers:bAnswers.map((q,i)=>i===19?bAnswers[0]:q)})).status,400)
+  assert.equal((await scopedMock(f,memberToken,'/submit','POST',
+   {...payload,answers:paperA.items.slice(0,20).map(q=>({question_id:q.id,answer:'b'}))})).status,409,
+   'wrong FE B distribution must not be scored as valid')
+  const done=await scopedMock(f,memberToken,'/submit','POST',payload)
+  assert.equal(done.status,201,await done.clone().text())
+  assert.equal((await done.json()).correct_count,20)
+  assert.equal((await (await scopedExams(f,memberToken,'/history')).json()).items[0].correct,20)
+  assert.equal((await (await scopedExams(f,ownerToken,'/history')).json()).items.length,0)
+  f.active.valid=false
+  assert.equal((await scopedMock(f,memberToken,'/submit','POST',payload)).status,401)
+  f.active.valid=true
+  f.env.HOMEFLOW_STUDY_MOCK_ENABLED='false'
+  assert.equal((await scopedMock(f,memberToken,'/questions?track=exam-fe&section=A')).status,503)
+ }finally{f.raw.close()}
+})
