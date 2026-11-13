@@ -1336,6 +1336,7 @@ export default {
     // A separate per-person daily progress namespace; never let the new HF
     // cookie authorize legacy /api/daily-tasks until all old caches isolate.
     if (url.pathname === '/api/homeflow-study/daily-tasks' ||
+        url.pathname === '/api/homeflow-study/daily-tasks/status' ||
         url.pathname === '/api/homeflow-study/daily-tasks/legacy/adopt')
       return homeflowDailyTasks(request, env)
     const authResponse = await handleAuthRequest(request, env)
