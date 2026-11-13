@@ -4,6 +4,7 @@ import { homeflowVocabulary } from './homeflow-vocabulary'
 import { homeflowDailyTasks } from './homeflow-daily-tasks'
 import { homeflowLanguage } from './homeflow-language'
 import { homeflowExams } from './homeflow-exams'
+import { homeflowMockExam } from './homeflow-mock'
 import { feSeeds, seedUrl } from './fe-question-bank'
 import { eligibleChineseWord, fetchChineseWordMetadata } from './chinese-word-dictionary'
 
@@ -55,6 +56,7 @@ export interface Env {
   HOMEFLOW_STUDY_DAILY_PROGRESS_ENABLED?: string
   HOMEFLOW_STUDY_LANGUAGE_ENABLED?: string
   HOMEFLOW_STUDY_EXAMS_ENABLED?: string
+  HOMEFLOW_STUDY_MOCK_ENABLED?: string
   STUDY_PUBLIC_ORIGIN?: string
   HOMEFLOW_OAUTH_ORIGIN?: string
   STUDY_SSO_ENCRYPTION_KEY?: string
@@ -1359,6 +1361,10 @@ export default {
         url.pathname === '/api/homeflow-study/exams/history' ||
         url.pathname === '/api/homeflow-study/exams/legacy/adopt')
       return homeflowExams(request, env)
+    if (url.pathname === '/api/homeflow-study/exams/mock/status' ||
+        url.pathname === '/api/homeflow-study/exams/mock/questions' ||
+        url.pathname === '/api/homeflow-study/exams/mock/submit')
+      return homeflowMockExam(request, env)
     const authResponse = await handleAuthRequest(request, env)
     if (authResponse) return authResponse
 
