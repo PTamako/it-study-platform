@@ -118,14 +118,17 @@ async function adopt(req:Request,env:StudyEnv,url:URL,user:Actor){
  const page=cursor(after)
  if(!page)return json({code:'INVALID_CURSOR'},400)
  const rows=(await env.DB.prepare(
-  'SELECT language,term FROM saved_vocabulary_entries_v2 '+
+  'SELECT language,term,json_valid(entry_json) AS entry_valid FROM saved_vocabulary_entries_v2 '+
   'WHERE language>? OR (language=? AND term>?) '+
   'ORDER BY language,term LIMIT 21')
   .bind(page.language,page.language,page.term).all<{language:string;term:string}>()).results||[]
  const chosen=rows.slice(0,20)
  if(!chosen.length)return json({ok:true,adopted:0,
   has_more:false,next_cursor:null,scope:'owner_only'})
- if(chosen.some(r=>!languages.has(r.language)||r.term.length<1||r.term.length>100))
+ // A corrupt legacy JSON row must stop the whole page instead of being
+ // silently skipped by INSERT ... WHERE json_valid() and then lost to cursor.
+ if(chosen.some(r=>!languages.has(r.language)||r.term.length<1||
+  r.term.length>100||Number(r.entry_valid)!==1))
   return json({code:'LEGACY_CONTENT_REVIEW_REQUIRED'},409)
  const end=chosen.at(-1)!
  const stamp=new Date().toISOString()
