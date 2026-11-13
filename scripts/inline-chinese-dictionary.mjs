@@ -9,6 +9,7 @@ const studyIdentityImport = "import { homeflowStudyIdentity } from './homeflow-i
 const studyVocabularyImport = "import { homeflowVocabulary } from './homeflow-vocabulary'"
 const studyDailyImport = "import { homeflowDailyTasks } from './homeflow-daily-tasks'"
 const studyLanguageImport = "import { homeflowLanguage } from './homeflow-language'"
+const studyExamsImport = "import { homeflowExams } from './homeflow-exams'"
 
 export function inlineChineseDictionary(workerSource) {
   if (!workerSource.includes(providerImport)) throw new Error('Chinese dictionary import no longer matches test loader')
@@ -25,4 +26,6 @@ export function inlineChineseDictionary(workerSource) {
       "const homeflowDailyTasks = async () => new Response('per-user daily tasks disabled', {status:503})")
     .replace(studyLanguageImport,
       "const homeflowLanguage = async () => new Response('per-user language disabled', {status:503})")
+    .replace(studyExamsImport,
+      "const homeflowExams = async () => new Response('per-user exams disabled', {status:503})")
 }
