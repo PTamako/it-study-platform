@@ -8,7 +8,7 @@ type Section='SG'|'A'|'B'
 type Question={id:string;topic:string;prompt:string;exam_section:string;
  options:Array<{id:string;text:string}>}
 type Paper={track:Track;section:Section;total:number;duration_minutes:number;items:Question[]}
-type Pending={submission_id:string;track:Track;section:Section;study_date:string;
+type Pending={submission_id:string;expected_user_id:string;track:Track;section:Section;study_date:string;
  duration_seconds:number;answers:Array<{question_id:string;answer:string}>}
 type Result={correct_count:number;total:number;review:Array<{
  id:string;answer:string;explanation:string}>;exam_name:string}
@@ -67,7 +67,8 @@ async function submit(){
  if(answered.value!==paper.value.total){error.value='请完成全部题目后再交卷';return}
  if(!window.confirm('交卷后将由服务器判分并保存到你自己的成绩记录。确定交卷？'))return
  const exam=paper.value
- pending.value={submission_id:crypto.randomUUID(),track:exam.track,section:exam.section,
+ pending.value={submission_id:crypto.randomUUID(),expected_user_id:props.userId,
+  track:exam.track,section:exam.section,
   study_date:tokyoDate(),duration_seconds:Math.min(86400,
    Math.max(0,Math.floor((Date.now()-createdAt)/1000))),
   answers:exam.items.map(q=>({question_id:q.id,answer:answers[q.id]}))}
@@ -75,20 +76,25 @@ async function submit(){
 }
 async function retry(){
  if(!pending.value||busy.value)return
- const payload=pending.value
+ const payload=pending.value,rev=generation
+ if(payload.expected_user_id!==props.userId){
+  error.value='当前 HomeFlow 账号与原交卷账号不同，已阻止跨账号提交。'
+  return
+ }
  busy.value=true;error.value=''
  try{
   const data=await api('/submit',{
    method:'POST',headers:{'Content-Type':'application/json'},
    body:JSON.stringify(payload)
   })
+  if(rev!==generation||props.userId!==payload.expected_user_id)return
   if(data.ok!==true||data.scope!=='user'||data.submission_id!==payload.submission_id||
     !Array.isArray(data.review)||data.review.length!==payload.answers.length)
     throw Error('交卷回执需要核验')
   result.value=data as Result
   pending.value=null
- }catch(e){error.value=(e as Error).message}
- finally{busy.value=false}
+ }catch(e){if(rev===generation)error.value=(e as Error).message}
+ finally{if(rev===generation)busy.value=false}
 }
 function foreground(){
  // Refresh feature status only while idle. Never discard an in-progress paper.
