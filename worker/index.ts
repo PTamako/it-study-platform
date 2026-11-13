@@ -5,6 +5,7 @@ import { homeflowDailyTasks } from './homeflow-daily-tasks'
 import { homeflowLanguage } from './homeflow-language'
 import { homeflowExams } from './homeflow-exams'
 import { homeflowMockExam } from './homeflow-mock'
+import { homeflowMockReceipts } from './homeflow-mock-receipts'
 import { feSeeds, seedUrl } from './fe-question-bank'
 import { eligibleChineseWord, fetchChineseWordMetadata } from './chinese-word-dictionary'
 
@@ -1365,6 +1366,10 @@ export default {
         url.pathname === '/api/homeflow-study/exams/mock/questions' ||
         url.pathname === '/api/homeflow-study/exams/mock/submit')
       return homeflowMockExam(request, env)
+    if (url.pathname === '/api/homeflow-study/exams/mock/receipts' ||
+        url.pathname === '/api/homeflow-study/exams/mock/receipt' ||
+        url.pathname === '/api/homeflow-study/exams/mock/legacy/adopt')
+      return homeflowMockReceipts(request, env)
     const authResponse = await handleAuthRequest(request, env)
     if (authResponse) return authResponse
 
