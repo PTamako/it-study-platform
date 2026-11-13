@@ -865,7 +865,8 @@ test('Stage E exams isolate practice, wrong answers and manual history between s
   const qs=await scopedExams(f,memberToken,'/questions?track=exam-sg')
   assert.equal(qs.status,200,await qs.clone().text())
   const publicCards=(await qs.json()).items
-  assert.equal(publicCards.length,2)
+  assert.equal(publicCards.length,15,'practice cards use the existing bounded page size')
+  assert.ok(publicCards.some(q=>q.id==='sg-example-001'))
   assert.ok(!Object.keys(publicCards[0]).includes('answer'),
    'practice question must never include the answer before grading')
   assert.equal(publicCards[0].wrong_count,0,
