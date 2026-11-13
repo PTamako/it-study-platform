@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {onMounted,ref} from 'vue'
 import StudyHomeFlowDailyTasks from './StudyHomeFlowDailyTasks.vue'
+import StudyHomeFlowLanguage from './StudyHomeFlowLanguage.vue'
 
 type Identity={user_id:string;household_id:string;role:'owner'|'member';display_name:string}
 type Pending={state:string;resume_secret:string;expires_at:number}
@@ -121,7 +122,7 @@ onMounted(()=>{void check()})
    {{ identity.display_name }} · {{ identity.role==='owner'?'家庭管理员':'家庭成员' }}
   </p>
   <p v-else class="hf-description">使用已有 HomeFlow 账号授权，不需要新建知学密码。</p>
-  <p v-if="identity" class="hf-note">每日任务可独立使用；其他个人学习数据隔离尚未开放。</p>
+  <p v-if="identity" class="hf-note">每日任务和语言卡可独立使用；考试、错题等仍待隔离。</p>
   <p v-else-if="pending" class="hf-note">在 Safari 完成授权后，返回此 PWA 点击「完成登录」。</p>
   <p v-if="error" class="hf-error" role="alert">{{ error }}</p>
   <div class="hf-actions">
@@ -137,6 +138,8 @@ onMounted(()=>{void check()})
    </template>
   </div>
   <StudyHomeFlowDailyTasks v-if="identity" :key="identity.user_id"
+   :user-id="identity.user_id" :role="identity.role" />
+  <StudyHomeFlowLanguage v-if="identity" :key="'language:'+identity.user_id"
    :user-id="identity.user_id" :role="identity.role" />
  </section>
 </template>
