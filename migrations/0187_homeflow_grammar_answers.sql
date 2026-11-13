@@ -11,8 +11,7 @@ CREATE TABLE IF NOT EXISTS homeflow_grammar_answers (
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY(homeflow_user_id,study_date,language,question_id)
 ) WITHOUT ROWID;
-CREATE INDEX IF NOT EXISTS idx_hf_grammar_owner_day
- ON homeflow_grammar_answers(homeflow_user_id,study_date,language);
+-- The composite PRIMARY KEY already indexes (user,date,language,question).
 CREATE TABLE IF NOT EXISTS homeflow_grammar_events (
   event_id TEXT PRIMARY KEY NOT NULL,
   actor_user_id TEXT NOT NULL REFERENCES homeflow_identity_links(homeflow_user_id) ON DELETE RESTRICT,
