@@ -297,7 +297,7 @@ test('legacy cache remains unclaimed and invisible after HomeFlow identity switc
 test('legacy daily rollover and localStorage progress writers never run for HomeFlow users',()=>{
  assert.match(app,/function legacyWritesAllowed\(\)\{/)
  assert.match(app,/return authenticated.value&&!legacyRequiresPassword.value&&!homeflowIdentityUser.value/)
- assert.match(app,/function rolloverDailyTasks\(\)\{[\s\S]*?if\(!legacyWritesAllowed\(\)\)return/)
+ assert.match(app,/function rolloverDailyTasks\(\)\s*\{\s*if\(!legacyWritesAllowed\(\)\)return/)
  assert.match(app,/watch\(tasks, value => \{[\s\S]*?if\(!legacyWritesAllowed\(\)\)return[\s\S]*?localStorage.setItem\('zhixue:tasks:/)
  assert.match(app,/watch\(examRecords, value => \{[\s\S]*?if\(legacyWritesAllowed\(\)\)localStorage.setItem\('zhixue:exam-records'/)
  assert.match(app,/void probeHomeflowIdentity\(\).then\(active=>\{[\s\S]*?if\(!active&&legacyWritesAllowed\(\)\)\{[\s\S]*?rolloverDailyTasks\(\)/)
