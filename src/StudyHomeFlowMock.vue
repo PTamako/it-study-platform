@@ -11,7 +11,7 @@ type Pending={submission_id:string;track:Track;section:Section;study_date:string
  duration_seconds:number;answers:Array<{question_id:string;answer:string}>}
 type Result={correct_count:number;total:number;review:Array<{
  id:string;answer:string;explanation:string}>;exam_name:string}
-const props=defineProps<{userId:string;role:'owner'|'member'}>()
+defineProps<{userId:string;role:'owner'|'member'}>()
 const enabled=ref(false),track=ref<Track>('exam-sg'),section=ref<Section>('SG')
 const busy=ref(false),loading=ref(false),error=ref(''),paper=ref<Paper|null>(null)
 const page=ref(0),result=ref<Result|null>(null),pending=ref<Pending|null>(null)
