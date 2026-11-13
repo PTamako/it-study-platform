@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS homeflow_oauth_pending (
   code_cipher TEXT,
   code_iv TEXT,
   has_legacy_owner_proof INTEGER NOT NULL DEFAULT 0 CHECK(has_legacy_owner_proof IN (0,1)),
+  legacy_session_hash TEXT,
   origin TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','processing','consumed','failed')),
   expires_at INTEGER NOT NULL,
