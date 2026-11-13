@@ -5,6 +5,11 @@ const directory = new URL('../migrations/', import.meta.url)
 const expected = { A: 20, B: 6 }
 // IPA publishes only 20 A and 6 B CBT items per year, not a complete exam.
 // Never guess unreleased questions or relabel adaptations as published originals.
+// Only question rows define an official original; occurrence mappings can reference
+// an existing canonical ID without creating another original.
+export function publishedQuestionIds(sql) {
+  return sql.matchAll(/(?:^\s*|\bVALUES\s*)\(\s*'fe-ipa-official-(20\d{2})-([ab])-(\d{2})'\s*,/gm)
+}
 export function inspectFePublishedBank() {
   const sourceFiles = readdirSync(directory)
     .filter(file => /^\d{4}_.+\.sql$/.test(file))
@@ -12,7 +17,7 @@ export function inspectFePublishedBank() {
   const byKey = new Map()
   for (const file of sourceFiles) {
     const text = readFileSync(new URL(file, directory), 'utf8')
-    const entries = text.matchAll(/fe-ipa-official-(20\d{2})-([ab])-(\d{2})/g)
+    const entries = publishedQuestionIds(text)
     for (const match of entries) {
       const [, year, section, item] = match
       const key = year + ':' + section.toUpperCase() + ':' + Number(item)
