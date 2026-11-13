@@ -211,3 +211,16 @@ test('PWA ignores stale HomeFlow identity probes after signout, account switch o
  assert.doesNotMatch(ui,/localStorage\.setItem\([^\n]*(?:identity|access_token|session_assertion)/i)
  assert.match(ui,/:key="identity.user_id"/)
 })
+
+
+test('mock handoff rejects previous-account pending submissions even after Cookie changes',()=>{
+ const worker=readFileSync(new URL('../worker/homeflow-mock.ts',import.meta.url),'utf8')
+ assert.match(mock,/expected_user_id:props\.userId/)
+ assert.match(mock,/payload\.expected_user_id!==props\.userId/)
+ assert.match(mock,/rev!==generation\|\|props\.userId!==payload\.expected_user_id/)
+ assert.match(mock,/当前 HomeFlow 账号与原交卷账号不同/)
+ assert.match(worker,/if\(v\.expected_user_id!==actor\.user_id\)/)
+ assert.match(worker,/return json\(\{code:'ACTOR_CHANGED'\},403\)/)
+ assert.match(worker,/\['submission_id','track','section','study_date',[\s\S]*?'expected_user_id'\]/)
+ assert.doesNotMatch(mock,/localStorage\.|sessionStorage\.|indexedDB\./)
+})
