@@ -7,6 +7,7 @@ const app=readFileSync(new URL('../src/App.vue',import.meta.url),'utf8')
 const daily=readFileSync(new URL('../src/StudyHomeFlowDailyTasks.vue',import.meta.url),'utf8')
 const grammar=readFileSync(new URL('../src/StudyHomeFlowGrammar.vue',import.meta.url),'utf8')
 const listening=readFileSync(new URL('../src/StudyHomeFlowListening.vue',import.meta.url),'utf8')
+const words=readFileSync(new URL('../src/StudyHomeFlowDailyWords.vue',import.meta.url),'utf8')
 const language=readFileSync(new URL('../src/StudyHomeFlowLanguage.vue',import.meta.url),'utf8')
 const exams=readFileSync(new URL('../src/StudyHomeFlowExams.vue',import.meta.url),'utf8')
 const mock=readFileSync(new URL('../src/StudyHomeFlowMock.vue',import.meta.url),'utf8')
@@ -20,7 +21,7 @@ test('HomeFlow PWA entry remains feature gated and cannot authenticate legacy st
  assert.match(app,/<StudyHomeFlowAccess \/>/)
  assert.match(app,/<StudyHomeFlowAccess v-if="activeModule==='home'"/)
  assert.doesNotMatch(ui,/authenticated\.value\s*=\s*true/)
- assert.match(ui,/每日任务、语法、听力、语言卡、练习错题、成绩与 SG\/FE 模拟考试使用独立身份接口/)
+ assert.match(ui,/每日任务、语法、听力、单词、语言卡、练习错题、成绩与 SG\/FE 模拟考试使用独立身份接口/)
 })
 
 test('Safari-to-installed-PWA resume uses only short-lived one-time proof, not bearer token',()=>{
@@ -178,3 +179,19 @@ test('Stage E listening PWA is private account keyed and avoids all shared old c
  assert.doesNotMatch(listening,/localStorage\.|sessionStorage\.|indexedDB\.|\/api\/listening-progress/)
  assert.doesNotMatch(listening,/access_token|session_assertion|document\.cookie|MediaRecorder|getUserMedia/)
 })
+
+test('Stage E personal daily-word UI uses only actor-scoped CAS, not legacy PWA caches',()=>{
+ assert.match(ui,/import StudyHomeFlowDailyWords from '.\/StudyHomeFlowDailyWords.vue'/)
+ assert.match(ui,/<StudyHomeFlowDailyWords v-if="identity" :key="'daily-words:'\+identity.user_id"/)
+ assert.match(words,/\/api\/homeflow-study\/daily-words\/status/)
+ assert.match(words,/status.enabled===true&&status.scope==='user'&&status.legacy_access===false/)
+ assert.match(words,/\/api\/homeflow-study\/daily-words\?keys=/)
+ assert.match(words,/\/api\/homeflow-study\/daily-words\/legacy\/adopt/)
+ assert.match(words,/expected_user_id:props.userId,expected_version:records.value\[key\]\?\.version\|\|0/)
+ assert.match(words,/props.role!=='owner'/)
+ assert.match(words,/window.confirm\(/)
+ assert.match(words,/active=false;revision\+\+;records.value=\{\}/)
+ assert.match(words,/findStaticLearnerEntry\(term,lang\)/)
+ assert.doesNotMatch(words,/localStorage\.|sessionStorage\.|indexedDB\.|\/api\/daily-word-reviews/)
+ assert.doesNotMatch(words,/access_token|session_assertion|document\.cookie/)
+});
