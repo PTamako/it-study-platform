@@ -6,6 +6,7 @@ const ui=readFileSync(new URL('../src/StudyHomeFlowAccess.vue',import.meta.url),
 const app=readFileSync(new URL('../src/App.vue',import.meta.url),'utf8')
 const daily=readFileSync(new URL('../src/StudyHomeFlowDailyTasks.vue',import.meta.url),'utf8')
 const language=readFileSync(new URL('../src/StudyHomeFlowLanguage.vue',import.meta.url),'utf8')
+const exams=readFileSync(new URL('../src/StudyHomeFlowExams.vue',import.meta.url),'utf8')
 
 test('HomeFlow PWA entry remains feature gated and cannot authenticate legacy study APIs',()=>{
  assert.match(ui,/api\('status'\)/)
@@ -15,7 +16,7 @@ test('HomeFlow PWA entry remains feature gated and cannot authenticate legacy st
  assert.match(app,/<StudyHomeFlowAccess \/>/)
  assert.match(app,/<StudyHomeFlowAccess v-if="activeModule==='home'"/)
  assert.doesNotMatch(ui,/authenticated\.value\s*=\s*true/)
- assert.match(ui,/每日任务和语言卡可独立使用；考试、错题等仍待隔离/)
+ assert.match(ui,/每日任务、语言卡、练习错题与成绩可独立使用；完整模拟考试与其他学习模块仍待隔离/)
 })
 
 test('Safari-to-installed-PWA resume uses only short-lived one-time proof, not bearer token',()=>{
@@ -76,4 +77,28 @@ test('Stage E language UI only requests the signed actor isolated card space',()
  assert.doesNotMatch(language,/localStorage\.(?:getItem|setItem)/)
  assert.doesNotMatch(language,/\/api\/language-(?:progress|review)(?![\w/-])/)
  assert.doesNotMatch(language,/document\.cookie|access_token|session_assertion/)
+});
+
+
+test('Stage E exams UI is isolated per verified HomeFlow user and never exposes old cache',()=>{
+ assert.match(ui,/import StudyHomeFlowExams from '.\/StudyHomeFlowExams.vue'/)
+ assert.match(ui,/<StudyHomeFlowExams v-if="identity" :key="'exams:'\+identity.user_id"/)
+ assert.match(ui,/:user-id="identity.user_id" :role="identity.role"/)
+ assert.match(exams,/\/api\/homeflow-study\/exams/)
+ assert.match(exams,/res.enabled===true&&res.scope==='user'&&res.legacy_access===false/)
+ assert.match(exams,/\/questions\?track=/)
+ assert.match(exams,/\/attempts/)
+ assert.match(exams,/\/wrong\?track=/)
+ assert.match(exams,/\/history\?limit=/)
+ assert.match(exams,/\/legacy\/adopt/)
+ assert.match(exams,/props.role!=='owner'/)
+ assert.match(exams,/window.confirm\(/)
+ assert.match(exams,/crypto.randomUUID\(\)/)
+ assert.match(exams,/pending.value=null/)
+ assert.match(exams,/重试上次答题（不重复计次）/)
+ assert.match(exams,/document.addEventListener\('visibilitychange',resume\)/)
+ assert.match(exams,/document.removeEventListener\('visibilitychange',resume\)/)
+ assert.doesNotMatch(exams,/localStorage\.(?:getItem|setItem)/)
+ assert.doesNotMatch(exams,/\/api\/(?:attempts|wrong-questions|exam-history|question-progress|mock-exam\/submit)(?![\w/-])/)
+ assert.doesNotMatch(exams,/document\.cookie|access_token|session_assertion/)
 });
