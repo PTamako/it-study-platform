@@ -125,6 +125,11 @@ async function submit(req:Request,env:Env,url:URL,actor:Actor){
   if(!obj||typeof obj!=='object'||Array.isArray(obj))throw Error('bad')
   v=obj as Record<string,unknown>
  }catch{return json({code:'INVALID_MOCK_BODY'},400)}
+ // A stale PWA request queued under another HomeFlow user must NEVER be
+ // attributed to whichever user happened to sign in before it was retried.
+ // The actor still comes exclusively from the verified HttpOnly session.
+ if(v.expected_user_id!==actor.user_id)
+  return json({code:'ACTOR_CHANGED'},403)
  const format=target(v.track,v.section)
  if(!format||!uuid(v.submission_id)||!safeDate(v.study_date)||
   typeof v.duration_seconds!=='number'||!Number.isSafeInteger(v.duration_seconds)||
@@ -135,7 +140,7 @@ async function submit(req:Request,env:Env,url:URL,actor:Actor){
    typeof x.answer!=='string'||x.answer.length>10))
   return json({code:'INVALID_MOCK_SUBMISSION'},400)
  if(Object.keys(v).some(k=>!['submission_id','track','section','study_date',
-  'duration_seconds','answers'].includes(k)))return json({code:'INVALID_MOCK_SUBMISSION'},400)
+  'duration_seconds','answers','expected_user_id'].includes(k)))return json({code:'INVALID_MOCK_SUBMISSION'},400)
  const answers=v.answers as Answer[],ids=answers.map(x=>x.question_id)
  if(new Set(ids).size!==format.count)return json({code:'MOCK_DUPLICATE_QUESTION'},400)
  const submissionId=v.submission_id,track=format.track,section=format.section
