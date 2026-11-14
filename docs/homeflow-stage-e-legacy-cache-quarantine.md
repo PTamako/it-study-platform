@@ -32,3 +32,11 @@ PWA `StudyHomeFlowExams.vue` 与 `StudyHomeFlowLanguage.vue` 发起操作时固�
 - 阶段 A 的 D1/R2 加密备份与 Mac 本地 SQLite 恢复已经通过，但 Cloudflare 生产恢复/回滚和上线授权没有完成。本 PR 始终 Draft，新 SQL 未执行，功能开关保持 OFF，无生产部署、无 Preview。
 
 注意：最终 CI 应按本 PR 最新 Commit 的 `completed/success` 核验，不得把中间旧 CI 或尚在运行的 CI 冒充已通过。
+
+## 2026-11-14 后续：七项 CI 修复与更多缓存写入栅栏
+
+- 已从 [Validate #43492418101](https://github.com/PTamako/it-study-platform/actions/runs/43492418101) 的**实际 job logs**确认全部七项失败：六项同属于 `scripts/daily-task-runtime.test.mjs` 用 VM 截取 App daily-task 代码，但未向模拟沙箱注入最新 `legacyWritesAllowed()`；另一个是 `scripts/homeflow-pwa-ui.test.mjs` 的旧静态断言无法匹配 `function rolloverDailyTasks() {` 中的空格。没有删除生产行为保护，也没有放宽个人身份安全检查。
+- 测试 VM 现在提供真实 `authenticated && !legacyRequiresPassword && !homeflowIdentityUser` 判定，增加 HomeFlow member 与旧密码未确认时都不能滚动/写旧缓存，原 owner 经旧密码明确解锁后仍能正常跨天更新。静态匹配调整为空白字符兼容。**[最新修复 CI #43529836222](https://github.com/PTamako/it-study-platform/actions/runs/43529836222) 已 `completed/success`，精确 HEAD `e61220acef43b858053768af1df477343bd07ea4`**。
+- 随后在**同一 Draft #179** 的 `src/App.vue` 继续把 `legacyWritesAllowed()` 加到旧离线任务未提交队列 `persistDailyPending`、考试原地保存 `persistActiveMockExam`、单词进度/待同步快照 `persistDailyWordState`、语言/语法解释翻译、旧每日词语选项与语言场景、个人语言卡掌握/复习、字典浏览历史/收藏、生词本等 watcher/本机写入路径。判定关闭时均**不覆盖旧主人的本机字节**，不是删除或把旧值自动归给当前 HomeFlow member。
+- 新运行时 `scripts/homeflow-legacy-cache-runtime.test.mjs` 从 App.vue 提取真实持久化函数放进隔离 VM，验证旧 PWA 明确授权前 `0` 个本机写入、授权后保存、随后切换到 HomeFlow 时无法覆盖考试草稿或离线单词队列。`scripts/homeflow-pwa-ui.test.mjs` 追加所有主要旧 watcher 和数据快照的身份门槛静态核查；需对**后续最新 HEAD** 另行核验完整 CI，不得仅引用上面绿灯基线。
+- **依然不能宣称全量 E 完成**：旧 `src/App.vue` 的直接异步网络返回、每个离线队列重试入口/IndexedDB 分区、原 owner 历史全量回填、文书同步词句共享 ID 与真实同一 iPhone 双人/断网 E2E 尚未覆盖。本轮只加访问/持久化防误覆盖栅栏，原 storage 字节保留，Feature Flags OFF，生产 D1/R2/Workers/Pages 未动、Preview 不创建。
