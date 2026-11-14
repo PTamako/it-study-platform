@@ -47,3 +47,10 @@ PWA `StudyHomeFlowExams.vue` 与 `StudyHomeFlowLanguage.vue` 发起操作时固�
 - `src/App.vue` 的旧模拟交卷 `zhixue:mock-pending-v1`、旧情景练习 `zhixue:scenario-pending-v1` 和旧单题答题 `zhixue:practice-pending-v1` 仅在 `legacyWritesAllowed()` 且 `legacyOperationGeneration` 与原请求发起时一致时发送、接收、清空本地队列。每次验证到 HomeFlow 身份、本人登出、旧身份网络状态不确定或旧密码重新验证时，都会让前次异步请求代次失效，阻止迟到成功回执清除原主人的离线 pending 或把旧反馈更新进新的身份界面。
 - HomeFlow 切入时同时停止旧模拟计时器，避免隐藏状态下到时自动交卷；只更新当前内存的操作锁，不删除、不移交或重命名旧 localStorage 字节。旧单密码空间只有再次明确登录成功后可手动重试原 stable attempt/submission id。服务器上的新的 HomeFlow 专属个人写入仍保持在线校验 `expected_user_id` 和独立作用域。
 - 新 `scripts/homeflow-legacy-queue-epoch.test.mjs` 从真实 Vue 方法体运行延迟 JSON 回执，覆盖 mock/scenario/practice 三类账号切换前保存、切换后不删队列、禁止自动重放；`scripts/dictionary-acceptance.test.mjs` 的旧静态回归同步检查新 `legacyWorkCurrent(generation)` 防护；快速 CI job 也包含新测试。**这是三类旧离线队列的客户端防串号补强，不是全部 App.vue 本地缓存分区或 iPhone 真机验证已完成。**
+
+
+## 2026-11-14 旧考试历史批量同步与清除的迟到身份栅栏
+
+- 原 `syncExamHistory()` 曾一次读取全部旧单密码成绩，再按缺失记录逐项 POST；切换 HomeFlow 账号时，之前的网络异步响应可能仍继续下一笔上传，或覆盖旧成绩视图。现在每次开始、读取云端、逐条 POST 前后、最终读取和本地合并之前都验证发起时 `legacyOperationGeneration`，换号立即停在当前边界，原本机历史不删除；并使用每代次独立的 `examHistorySyncGeneration`，避免迟到 finally 清除新一轮同步锁。
+- 手动成绩保存、三次弹窗后明确删除成绩均在入口与网络回执落地前再次验证同一旧密码空间；换号后旧 DELETE 回执不能把设备旧成绩清空，不能展示旧错误/成功状态。**不能撤销已经发至服务器且成功执行的旧用户请求**，因此正式切换 HomeFlow 后仍要完成旧账号/新账号后端权限与迁移的真机全量验收。
+- `scripts/homeflow-legacy-exam-history-epoch.test.mjs` 从真正 App.vue 方法体执行一个延迟上传及一个延迟删除，验证切号后后续旧记录不会继续 POST、旧 localStorage 和原历史未擦除；快速 CI 与完整 `npm test` 均包含这一回归。用户原始历史始终留在旧空间，不自动分发至 member。
