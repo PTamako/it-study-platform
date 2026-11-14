@@ -1,5 +1,6 @@
 import { checkWriteRateLimit, handleAuthRequest, requireAuth } from './auth'
 import { homeflowStudyIdentity } from './homeflow-identity'
+import { documentStudyExecution } from './document-study-execution'
 import { homeflowVocabulary } from './homeflow-vocabulary'
 import { homeflowDailyTasks } from './homeflow-daily-tasks'
 import { homeflowGrammar } from './homeflow-grammar'
@@ -65,6 +66,12 @@ export interface Env {
   HOMEFLOW_OAUTH_ORIGIN?: string
   STUDY_SSO_ENCRYPTION_KEY?: string
   HOMEFLOW_STUDY_SERVICE?: Fetcher
+  DOCUMENT_STUDY_EXECUTION_ENABLED?: string
+  DOCUMENT_STUDY_EXECUTION_SECRET?: string
+  DOCUMENT_STUDY_PROOF_SECRET?: string
+  DOCUMENT_STUDY_SOURCE_SECRET?: string
+  DOCUMENT_STUDY_HOMEFLOW_SERVICE?: Fetcher
+  DOCUMENT_STUDY_SOURCE_SERVICE?: Fetcher
   // Owner-deployed Google Apps Script Web App. Optional; keep its URL and token server-side.
   GAS_TRANSLATOR_URL?: string
   GAS_TRANSLATOR_TOKEN?: string
@@ -1327,6 +1334,9 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
 
+    if (url.pathname === '/api/internal/document-study/execute' ||
+        url.pathname === '/api/internal/document-study/receipt')
+      return documentStudyExecution(request, env)
     if (url.pathname === '/api/bridge/document-assistant') return documentAssistantBridge(request, env)
     if (url.pathname === '/api/bridge/document-assistant/translate') return documentAssistantTranslateBridge(request, env)
 

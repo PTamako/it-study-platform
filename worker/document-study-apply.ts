@@ -3,7 +3,8 @@
 // version/authorization and exact snapshot, and recheck active membership.
 // This module itself is never approval or source-authorization proof.
 type Intent={approval_id:string;candidate_id:string;household_id:string;
- requester_user_id:string;payload_sha256:string;snapshot:string}
+ requester_user_id:string;payload_sha256:string;snapshot:string;
+ approver_user_id?:string}
 type Receipt={approval_id:string;candidate_id:string;household_id:string;
  requester_user_id:string;payload_sha256:string;kind:string;remote_id:string;
  effect:string;applied_at:number}
@@ -47,10 +48,19 @@ export async function applyVerifiedDocumentStudy(db:D1Database,i:Intent){
    !safe(p.term,100)||!safe(p.meaning_zh,200)||typeof p.reading!=='string'||p.reading.length>100||
    /[\u0000-\u001f\u007f]/.test(p.reading)||/[\d０-９]{5,}|@|〒/.test(String(p.term)))throw Error('vocabulary')
  }catch{return {ok:false,code:'INVALID_SNAPSHOT',applied:false}}
+ if(i.approver_user_id!==undefined&&(!safe(i.approver_user_id,128)||
+  i.approver_user_id===i.requester_user_id))
+  return {ok:false,code:'APPROVER_SCOPE_INVALID',applied:false}
  const active=await db.prepare('SELECT 1 FROM homeflow_identity_links WHERE homeflow_user_id=? '+
   "AND homeflow_household_id=? AND role='member' AND state='active'")
   .bind(i.requester_user_id,i.household_id).first()
  if(!active)return {ok:false,code:'MEMBER_SCOPE_INVALID',applied:false}
+ if(i.approver_user_id!==undefined){
+  const approver=await db.prepare('SELECT 1 FROM homeflow_identity_links WHERE homeflow_user_id=? '+
+   "AND homeflow_household_id=? AND role='owner' AND state='active'")
+   .bind(i.approver_user_id,i.household_id).first()
+  if(!approver)return {ok:false,code:'APPROVER_SCOPE_INVALID',applied:false}
+ }
  const existing=await readReceipt(db,i)
  if(existing)return same(existing,i)?{ok:true,applied:true,replayed:true,receipt:existing}:
   {ok:false,code:'RECEIPT_IDENTITY_CONFLICT',applied:false}
@@ -58,7 +68,7 @@ export async function applyVerifiedDocumentStudy(db:D1Database,i:Intent){
  const remote=kind==='sentence'?i.candidate_id:'ja:'+String(p.term)
  try{
   if(kind==='sentence'){
-   const results=await db.batch([
+   const statements=[
     db.prepare('INSERT INTO homeflow_personal_sentence_cards '+
      '(homeflow_user_id,card_id,language,sentence_text,translation_zh,notes,source_kind,is_deleted,version,updated_by_user_id,updated_at) '+
      "SELECT ?,?,'ja',?,?,'','document',0,1,?,? WHERE EXISTS(SELECT 1 FROM homeflow_identity_links "+
@@ -71,7 +81,13 @@ export async function applyVerifiedDocumentStudy(db:D1Database,i:Intent){
     db.prepare('INSERT INTO homeflow_personal_sentence_events(event_id,actor_user_id,card_id,action,created_at) '+
      "SELECT ?,?,?,'saved',? WHERE changes()=1")
      .bind(token(),i.requester_user_id,remote,stamp)
-   ])
+   ]
+   if(i.approver_user_id)statements.push(db.prepare('INSERT INTO homeflow_document_study_approval_audit '+
+    '(approval_id,candidate_id,household_id,requester_user_id,approver_user_id,applied_at) '+
+    'SELECT approval_id,candidate_id,household_id,requester_user_id,?,applied_at '+
+    'FROM homeflow_document_study_receipts WHERE approval_id=?')
+    .bind(i.approver_user_id,i.approval_id))
+   const results=await db.batch(statements)
    if(results.some(x=>x.meta?.changes!==1))return {ok:false,code:'RECEIPT_RECONCILE_REQUIRED',applied:false}
   }else{
    const old=await db.prepare('SELECT is_deleted FROM homeflow_saved_vocabulary '+
@@ -81,7 +97,7 @@ export async function applyVerifiedDocumentStudy(db:D1Database,i:Intent){
    const entry=JSON.stringify({term:p.term,reading:p.reading,zh:p.meaning_zh,
     meaning_zh:p.meaning_zh,language:'ja',source:'document'})
    const termHash=await digest('ja\u0000'+String(p.term))
-   const results=await db.batch([
+   const statements=[
     db.prepare('INSERT INTO homeflow_saved_vocabulary(homeflow_user_id,language,term,entry_json,is_deleted,updated_by_user_id,saved_at) '+
      "SELECT ?,'ja',?,?,0,?,? WHERE EXISTS(SELECT 1 FROM homeflow_identity_links WHERE homeflow_user_id=? "+
      "AND homeflow_household_id=? AND role='member' AND state='active') ON CONFLICT(homeflow_user_id,language,term) DO NOTHING")
@@ -96,8 +112,15 @@ export async function applyVerifiedDocumentStudy(db:D1Database,i:Intent){
     db.prepare('INSERT INTO homeflow_vocabulary_events(event_id,actor_user_id,action,term_sha256,affected_count,created_at) '+
      "SELECT ?,?,'saved',?,1,? FROM homeflow_document_study_receipts WHERE approval_id=? AND effect='created' AND changes()=1")
      .bind(token(),i.requester_user_id,termHash,stamp,i.approval_id)
-   ])
-   if(results[1]?.meta?.changes!==1)return {ok:false,code:'RECEIPT_RECONCILE_REQUIRED',applied:false}
+   ]
+   if(i.approver_user_id)statements.push(db.prepare('INSERT INTO homeflow_document_study_approval_audit '+
+    '(approval_id,candidate_id,household_id,requester_user_id,approver_user_id,applied_at) '+
+    'SELECT approval_id,candidate_id,household_id,requester_user_id,?,applied_at '+
+    'FROM homeflow_document_study_receipts WHERE approval_id=?')
+    .bind(i.approver_user_id,i.approval_id))
+   const results=await db.batch(statements)
+   if(results[1]?.meta?.changes!==1||
+    (i.approver_user_id&&results.at(-1)?.meta?.changes!==1))return {ok:false,code:'RECEIPT_RECONCILE_REQUIRED',applied:false}
   }
  }catch{
   const raced=await readReceipt(db,i).catch(()=>null)
