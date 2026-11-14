@@ -24,7 +24,12 @@ function harness(fetch, date = '2026-10-28', day = date, storage = new Map()) {
   // bypassing the new HomeFlow cache-isolation behavior in these tests.
   context.legacyWritesAllowed = () => context.authenticated.value &&
     !context.legacyRequiresPassword.value && !context.homeflowIdentityUser.value
-  vm.runInContext(stripTypeScriptTypes(segment, { mode: 'strip' }) + '\nthis.api = { rolloverDailyTasks, toggleDailyTask, refreshDailyTasks, reconcilePriorDailyTasks, retryPendingDailyTask, intents: pendingDailyTasks, invalidate: () => { dailyHydrationRun++ }, pending: dailyTaskSaveQueues }', context)
+  // Mirror the real single-user login epoch. The runtime slice starts after
+  // App.vue's identity setup, so supply both the generation and its guard.
+  context.legacyOperationGeneration = 0
+  context.legacyWorkCurrent = generation =>
+    generation === context.legacyOperationGeneration && context.legacyWritesAllowed()
+  vm.runInContext(stripTypeScriptTypes(segment, { mode: 'strip' }) + '\nthis.api = { rolloverDailyTasks, toggleDailyTask, refreshDailyTasks, reconcilePriorDailyTasks, retryPendingDailyTask, intents: pendingDailyTasks, invalidate: () => { dailyHydrationRun++; legacyOperationGeneration++ }, pending: dailyTaskSaveQueues }', context)
   return context
 }
 test('click immediately after midnight toggles the new day instead of the old DOM state', async () => {
