@@ -252,14 +252,18 @@ type CloudDashboard = {
 const cloudDashboard = ref<CloudDashboard | null>(null)
 const cloudDashboardError = ref('')
 async function loadCloudDashboard() {
+  const actorGeneration=legacyOperationGeneration
+  if(!legacyWorkCurrent(actorGeneration))return
   try {
     const response = await fetch('/api/dashboard')
     const data = await response.json() as CloudDashboard & { error?: string }
+    if(!legacyWorkCurrent(actorGeneration))return
     if (!response.ok) throw new Error(data.error || '云端学习统计暂不可用')
     cloudDashboard.value = data
     cloudDashboardError.value = ''
   } catch (error) {
-    cloudDashboardError.value = error instanceof Error ? error.message : '云端学习统计暂不可用'
+    if(legacyWorkCurrent(actorGeneration))
+      cloudDashboardError.value = error instanceof Error ? error.message : '云端学习统计暂不可用'
   }
 }
 const dailyTaskSaveQueues = new Map<string, Promise<void>>()
@@ -288,6 +292,8 @@ function persistDailyPending() {
   catch { cloudDashboardError.value = '本设备存储不可用，待同步任务可能无法保留。' }
 }
 async function saveDailyTask(task: StudyTask, previousDone: boolean, replay?: PendingDailyTask) {
+  const actorGeneration=legacyOperationGeneration
+  if(!legacyWorkCurrent(actorGeneration))return
   const taskId = task.id
   const date = replay?.date || todayKey.value
   const queueKey = date + ':' + taskId
@@ -302,13 +308,16 @@ async function saveDailyTask(task: StudyTask, previousDone: boolean, replay?: Pe
   // Serialize writes for each task so a slow earlier toggle cannot overwrite the latest choice.
   const previous = dailyTaskSaveQueues.get(queueKey) || Promise.resolve()
   const pending = previous.catch(() => undefined).then(async () => {
+    if(!legacyWorkCurrent(actorGeneration))return
     try {
       const response = await fetch('/api/daily-tasks', {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ task_id: taskId, study_date: date, completed }),
       })
+      if(!legacyWorkCurrent(actorGeneration))return
       if (!response.ok) {
         const data = await response.json().catch(() => ({})) as { error?: string }
+        if(!legacyWorkCurrent(actorGeneration))return
         throw new Error(data.error || '每日任务云端保存失败')
       }
       const remaining = pendingDailyTasks.get(queueKey)
@@ -320,7 +329,8 @@ async function saveDailyTask(task: StudyTask, previousDone: boolean, replay?: Pe
         void loadCloudDashboard()
       }
     } catch (error) {
-      if (todayKey.value === date && dailyTaskSaveRequestIds.get(queueKey) === requestId) {
+      if (legacyWorkCurrent(actorGeneration) &&
+          todayKey.value === date && dailyTaskSaveRequestIds.get(queueKey) === requestId) {
         cloudDashboardError.value = error instanceof Error ? error.message : '网络异常：每日任务暂未同步到云端。'
       }
     }
@@ -2159,9 +2169,12 @@ watch(languageReviews, value => {
   if(legacyWritesAllowed())localStorage.setItem('zhixue:language-reviews', JSON.stringify(value))
 }, { deep: true })
 async function hydrateCloudProgress() {
+  const actorGeneration=legacyOperationGeneration
+  if(!legacyWorkCurrent(actorGeneration))return
   void hydrateVocabulary()
   const generation = ++masterySyncGeneration
-  const isCurrent = () => generation === masterySyncGeneration && authenticated.value
+  const isCurrent = () => generation === masterySyncGeneration &&
+    legacyWorkCurrent(actorGeneration)
   languageProgressHydrating.value = true
   languageProgressReady.value = false
   dailyScenesReady.value = false
@@ -2182,6 +2195,7 @@ async function hydrateCloudProgress() {
     const hydratedCards = await hydrateMastery(completedLanguageCards.value, fetch, {
       has: id => importedIds.has(id),
       add: ids => {
+        if(!isCurrent())return
         ids.forEach(id => importedIds.add(id))
         try { localStorage.setItem('zhixue:mastery-imported-v1', JSON.stringify([...importedIds])) } catch { /* retry safely next time */ }
       },
@@ -2198,8 +2212,10 @@ async function hydrateCloudProgress() {
 
   try {
     const reviewResponse = await fetch('/api/language-review')
+    if(!isCurrent())return
     if (reviewResponse.ok) {
       const reviews = await reviewResponse.json() as { items?: LanguageReview[] }
+      if(!isCurrent())return
       const cloudReviews = reviews.items || []
       languageReviews.value = [...cloudReviews, ...languageReviews.value.filter(local =>
         !cloudReviews.some(cloud => cloud.card_id === local.card_id))]
