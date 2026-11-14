@@ -55,6 +55,7 @@ function quarantineLegacyStudy(userId:string){
  mockSyncing.value=false
  practiceSaving.value=false
  scenarioSubmitting.value=false
+ examHistorySyncing.value=false
  homeflowIdentityUser.value=userId
  if(!legacyRequiresPassword.value){
   legacyRequiresPassword.value=true
@@ -460,10 +461,11 @@ watch(examRecords, value => {
 }, { deep: true })
 
 // 将旧版本保存在浏览器的手动成绩记录迁移到 D1。先上传，再读取云端；每条记录带稳定 ID，失败时保留本地副本。
-let examHistorySyncStarted = false
+let examHistorySyncGeneration: number | null = null
 async function syncExamHistory() {
-  if (examHistorySyncStarted) return
-  examHistorySyncStarted = true
+  const generation=legacyOperationGeneration
+  if(!legacyWorkCurrent(generation)||examHistorySyncGeneration===generation)return
+  examHistorySyncGeneration=generation
   examHistorySyncing.value = true
   try {
     const localRecords = examRecords.value.map(record => {
@@ -474,28 +476,37 @@ async function syncExamHistory() {
     // Fetch cloud IDs first. Reposting the entire history on every sign-in
     // wastes D1 rows/writes and hits the 60-write/minute protection on long histories.
     const initialResponse = await fetch('/api/exam-history', { cache: 'no-store' })
+    if(!legacyWorkCurrent(generation))return
     if (!initialResponse.ok) throw new Error('云端考试历史暂不可用')
     const initial = await initialResponse.json() as { items?: Array<ExamRecord & { id: string }> }
+    if(!legacyWorkCurrent(generation))return
     if (!Array.isArray(initial.items)) throw new Error('云端考试历史数据异常')
     const missing = recordsMissingOnCloud(localRecords, initial.items)
     let uploadFailed = false
     let uploaded = false
     for (const record of missing) {
+      if(!legacyWorkCurrent(generation))return
       try {
         const response = await fetch('/api/exam-history', {
           method: 'POST', headers: { 'content-type': 'application/json' },
           body: JSON.stringify(record),
         })
+        if(!legacyWorkCurrent(generation))return
         if (!response.ok) uploadFailed = true
         else uploaded = true
-      } catch { uploadFailed = true }
+      } catch {
+        if(!legacyWorkCurrent(generation))return
+        uploadFailed = true
+      }
     }
     // Refresh only if something actually changed. Never discard unsynced local records.
     let cloudRecords = initial.items
     if (uploaded && !uploadFailed) {
       const finalResponse = await fetch('/api/exam-history', { cache: 'no-store' })
+      if(!legacyWorkCurrent(generation))return
       if (!finalResponse.ok) throw new Error('云端考试历史复核失败')
       const finalData = await finalResponse.json() as { items?: Array<ExamRecord & { id: string }> }
+      if(!legacyWorkCurrent(generation))return
       if (!Array.isArray(finalData.items)) throw new Error('云端考试历史复核数据异常')
       cloudRecords = finalData.items
     }
@@ -505,13 +516,18 @@ async function syncExamHistory() {
       cloudDashboardError.value = '部分本地考试记录尚未同步，原始记录仍保留在本设备。'
     }
   } catch {
-    cloudDashboardError.value = '考试记录暂未完成云端迁移；本地数据仍保留。'
+    if(legacyWorkCurrent(generation))
+      cloudDashboardError.value = '考试记录暂未完成云端迁移；本地数据仍保留。'
   } finally {
-    examHistorySyncStarted = false
-    examHistorySyncing.value = false
+    if(examHistorySyncGeneration===generation){
+      examHistorySyncGeneration=null
+      examHistorySyncing.value=false
+    }
   }
 }
 async function saveExamRecord(record: ExamRecord) {
+  const generation=legacyOperationGeneration
+  if(!legacyWorkCurrent(generation))return
   const savedRecord = { ...record, id: record.id || crypto.randomUUID() }
   examRecords.value.push(savedRecord)
   try {
@@ -520,16 +536,20 @@ async function saveExamRecord(record: ExamRecord) {
       body: JSON.stringify(savedRecord),
     })
     const data = await response.json().catch(() => ({})) as { error?: string }
+    if(!legacyWorkCurrent(generation))return
     if (!response.ok) throw new Error(data.error || '考试成绩未能同步到云端。')
     cloudDashboardError.value = ''
     void loadCloudDashboard()
   } catch (error) {
-    cloudDashboardError.value = error instanceof Error
-      ? error.message + ' 成绩仍保留在本设备，之后可重试同步。'
-      : '考试成绩未能同步到云端；本地记录仍保留。'
+    if(legacyWorkCurrent(generation))
+      cloudDashboardError.value = error instanceof Error
+        ? error.message + ' 成绩仍保留在本设备，之后可重试同步。'
+        : '考试成绩未能同步到云端；本地记录仍保留。'
   }
 }
 function addExamRecord() {
+  if(!legacyWritesAllowed())return
+  const generation=legacyOperationGeneration
   const exam = window.prompt('记录哪项考试？例如 SG', 'SG')
   if (!exam?.trim()) return
   const totalRaw = window.prompt('本次共做了多少题？请输入题目总数')
@@ -540,23 +560,29 @@ function addExamRecord() {
   if (correctRaw === null) return
   const correct = Number(correctRaw)
   if (!Number.isInteger(correct) || correct < 0 || correct > total) { window.alert('答对题数应为 0 到总题数之间的整数。'); return }
+  if(!legacyWorkCurrent(generation))return
   void saveExamRecord({ date: tokyoDate(), correct, total, exam: exam.trim().toUpperCase() })
 }
 async function removeExamRecords() {
+  if(!legacyWritesAllowed())return
+  const generation=legacyOperationGeneration
   if (!window.confirm('确定清除全部历史考试成绩吗？云端和本设备记录都会删除，且无法恢复。')) return
   const confirmation = window.prompt('二次确认：此操作无法恢复。请输入「清除」以继续。')
-  if (confirmation !== '清除') return
+  if (confirmation !== '清除'||!legacyWorkCurrent(generation)) return
   try {
     const response = await fetch('/api/exam-history', { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ confirmation }) })
     const data = await response.json().catch(() => ({})) as { error?: string }
+    if(!legacyWorkCurrent(generation))return
     if (!response.ok) throw new Error(data.error || '云端记录清除失败。')
     examRecords.value = []
     localStorage.setItem('zhixue:exam-records', '[]')
     cloudDashboardError.value = ''
   } catch (error) {
-    const message = error instanceof Error ? error.message : '记录清除失败，请检查网络后重试。'
-    cloudDashboardError.value = message
-    window.alert(message + ' 原有记录未从页面清除。')
+    if(legacyWorkCurrent(generation)){
+      const message = error instanceof Error ? error.message : '记录清除失败，请检查网络后重试。'
+      cloudDashboardError.value = message
+      window.alert(message + ' 原有记录未从页面清除。')
+    }
   }
 }
 
