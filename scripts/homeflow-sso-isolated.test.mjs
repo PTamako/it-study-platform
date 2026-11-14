@@ -16,6 +16,9 @@ writeFileSync(join(dir,'auth.mts'),readFileSync(new URL('../worker/auth.ts',impo
 writeFileSync(join(dir,'homeflow-vocabulary.mts'),
  readFileSync(new URL('../worker/homeflow-vocabulary.ts',import.meta.url),'utf8')
   .replace("from './homeflow-identity'","from './homeflow-identity.mts'"))
+writeFileSync(join(dir,'homeflow-sentences.mts'),
+ readFileSync(new URL('../worker/homeflow-sentences.ts',import.meta.url),'utf8')
+  .replace("from './homeflow-identity'","from './homeflow-identity.mts'"))
 writeFileSync(join(dir,'homeflow-daily-tasks.mts'),
  readFileSync(new URL('../worker/homeflow-daily-tasks.ts',import.meta.url),'utf8')
   .replace("from './homeflow-identity'","from './homeflow-identity.mts'"))
@@ -35,6 +38,8 @@ const {homeflowStudyIdentity,homeflowStudyReady}=
  await import(pathToFileURL(join(dir,'homeflow-identity.mts')))
 const {homeflowVocabulary}=
  await import(pathToFileURL(join(dir,'homeflow-vocabulary.mts')))
+const {homeflowSentences}=
+ await import(pathToFileURL(join(dir,'homeflow-sentences.mts')))
 const {homeflowDailyTasks}=
  await import(pathToFileURL(join(dir,'homeflow-daily-tasks.mts')))
 writeFileSync(join(dir,'homeflow-grammar.mts'),
@@ -73,6 +78,7 @@ function sqliteEnv(){
  raw.exec('PRAGMA foreign_keys=ON;')
  raw.exec(readFileSync(new URL('../migrations/0180_homeflow_identity_isolation.sql',import.meta.url),'utf8'))
  raw.exec(readFileSync(new URL('../migrations/0181_homeflow_user_vocabulary.sql',import.meta.url),'utf8'))
+ raw.exec(readFileSync(new URL('../migrations/0190_homeflow_personal_sentence_cards.sql',import.meta.url),'utf8'))
  raw.exec(readFileSync(new URL('../migrations/0182_homeflow_user_daily_tasks.sql',import.meta.url),'utf8'))
  raw.exec(readFileSync(new URL('../migrations/0133_daily_grammar_answers.sql',import.meta.url),'utf8'))
  raw.exec(readFileSync(new URL('../migrations/0187_homeflow_grammar_answers.sql',import.meta.url),'utf8'))
@@ -334,6 +340,73 @@ test('member cannot join before owner, household mismatch, role change and expir
  }finally{f.raw.close()}
 })
 
+
+
+test('Stage E personal sentence cards: same card IDs belong to separate HomeFlow users, idempotent edit/delete and revocation',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_SENTENCES_ENABLED='true'
+  const flow=await f.begin(true);await f.callback(flow)
+  const o=await f.finish(flow,{legacy:true})
+  assert.equal(o.status,200)
+  const oToken=o.headers.get('set-cookie').match(/__Host-study_hf=([a-f0-9]{64})/)[1]
+  f.active.user=member;f.active.role='member';f.active.nickname='鸡毛'
+  const mFlow=await f.begin();await f.callback(mFlow)
+  const m=await f.finish(mFlow)
+  assert.equal(m.status,200)
+  const mToken=m.headers.get('set-cookie').match(/__Host-study_hf=([a-f0-9]{64})/)[1]
+  const call=(cookie,method='GET',body=null,route='',origin=app)=>{
+   const headers={Cookie:'__Host-study_hf='+cookie}
+   if(method==='POST'){headers.Origin=origin;headers['content-type']='application/json'}
+   return homeflowSentences(new Request(app+'/api/homeflow-study/sentences'+route,{
+    method,headers,body:method==='POST'?JSON.stringify(body):undefined
+   }),f.env)
+  }
+  const card='a'.repeat(32)
+  const base={card_id:card,action:'save',expected_version:0,
+   expected_user_id:member,language:'ja',sentence:'今日は仕事が順調です。',
+   translation_zh:'今天工作顺利。',notes:'日常'}
+  assert.equal((await call(mToken,'POST',{...base,expected_user_id:owner})).status,403)
+  assert.equal((await call(mToken,'POST',{...base,actor_user_id:owner})).status,400)
+  assert.equal((await call(mToken,'POST',base,'','https://attacker.invalid')).status,403)
+  assert.equal((await call(mToken,'POST',base)).status,200)
+  const replay=await call(mToken,'POST',base)
+  assert.equal((await replay.json()).replayed,true)
+  const memberRead=await call(mToken),ownerRead=await call(oToken)
+  assert.equal((await memberRead.json()).items.length,1)
+  assert.equal((await ownerRead.json()).items.length,0)
+  assert.equal((await call(oToken,'POST',{...base,expected_user_id:owner,
+   sentence:'別の例文です。',translation_zh:'这是另外的例句。'})).status,200)
+  const mine=(await (await call(mToken)).json()).items[0]
+  assert.equal(mine.sentence,base.sentence,'same client card ID must not merge cross-user data')
+  const updated={...base,expected_version:1,translation_zh:'修改后的个人翻译'}
+  assert.equal((await call(mToken,'POST',updated)).status,200)
+  assert.equal((await call(mToken,'POST',{...base,expected_version:1,
+   translation_zh:'旧版本覆盖'})).status,409)
+  const removed={expected_user_id:member,card_id:card,action:'remove',expected_version:2}
+  assert.equal((await call(mToken,'POST',removed)).status,200)
+  const repeat=await call(mToken,'POST',removed)
+  assert.equal((await repeat.json()).replayed,true)
+  assert.equal((await (await call(mToken)).json()).items.length,0)
+  assert.equal((await (await call(oToken)).json()).items.length,1)
+  const count=f.raw.prepare('SELECT COUNT(*) n FROM homeflow_personal_sentence_events WHERE actor_user_id=?').get(member).n
+  assert.equal(count,3,'save, edit and remove each create one event, replay none')
+  assert.throws(()=>f.raw.prepare('UPDATE homeflow_personal_sentence_events SET actor_user_id=?').run(owner),/IMMUTABLE_SENTENCE_AUDIT/)
+  assert.throws(()=>f.raw.prepare('DELETE FROM homeflow_personal_sentence_cards').run(),/SENTENCE_PHYSICAL_DELETE_FORBIDDEN/)
+  assert.throws(()=>f.raw.prepare('INSERT INTO homeflow_personal_sentence_cards(homeflow_user_id,card_id,language,sentence_text,updated_by_user_id,updated_at) VALUES(?,?,?,?,?,?)')
+   .run(owner,'b'.repeat(32),'en','A sentence',member,'2026-11-14'),/SENTENCE_OWNER_REQUIRED/)
+  const hidden=f.raw.prepare('SELECT * FROM homeflow_personal_sentence_cards WHERE homeflow_user_id=?').all(owner)
+  assert.equal(hidden[0].sentence_text,'別の例文です。')
+  assert.equal(f.raw.prepare('SELECT source_kind FROM homeflow_personal_sentence_cards WHERE homeflow_user_id=?').get(member).source_kind,'manual')
+  f.active.valid=false
+  assert.equal((await call(oToken)).status,401)
+  assert.equal((await call(mToken,'POST',{...base,expected_version:3})).status,401)
+  f.active.valid=true
+  f.env.HOMEFLOW_STUDY_SENTENCES_ENABLED='false'
+  assert.equal((await call(oToken)).status,503)
+  assert.equal((await (await call(oToken,'GET',null,'/status')).json()).enabled,false)
+ }finally{f.raw.close()}
+})
 
 test('Stage E new vocabulary is per-actor; owner adopts old terms but member starts empty',async()=>{
  const f=sqliteEnv()

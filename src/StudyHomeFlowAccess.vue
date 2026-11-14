@@ -7,6 +7,7 @@ import StudyHomeFlowDailyWords from './StudyHomeFlowDailyWords.vue'
 import StudyHomeFlowLanguage from './StudyHomeFlowLanguage.vue'
 import StudyHomeFlowExams from './StudyHomeFlowExams.vue'
 import StudyHomeFlowMock from './StudyHomeFlowMock.vue'
+import StudyHomeFlowSentences from './StudyHomeFlowSentences.vue'
 
 type Identity={user_id:string;household_id:string;role:'owner'|'member';display_name:string}
 const emit=defineEmits<{(event:'identity-changed',userId:string|null):void}>()
@@ -194,6 +195,8 @@ onUnmounted(()=>{
    :user-id="identity.user_id" :role="identity.role" />
   <StudyHomeFlowMock v-if="identity" :key="'mock:'+identity.user_id"
    :user-id="identity.user_id" :role="identity.role" />
+  <StudyHomeFlowSentences v-if="identity" :key="'sentences:'+identity.user_id"
+   :user-id="identity.user_id" />
  </section>
 </template>
 

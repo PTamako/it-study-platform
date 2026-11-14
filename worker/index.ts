@@ -9,6 +9,7 @@ import { homeflowLanguage } from './homeflow-language'
 import { homeflowExams } from './homeflow-exams'
 import { homeflowMockExam } from './homeflow-mock'
 import { homeflowMockReceipts } from './homeflow-mock-receipts'
+import { homeflowSentences } from './homeflow-sentences'
 import { feSeeds, seedUrl } from './fe-question-bank'
 import { eligibleChineseWord, fetchChineseWordMetadata } from './chinese-word-dictionary'
 
@@ -1338,6 +1339,9 @@ export default {
     // personal study APIs until every personal D1 key and PWA cache is scoped.
     if (url.pathname.startsWith('/api/homeflow-sso/'))
       return homeflowStudyIdentity(request, env)
+    if (url.pathname === '/api/homeflow-study/sentences' ||
+        url.pathname === '/api/homeflow-study/sentences/status')
+      return homeflowSentences(request, env)
     // New, strictly scoped per-user vocabulary API; legacy personal endpoints
     // still require the old session and are never unlocked by the HF cookie.
     if (url.pathname === '/api/homeflow-study/vocabulary' ||

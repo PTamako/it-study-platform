@@ -24,6 +24,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Focused personal sentence cards with real HomeFlow actor and D1
+        run: node --test --test-name-pattern="Stage E personal sentence cards" scripts/homeflow-sso-isolated.test.mjs
       - name: Check identity, cache isolation and delayed requests
         run: node --test scripts/daily-task-runtime.test.mjs scripts/homeflow-pwa-ui.test.mjs scripts/homeflow-legacy-cache-runtime.test.mjs scripts/homeflow-legacy-queue-epoch.test.mjs scripts/homeflow-legacy-exam-history-epoch.test.mjs scripts/homeflow-legacy-daily-epoch.test.mjs
       - name: Type-check frontend
@@ -31,6 +33,7 @@ jobs:
 
   # Keep the complete existing validation job as the acceptance gate.
   validate:
+    needs: fast-identity-checks
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
