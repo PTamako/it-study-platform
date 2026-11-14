@@ -25,7 +25,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Check identity, cache isolation and delayed requests
-        run: node --test scripts/daily-task-runtime.test.mjs scripts/homeflow-pwa-ui.test.mjs scripts/homeflow-legacy-cache-runtime.test.mjs
+        run: node --test scripts/daily-task-runtime.test.mjs scripts/homeflow-pwa-ui.test.mjs scripts/homeflow-legacy-cache-runtime.test.mjs scripts/homeflow-legacy-queue-epoch.test.mjs
       - name: Type-check frontend
         run: npm run typecheck
 
