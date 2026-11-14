@@ -100,9 +100,11 @@ function fixture(){
    hmac('it-study:document-source-check',keys.source,stamp,raw))
   const b=JSON.parse(raw)
   assert.deepEqual(Object.keys(b).sort(),
-   ['request_id','resource_id','household_id','requester_user_id','payload_sha256'].sort())
+   ['request_id','resource_id','household_id','requester_user_id','payload_sha256','execution_nonce'].sort())
+  assert.equal(b.execution_nonce,nonce)
   assert.doesNotMatch(raw,/確認|a-private-document/)
-  return Response.json({ok:true,verified:true,
+  return Response.json({ok:true,verified:true,reserved:true,
+   execution_nonce_hash:hashed(nonce),snapshot_sha256:b.payload_sha256,
    approval_id:b.request_id,candidate_id:b.resource_id,
    household_id:b.household_id,requester_user_id:b.requester_user_id,
    payload_sha256:b.payload_sha256})
@@ -125,6 +127,7 @@ test('signed study document vocabulary: real D1 receipt and approver audit, repl
   assert.equal(applied.status,200,JSON.stringify(applied))
   assert.equal(applied.body.applied,true)
   assert.equal(applied.body.kind,'vocabulary')
+  assert.equal(applied.body.approver_user_id,owner)
   const a=f.sql.prepare('SELECT * FROM homeflow_saved_vocabulary').get()
   assert.equal(a.homeflow_user_id,member)
   assert.equal(a.term,term.term)
@@ -141,6 +144,7 @@ test('signed study document vocabulary: real D1 receipt and approver audit, repl
   const recovered=await f.receipt()
   assert.equal(recovered.body.applied,true)
   assert.equal(recovered.body.remote_id,journal.remote_id)
+  assert.equal(recovered.body.approver_user_id,owner)
   assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM homeflow_saved_vocabulary').get().n,1)
   assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM homeflow_document_study_approval_audit').get().n,1)
   assert.throws(()=>f.sql.prepare('DELETE FROM homeflow_document_study_approval_audit').run(),/IMMUTABLE/)
