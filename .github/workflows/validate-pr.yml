@@ -123,17 +123,43 @@ jobs:
         with:
           python-version: '3.12'
 
+      # Reuse expensive, immutable public-data generation only when all
+      # generator inputs match. Bump the epoch when updating the Tatoeba
+      # source-export snapshot; never put user data or secrets in this cache.
+      - name: Restore generated public language fixtures
+        id: language-artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            migrations/0081_language_sentence_cards.sql
+            migrations/0082_refresh_language_sentence_annotations.sql
+            migrations/0084_refresh_contextual_bilingual_annotations.sql
+            migrations/0087_rebuild_contextual_bilingual_sentence_cards.sql
+            migrations/0115_refresh_precise_bilingual_annotations.sql
+            public/language-cards/
+            public/learner-lexicon/
+            scripts/.generated/lexicon-source-examples.json
+          key: public-language-fixtures-v1-${{ runner.os }}-py312-${{ hashFiles('scripts/generate_language_sentence_seed.py', 'scripts/build_static_learner_dictionary.py', 'scripts/lexicon_example_matching.py', 'scripts/curated-learner-words.json', 'migrations/0079_language_learning_6000_cards.sql') }}
+
       - name: Restore cached Tatoeba sentence exports
+        if: steps.language-artifacts.outputs.cache-hit != 'true'
         uses: actions/cache@v4
         with:
           path: /tmp/language-sentence-sources
           key: tatoeba-sentence-exports-v1-${{ runner.os }}
 
       - name: Generate attributed Japanese and English sentence migration
+        if: steps.language-artifacts.outputs.cache-hit != 'true'
         run: python scripts/generate_language_sentence_seed.py
 
       - name: Compile offline learner lexicon from committed licensed seeds
+        if: steps.language-artifacts.outputs.cache-hit != 'true'
         run: python scripts/build_static_learner_dictionary.py
+
+      # Always revalidate restored outputs; CI must still run the full test
+      # suite, local D1 migration chain, Worker dry-run, and frontend build.
+      - name: Verify generated language migrations and fingerprinted datasets
+        run: node scripts/verify-language-generated-artifacts.mjs
 
       - name: Audit licensed dictionary and grammar quality offline (zero D1/AI)
         run: node scripts/audit-language-quality.mjs
