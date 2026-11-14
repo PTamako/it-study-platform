@@ -40,3 +40,10 @@ PWA `StudyHomeFlowExams.vue` 与 `StudyHomeFlowLanguage.vue` 发起操作时固�
 - 随后在**同一 Draft #179** 的 `src/App.vue` 继续把 `legacyWritesAllowed()` 加到旧离线任务未提交队列 `persistDailyPending`、考试原地保存 `persistActiveMockExam`、单词进度/待同步快照 `persistDailyWordState`、语言/语法解释翻译、旧每日词语选项与语言场景、个人语言卡掌握/复习、字典浏览历史/收藏、生词本等 watcher/本机写入路径。判定关闭时均**不覆盖旧主人的本机字节**，不是删除或把旧值自动归给当前 HomeFlow member。
 - 新运行时 `scripts/homeflow-legacy-cache-runtime.test.mjs` 从 App.vue 提取真实持久化函数放进隔离 VM，验证旧 PWA 明确授权前 `0` 个本机写入、授权后保存、随后切换到 HomeFlow 时无法覆盖考试草稿或离线单词队列。`scripts/homeflow-pwa-ui.test.mjs` 追加所有主要旧 watcher 和数据快照的身份门槛静态核查；需对**后续最新 HEAD** 另行核验完整 CI，不得仅引用上面绿灯基线。
 - **依然不能宣称全量 E 完成**：旧 `src/App.vue` 的直接异步网络返回、每个离线队列重试入口/IndexedDB 分区、原 owner 历史全量回填、文书同步词句共享 ID 与真实同一 iPhone 双人/断网 E2E 尚未覆盖。本轮只加访问/持久化防误覆盖栅栏，原 storage 字节保留，Feature Flags OFF，生产 D1/R2/Workers/Pages 未动、Preview 不创建。
+
+
+## 2026-11-14 原单密码离线答题三类队列：账号代次与迟到回执
+
+- `src/App.vue` 的旧模拟交卷 `zhixue:mock-pending-v1`、旧情景练习 `zhixue:scenario-pending-v1` 和旧单题答题 `zhixue:practice-pending-v1` 仅在 `legacyWritesAllowed()` 且 `legacyOperationGeneration` 与原请求发起时一致时发送、接收、清空本地队列。每次验证到 HomeFlow 身份、本人登出、旧身份网络状态不确定或旧密码重新验证时，都会让前次异步请求代次失效，阻止迟到成功回执清除原主人的离线 pending 或把旧反馈更新进新的身份界面。
+- HomeFlow 切入时同时停止旧模拟计时器，避免隐藏状态下到时自动交卷；只更新当前内存的操作锁，不删除、不移交或重命名旧 localStorage 字节。旧单密码空间只有再次明确登录成功后可手动重试原 stable attempt/submission id。服务器上的新的 HomeFlow 专属个人写入仍保持在线校验 `expected_user_id` 和独立作用域。
+- 新 `scripts/homeflow-legacy-queue-epoch.test.mjs` 从真实 Vue 方法体运行延迟 JSON 回执，覆盖 mock/scenario/practice 三类账号切换前保存、切换后不删队列、禁止自动重放；`scripts/dictionary-acceptance.test.mjs` 的旧静态回归同步检查新 `legacyWorkCurrent(generation)` 防护；快速 CI job 也包含新测试。**这是三类旧离线队列的客户端防串号补强，不是全部 App.vue 本地缓存分区或 iPhone 真机验证已完成。**
