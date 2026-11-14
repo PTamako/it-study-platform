@@ -19,6 +19,7 @@ import { parseMockSnapshot, type MockSnapshot } from './mock-recovery'
 import ExamScratchTools from './ExamScratchTools.vue'
 import DailyGrammarLesson from './DailyGrammarLesson.vue'
 import DailyListeningPractice from './DailyListeningPractice.vue'
+import StudyHomeFlowAccess from './StudyHomeFlowAccess.vue'
 import {
   BookOpen, Languages, Search, GraduationCap,
   ChevronRight, ChevronDown, Sparkles, Clock3, Flame, Bookmark, Volume2, ArrowRight,
@@ -29,6 +30,94 @@ type ModuleId = 'home' | 'exam' | 'practical' | 'language' | 'dictionary'
 
 const authenticated = ref(false)
 const authReady = ref(false)
+// The old single-password PWA has unlabelled localStorage/queued work.
+// Never auto-claim any of it for a new HomeFlow user or silently show it
+// after switching HomeFlow accounts on a shared iPhone.
+const LEGACY_QUARANTINE='zhixue:legacy-cache-quarantine-v1'
+const homeflowIdentityUser=ref<string|null>(null)
+const legacyRequiresPassword=ref((()=>{
+ try{return localStorage.getItem(LEGACY_QUARANTINE)==='1'}
+ catch{return false}
+})())
+let homeflowProbeGeneration=0
+// Every legacy offline upload is tied to the original legacy login lifetime.
+// Switching HomeFlow users invalidates late fetch responses and pending replays,
+// but deliberately does NOT delete the original owner's localStorage snapshots.
+let legacyOperationGeneration=0
+function legacyWorkCurrent(generation:number){
+ return generation===legacyOperationGeneration&&legacyWritesAllowed()
+}
+function quarantineLegacyStudy(userId:string){
+ legacyOperationGeneration++
+ // Disarm the old mock timer; do not submit another person's exam after SSO.
+ if(mockTimer){clearInterval(mockTimer);mockTimer=undefined}
+ mockStarted.value=false
+ mockSyncing.value=false
+ practiceSaving.value=false
+ scenarioSubmitting.value=false
+ examHistorySyncing.value=false
+ homeflowIdentityUser.value=userId
+ if(!legacyRequiresPassword.value){
+  legacyRequiresPassword.value=true
+  try{localStorage.setItem(LEGACY_QUARANTINE,'1')}catch{/* fail closed in memory */}
+ }
+ // Hide old single-user content while HomeFlow identity is active.
+ // Keep the existing storage bytes intact; only the original password
+ // holder may explicitly reopen that legacy study workspace.
+ authenticated.value=false
+ authPassword.value=''
+ dailyHydrationRun++
+ masterySyncGeneration++
+ dailyWordHydrationRun++
+}
+function legacyWritesAllowed(){
+ return authenticated.value&&!legacyRequiresPassword.value&&!homeflowIdentityUser.value
+}
+function onHomeflowIdentityChanged(userId:string|null){
+ if(userId){quarantineLegacyStudy(userId);return}
+ if(homeflowIdentityUser.value){
+  legacyOperationGeneration++
+  homeflowIdentityUser.value=null
+  authenticated.value=false
+  // Never auto-open the old owner cache after a member logs out.
+  // The legacy password form remains available by explicit choice.
+ }
+}
+async function probeHomeflowIdentity(){
+ const generation=++homeflowProbeGeneration
+ try{
+  const res=await fetch('/api/homeflow-sso/me',{
+   credentials:'same-origin',cache:'no-store'
+  })
+  if(generation!==homeflowProbeGeneration)return Boolean(homeflowIdentityUser.value)
+  if(res.ok){
+   const data=await res.json() as {identity?:{user_id?:unknown}}
+   if(generation!==homeflowProbeGeneration)return Boolean(homeflowIdentityUser.value)
+   const id=data.identity?.user_id
+   if(typeof id==='string'&&id.length>0&&id.length<=128){
+    quarantineLegacyStudy(id)
+    return true
+   }
+  }
+  if(res.ok){
+   // A successful identity endpoint without an actor violates its contract.
+   // Do not fall back to the unscoped legacy cache automatically.
+   legacyOperationGeneration++
+   legacyRequiresPassword.value=true
+   authenticated.value=false
+   try{localStorage.setItem(LEGACY_QUARANTINE,'1')}catch{/* keep lock in memory */}
+  }
+  homeflowIdentityUser.value=null
+  return false
+ }catch{
+  // Network uncertainty must never unlock an old owner's offline cache.
+  legacyOperationGeneration++
+  authenticated.value=false
+  legacyRequiresPassword.value=true
+  try{localStorage.setItem(LEGACY_QUARANTINE,'1')}catch{/* keep lock in memory */}
+  return Boolean(homeflowIdentityUser.value)
+ }
+}
 const authConfigured = ref(true)
 const authPassword = ref('')
 const authError = ref('')
@@ -39,10 +128,15 @@ function applyAppUpdate() { window.location.reload() }
 
 async function checkAuth() {
   try {
+    if(await probeHomeflowIdentity()||legacyRequiresPassword.value){
+     authenticated.value=false
+     return
+    }
     const response = await fetch('/api/auth/session', { cache: 'no-store' })
     const result = await response.json() as { authenticated?: boolean; configured?: boolean }
     authConfigured.value = result.configured !== false
-    authenticated.value = response.ok && result.authenticated === true
+    authenticated.value = !homeflowIdentityUser.value&&!legacyRequiresPassword.value&&
+     response.ok && result.authenticated === true
   } catch {
     authenticated.value = false
     dailyHydrationRun++
@@ -53,9 +147,12 @@ async function checkAuth() {
 }
 
 async function login() {
+  if(authLoading.value)return
   authLoading.value = true
   authError.value = ''
   try {
+    if(await probeHomeflowIdentity())
+     throw Error('已连接 HomeFlow 身份，请先退出 HomeFlow 才能使用旧密码学习空间')
     const response = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -63,7 +160,14 @@ async function login() {
     })
     const result = await response.json() as { error?: string; authenticated?: boolean }
     if (!response.ok || result.authenticated !== true) throw new Error(result.error || '登录失败，请稍后重试。')
+    // A simultaneous HomeFlow login may finish while legacy password was
+    // checked. Its verified identity always wins the display scope.
+    if(homeflowIdentityUser.value)throw Error('已切换到 HomeFlow，旧学习空间继续隔离')
+    legacyOperationGeneration++
+    legacyRequiresPassword.value=false
+    try{localStorage.removeItem(LEGACY_QUARANTINE)}catch{/* memory state unlocks only after password */}
     authenticated.value = true
+    rolloverDailyTasks()
     dailyWordSyncState.value = 'loading'
     dailyWordSyncError.value = ''
     authPassword.value = ''
@@ -86,6 +190,7 @@ async function login() {
 
 async function logout() {
   if (authLoading.value) return
+  legacyOperationGeneration++
   authLoading.value = true
   authError.value = ''
   try {
@@ -147,14 +252,18 @@ type CloudDashboard = {
 const cloudDashboard = ref<CloudDashboard | null>(null)
 const cloudDashboardError = ref('')
 async function loadCloudDashboard() {
+  const actorGeneration=legacyOperationGeneration
+  if(!legacyWorkCurrent(actorGeneration))return
   try {
     const response = await fetch('/api/dashboard')
     const data = await response.json() as CloudDashboard & { error?: string }
+    if(!legacyWorkCurrent(actorGeneration))return
     if (!response.ok) throw new Error(data.error || '云端学习统计暂不可用')
     cloudDashboard.value = data
     cloudDashboardError.value = ''
   } catch (error) {
-    cloudDashboardError.value = error instanceof Error ? error.message : '云端学习统计暂不可用'
+    if(legacyWorkCurrent(actorGeneration))
+      cloudDashboardError.value = error instanceof Error ? error.message : '云端学习统计暂不可用'
   }
 }
 const dailyTaskSaveQueues = new Map<string, Promise<void>>()
@@ -178,10 +287,13 @@ function applyPendingDailyTasks(date: string) {
 }
 applyPendingDailyTasks(todayKey.value)
 function persistDailyPending() {
+  if(!legacyWritesAllowed())return
   try { localStorage.setItem('zhixue:daily-pending-v1', JSON.stringify([...pendingDailyTasks.values()])) }
   catch { cloudDashboardError.value = '本设备存储不可用，待同步任务可能无法保留。' }
 }
 async function saveDailyTask(task: StudyTask, previousDone: boolean, replay?: PendingDailyTask) {
+  const actorGeneration=legacyOperationGeneration
+  if(!legacyWorkCurrent(actorGeneration))return
   const taskId = task.id
   const date = replay?.date || todayKey.value
   const queueKey = date + ':' + taskId
@@ -196,13 +308,16 @@ async function saveDailyTask(task: StudyTask, previousDone: boolean, replay?: Pe
   // Serialize writes for each task so a slow earlier toggle cannot overwrite the latest choice.
   const previous = dailyTaskSaveQueues.get(queueKey) || Promise.resolve()
   const pending = previous.catch(() => undefined).then(async () => {
+    if(!legacyWorkCurrent(actorGeneration))return
     try {
       const response = await fetch('/api/daily-tasks', {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ task_id: taskId, study_date: date, completed }),
       })
+      if(!legacyWorkCurrent(actorGeneration))return
       if (!response.ok) {
         const data = await response.json().catch(() => ({})) as { error?: string }
+        if(!legacyWorkCurrent(actorGeneration))return
         throw new Error(data.error || '每日任务云端保存失败')
       }
       const remaining = pendingDailyTasks.get(queueKey)
@@ -214,7 +329,8 @@ async function saveDailyTask(task: StudyTask, previousDone: boolean, replay?: Pe
         void loadCloudDashboard()
       }
     } catch (error) {
-      if (todayKey.value === date && dailyTaskSaveRequestIds.get(queueKey) === requestId) {
+      if (legacyWorkCurrent(actorGeneration) &&
+          todayKey.value === date && dailyTaskSaveRequestIds.get(queueKey) === requestId) {
         cloudDashboardError.value = error instanceof Error ? error.message : '网络异常：每日任务暂未同步到云端。'
       }
     }
@@ -225,6 +341,7 @@ async function saveDailyTask(task: StudyTask, previousDone: boolean, replay?: Pe
 }
 let dailyHydrationRun = 0
 function rolloverDailyTasks() {
+  if(!legacyWritesAllowed())return
   const next = tokyoDate()
   if (next === todayKey.value) return
   // The synchronous watcher has already persisted the prior day's latest value.
@@ -309,10 +426,17 @@ let dailyRolloverTimer: ReturnType<typeof setInterval> | undefined
 function onDailyNetworkOnline() { if (authenticated.value) void hydrateDailyWordProgress() }
 function onDailyVisibilityChange() {
   if (document.visibilityState === 'visible') {
-    rolloverDailyTasks()
-    // iOS may throttle background intervals: refresh due cards immediately on resume.
+    // A Safari account switch may occur while this installed PWA is asleep.
+    // Check HomeFlow before refreshing any legacy PWA learner data.
+    if(authenticated.value){
+     void probeHomeflowIdentity().then(active=>{
+      if(!active&&legacyWritesAllowed()){
+       rolloverDailyTasks()
+       void hydrateDailyWordProgress()
+      }
+     })
+    }
     reviewClockNow.value = Date.now()
-    if (authenticated.value) void hydrateDailyWordProgress()
   }
 }
 const examRecords = ref<ExamRecord[]>(readStored('zhixue:exam-records', []))
@@ -337,14 +461,21 @@ const curveRecords = computed(() => {
   }
   return days
 })
-watch(tasks, value => { try { localStorage.setItem('zhixue:tasks:' + todayKey.value, JSON.stringify(value)) } catch { cloudDashboardError.value = '本设备存储不可用，每日任务可能无法离线保留。' } }, { deep: true, flush: 'sync' })
-watch(examRecords, value => localStorage.setItem('zhixue:exam-records', JSON.stringify(value)), { deep: true })
+watch(tasks, value => {
+  if(!legacyWritesAllowed())return
+  try { localStorage.setItem('zhixue:tasks:' + todayKey.value, JSON.stringify(value)) }
+  catch { cloudDashboardError.value = '本设备存储不可用，每日任务可能无法离线保留。' }
+}, { deep: true, flush: 'sync' })
+watch(examRecords, value => {
+ if(legacyWritesAllowed())localStorage.setItem('zhixue:exam-records', JSON.stringify(value))
+}, { deep: true })
 
 // 将旧版本保存在浏览器的手动成绩记录迁移到 D1。先上传，再读取云端；每条记录带稳定 ID，失败时保留本地副本。
-let examHistorySyncStarted = false
+let examHistorySyncGeneration: number | null = null
 async function syncExamHistory() {
-  if (examHistorySyncStarted) return
-  examHistorySyncStarted = true
+  const generation=legacyOperationGeneration
+  if(!legacyWorkCurrent(generation)||examHistorySyncGeneration===generation)return
+  examHistorySyncGeneration=generation
   examHistorySyncing.value = true
   try {
     const localRecords = examRecords.value.map(record => {
@@ -355,28 +486,37 @@ async function syncExamHistory() {
     // Fetch cloud IDs first. Reposting the entire history on every sign-in
     // wastes D1 rows/writes and hits the 60-write/minute protection on long histories.
     const initialResponse = await fetch('/api/exam-history', { cache: 'no-store' })
+    if(!legacyWorkCurrent(generation))return
     if (!initialResponse.ok) throw new Error('云端考试历史暂不可用')
     const initial = await initialResponse.json() as { items?: Array<ExamRecord & { id: string }> }
+    if(!legacyWorkCurrent(generation))return
     if (!Array.isArray(initial.items)) throw new Error('云端考试历史数据异常')
     const missing = recordsMissingOnCloud(localRecords, initial.items)
     let uploadFailed = false
     let uploaded = false
     for (const record of missing) {
+      if(!legacyWorkCurrent(generation))return
       try {
         const response = await fetch('/api/exam-history', {
           method: 'POST', headers: { 'content-type': 'application/json' },
           body: JSON.stringify(record),
         })
+        if(!legacyWorkCurrent(generation))return
         if (!response.ok) uploadFailed = true
         else uploaded = true
-      } catch { uploadFailed = true }
+      } catch {
+        if(!legacyWorkCurrent(generation))return
+        uploadFailed = true
+      }
     }
     // Refresh only if something actually changed. Never discard unsynced local records.
     let cloudRecords = initial.items
     if (uploaded && !uploadFailed) {
       const finalResponse = await fetch('/api/exam-history', { cache: 'no-store' })
+      if(!legacyWorkCurrent(generation))return
       if (!finalResponse.ok) throw new Error('云端考试历史复核失败')
       const finalData = await finalResponse.json() as { items?: Array<ExamRecord & { id: string }> }
+      if(!legacyWorkCurrent(generation))return
       if (!Array.isArray(finalData.items)) throw new Error('云端考试历史复核数据异常')
       cloudRecords = finalData.items
     }
@@ -386,13 +526,18 @@ async function syncExamHistory() {
       cloudDashboardError.value = '部分本地考试记录尚未同步，原始记录仍保留在本设备。'
     }
   } catch {
-    cloudDashboardError.value = '考试记录暂未完成云端迁移；本地数据仍保留。'
+    if(legacyWorkCurrent(generation))
+      cloudDashboardError.value = '考试记录暂未完成云端迁移；本地数据仍保留。'
   } finally {
-    examHistorySyncStarted = false
-    examHistorySyncing.value = false
+    if(examHistorySyncGeneration===generation){
+      examHistorySyncGeneration=null
+      examHistorySyncing.value=false
+    }
   }
 }
 async function saveExamRecord(record: ExamRecord) {
+  const generation=legacyOperationGeneration
+  if(!legacyWorkCurrent(generation))return
   const savedRecord = { ...record, id: record.id || crypto.randomUUID() }
   examRecords.value.push(savedRecord)
   try {
@@ -401,16 +546,20 @@ async function saveExamRecord(record: ExamRecord) {
       body: JSON.stringify(savedRecord),
     })
     const data = await response.json().catch(() => ({})) as { error?: string }
+    if(!legacyWorkCurrent(generation))return
     if (!response.ok) throw new Error(data.error || '考试成绩未能同步到云端。')
     cloudDashboardError.value = ''
     void loadCloudDashboard()
   } catch (error) {
-    cloudDashboardError.value = error instanceof Error
-      ? error.message + ' 成绩仍保留在本设备，之后可重试同步。'
-      : '考试成绩未能同步到云端；本地记录仍保留。'
+    if(legacyWorkCurrent(generation))
+      cloudDashboardError.value = error instanceof Error
+        ? error.message + ' 成绩仍保留在本设备，之后可重试同步。'
+        : '考试成绩未能同步到云端；本地记录仍保留。'
   }
 }
 function addExamRecord() {
+  if(!legacyWritesAllowed())return
+  const generation=legacyOperationGeneration
   const exam = window.prompt('记录哪项考试？例如 SG', 'SG')
   if (!exam?.trim()) return
   const totalRaw = window.prompt('本次共做了多少题？请输入题目总数')
@@ -421,23 +570,29 @@ function addExamRecord() {
   if (correctRaw === null) return
   const correct = Number(correctRaw)
   if (!Number.isInteger(correct) || correct < 0 || correct > total) { window.alert('答对题数应为 0 到总题数之间的整数。'); return }
+  if(!legacyWorkCurrent(generation))return
   void saveExamRecord({ date: tokyoDate(), correct, total, exam: exam.trim().toUpperCase() })
 }
 async function removeExamRecords() {
+  if(!legacyWritesAllowed())return
+  const generation=legacyOperationGeneration
   if (!window.confirm('确定清除全部历史考试成绩吗？云端和本设备记录都会删除，且无法恢复。')) return
   const confirmation = window.prompt('二次确认：此操作无法恢复。请输入「清除」以继续。')
-  if (confirmation !== '清除') return
+  if (confirmation !== '清除'||!legacyWorkCurrent(generation)) return
   try {
     const response = await fetch('/api/exam-history', { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ confirmation }) })
     const data = await response.json().catch(() => ({})) as { error?: string }
+    if(!legacyWorkCurrent(generation))return
     if (!response.ok) throw new Error(data.error || '云端记录清除失败。')
     examRecords.value = []
     localStorage.setItem('zhixue:exam-records', '[]')
     cloudDashboardError.value = ''
   } catch (error) {
-    const message = error instanceof Error ? error.message : '记录清除失败，请检查网络后重试。'
-    cloudDashboardError.value = message
-    window.alert(message + ' 原有记录未从页面清除。')
+    if(legacyWorkCurrent(generation)){
+      const message = error instanceof Error ? error.message : '记录清除失败，请检查网络后重试。'
+      cloudDashboardError.value = message
+      window.alert(message + ' 原有记录未从页面清除。')
+    }
   }
 }
 
@@ -464,7 +619,9 @@ type QuestionExplanationTranslation = { source_text: string; translation_zh: str
 const questionExplanationTranslations = ref<Record<string, QuestionExplanationTranslation>>(readStored('zhixue:question-explanation-zh', {}))
 const questionExplanationTranslating = ref<Record<string, boolean>>({})
 const questionExplanationTranslationErrors = ref<Record<string, string>>({})
-watch(questionExplanationTranslations, value => localStorage.setItem('zhixue:question-explanation-zh', JSON.stringify(value)), { deep: true })
+watch(questionExplanationTranslations, value => {
+  if(legacyWritesAllowed())localStorage.setItem('zhixue:question-explanation-zh', JSON.stringify(value))
+}, { deep: true })
 const quizQuestions = ref<PracticeQuestion[]>([])
 const quizIndex = ref(0)
 const selectedOption = ref('')
@@ -525,7 +682,7 @@ const MOCK_REVIEW_KEY = 'zhixue:mock-review-v1'
 const mockStorageWarning = ref('')
 let mockTimer: ReturnType<typeof setInterval> | undefined
 function persistActiveMockExam() {
-  if (!mockStarted.value) return
+  if(!legacyWritesAllowed()||!mockStarted.value)return
   const snapshot: MockSnapshot<PracticeQuestion> = {
     track: selectedTrackId.value === 'exam-fe' ? 'exam-fe' : 'exam-sg',
     section: selectedTrackId.value === 'exam-fe' ? feMockSection.value : 'SG',
@@ -644,8 +801,9 @@ const mockPendingSubmission = ref<PendingMockSubmission | null>(readStored('zhix
 const mockSyncing = ref(false)
 
 async function syncPendingMockSubmission() {
+  const generation=legacyOperationGeneration
   const pending = mockPendingSubmission.value
-  if (!pending || mockSyncing.value || !authenticated.value) return
+  if (!pending || mockSyncing.value || !legacyWorkCurrent(generation)) return
   mockSyncing.value = true
   try {
     const response = await fetch('/api/mock-exam/submit', {
@@ -656,6 +814,7 @@ async function syncPendingMockSubmission() {
       error?: string; submission_id?: string; correct_count?: number; total?: number; exam_name?: string; study_date?: string
       review?: Array<{ id: string; answer: string; explanation: string }>
     }
+    if (!legacyWorkCurrent(generation)) return
     if (!response.ok || data.submission_id !== pending.submission_id || !Number.isInteger(data.correct_count) || data.total !== pending.answers.length) {
       throw new Error(data.error || '交卷结果暂未成功同步。')
     }
@@ -683,13 +842,14 @@ async function syncPendingMockSubmission() {
     mockError.value = ''
     void loadCloudDashboard()
   } catch (error) {
-    mockError.value = (error instanceof Error ? error.message : '网络异常。') + ' 答卷已保留在本设备，可点击「重新同步」。'
+    if(legacyWorkCurrent(generation))
+      mockError.value = (error instanceof Error ? error.message : '网络异常。') + ' 答卷已保留在本设备，可点击「重新同步」。'
   } finally {
-    mockSyncing.value = false
+    if(generation===legacyOperationGeneration) mockSyncing.value = false
   }
 }
 async function finishMockExam(autoSubmit = false) {
-  if (!mockStarted.value || mockSubmitted.value) return
+  if (!legacyWritesAllowed() || !mockStarted.value || mockSubmitted.value) return
   mockSubmitted.value = true
   mockStarted.value = false
   if (mockTimer) { clearInterval(mockTimer); mockTimer = undefined }
@@ -720,6 +880,7 @@ async function finishMockExam(autoSubmit = false) {
   await syncPendingMockSubmission()
 }
 function closeMockReview() {
+  if(!legacyWritesAllowed())return
   mockSubmitted.value = false
   mockQuestions.value = []
   mockAnswers.value = {}
@@ -755,7 +916,7 @@ const scenarioExplanationTranslations = ref<Record<string, ScenarioExplanationTr
 const scenarioExplanationTranslating = ref<Record<string, boolean>>({})
 const scenarioExplanationTranslationErrors = ref<Record<string, string>>({})
 watch(scenarioExplanationTranslations, value => {
-  localStorage.setItem('zhixue:scenario-explanations-zh', JSON.stringify(value))
+  if(legacyWritesAllowed())localStorage.setItem('zhixue:scenario-explanations-zh', JSON.stringify(value))
 }, { deep: true })
 const currentScenario = computed(() => visibleScenarios.value.find(item => item.id === selectedScenarioId.value) || visibleScenarios.value[0] || null)
 const practicalPosition = computed(() => currentScenario.value
@@ -874,8 +1035,9 @@ type PendingScenarioAttempt = {
 }
 const pendingScenarioAttempt = ref<PendingScenarioAttempt | null>(readStored('zhixue:scenario-pending-v1', null))
 async function syncPendingScenarioAttempt() {
+  const generation=legacyOperationGeneration
   const pending = pendingScenarioAttempt.value
-  if (!pending || scenarioSubmitting.value || !authenticated.value) return
+  if (!pending || scenarioSubmitting.value || !legacyWorkCurrent(generation)) return
   const requestId = ++scenarioSubmissionId
   scenarioSubmitting.value = true
   scenariosError.value = ''
@@ -888,6 +1050,7 @@ async function syncPendingScenarioAttempt() {
     const data = await response.json() as {
       attempt_id?: string; score?: number; best_option?: string; correct?: boolean; feedback?: string; error?: string
     }
+    if (!legacyWorkCurrent(generation)) return
     if (!response.ok || data.attempt_id !== pending.attempt_id) {
       throw new Error(data.error || '实战结果尚未保存。')
     }
@@ -907,16 +1070,16 @@ async function syncPendingScenarioAttempt() {
     }
     void loadCloudDashboard()
   } catch (error) {
-    if (requestId === scenarioSubmissionId) {
+    if (legacyWorkCurrent(generation) && requestId === scenarioSubmissionId) {
       scenariosError.value = (error instanceof Error ? error.message : '网络异常。') + ' 实战答题保存在本设备，请重试同步。'
     }
   } finally {
-    // Switching scenarios doesn't unlock an in-flight save; a newer
-    // submission cannot start until this request has settled.
-    scenarioSubmitting.value = false
+    // A previous actor's reply must not release a new actor's submission.
+    if(generation===legacyOperationGeneration)scenarioSubmitting.value = false
   }
 }
 async function submitScenario() {
+  if(!legacyWritesAllowed())return
   const scenario = currentScenario.value
   const selected = selectedScenarioOption.value
   if (!scenario || !selected || scenarioSubmitting.value || scenarioResult.value) return
@@ -1244,8 +1407,9 @@ const pendingPracticeAttempt = ref<PendingPracticeAttempt | null>(readStored('zh
 const practiceSaving = ref(false)
 
 async function syncPendingPracticeAttempt() {
+  const generation=legacyOperationGeneration
   const pending = pendingPracticeAttempt.value
-  if (!pending || practiceSaving.value || !authenticated.value) return
+  if (!pending || practiceSaving.value || !legacyWorkCurrent(generation)) return
   practiceSaving.value = true
   try {
     const response = await fetch('/api/attempts', {
@@ -1254,6 +1418,7 @@ async function syncPendingPracticeAttempt() {
       body: JSON.stringify(pending),
     })
     const data = await response.json() as { error?: string; attempt_id?: string; progress?: QuestionReviewProgress }
+    if (!legacyWorkCurrent(generation)) return
     if (!response.ok || data.attempt_id !== pending.attempt_id) {
       throw new Error(data.error || '答题记录尚未同步。')
     }
@@ -1265,12 +1430,14 @@ async function syncPendingPracticeAttempt() {
     quizError.value = ''
     void loadCloudDashboard()
   } catch (error) {
-    quizError.value = (error instanceof Error ? error.message : '网络异常。') + ' 答题保存在本设备，请重新同步。'
+    if(legacyWorkCurrent(generation))
+      quizError.value = (error instanceof Error ? error.message : '网络异常。') + ' 答题保存在本设备，请重新同步。'
   } finally {
-    practiceSaving.value = false
+    if(generation===legacyOperationGeneration)practiceSaving.value = false
   }
 }
 async function submitPracticeAnswer() {
+  if(!legacyWritesAllowed())return
   const question = currentQuestion.value
   if (!question || !selectedOption.value || practiceSaving.value) return
   if (quizSubmitted.value) {
@@ -1412,7 +1579,7 @@ function pinDailyWords(language: 'ja' | 'en', date: string, words: DictionaryEnt
   if (dailyWordSelections.value[key]?.length === 5 || words.length < 5) return
   const next = { ...dailyWordSelections.value, [key]: words.slice(0, 5).map(word => word.term) }
   dailyWordSelections.value = Object.fromEntries(Object.entries(next).sort().slice(-8))
-  try { localStorage.setItem('zhixue:daily-word-selections-v1', JSON.stringify(dailyWordSelections.value)) } catch { /* optional local cache */ }
+  try { if(legacyWritesAllowed())localStorage.setItem('zhixue:daily-word-selections-v1', JSON.stringify(dailyWordSelections.value)) } catch { /* optional local cache */ }
 }
 function dailyWordStatus(language: 'ja' | 'en', term: string): string {
   const review = dailyWordProgress.value[dailyWordKey(language, term)]
@@ -1500,6 +1667,7 @@ let dailyWordHydrationRun = 0
 let dailyWordFlushJob: Promise<void> | null = null
 
 function persistDailyWordState() {
+  if(!legacyWritesAllowed())return
   try {
     localStorage.setItem('zhixue:daily-word-review-v1', JSON.stringify(dailyWordProgress.value))
     localStorage.setItem('zhixue:daily-word-pending-v1', JSON.stringify(dailyWordPending.value))
@@ -1630,7 +1798,7 @@ async function hydrateDailyWordProgress() {
           delete selections[key]
       }
       dailyWordSelections.value = selections
-      try { localStorage.setItem('zhixue:daily-word-selections-v1', JSON.stringify(selections)) } catch { /* local cache is optional */ }
+      try { if(legacyWritesAllowed())localStorage.setItem('zhixue:daily-word-selections-v1', JSON.stringify(selections)) } catch { /* local cache is optional */ }
     }
     dailyWordProgress.value = merged
     dailyWordPending.value = pending
@@ -1749,7 +1917,7 @@ watch(dailyLanguageScenes, scenes => {
   if (!changed) return
   // Keep recent assignments bounded; all past cards remain in the full library.
   dailySceneAssignments.value = Object.fromEntries(Object.entries(next).sort().slice(-16))
-  try { localStorage.setItem('zhixue:daily-scene-assignments-v1', JSON.stringify(dailySceneAssignments.value)) } catch { /* optional cache */ }
+  try { if(legacyWritesAllowed())localStorage.setItem('zhixue:daily-scene-assignments-v1', JSON.stringify(dailySceneAssignments.value)) } catch { /* optional cache */ }
 })
 const isLanguageCardUnlearned = (card: LanguageCard) => {
   const review = languageReviewByCardId.value.get(card.id)
@@ -1990,16 +2158,23 @@ async function toggleLanguageCard(id: string) {
   }
 }
 watch(studyLanguage, value => {
-  localStorage.setItem('zhixue:study-language', JSON.stringify(value))
+  if(legacyWritesAllowed())localStorage.setItem('zhixue:study-language', JSON.stringify(value))
   selectedLanguageCategory.value = '全部'
   void loadLanguageCards()
 })
-watch(completedLanguageCards, value => localStorage.setItem('zhixue:completed-language-cards', JSON.stringify(value)), { deep: true })
-watch(languageReviews, value => localStorage.setItem('zhixue:language-reviews', JSON.stringify(value)), { deep: true })
+watch(completedLanguageCards, value => {
+  if(legacyWritesAllowed())localStorage.setItem('zhixue:completed-language-cards', JSON.stringify(value))
+}, { deep: true })
+watch(languageReviews, value => {
+  if(legacyWritesAllowed())localStorage.setItem('zhixue:language-reviews', JSON.stringify(value))
+}, { deep: true })
 async function hydrateCloudProgress() {
+  const actorGeneration=legacyOperationGeneration
+  if(!legacyWorkCurrent(actorGeneration))return
   void hydrateVocabulary()
   const generation = ++masterySyncGeneration
-  const isCurrent = () => generation === masterySyncGeneration && authenticated.value
+  const isCurrent = () => generation === masterySyncGeneration &&
+    legacyWorkCurrent(actorGeneration)
   languageProgressHydrating.value = true
   languageProgressReady.value = false
   dailyScenesReady.value = false
@@ -2020,6 +2195,7 @@ async function hydrateCloudProgress() {
     const hydratedCards = await hydrateMastery(completedLanguageCards.value, fetch, {
       has: id => importedIds.has(id),
       add: ids => {
+        if(!isCurrent())return
         ids.forEach(id => importedIds.add(id))
         try { localStorage.setItem('zhixue:mastery-imported-v1', JSON.stringify([...importedIds])) } catch { /* retry safely next time */ }
       },
@@ -2036,8 +2212,10 @@ async function hydrateCloudProgress() {
 
   try {
     const reviewResponse = await fetch('/api/language-review')
+    if(!isCurrent())return
     if (reviewResponse.ok) {
       const reviews = await reviewResponse.json() as { items?: LanguageReview[] }
+      if(!isCurrent())return
       const cloudReviews = reviews.items || []
       languageReviews.value = [...cloudReviews, ...languageReviews.value.filter(local =>
         !cloudReviews.some(cloud => cloud.card_id === local.card_id))]
@@ -2065,7 +2243,10 @@ onMounted(async () => {
     // Speech playback will report its own browser/device error when requested.
   }
   await checkAuth()
-  if (authenticated.value) { restoreMockReview(); restoreActiveMockExam(); void syncExamHistory(); void hydrateCloudProgress(); void hydrateDailyWordProgress(); void refreshDailyTasks(todayKey.value); void reconcilePriorDailyTasks(); void syncPendingMockSubmission(); void syncPendingPracticeAttempt(); void syncPendingScenarioAttempt() }
+  if (legacyWritesAllowed()) {
+   rolloverDailyTasks()
+   restoreMockReview(); restoreActiveMockExam(); void syncExamHistory(); void hydrateCloudProgress(); void hydrateDailyWordProgress(); void refreshDailyTasks(todayKey.value); void reconcilePriorDailyTasks(); void syncPendingMockSubmission(); void syncPendingPracticeAttempt(); void syncPendingScenarioAttempt()
+  }
 })
 
 type DictionaryEntry = {
@@ -2170,8 +2351,12 @@ watch(authenticated, () => dictionaryOnlineCache.clear())
 
 const speechPaused = ref(false)
 const speechPlaying = ref(false)
-watch(recentDictionaryEntries, value => localStorage.setItem('zhixue:recent-dictionary', JSON.stringify(value)), { deep: true })
-watch(savedDictionaryEntries, value => localStorage.setItem('zhixue:saved-dictionary-entries', JSON.stringify(value)), { deep: true })
+watch(recentDictionaryEntries, value => {
+  if(legacyWritesAllowed())localStorage.setItem('zhixue:recent-dictionary', JSON.stringify(value))
+}, { deep: true })
+watch(savedDictionaryEntries, value => {
+  if(legacyWritesAllowed())localStorage.setItem('zhixue:saved-dictionary-entries', JSON.stringify(value))
+}, { deep: true })
 const savedVocabularyEntries = computed(() => savedWords.value.map(key=>{
  const {term,language}=parseVocabularyKey(key)
  return savedDictionaryEntries.value.find(entry=>vocabularyKey(entry.term,entry.language||'auto')===key)||
@@ -2638,7 +2823,9 @@ function setDictionaryLanguage(language: 'auto' | 'ja' | 'en' | 'zh' | 'it') {
   speechStatus.value = ''
   speechStatusTarget.value = ''
 }
-watch(savedWords, value => localStorage.setItem('zhixue:saved-words', JSON.stringify(value)), { deep: true })
+watch(savedWords, value => {
+  if(legacyWritesAllowed())localStorage.setItem('zhixue:saved-words', JSON.stringify(value))
+}, { deep: true })
 
 function navigate(id: ModuleId) {
   stopSpeech()
@@ -2913,7 +3100,11 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
     <div class="auth-card"><div class="auth-mark"><BookOpen :size="28" /></div><h1>知学</h1><p>正在确认登录状态…</p></div>
   </section>
   <section v-else-if="!authenticated" class="auth-screen">
-    <form class="auth-card" @submit.prevent="login">
+    <p v-if="homeflowIdentityUser" class="auth-card" role="status">
+      当前已连接 HomeFlow，旧版学习资料不会自动显示或归属其他家庭成员。
+      如需进入旧学习空间，请先退出 HomeFlow，再用原密码登录。
+    </p>
+    <form v-else class="auth-card" @submit.prevent="login">
       <div class="auth-mark"><ShieldCheck :size="28" /></div>
           <h1>欢迎回来</h1>
 
@@ -2926,6 +3117,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
       </button>
 
     </form>
+    <StudyHomeFlowAccess @identity-changed="onHomeflowIdentityChanged" />
   </section>
   <div v-else class="app-shell">
     <aside class="sidebar">
@@ -2966,6 +3158,8 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
       </nav>
 
       <div class="content-wrap">
+        <StudyHomeFlowAccess v-if="activeModule==='home'"
+          @identity-changed="onHomeflowIdentityChanged" />
         <section class="welcome-row">
           <div>
             

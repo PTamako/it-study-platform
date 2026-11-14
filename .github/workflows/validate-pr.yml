@@ -13,7 +13,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  fast-identity-checks:
+    name: Fast identity and type checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Focused personal sentence cards with real HomeFlow actor and D1
+        run: node --test --test-name-pattern="Stage E personal sentence cards|Stage E .*vocabulary|legacy adoption rejects malformed JSON" scripts/homeflow-sso-isolated.test.mjs
+      - name: Verify document-study persistence and worker types
+        run: |
+          node --test scripts/document-study-apply.test.mjs
+          npx tsc --noEmit --target es2022 --module esnext --moduleResolution bundler --skipLibCheck --types @cloudflare/workers-types worker/document-study-apply.ts
+      - name: Check identity, cache isolation and delayed requests
+        run: node --test scripts/daily-task-runtime.test.mjs scripts/homeflow-pwa-ui.test.mjs scripts/homeflow-legacy-cache-runtime.test.mjs scripts/homeflow-legacy-queue-epoch.test.mjs scripts/homeflow-legacy-exam-history-epoch.test.mjs scripts/homeflow-legacy-daily-epoch.test.mjs
+      - name: Type-check frontend
+        run: npm run typecheck
+
+  # Keep the complete existing validation job as the acceptance gate.
   validate:
+    needs: fast-identity-checks
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -106,17 +130,43 @@ jobs:
         with:
           python-version: '3.12'
 
+      # Reuse expensive, immutable public-data generation only when all
+      # generator inputs match. Bump the epoch when updating the Tatoeba
+      # source-export snapshot; never put user data or secrets in this cache.
+      - name: Restore generated public language fixtures
+        id: language-artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            migrations/0081_language_sentence_cards.sql
+            migrations/0082_refresh_language_sentence_annotations.sql
+            migrations/0084_refresh_contextual_bilingual_annotations.sql
+            migrations/0087_rebuild_contextual_bilingual_sentence_cards.sql
+            migrations/0115_refresh_precise_bilingual_annotations.sql
+            public/language-cards/
+            public/learner-lexicon/
+            scripts/.generated/lexicon-source-examples.json
+          key: public-language-fixtures-v1-${{ runner.os }}-py312-${{ hashFiles('scripts/generate_language_sentence_seed.py', 'scripts/build_static_learner_dictionary.py', 'scripts/lexicon_example_matching.py', 'scripts/curated-learner-words.json', 'migrations/0079_language_learning_6000_cards.sql') }}
+
       - name: Restore cached Tatoeba sentence exports
+        if: steps.language-artifacts.outputs.cache-hit != 'true'
         uses: actions/cache@v4
         with:
           path: /tmp/language-sentence-sources
           key: tatoeba-sentence-exports-v1-${{ runner.os }}
 
       - name: Generate attributed Japanese and English sentence migration
+        if: steps.language-artifacts.outputs.cache-hit != 'true'
         run: python scripts/generate_language_sentence_seed.py
 
       - name: Compile offline learner lexicon from committed licensed seeds
+        if: steps.language-artifacts.outputs.cache-hit != 'true'
         run: python scripts/build_static_learner_dictionary.py
+
+      # Always revalidate restored outputs; CI must still run the full test
+      # suite, local D1 migration chain, Worker dry-run, and frontend build.
+      - name: Verify generated language migrations and fingerprinted datasets
+        run: node scripts/verify-language-generated-artifacts.mjs
 
       - name: Audit licensed dictionary and grammar quality offline (zero D1/AI)
         run: node scripts/audit-language-quality.mjs

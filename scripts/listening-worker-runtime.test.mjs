@@ -11,6 +11,8 @@ source = source.replace("import { checkWriteRateLimit, handleAuthRequest, requir
   'const checkWriteRateLimit=async()=>null; const handleAuthRequest=async()=>null; const requireAuth=async()=>null;')
 source = source.replace("import { feSeeds, seedUrl } from './fe-question-bank'",
   "const feSeeds=[]; const seedUrl=()=>'';")
+source = source.replace("import { homeflowStudyIdentity } from './homeflow-identity'",
+  'const homeflowStudyIdentity = async () => new Response("SSO disabled",{status:503})')
 source = inlineChineseDictionary(source)
 const compiled = ts.transpileModule(source, {compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText
 const worker = (await import('data:text/javascript;base64,'+Buffer.from(compiled).toString('base64'))).default

@@ -1,0 +1,353 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import {readFileSync} from 'node:fs'
+
+const ui=readFileSync(new URL('../src/StudyHomeFlowAccess.vue',import.meta.url),'utf8')
+const app=readFileSync(new URL('../src/App.vue',import.meta.url),'utf8')
+const daily=readFileSync(new URL('../src/StudyHomeFlowDailyTasks.vue',import.meta.url),'utf8')
+const grammar=readFileSync(new URL('../src/StudyHomeFlowGrammar.vue',import.meta.url),'utf8')
+const listening=readFileSync(new URL('../src/StudyHomeFlowListening.vue',import.meta.url),'utf8')
+const words=readFileSync(new URL('../src/StudyHomeFlowDailyWords.vue',import.meta.url),'utf8')
+const language=readFileSync(new URL('../src/StudyHomeFlowLanguage.vue',import.meta.url),'utf8')
+const exams=readFileSync(new URL('../src/StudyHomeFlowExams.vue',import.meta.url),'utf8')
+const mock=readFileSync(new URL('../src/StudyHomeFlowMock.vue',import.meta.url),'utf8')
+const receipts=readFileSync(new URL('../src/StudyHomeFlowMockReceipts.vue',import.meta.url),'utf8')
+
+test('HomeFlow PWA entry remains feature gated and cannot authenticate legacy study APIs',()=>{
+ assert.match(ui,/api\('status'\)/)
+ assert.match(ui,/enabled\.value=status\.enabled===true/)
+ assert.match(ui,/<section v-if="enabled"/)
+ assert.match(app,/import StudyHomeFlowAccess from '.\/StudyHomeFlowAccess.vue'/)
+ assert.match(app,/<StudyHomeFlowAccess @identity-changed="onHomeflowIdentityChanged" \/>/)
+ assert.match(app,/<StudyHomeFlowAccess v-if="activeModule==='home'"/)
+ assert.doesNotMatch(ui,/authenticated\.value\s*=\s*true/)
+ assert.match(ui,/每日任务、语法、听力、单词、语言卡、练习错题、成绩与 SG\/FE 模拟考试使用独立身份接口/)
+})
+
+test('Safari-to-installed-PWA resume uses only short-lived one-time proof, not bearer token',()=>{
+ assert.match(ui,/expires_at:Date\.now\(\)\+Math\.min\(300/)
+ assert.match(ui,/localStorage\.setItem\(KEY,JSON\.stringify\(value\)\)/)
+ assert.match(ui,/localStorage\.removeItem\(KEY\)/)
+ assert.match(ui,/window\.location\.assign\(url\.toString\(\)\)/)
+ assert.match(ui,/url\.protocol!=='https:'\|\|url\.pathname!=='\/authorize'/)
+ assert.match(ui,/JSON\.stringify\(\{state:proof\.state,resume_secret:proof\.resume_secret\}\)/)
+ assert.match(ui,/identity\.value=null/)
+ assert.match(ui,/api\('logout',\{method:'POST'\}\)/)
+ assert.doesNotMatch(ui,/localStorage\.setItem\([^\n]*(?:access_token|session_assertion|bearer_token)/i)
+ assert.doesNotMatch(ui,/document\.cookie\s*=/)
+})
+
+
+test('private HomeFlow daily checklist is keyed to the signed actor, not shared legacy cache',()=>{
+ assert.match(ui,/import StudyHomeFlowDailyTasks from '.\/StudyHomeFlowDailyTasks.vue'/)
+ assert.match(ui,/<StudyHomeFlowDailyTasks v-if="identity" :key="identity.user_id"/)
+ assert.match(ui,/:user-id="identity.user_id" :role="identity.role"/)
+ assert.match(daily,/\/api\/homeflow-study\/daily-tasks\?date=/)
+ assert.match(daily,/\/api\/homeflow-study\/daily-tasks\/status/)
+ assert.match(daily,/status.enabled===true&&status.scope==='user'/)
+ assert.match(daily,/\/api\/homeflow-study\/daily-tasks\/legacy\/adopt/)
+ assert.match(daily,/role==='owner'/)
+ assert.match(daily,/window.confirm\(/)
+ assert.match(daily,/version:t.version/)
+ assert.match(daily,/document.addEventListener\('visibilitychange',foreground\)/)
+ assert.match(daily,/document.removeEventListener\('visibilitychange',foreground\)/)
+ assert.match(daily,/onUnmounted\(\(\)=>\{generation\+\+;rows.value=\[\]/)
+ assert.doesNotMatch(daily,/localStorage\.(?:getItem|setItem)/)
+ assert.doesNotMatch(daily,/authenticated\.value\s*=\s*true/)
+ assert.doesNotMatch(daily,/fetch\('\/api\/daily-tasks/)
+ assert.doesNotMatch(daily,/access_token|session_assertion/)
+});
+
+
+test('Stage E language UI only requests the signed actor isolated card space',()=>{
+ assert.match(ui,/import StudyHomeFlowLanguage from '.\/StudyHomeFlowLanguage.vue'/)
+ assert.match(ui,/<StudyHomeFlowLanguage v-if="identity" :key="'language:'\+identity.user_id"/)
+ assert.match(ui,/:user-id="identity.user_id" :role="identity.role"/)
+ assert.match(language,/\/api\/homeflow-study\/language\/status/)
+ assert.match(language,/r.enabled===true&&r.scope==='user'&&r.legacy_access===false/)
+ assert.match(language,/\/api\/homeflow-study\/language\/cards\?/)
+ assert.match(language,/\/api\/homeflow-study\/language\/mastery/)
+ assert.match(language,/\/api\/homeflow-study\/language\/review/)
+ assert.match(language,/\/api\/homeflow-study\/language\/legacy\/adopt/)
+ assert.match(language,/props.role!=='owner'/)
+ assert.match(language,/window.confirm\(/)
+ assert.match(language,/crypto.randomUUID\(\).replace\(\/-\/g,''\)/)
+ assert.match(language,/request_id/)
+ assert.match(language,/pendingReview.value=null/)
+ assert.match(language,/重试上次复习（不重复计次）/)
+ assert.match(language,/version:card.mastery_version/)
+ assert.match(language,/version:card.review_version/)
+ assert.match(language,/document.addEventListener\('visibilitychange',resume\)/)
+ assert.match(language,/document.removeEventListener\('visibilitychange',resume\)/)
+ assert.doesNotMatch(language,/localStorage\.(?:getItem|setItem)/)
+ assert.doesNotMatch(language,/\/api\/language-(?:progress|review)(?![\w/-])/)
+ assert.doesNotMatch(language,/document\.cookie|access_token|session_assertion/)
+});
+
+
+test('Stage E exams UI is isolated per verified HomeFlow user and never exposes old cache',()=>{
+ assert.match(ui,/import StudyHomeFlowExams from '.\/StudyHomeFlowExams.vue'/)
+ assert.match(ui,/<StudyHomeFlowExams v-if="identity" :key="'exams:'\+identity.user_id"/)
+ assert.match(ui,/:user-id="identity.user_id" :role="identity.role"/)
+ assert.match(exams,/\/api\/homeflow-study\/exams/)
+ assert.match(exams,/res.enabled===true&&res.scope==='user'&&res.legacy_access===false/)
+ assert.match(exams,/\/questions\?track=/)
+ assert.match(exams,/\/attempts/)
+ assert.match(exams,/\/wrong\?track=/)
+ assert.match(exams,/\/history\?limit=/)
+ assert.match(exams,/\/legacy\/adopt/)
+ assert.match(exams,/props.role!=='owner'/)
+ assert.match(exams,/window.confirm\(/)
+ assert.match(exams,/crypto.randomUUID\(\)/)
+ assert.match(exams,/pending.value=null/)
+ assert.match(exams,/重试上次答题（不重复计次）/)
+ assert.match(exams,/document.addEventListener\('visibilitychange',resume\)/)
+ assert.match(exams,/document.removeEventListener\('visibilitychange',resume\)/)
+ assert.doesNotMatch(exams,/localStorage\.(?:getItem|setItem)/)
+ assert.doesNotMatch(exams,/\/api\/(?:attempts|wrong-questions|exam-history|question-progress|mock-exam\/submit)(?![\w/-])/)
+ assert.doesNotMatch(exams,/document\.cookie|access_token|session_assertion/)
+});
+
+
+test('HomeFlow mock exam only sends full privately answered paper to the actor scoped backend',()=>{
+ assert.match(ui,/import StudyHomeFlowMock from '.\/StudyHomeFlowMock.vue'/)
+ assert.match(ui,/<StudyHomeFlowMock v-if="identity" :key="'mock:'\+identity.user_id"/)
+ assert.match(mock,/\/api\/homeflow-study\/exams\/mock/)
+ assert.match(mock,/res.enabled===true&&res.scope==='user'&&res.legacy_access===false|data.enabled===true&&data.scope==='user'&&data.legacy_access===false/)
+ assert.match(mock,/\/questions\?track=/)
+ assert.match(mock,/\/submit/)
+ assert.match(mock,/crypto.randomUUID\(\)/)
+ assert.match(mock,/pending.value=null/)
+ assert.match(mock,/重试同一次交卷（不会重复计分）/)
+ assert.match(mock,/new Set\(data.items.map/)
+ assert.match(mock,/window.confirm\(/)
+ assert.match(mock,/result.review.find/)
+ assert.match(mock,/document.addEventListener\('visibilitychange',foreground\)/)
+ assert.match(mock,/document.removeEventListener\('visibilitychange',foreground\)/)
+ assert.doesNotMatch(mock,/localStorage\.(?:getItem|setItem)|sessionStorage\.(?:getItem|setItem)/)
+ assert.doesNotMatch(mock,/\/api\/mock-exam\/(?:submit|questions)/)
+ assert.doesNotMatch(mock,/document\.cookie|access_token|session_assertion/)
+});
+
+
+test('private mock receipt history is actor-scoped, lazy loaded and never enters legacy cache',()=>{
+ assert.match(mock,/import StudyHomeFlowMockReceipts from '.\/StudyHomeFlowMockReceipts.vue'/)
+ assert.match(mock,/<StudyHomeFlowMockReceipts :key="props.userId"/)
+ assert.match(receipts,/\/api\/homeflow-study\/exams\/mock/)
+ assert.match(receipts,/\/receipts\?limit=10/)
+ assert.match(receipts,/\/receipt\?id=/)
+ assert.match(receipts,/\/legacy\/adopt/)
+ assert.match(receipts,/props.role!=='owner'/)
+ assert.match(receipts,/window.confirm\(/)
+ assert.match(receipts,/adoptionFinished/)
+ assert.match(receipts,/revision\+\+/)
+ assert.match(receipts,/onUnmounted\(\(\)=>\{revision\+\+;chosen.value=null/)
+ assert.doesNotMatch(receipts,/localStorage\.|sessionStorage\./)
+ assert.doesNotMatch(receipts,/\/api\/mock-exam\/(?:submit|questions)/)
+ assert.doesNotMatch(receipts,/document\.cookie|access_token|session_assertion/)
+});
+
+test('personal grammar PWA uses scoped online-only API, explicit owner adoption, no old cache',()=>{
+ assert.match(ui,/import StudyHomeFlowGrammar from '.\/StudyHomeFlowGrammar.vue'/)
+ assert.match(ui,/<StudyHomeFlowGrammar v-if="identity" :key="'grammar:'\+identity.user_id"/)
+ assert.match(grammar,/\/api\/homeflow-study\/grammar\/status/)
+ assert.match(grammar,/status.enabled===true&&status.scope==='user'/)
+ assert.match(grammar,/\/api\/homeflow-study\/grammar\?date=/)
+ assert.match(grammar,/\/api\/homeflow-study\/grammar\/legacy\/adopt/)
+ assert.match(grammar,/expected_user_id:props.userId/)
+ assert.match(grammar,/props.role!=='owner'/)
+ assert.match(grammar,/window.confirm\(/)
+ assert.match(grammar,/onUnmounted\(\(\)=>\{generation\+\+;rows.value=\[\]/)
+ assert.match(grammar,/document.addEventListener\('visibilitychange',foreground\)/)
+ assert.doesNotMatch(grammar,/localStorage\.|sessionStorage\.|indexedDB\.|\/api\/grammar-progress/)
+ assert.doesNotMatch(grammar,/document\.cookie|access_token|session_assertion/)
+});
+
+test('Stage E listening PWA is private account keyed and avoids all shared old caches',()=>{
+ assert.match(ui,/import StudyHomeFlowListening from '.\/StudyHomeFlowListening.vue'/)
+ assert.match(ui,/<StudyHomeFlowListening v-if="identity" :key="'listening:'\+identity.user_id"/)
+ assert.match(listening,/\/api\/homeflow-study\/listening\/status/)
+ assert.match(listening,/status.enabled===true&&status.scope==='user'&&status.legacy_access===false/)
+ assert.match(listening,/\/api\/homeflow-study\/listening\?date=/)
+ assert.match(listening,/\/api\/homeflow-study\/listening\/legacy\/adopt/)
+ assert.match(listening,/expected_user_id:props.userId/)
+ assert.match(listening,/props.role!=='owner'/)
+ assert.match(listening,/window.confirm\(/)
+ assert.match(listening,/document.addEventListener\('visibilitychange',foreground\)/)
+ assert.match(listening,/active=false;revision\+\+;rows.value=\[\]/)
+ assert.match(listening,/window.speechSynthesis.speak\(speech\)/)
+ assert.doesNotMatch(listening,/localStorage\.|sessionStorage\.|indexedDB\.|\/api\/listening-progress/)
+ assert.doesNotMatch(listening,/access_token|session_assertion|document\.cookie|MediaRecorder|getUserMedia/)
+})
+
+test('Stage E personal daily-word UI uses only actor-scoped CAS, not legacy PWA caches',()=>{
+ assert.match(ui,/import StudyHomeFlowDailyWords from '.\/StudyHomeFlowDailyWords.vue'/)
+ assert.match(ui,/<StudyHomeFlowDailyWords v-if="identity" :key="'daily-words:'\+identity.user_id"/)
+ assert.match(words,/\/api\/homeflow-study\/daily-words\/status/)
+ assert.match(words,/status.enabled===true&&status.scope==='user'&&status.legacy_access===false/)
+ assert.match(words,/\/api\/homeflow-study\/daily-words\?keys=/)
+ assert.match(words,/\/api\/homeflow-study\/daily-words\/legacy\/adopt/)
+ assert.match(words,/expected_user_id:props.userId,expected_version:records.value\[key\]\?\.version\|\|0/)
+ assert.match(words,/props.role!=='owner'/)
+ assert.match(words,/window.confirm\(/)
+ assert.match(words,/active=false;revision\+\+;records.value=\{\}/)
+ assert.match(words,/findStaticLearnerEntry\(term,lang\)/)
+ assert.doesNotMatch(words,/localStorage\.|sessionStorage\.|indexedDB\.|\/api\/daily-word-reviews/)
+ assert.doesNotMatch(words,/access_token|session_assertion|document\.cookie/)
+});
+
+
+test('PWA ignores stale HomeFlow identity probes after signout, account switch or unmount',()=>{
+ assert.match(ui,/let identityGeneration=0/)
+ assert.match(ui,/const generation=\+\+identityGeneration/)
+ assert.match(ui,/const status=await api\('status'\)[\s\S]*?if\(generation!==identityGeneration\)return/)
+ assert.match(ui,/const res=await fetch\('\/api\/homeflow-sso\/me',[\s\S]*?if\(generation!==identityGeneration\)return/)
+ assert.match(ui,/const value=await res\.json\(\) as \{identity\?:Identity\}[\s\S]*?if\(generation!==identityGeneration\)return/)
+ assert.match(ui,/if\(generation===identityGeneration\)loading\.value=false/)
+ assert.match(ui,/async function signOut\(\)\{[\s\S]*?identityGeneration\+\+[\s\S]*?await api\('logout',\{method:'POST'\}\)/)
+ assert.match(ui,/onUnmounted\(\(\)=>\{[\s\S]*?identityGeneration\+\+;identity\.value=null/)
+ // The app still does not store credentials, identity or learning data in
+ // shared localStorage, and its per-person children remain key-remounted.
+ assert.doesNotMatch(ui,/localStorage\.setItem\([^\n]*(?:identity|access_token|session_assertion)/i)
+ assert.match(ui,/:key="identity.user_id"/)
+})
+
+
+test('mock handoff rejects previous-account pending submissions even after Cookie changes',()=>{
+ const worker=readFileSync(new URL('../worker/homeflow-mock.ts',import.meta.url),'utf8')
+ assert.match(mock,/expected_user_id:props\.userId/)
+ assert.match(mock,/payload\.expected_user_id!==props\.userId/)
+ assert.match(mock,/rev!==generation\|\|props\.userId!==payload\.expected_user_id/)
+ assert.match(mock,/当前 HomeFlow 账号与原交卷账号不同/)
+ assert.match(worker,/if\(v\.expected_user_id!==actor\.user_id\)/)
+ assert.match(worker,/return json\(\{code:'ACTOR_CHANGED'\},403\)/)
+ assert.match(worker,/\['submission_id','track','section','study_date',[\s\S]*?'expected_user_id'\]/)
+ assert.doesNotMatch(mock,/localStorage\.|sessionStorage\.|indexedDB\./)
+})
+
+test('practice and language member writes carry the originating actor and discard stale PWA replies',()=>{
+ const examApi=readFileSync(new URL('../worker/homeflow-exams.ts',import.meta.url),'utf8')
+ const languageApi=readFileSync(new URL('../worker/homeflow-language.ts',import.meta.url),'utf8')
+ for(const worker of [examApi,languageApi]){
+  assert.equal((worker.match(/data.expected_user_id!==actor.user_id/g)||[]).length,3,
+   'three mutation routes must reject an old cookie after account switch')
+  assert.equal((worker.match(/code:'ACTOR_CHANGED'/g)||[]).length,3)
+  assert.equal((worker.match(/'expected_user_id'/g)||[]).length,3)
+ }
+ assert.match(exams,/type Pending=\{[^}]*expected_user_id:string\}/)
+ assert.match(exams,/answer:selected\[question.id\],duration_seconds:0,expected_user_id:props.userId/)
+ assert.match(exams,/current.expected_user_id!==props.userId/)
+ assert.match(exams,/rev!==generation\|\|current.expected_user_id!==props.userId/)
+ assert.match(exams,/const rev=generation,actor=props.userId/)
+ assert.match(exams,/expected_user_id:actor/)
+ assert.match(exams,/confirm:true,kind,expected_user_id:props.userId/)
+ assert.match(exams,/onUnmounted\(\(\)=>\{[\s\S]*?generation\+\+/)
+ assert.match(language,/type PendingReview=\{[\s\S]*?expected_user_id:string\}/)
+ assert.match(language,/version:card.mastery_version,expected_user_id:actor/)
+ assert.match(language,/request_id:crypto.randomUUID\(\).replace\(\/-\/g,''\),expected_user_id:props.userId/)
+ assert.match(language,/attempt.expected_user_id!==props.userId/)
+ assert.match(language,/revision!==epoch\|\|attempt.expected_user_id!==props.userId/)
+ assert.match(language,/confirm:true,kind,expected_user_id:props.userId/)
+ assert.match(language,/busy.value=false[\s\S]*?await load\(\)/)
+ // New SSO panels are online-only. Never persist queued answers in a
+ // legacy cache and silently replay them as the newly logged-in person.
+ for(const component of [exams,language]){
+  assert.doesNotMatch(component,/localStorage\.|sessionStorage\.|indexedDB\./)
+  assert.doesNotMatch(component,/document.cookie|access_token|session_assertion/)
+ }
+})
+
+test('legacy cache remains unclaimed and invisible after HomeFlow identity switch on a shared PWA',()=>{
+ // The old single-user storage has no proof of ownership. The new HomeFlow
+ // identity must never silently adopt its queue or rewrite its keys.
+ assert.match(app,/const LEGACY_QUARANTINE='zhixue:legacy-cache-quarantine-v1'/)
+ assert.match(app,/legacyRequiresPassword=ref/)
+ assert.match(app,/function quarantineLegacyStudy\(userId:string\)/)
+ assert.match(app,/homeflowIdentityUser.value=userId/)
+ assert.match(app,/localStorage.setItem\(LEGACY_QUARANTINE,'1'\)/)
+ assert.match(app,/authenticated.value=false/)
+ assert.match(app,/authPassword.value=''/)
+ assert.match(app,/dailyHydrationRun\+\+/)
+ assert.match(app,/masterySyncGeneration\+\+/)
+ assert.match(app,/dailyWordHydrationRun\+\+/)
+ assert.match(app,/if\(await probeHomeflowIdentity\(\)\|\|legacyRequiresPassword.value\)/)
+ assert.match(app,/!homeflowIdentityUser.value&&!legacyRequiresPassword.value&&/)
+ assert.match(app,/if\(homeflowIdentityUser.value\)throw Error\('已切换到 HomeFlow/)
+ assert.match(app,/Network uncertainty must never unlock an old owner's offline cache/)
+ assert.match(app,/A successful identity endpoint without an actor violates its contract/)
+ assert.match(app,/if\(await probeHomeflowIdentity\(\)\)/)
+ assert.match(app,/localStorage.removeItem\(LEGACY_QUARANTINE\)/)
+ assert.match(app,/v-if="homeflowIdentityUser" class="auth-card"/)
+ assert.match(app,/旧版学习资料不会自动显示或归属其他家庭成员/)
+ assert.match(app,/<StudyHomeFlowAccess @identity-changed="onHomeflowIdentityChanged"/)
+ assert.match(app,/@identity-changed="onHomeflowIdentityChanged"/)
+ const body=app.slice(app.indexOf('function quarantineLegacyStudy('),
+  app.indexOf('function onHomeflowIdentityChanged('))
+ assert.doesNotMatch(body,/localStorage.removeItem\(/)
+ assert.doesNotMatch(body,/localStorage.clear\(/)
+ assert.doesNotMatch(body,/homeflow_user_id|\/api\/homeflow-study/)
+ assert.match(ui,/defineEmits<\{\(event:'identity-changed',userId:string\|null\):void\}>/)
+ assert.match(ui,/emit\('identity-changed',identity.value\?\.user_id\|\|null\)/)
+ assert.match(ui,/emit\('identity-changed',null\)/)
+ assert.match(ui,/identity.value=null[\s\S]*?void check\(\)/)
+ assert.match(ui,/document.addEventListener\('visibilitychange',foreground\)/)
+ assert.match(ui,/document.removeEventListener\('visibilitychange',foreground\)/)
+})
+
+test('legacy daily rollover and localStorage progress writers never run for HomeFlow users',()=>{
+ assert.match(app,/function legacyWritesAllowed\(\)\{/)
+ assert.match(app,/return authenticated.value&&!legacyRequiresPassword.value&&!homeflowIdentityUser.value/)
+ assert.match(app,/function rolloverDailyTasks\(\)\s*\{\s*if\(!legacyWritesAllowed\(\)\)return/)
+ assert.match(app,/watch\(tasks, value => \{[\s\S]*?if\(!legacyWritesAllowed\(\)\)return[\s\S]*?localStorage.setItem\('zhixue:tasks:/)
+ assert.match(app,/watch\(examRecords, value => \{[\s\S]*?if\(legacyWritesAllowed\(\)\)localStorage.setItem\('zhixue:exam-records'/)
+ assert.match(app,/void probeHomeflowIdentity\(\).then\(active=>\{[\s\S]*?if\(!active&&legacyWritesAllowed\(\)\)\{[\s\S]*?rolloverDailyTasks\(\)/)
+ assert.match(app,/await checkAuth\(\)[\s\S]*?if \(legacyWritesAllowed\(\)\) \{[\s\S]*?rolloverDailyTasks\(\)/)
+});
+
+test('legacy language, dictionary and offline cache writers require original password space',()=>{
+ const watchers=[
+  ['questionExplanationTranslations','zhixue:question-explanation-zh'],
+  ['scenarioExplanationTranslations','zhixue:scenario-explanations-zh'],
+  ['studyLanguage','zhixue:study-language'],
+  ['completedLanguageCards','zhixue:completed-language-cards'],
+  ['languageReviews','zhixue:language-reviews'],
+  ['recentDictionaryEntries','zhixue:recent-dictionary'],
+  ['savedDictionaryEntries','zhixue:saved-dictionary-entries'],
+  ['savedWords','zhixue:saved-words']
+ ]
+ for(const [ref,key] of watchers){
+  const begin=app.indexOf('watch('+ref+',')
+  assert.ok(begin>=0,'missing watcher '+ref)
+  const end=app.indexOf('})',begin)
+  const body=app.slice(begin,begin+320)
+  assert.ok(body.includes('legacyWritesAllowed()'),ref+' must be gated')
+  assert.ok(body.includes("localStorage.setItem('"+key),ref+' writer must persist its original key')
+ }
+ const dailyPending=app.slice(app.indexOf('function persistDailyPending()'),
+  app.indexOf('async function saveDailyTask('))
+ assert.match(dailyPending,/if\(!legacyWritesAllowed\(\)\)return/)
+ const mock=app.slice(app.indexOf('function persistActiveMockExam()'),
+  app.indexOf('watch([mockStarted, mockAnswers]'))
+ assert.match(mock,/if\(!legacyWritesAllowed\(\)\|\|!mockStarted.value\)return/)
+ const words=app.slice(app.indexOf('function persistDailyWordState()'),
+  app.indexOf('function parseDailyWordCloud'))
+ assert.match(words,/if\(!legacyWritesAllowed\(\)\)return/)
+ for(const key of [
+  'zhixue:daily-word-selections-v1','zhixue:daily-scene-assignments-v1'
+ ]){
+  const lines=app.split('\n').filter(line=>line.includes("localStorage.setItem('"+key))
+  assert.ok(lines.length>0)
+  assert.ok(lines.every(line=>line.includes('legacyWritesAllowed()')),key+' must not update under SSO')
+ }
+})
+
+test('Stage E personal vocabulary UI has verified origin and no old shared cache',()=>{
+ const word=readFileSync(new URL('../src/StudyHomeFlowVocabulary.vue',import.meta.url),'utf8')
+ assert.match(ui,/import StudyHomeFlowVocabulary from '.\/StudyHomeFlowVocabulary.vue'/)
+ assert.match(ui,/<StudyHomeFlowVocabulary v-if="identity" :key="'vocabulary:'\+identity.user_id"/)
+ assert.match(word,/expected_user_id:props.userId/)
+ assert.match(word,/data.actor_user_id!==actor/)
+ assert.match(word,/document.addEventListener\('visibilitychange',resume\)/)
+ assert.match(word,/onUnmounted\(\(\)=>\{/)
+ assert.doesNotMatch(word,/localStorage\.|sessionStorage\.|indexedDB\./)
+})
