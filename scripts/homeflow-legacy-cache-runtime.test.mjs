@@ -60,5 +60,5 @@ test('daily-word review and offline queue persist only after verified legacy pas
  access.allowed=false
  env.dailyWordPending.value={'en:later':{streak:2}}
  persist();assert.deepEqual([...writes.entries()],earlier,
-  'HomeFlow actor never inherits or rewrites former owner's offline queue')
+  "HomeFlow actor never inherits or rewrites former owner's offline queue")
 })
