@@ -78,7 +78,8 @@ export async function applyVerifiedDocumentStudy(db:D1Database,i:Intent){
     "WHERE homeflow_user_id=? AND language='ja' AND term=?")
     .bind(i.requester_user_id,p.term).first<{is_deleted:number}>()
    if(old?.is_deleted===1)return {ok:false,code:'VOCABULARY_REMOVED',applied:false}
-   const entry=JSON.stringify({term:p.term,reading:p.reading,meaning_zh:p.meaning_zh,language:'ja',source:'document'})
+   const entry=JSON.stringify({term:p.term,reading:p.reading,zh:p.meaning_zh,
+    meaning_zh:p.meaning_zh,language:'ja',source:'document'})
    const termHash=await digest('ja\u0000'+String(p.term))
    const results=await db.batch([
     db.prepare('INSERT INTO homeflow_saved_vocabulary(homeflow_user_id,language,term,entry_json,is_deleted,updated_by_user_id,saved_at) '+

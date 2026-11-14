@@ -71,6 +71,7 @@ test('document vocabulary preserves existing private entries and never revives r
   assert.equal(result.receipt.effect,'already_present')
   assert.match(f.sql.prepare("SELECT entry_json FROM homeflow_saved_vocabulary WHERE homeflow_user_id='member-a'").get().entry_json,/私人的备注/)
   assert.equal((await applyVerifiedDocumentStudy(f.db,b)).receipt.effect,'created')
+  assert.equal(JSON.parse(f.sql.prepare("SELECT entry_json FROM homeflow_saved_vocabulary WHERE homeflow_user_id='member-b'").get().entry_json).zh,'确认')
   assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM homeflow_saved_vocabulary').get().n,2)
   assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM homeflow_vocabulary_events').get().n,1)
   f.sql.prepare("UPDATE homeflow_saved_vocabulary SET is_deleted=1 WHERE homeflow_user_id='member-a'").run()
