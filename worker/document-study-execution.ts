@@ -75,7 +75,9 @@ const signed=async(service:Fetcher|undefined,secret:string,domain:string,client:
  }catch{return null}
 }
 async function original(db:D1Database,b:Record<string,any>){
- return db.prepare('SELECT * FROM homeflow_document_study_receipts WHERE approval_id=? OR candidate_id=? LIMIT 1')
+ return db.prepare('SELECT r.*,a.approver_user_id FROM homeflow_document_study_receipts r '+
+  'JOIN homeflow_document_study_approval_audit a ON a.approval_id=r.approval_id '+
+  'WHERE r.approval_id=? OR r.candidate_id=? LIMIT 1')
   .bind(b.request_id,b.resource_id).first<Record<string,any>>()
 }
 function identical(r:Record<string,any>|null,b:Record<string,any>){
@@ -87,7 +89,8 @@ const safeReceipt=(r:Record<string,any>,replayed:boolean)=>({
  ok:true,applied:true,approval_id:r.approval_id,candidate_id:r.candidate_id,
  household_id:r.household_id,requester_user_id:r.requester_user_id,
  payload_sha256:r.payload_sha256,kind:r.kind,remote_id:r.remote_id,
- effect:r.effect,applied_at:r.applied_at,already_applied:replayed
+ effect:r.effect,approver_user_id:r.approver_user_id,
+ applied_at:r.applied_at,already_applied:replayed
 })
 export async function documentStudyExecution(req:Request,env:DbEnv){
  if(!on(env))return fail('document_study_execution_disabled',503)
@@ -120,11 +123,16 @@ export async function documentStudyExecution(req:Request,env:DbEnv){
  const source=await signed(env.DOCUMENT_STUDY_SOURCE_SERVICE,
   env.DOCUMENT_STUDY_SOURCE_SECRET!,'it-study:document-source-check',
   'it-study-platform','/api/internal/document-actions/study-source-check',
-  {...Object.fromEntries(core.map(x=>[x,b[x]]))})
+  {...Object.fromEntries(core.map(x=>[x,b[x]])),execution_nonce:b.execution_nonce})
  if(!source||source.ok!==true||source.verified!==true||
   source.approval_id!==b.request_id||source.candidate_id!==b.resource_id||
   source.household_id!==b.household_id||source.requester_user_id!==b.requester_user_id||
-  source.payload_sha256!==b.payload_sha256)return fail('document_study_source_invalid',409)
+  source.payload_sha256!==b.payload_sha256||
+  source.reserved!==true||source.snapshot_sha256!==b.payload_sha256||
+  source.execution_nonce_hash!==await (async()=>{
+   const data=await crypto.subtle.digest('SHA-256',enc.encode(b.execution_nonce))
+   return Array.from(new Uint8Array(data),x=>x.toString(16).padStart(2,'0')).join('')
+  })())return fail('document_study_source_invalid',409)
  // The source snapshot and approval SHA are byte-identical; neither is
  // transmitted to HomeFlow, including private words, sentences or notes.
  const written=await applyVerifiedDocumentStudy(env.DB,{
@@ -133,5 +141,9 @@ export async function documentStudyExecution(req:Request,env:DbEnv){
   snapshot:b.snapshot,approver_user_id:proof.approver_user_id})
  if(!written?.ok||!written.applied||!written.receipt)return fail(
   'document_study_target_'+String(written?.code||'unconfirmed'),409)
- return reply(safeReceipt(written.receipt,written.replayed===true))
+ const receipt=await original(env.DB,b)
+ if(!receipt||!identical(receipt,b)||
+  receipt.approver_user_id!==proof.approver_user_id)
+  return fail('document_study_receipt_unconfirmed',503)
+ return reply(safeReceipt(receipt,written.replayed===true))
 }
