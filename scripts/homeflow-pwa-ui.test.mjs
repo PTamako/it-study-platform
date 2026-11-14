@@ -340,3 +340,14 @@ test('legacy language, dictionary and offline cache writers require original pas
   assert.ok(lines.every(line=>line.includes('legacyWritesAllowed()')),key+' must not update under SSO')
  }
 })
+
+test('Stage E personal vocabulary UI has verified origin and no old shared cache',()=>{
+ const word=readFileSync(new URL('../src/StudyHomeFlowVocabulary.vue',import.meta.url),'utf8')
+ assert.match(ui,/import StudyHomeFlowVocabulary from '.\/StudyHomeFlowVocabulary.vue'/)
+ assert.match(ui,/<StudyHomeFlowVocabulary v-if="identity" :key="'vocabulary:'\+identity.user_id"/)
+ assert.match(word,/expected_user_id:props.userId/)
+ assert.match(word,/data.actor_user_id!==actor/)
+ assert.match(word,/document.addEventListener\('visibilitychange',resume\)/)
+ assert.match(word,/onUnmounted\(\(\)=>\{/)
+ assert.doesNotMatch(word,/localStorage\.|sessionStorage\.|indexedDB\./)
+})

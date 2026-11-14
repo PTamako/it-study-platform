@@ -68,7 +68,9 @@ async function list(env:StudyEnv,url:URL,user:Actor){
 async function save(req:Request,env:StudyEnv,url:URL,user:Actor){
  const data=await readMutation(req,url)
  if(!data)return json({code:'BAD_ORIGIN_OR_BODY'},403)
- if(Object.keys(data).some(k=>!['language','term','action','entry','explicit'].includes(k)))
+ // Match originating PWA actor to freshly introspected HomeFlow identity.
+ if(data.expected_user_id!==user.user_id)return json({code:'ACTOR_CHANGED'},403)
+ if(Object.keys(data).some(k=>!['expected_user_id','language','term','action','entry','explicit'].includes(k)))
   return json({code:'INVALID_FIELDS'},400)
  const language=data.language,term=data.term,action=data.action
  if(typeof language!=='string'||!languages.has(language)||
@@ -111,8 +113,10 @@ async function adopt(req:Request,env:StudyEnv,url:URL,user:Actor){
  // first account binding. New members must NEVER claim old private words.
  if(user.role!=='owner')return json({code:'ONLY_ORIGINAL_OWNER'},403)
  const body=await readMutation(req,url)
- if(!body||body.confirm!==true||
-  Object.keys(body).some(k=>!['confirm','after'].includes(k)))
+ if(!body)return json({code:'CONFIRM_REQUIRED'},403)
+ if(body.expected_user_id!==user.user_id)return json({code:'ACTOR_CHANGED'},403)
+ if(body.confirm!==true||
+  Object.keys(body).some(k=>!['expected_user_id','confirm','after'].includes(k)))
   return json({code:'CONFIRM_REQUIRED'},403)
  const after=typeof body.after==='string'?body.after:''
  const page=cursor(after)

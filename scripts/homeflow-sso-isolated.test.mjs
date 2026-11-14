@@ -427,7 +427,8 @@ test('Stage E new vocabulary is per-actor; owner adopts old terms but member sta
     headers['Content-Type']='application/json'
    }
    const req=new Request(app+'/api/homeflow-study/vocabulary'+route,{
-    method,headers,body:method==='POST'?JSON.stringify(body||{}):undefined
+    method,headers,body:method==='POST'?JSON.stringify({...body,
+     expected_user_id:body?.expected_user_id??(cookie===ownerCookie?owner:member)}):undefined
    })
    return homeflowVocabulary(req,f.env)
   }
@@ -499,7 +500,7 @@ test('Stage E vocabulary fails closed on origin, feature gate, invalid payload a
    new Request(app+'/api/homeflow-study/vocabulary'+route,{
     method,headers:{Cookie:'__Host-study_hf='+auth,
      ...(method==='POST'?{Origin:origin,'Content-Type':'application/json'}:{})},
-    body:method==='POST'?JSON.stringify(body):undefined
+    body:method==='POST'?JSON.stringify({...body,expected_user_id:body?.expected_user_id??owner}):undefined
    }),f.env)
   assert.equal((await req()).status,503,'default OFF')
   f.env.HOMEFLOW_STUDY_VOCAB_ENABLED='true'
@@ -536,7 +537,7 @@ test('legacy adoption rejects malformed JSON before copying any part of the page
    app+'/api/homeflow-study/vocabulary/legacy/adopt',{
     method:'POST',headers:{Origin:app, Cookie:'__Host-study_hf='+cookie,
      'Content-Type':'application/json'},
-    body:JSON.stringify({confirm:true})
+    body:JSON.stringify({confirm:true,expected_user_id:owner})
    }),f.env)
   const stopped=await adopt()
   assert.equal(stopped.status,409)
@@ -1797,5 +1798,46 @@ test('Stage E rejects stale exam and language mutations after a HomeFlow cookie 
   // owner never silently imports their legacy single-user data into a spouse.
   assert.equal((await scopedExams(f,memberToken,'/history')).status,200)
   assert.equal((await scopedLanguage(f,memberToken,'/cards?lang=ja')).status,200)
+ }finally{f.raw.close()}
+})
+
+test('Stage E HomeFlow vocabulary original actor fence rejects stale spouse and replay without changing private data',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_VOCAB_ENABLED='true'
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  const send=(cookie,path,body)=>homeflowVocabulary(new Request(
+   app+'/api/homeflow-study/vocabulary'+path,{
+    method:'POST',headers:{Origin:app,'Content-Type':'application/json',
+     Cookie:'__Host-study_hf='+cookie},body:JSON.stringify(body)
+   }),f.env)
+  const count=table=>f.raw.prepare('SELECT COUNT(*) n FROM '+table).get().n
+  const item={expected_user_id:owner,language:'ja',term:'報告',action:'save',
+   explicit:true,entry:{term:'報告',zh:'管理员的解释'}}
+  const old=f.raw.prepare('SELECT * FROM saved_vocabulary_entries_v2').all()
+  for(const body of [item,{expected_user_id:owner,language:'ja',term:'報告',action:'remove'}]){
+   const denied=await send(memberToken,'',body)
+   assert.equal(denied.status,403,await denied.clone().text())
+   assert.equal((await denied.json()).code,'ACTOR_CHANGED')
+  }
+  assert.equal((await send(memberToken,'/legacy/adopt',{confirm:true,expected_user_id:owner})).status,403)
+  const missing=await send(ownerToken,'',{...item,expected_user_id:undefined})
+  assert.equal(missing.status,403)
+  assert.equal(count('homeflow_saved_vocabulary'),0)
+  assert.equal(count('homeflow_vocabulary_events'),0)
+  const ok=await send(ownerToken,'',item)
+  assert.equal(ok.status,200,await ok.clone().text())
+  assert.equal((await (await send(ownerToken,'',item)).json()).replayed,true)
+  assert.equal(count('homeflow_vocabulary_events'),1)
+  const memberOk=await send(memberToken,'',{...item,expected_user_id:member,entry:{term:'報告',zh:'成员解释'}})
+  assert.equal(memberOk.status,200,await memberOk.clone().text())
+  assert.equal(count('homeflow_saved_vocabulary'),2)
+  const one=f.raw.prepare('SELECT entry_json FROM homeflow_saved_vocabulary WHERE homeflow_user_id=? AND term=?')
+  assert.equal(JSON.parse(one.get(owner,'報告').entry_json).zh,'管理员的解释')
+  assert.equal(JSON.parse(one.get(member,'報告').entry_json).zh,'成员解释')
+  assert.deepEqual(f.raw.prepare('SELECT * FROM saved_vocabulary_entries_v2').all(),old)
+  f.active.valid=false
+  assert.equal((await send(memberToken,'',{...item,expected_user_id:member})).status,401)
+  assert.equal(count('homeflow_vocabulary_events'),2)
  }finally{f.raw.close()}
 })
