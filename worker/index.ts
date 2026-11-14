@@ -1,6 +1,6 @@
 import { checkWriteRateLimit, handleAuthRequest, requireAuth } from './auth'
 import { homeflowStudyIdentity } from './homeflow-identity'
-import { documentStudyExecution } from './document-study-execution'
+
 import { homeflowVocabulary } from './homeflow-vocabulary'
 import { homeflowDailyTasks } from './homeflow-daily-tasks'
 import { homeflowGrammar } from './homeflow-grammar'
@@ -1335,8 +1335,11 @@ export default {
     const url = new URL(request.url)
 
     if (url.pathname === '/api/internal/document-study/execute' ||
-        url.pathname === '/api/internal/document-study/receipt')
+        url.pathname === '/api/internal/document-study/receipt') {
+      // Lazy import avoids resolution for old worker tests and unrelated routes.
+      const {documentStudyExecution}=await import('./document-study-execution')
       return documentStudyExecution(request, env)
+    }
     if (url.pathname === '/api/bridge/document-assistant') return documentAssistantBridge(request, env)
     if (url.pathname === '/api/bridge/document-assistant/translate') return documentAssistantTranslateBridge(request, env)
 
