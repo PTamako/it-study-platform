@@ -9,7 +9,6 @@ import { homeflowLanguage } from './homeflow-language'
 import { homeflowExams } from './homeflow-exams'
 import { homeflowMockExam } from './homeflow-mock'
 import { homeflowMockReceipts } from './homeflow-mock-receipts'
-import { homeflowSentences } from './homeflow-sentences'
 import { feSeeds, seedUrl } from './fe-question-bank'
 import { eligibleChineseWord, fetchChineseWordMetadata } from './chinese-word-dictionary'
 
@@ -1340,8 +1339,12 @@ export default {
     if (url.pathname.startsWith('/api/homeflow-sso/'))
       return homeflowStudyIdentity(request, env)
     if (url.pathname === '/api/homeflow-study/sentences' ||
-        url.pathname === '/api/homeflow-study/sentences/status')
+        url.pathname === '/api/homeflow-study/sentences/status') {
+      // Load only for this new opt-in route; old legacy-worker test sandboxes
+      // and unrelated requests never need to resolve private sentence code.
+      const { homeflowSentences } = await import('./homeflow-sentences')
       return homeflowSentences(request, env)
+    }
     // New, strictly scoped per-user vocabulary API; legacy personal endpoints
     // still require the old session and are never unlocked by the HF cookie.
     if (url.pathname === '/api/homeflow-study/vocabulary' ||
