@@ -40,7 +40,21 @@ const legacyRequiresPassword=ref((()=>{
  catch{return false}
 })())
 let homeflowProbeGeneration=0
+// Every legacy offline upload is tied to the original legacy login lifetime.
+// Switching HomeFlow users invalidates late fetch responses and pending replays,
+// but deliberately does NOT delete the original owner's localStorage snapshots.
+let legacyOperationGeneration=0
+function legacyWorkCurrent(generation:number){
+ return generation===legacyOperationGeneration&&legacyWritesAllowed()
+}
 function quarantineLegacyStudy(userId:string){
+ legacyOperationGeneration++
+ // Disarm the old mock timer; do not submit another person's exam after SSO.
+ if(mockTimer){clearInterval(mockTimer);mockTimer=undefined}
+ mockStarted.value=false
+ mockSyncing.value=false
+ practiceSaving.value=false
+ scenarioSubmitting.value=false
  homeflowIdentityUser.value=userId
  if(!legacyRequiresPassword.value){
   legacyRequiresPassword.value=true
@@ -61,6 +75,7 @@ function legacyWritesAllowed(){
 function onHomeflowIdentityChanged(userId:string|null){
  if(userId){quarantineLegacyStudy(userId);return}
  if(homeflowIdentityUser.value){
+  legacyOperationGeneration++
   homeflowIdentityUser.value=null
   authenticated.value=false
   // Never auto-open the old owner cache after a member logs out.
@@ -86,13 +101,17 @@ async function probeHomeflowIdentity(){
   if(res.ok){
    // A successful identity endpoint without an actor violates its contract.
    // Do not fall back to the unscoped legacy cache automatically.
+   legacyOperationGeneration++
    legacyRequiresPassword.value=true
+   authenticated.value=false
    try{localStorage.setItem(LEGACY_QUARANTINE,'1')}catch{/* keep lock in memory */}
   }
   homeflowIdentityUser.value=null
   return false
  }catch{
   // Network uncertainty must never unlock an old owner's offline cache.
+  legacyOperationGeneration++
+  authenticated.value=false
   legacyRequiresPassword.value=true
   try{localStorage.setItem(LEGACY_QUARANTINE,'1')}catch{/* keep lock in memory */}
   return Boolean(homeflowIdentityUser.value)
@@ -143,6 +162,7 @@ async function login() {
     // A simultaneous HomeFlow login may finish while legacy password was
     // checked. Its verified identity always wins the display scope.
     if(homeflowIdentityUser.value)throw Error('已切换到 HomeFlow，旧学习空间继续隔离')
+    legacyOperationGeneration++
     legacyRequiresPassword.value=false
     try{localStorage.removeItem(LEGACY_QUARANTINE)}catch{/* memory state unlocks only after password */}
     authenticated.value = true
@@ -169,6 +189,7 @@ async function login() {
 
 async function logout() {
   if (authLoading.value) return
+  legacyOperationGeneration++
   authLoading.value = true
   authError.value = ''
   try {
@@ -744,8 +765,9 @@ const mockPendingSubmission = ref<PendingMockSubmission | null>(readStored('zhix
 const mockSyncing = ref(false)
 
 async function syncPendingMockSubmission() {
+  const generation=legacyOperationGeneration
   const pending = mockPendingSubmission.value
-  if (!pending || mockSyncing.value || !authenticated.value) return
+  if (!pending || mockSyncing.value || !legacyWorkCurrent(generation)) return
   mockSyncing.value = true
   try {
     const response = await fetch('/api/mock-exam/submit', {
@@ -756,6 +778,7 @@ async function syncPendingMockSubmission() {
       error?: string; submission_id?: string; correct_count?: number; total?: number; exam_name?: string; study_date?: string
       review?: Array<{ id: string; answer: string; explanation: string }>
     }
+    if (!legacyWorkCurrent(generation)) return
     if (!response.ok || data.submission_id !== pending.submission_id || !Number.isInteger(data.correct_count) || data.total !== pending.answers.length) {
       throw new Error(data.error || '交卷结果暂未成功同步。')
     }
@@ -783,13 +806,14 @@ async function syncPendingMockSubmission() {
     mockError.value = ''
     void loadCloudDashboard()
   } catch (error) {
-    mockError.value = (error instanceof Error ? error.message : '网络异常。') + ' 答卷已保留在本设备，可点击「重新同步」。'
+    if(legacyWorkCurrent(generation))
+      mockError.value = (error instanceof Error ? error.message : '网络异常。') + ' 答卷已保留在本设备，可点击「重新同步」。'
   } finally {
-    mockSyncing.value = false
+    if(generation===legacyOperationGeneration) mockSyncing.value = false
   }
 }
 async function finishMockExam(autoSubmit = false) {
-  if (!mockStarted.value || mockSubmitted.value) return
+  if (!legacyWritesAllowed() || !mockStarted.value || mockSubmitted.value) return
   mockSubmitted.value = true
   mockStarted.value = false
   if (mockTimer) { clearInterval(mockTimer); mockTimer = undefined }
@@ -820,6 +844,7 @@ async function finishMockExam(autoSubmit = false) {
   await syncPendingMockSubmission()
 }
 function closeMockReview() {
+  if(!legacyWritesAllowed())return
   mockSubmitted.value = false
   mockQuestions.value = []
   mockAnswers.value = {}
@@ -974,8 +999,9 @@ type PendingScenarioAttempt = {
 }
 const pendingScenarioAttempt = ref<PendingScenarioAttempt | null>(readStored('zhixue:scenario-pending-v1', null))
 async function syncPendingScenarioAttempt() {
+  const generation=legacyOperationGeneration
   const pending = pendingScenarioAttempt.value
-  if (!pending || scenarioSubmitting.value || !authenticated.value) return
+  if (!pending || scenarioSubmitting.value || !legacyWorkCurrent(generation)) return
   const requestId = ++scenarioSubmissionId
   scenarioSubmitting.value = true
   scenariosError.value = ''
@@ -988,6 +1014,7 @@ async function syncPendingScenarioAttempt() {
     const data = await response.json() as {
       attempt_id?: string; score?: number; best_option?: string; correct?: boolean; feedback?: string; error?: string
     }
+    if (!legacyWorkCurrent(generation)) return
     if (!response.ok || data.attempt_id !== pending.attempt_id) {
       throw new Error(data.error || '实战结果尚未保存。')
     }
@@ -1007,16 +1034,16 @@ async function syncPendingScenarioAttempt() {
     }
     void loadCloudDashboard()
   } catch (error) {
-    if (requestId === scenarioSubmissionId) {
+    if (legacyWorkCurrent(generation) && requestId === scenarioSubmissionId) {
       scenariosError.value = (error instanceof Error ? error.message : '网络异常。') + ' 实战答题保存在本设备，请重试同步。'
     }
   } finally {
-    // Switching scenarios doesn't unlock an in-flight save; a newer
-    // submission cannot start until this request has settled.
-    scenarioSubmitting.value = false
+    // A previous actor's reply must not release a new actor's submission.
+    if(generation===legacyOperationGeneration)scenarioSubmitting.value = false
   }
 }
 async function submitScenario() {
+  if(!legacyWritesAllowed())return
   const scenario = currentScenario.value
   const selected = selectedScenarioOption.value
   if (!scenario || !selected || scenarioSubmitting.value || scenarioResult.value) return
@@ -1344,8 +1371,9 @@ const pendingPracticeAttempt = ref<PendingPracticeAttempt | null>(readStored('zh
 const practiceSaving = ref(false)
 
 async function syncPendingPracticeAttempt() {
+  const generation=legacyOperationGeneration
   const pending = pendingPracticeAttempt.value
-  if (!pending || practiceSaving.value || !authenticated.value) return
+  if (!pending || practiceSaving.value || !legacyWorkCurrent(generation)) return
   practiceSaving.value = true
   try {
     const response = await fetch('/api/attempts', {
@@ -1354,6 +1382,7 @@ async function syncPendingPracticeAttempt() {
       body: JSON.stringify(pending),
     })
     const data = await response.json() as { error?: string; attempt_id?: string; progress?: QuestionReviewProgress }
+    if (!legacyWorkCurrent(generation)) return
     if (!response.ok || data.attempt_id !== pending.attempt_id) {
       throw new Error(data.error || '答题记录尚未同步。')
     }
@@ -1365,12 +1394,14 @@ async function syncPendingPracticeAttempt() {
     quizError.value = ''
     void loadCloudDashboard()
   } catch (error) {
-    quizError.value = (error instanceof Error ? error.message : '网络异常。') + ' 答题保存在本设备，请重新同步。'
+    if(legacyWorkCurrent(generation))
+      quizError.value = (error instanceof Error ? error.message : '网络异常。') + ' 答题保存在本设备，请重新同步。'
   } finally {
-    practiceSaving.value = false
+    if(generation===legacyOperationGeneration)practiceSaving.value = false
   }
 }
 async function submitPracticeAnswer() {
+  if(!legacyWritesAllowed())return
   const question = currentQuestion.value
   if (!question || !selectedOption.value || practiceSaving.value) return
   if (quizSubmitted.value) {
