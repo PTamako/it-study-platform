@@ -121,17 +121,20 @@ test('an ABA remote change cannot trigger a background overwrite', async () => {
 })
 
 test('successful old request does not clear newer intent after session change', async () => {
-  const storage = new Map(); let resolveFirst
+  const storage = new Map(); let resolveFirst,markFirstStarted
   const first = new Promise(resolve => { resolveFirst = resolve })
+  const firstStarted = new Promise(resolve => { markFirstStarted = resolve })
   let writes = 0
   const c = harness(async (_url,options) => {
     if (!options) return {ok:true,json:async()=>({items:[]})}
-    if (++writes === 1) return first
+    if (++writes === 1) { markFirstStarted(); return first }
     return {ok:false,json:async()=>({})}
   }, '2026-10-28', '2026-10-28', storage)
   c.tasks.value[0].done = false
   c.api.toggleDailyTask('x', true)
-  await Promise.resolve()
+  // The old operation must actually reach the network. With the new actor
+  // guard, an operation still queued when the user switches is never sent.
+  await firstStarted
   c.authenticated.value = false; c.api.invalidate(); c.authenticated.value = true
   c.api.toggleDailyTask('x', false)
   resolveFirst({ok:true})
