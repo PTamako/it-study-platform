@@ -1,6 +1,7 @@
 -- 0190 Stage E: manual sentence cards scoped to immutable HomeFlow user ID.
 -- Additive; NEVER move or delete original public/Tatoeba/legacy sentence data.
--- Document-sourced cards require a separate trusted owner-approved executor.
+-- Document-sourced cards require a separate trusted owner-approved executor;
+-- manual HTTP writes remain hard-coded to source_kind='manual'.
 -- UNEXECUTED in production: F release authorization is required.
 CREATE TABLE IF NOT EXISTS homeflow_personal_sentence_cards (
  homeflow_user_id TEXT NOT NULL REFERENCES homeflow_identity_links(homeflow_user_id) ON DELETE RESTRICT,
@@ -9,7 +10,7 @@ CREATE TABLE IF NOT EXISTS homeflow_personal_sentence_cards (
  sentence_text TEXT NOT NULL CHECK(length(sentence_text) BETWEEN 1 AND 700),
  translation_zh TEXT NOT NULL DEFAULT '' CHECK(length(translation_zh)<=700),
  notes TEXT NOT NULL DEFAULT '' CHECK(length(notes)<=500),
- source_kind TEXT NOT NULL DEFAULT 'manual' CHECK(source_kind='manual'),
+ source_kind TEXT NOT NULL DEFAULT 'manual' CHECK(source_kind IN ('manual','document')),
  is_deleted INTEGER NOT NULL DEFAULT 0 CHECK(is_deleted IN (0,1)),
  version INTEGER NOT NULL DEFAULT 1 CHECK(version>=1),
  updated_by_user_id TEXT NOT NULL REFERENCES homeflow_identity_links(homeflow_user_id) ON DELETE RESTRICT,

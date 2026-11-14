@@ -26,6 +26,10 @@ jobs:
       - run: npm ci
       - name: Focused personal sentence cards with real HomeFlow actor and D1
         run: node --test --test-name-pattern="Stage E personal sentence cards|Stage E .*vocabulary|legacy adoption rejects malformed JSON" scripts/homeflow-sso-isolated.test.mjs
+      - name: Verify document-study persistence and worker types
+        run: |
+          node --test scripts/document-study-apply.test.mjs
+          npx tsc --noEmit --target es2022 --module esnext --moduleResolution bundler --skipLibCheck --types @cloudflare/workers-types worker/document-study-apply.ts
       - name: Check identity, cache isolation and delayed requests
         run: node --test scripts/daily-task-runtime.test.mjs scripts/homeflow-pwa-ui.test.mjs scripts/homeflow-legacy-cache-runtime.test.mjs scripts/homeflow-legacy-queue-epoch.test.mjs scripts/homeflow-legacy-exam-history-epoch.test.mjs scripts/homeflow-legacy-daily-epoch.test.mjs
       - name: Type-check frontend
