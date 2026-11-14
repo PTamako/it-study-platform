@@ -98,3 +98,13 @@ test('journal failure also rolls back newly inserted vocabulary',async()=>{
    assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM '+table).get().n,0)
  }finally{f.sql.close()}
 })
+test('simultaneous retries converge on one document sentence and one receipt',async()=>{
+ const f=fixture();try{
+  const a=make('member-a','a'.repeat(32),aid,sentence)
+  const both=await Promise.all([applyVerifiedDocumentStudy(f.db,a),applyVerifiedDocumentStudy(f.db,a)])
+  assert.equal(both.filter(x=>x.ok).length,2)
+  assert.equal(both.filter(x=>x.replayed).length,1)
+  for(const table of ['homeflow_personal_sentence_cards','homeflow_personal_sentence_events','homeflow_document_study_receipts'])
+   assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM '+table).get().n,1)
+ }finally{f.sql.close()}
+})
