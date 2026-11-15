@@ -1,9 +1,14 @@
 name: Deploy to Cloudflare Workers
 
 on:
-  push:
-    branches: [main]
+  # Never push-to-deploy while the five-PR identity cutover is staged.
+  # Requires manually approved cross-repo production release.
   workflow_dispatch:
+    inputs:
+      release_confirmation:
+        description: "After G0/G1/G3-G6/G8/G9, enter FOUR_APP_RELEASE_APPROVED"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -15,6 +20,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.release_confirmation == 'FOUR_APP_RELEASE_APPROVED' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
