@@ -29,7 +29,7 @@ test('Safari-to-installed-PWA resume uses only short-lived one-time proof, not b
  assert.match(ui,/localStorage\.setItem\(KEY,JSON\.stringify\(value\)\)/)
  assert.match(ui,/localStorage\.removeItem\(KEY\)/)
  assert.match(ui,/window\.location\.assign\(url\.toString\(\)\)/)
- assert.match(ui,/url\.protocol!=='https:'\|\|url\.pathname!=='\/authorize'/)
+ assert.match(ui,/validateStudyHomeflowAuthorizationUrl\(result\.authorization_url,result\.state,window\.location\.origin\)/)
  assert.match(ui,/JSON\.stringify\(\{state:proof\.state,resume_secret:proof\.resume_secret\}\)/)
  assert.match(ui,/identity\.value=null/)
  assert.match(ui,/api\('logout',\{method:'POST'\}\)/)
