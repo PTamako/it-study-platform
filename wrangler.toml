@@ -38,3 +38,5 @@ binding = "AI"
 
 [vars]
 APP_ENV = "production"
+HOMEFLOW_OAUTH_ORIGIN = "https://homeflow.yupan6706.workers.dev"
+STUDY_PUBLIC_ORIGIN = "https://it-study-platform.yupan6706.workers.dev"
