@@ -19,6 +19,19 @@ database_name = "it-study-platform-db"
 database_id = "ed4ca935-5d00-4f38-b3c5-c0d53c5aad63"
 migrations_dir = "migrations"
 
+# Bind only existing production Workers; keep independent D1 ownership.
+[[services]]
+binding = "HOMEFLOW_STUDY_SERVICE"
+service = "homeflow"
+
+[[services]]
+binding = "DOCUMENT_STUDY_HOMEFLOW_SERVICE"
+service = "homeflow"
+
+[[services]]
+binding = "DOCUMENT_STUDY_SOURCE_SERVICE"
+service = "jp-document-assistant"
+
 # Cloudflare-hosted translation fallback for explanation text.
 [ai]
 binding = "AI"
