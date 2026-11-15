@@ -9,6 +9,7 @@ import StudyHomeFlowExams from './StudyHomeFlowExams.vue'
 import StudyHomeFlowMock from './StudyHomeFlowMock.vue'
 import StudyHomeFlowSentences from './StudyHomeFlowSentences.vue'
 import StudyHomeFlowVocabulary from './StudyHomeFlowVocabulary.vue'
+import {validateStudyHomeflowAuthorizationUrl} from './homeflow-authorization-url.mjs'
 
 type Identity={user_id:string;household_id:string;role:'owner'|'member';display_name:string}
 const emit=defineEmits<{(event:'identity-changed',userId:string|null):void}>()
@@ -93,9 +94,7 @@ async function begin(){
   if(!hex.test(result.state)||!hex.test(result.resume_secret)||
    typeof result.authorization_url!=='string')
    throw Error('授权信息无效')
-  const url=new URL(result.authorization_url)
-  if(url.protocol!=='https:'||url.pathname!=='/authorize')
-   throw Error('授权地址不安全')
+  const url=validateStudyHomeflowAuthorizationUrl(result.authorization_url,result.state,window.location.origin)
   const expires=Number(result.expires_in)
   const value:Pending={state:result.state,resume_secret:result.resume_secret,
    expires_at:Date.now()+Math.min(300,Math.max(1,expires||300))*1000}
