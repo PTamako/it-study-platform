@@ -170,13 +170,13 @@ test('HomeFlow member or unverified legacy owner cannot roll over the old daily 
     '2026-10-28', '2026-10-29', storage)
   c.homeflowIdentityUser.value = '22222222-2222-4222-8222-222222222222'
   c.api.rolloverDailyTasks()
-  assert.equal(c.todayKey.value, '2026-10-28',
-    'HomeFlow member cannot mutate unlabelled legacy daily task state')
+  assert.equal(c.todayKey.value, '2026-10-29',
+    'HomeFlow learner may roll their in-memory day forward without touching legacy storage')
   assert.equal(storage.size, 0)
   c.homeflowIdentityUser.value = null
   c.legacyRequiresPassword.value = true
   c.api.rolloverDailyTasks()
-  assert.equal(c.todayKey.value, '2026-10-28',
+  assert.equal(c.todayKey.value, '2026-10-29',
     'unverified legacy password must not unlock old local cache')
   assert.equal(storage.size, 0)
   c.legacyRequiresPassword.value = false
