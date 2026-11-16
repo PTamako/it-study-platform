@@ -488,7 +488,7 @@ function retryPendingDailyTask(intent: PendingDailyTask) {
   void saveDailyTask({ id: intent.taskId, done: intent.completed } as StudyTask, intent.base, intent)
 }
 let dailyRolloverTimer: ReturnType<typeof setInterval> | undefined
-function onDailyNetworkOnline() { if (authenticated.value) void hydrateDailyWordProgress() }
+function onDailyNetworkOnline() { if(homeflowIdentityUser.value)void hydrateClassicActorDailyWords(homeflowIdentityUser.value);else if(authenticated.value)void hydrateDailyWordProgress() }
 function onDailyVisibilityChange() {
   if (document.visibilityState === 'visible') {
     // A Safari account switch may occur while this installed PWA is asleep.
@@ -2543,7 +2543,7 @@ async function restoreVocabulary(key: string) {
     const response = await fetch('/api/vocabulary/saved', { method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ term, language, entry, explicit: true }) })
     if (!response.ok) throw new Error('同步未成功，请稍后重试。')
-    if (sessionId !== vocabularyLoadId || !authenticated.value) return
+    if (sessionId !== vocabularyLoadId || !studyAuthenticated.value) return
     const pending = new Map(vocabularyPending.value); pending.delete(key); vocabularyPending.value = pending
     vocabularyStatus.value = ''
     void loadCloudDashboard()
@@ -2590,7 +2590,7 @@ async function toggleSaved(entry: DictionaryEntry) {
       })
       const data = await response.json().catch(() => ({})) as { error?: string }
       if (!response.ok) throw new Error(data.error || '云端生词删除失败；本地收藏状态未更改。')
-      if (sessionId !== vocabularyLoadId || !authenticated.value) return
+      if (sessionId !== vocabularyLoadId || !studyAuthenticated.value) return
       const pending = new Map(vocabularyPending.value); pending.delete(key); vocabularyPending.value = pending
       savedWords.value = savedWords.value.filter(word => word !== key)
       savedDictionaryEntries.value = savedDictionaryEntries.value.filter(entry => vocabularyKey(entry.term,entry.language||'auto')!==key)
@@ -2612,7 +2612,7 @@ async function toggleSaved(entry: DictionaryEntry) {
     })
     const data = await response.json().catch(() => ({})) as { error?: string }
     if (!response.ok) throw new Error(data.error || '生词未能保存到云端；本地收藏状态未更改。')
-    if (sessionId !== vocabularyLoadId || !authenticated.value) return
+    if (sessionId !== vocabularyLoadId || !studyAuthenticated.value) return
     savedWords.value = [...savedWords.value, key]
     if(!savedDictionaryEntries.value.some(item=>vocabularyKey(item.term,item.language||'auto')===key)){
       savedDictionaryEntries.value=[word,...savedDictionaryEntries.value]
@@ -2638,7 +2638,7 @@ function resetDictionaryAiDisplay() {
   dictionaryAiErrors.value = {}
 }
 async function loadDictionaryAiQuota() {
-  if (!authenticated.value) return
+  if (!studyAuthenticated.value) return
   try {
     const response = await fetch('/api/dictionary/ai/status')
     if (!response.ok) return
@@ -2647,7 +2647,7 @@ async function loadDictionaryAiQuota() {
   } catch { /* The ordinary dictionary is independent of the AI quota endpoint. */ }
 }
 async function supplementDictionaryWithAi(entry: DictionaryEntry | null) {
-  if (dictionaryAiBusy.value || !authenticated.value) return
+  if (dictionaryAiBusy.value || !studyAuthenticated.value) return
   const term = (entry?.term || searchText.value).normalize('NFKC').trim()
   if (!term || term.length > 100) return
   const key = dictionaryAiKey(entry)
@@ -2697,7 +2697,7 @@ async function supplementDictionaryWithAi(entry: DictionaryEntry | null) {
 // AI translation is deliberately opt-in, and shares the existing daily allowance
 // with AI explanations. Regular dictionary queries never call Workers AI.
 async function translateMissingDictionaryWithAi() {
-  if (dictionaryAiBusy.value || !authenticated.value || dictSourceLang.value === 'it') return
+  if (dictionaryAiBusy.value || !studyAuthenticated.value || dictSourceLang.value === 'it') return
   const term = searchText.value.normalize('NFKC').trim().replace(/\s+/g, ' ')
   if (!term || term.length > 100) return
   const key = dictionaryAiKey(null)
@@ -2855,7 +2855,7 @@ async function lookupDictionary() {
       + (staticWordChecked ? '&static_word_checked=1' : '')
     // Short-lived per-session cache: repeated online lookups avoid both Worker
     // requests and D1 quota writes. Never cache failures or no-result responses.
-    const key = [requestedLanguage, q, staticWordChecked ? 'static' : 'full', authenticated.value ? 'owner' : 'public'].join('|')
+    const key = [requestedLanguage, q, staticWordChecked ? 'static' : 'full', (homeflowIdentityUser.value|| (authenticated.value?'legacy-owner':'public'))].join('|')
     const data = await dictionaryOnlineCache.lookup(key, async () => {
       const response = await fetch(url, {
         signal: AbortSignal.any([controller.signal, AbortSignal.timeout(18000)]),
