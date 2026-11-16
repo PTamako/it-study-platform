@@ -1,5 +1,6 @@
 import { checkWriteRateLimit, handleAuthRequest, requireAuth } from './auth'
-import { homeflowStudyIdentity } from './homeflow-identity'
+import { homeflowStudyIdentity, verifiedStudyActor } from './homeflow-identity'
+import { homeflowClassicPersonal } from './homeflow-classic-personal'
 
 import { homeflowVocabulary } from './homeflow-vocabulary'
 import { homeflowDailyTasks } from './homeflow-daily-tasks'
@@ -1415,12 +1416,35 @@ export default {
         url.pathname === '/api/homeflow-study/exams/mock/receipt' ||
         url.pathname === '/api/homeflow-study/exams/mock/legacy/adopt')
       return homeflowMockReceipts(request, env)
+    if (url.pathname.startsWith('/api/homeflow-classic/'))
+      return homeflowClassicPersonal(request, env)
     const authResponse = await handleAuthRequest(request, env)
     if (authResponse) return authResponse
 
     if (protectedPersonalPaths.has(url.pathname)) {
       const authFailure = await requireAuth(request, env)
-      if (authFailure) return authFailure
+      // These catalogues contain no user or device state. Keep legacy
+      // credential paths closed, but let a freshly verified HomeFlow actor
+      // use the exact original quiz/catalogue UI and filtering controls.
+      // Personal history, daily tasks, mastery and wrong-answer queries
+      // are NOT permitted through this exception.
+      const classicSharedReads = new Set([
+        '/api/tracks','/api/questions','/api/mock-exam-questions',
+        '/api/question-categories','/api/question-classification-stats',
+        '/api/question-sources','/api/fe-exemption-sittings',
+        '/api/scenarios','/api/language-cards'
+      ])
+      const classicSharedActions = new Set([
+        '/api/translate-explanation','/api/dictionary/ai',
+        '/api/dictionary/ai/status','/api/fe-question-bank/install'
+      ])
+      if(authFailure){
+        const candidate = (request.method==='GET' && classicSharedReads.has(url.pathname)) ||
+          classicSharedActions.has(url.pathname)
+        const actor = candidate ? await verifiedStudyActor(request, env) : null
+        if(!actor || (url.pathname==='/api/fe-question-bank/install' &&
+           actor.role!=='owner')) return authFailure
+      }
       if (request.method !== 'GET') {
         const origin = request.headers.get('origin')
         let originMatches = false
