@@ -30,7 +30,7 @@ test('classic exam/language/practical/dictionary use original visual elements',(
  assert.match(language,/class="language-choice"/)
  assert.match(language,/language-study-card/)
  assert.match(language,/vocabulary_expansion_json/)
- assert.match(practical,/class="question-card practical-scenario-card"/)
+ assert.match(practical,/class="panel question-card practical-scenario-card"/)
  assert.match(practical,/ExamScratchTools/)
  assert.match(dictionary,/class="dictionary-search"/)
  assert.match(dictionary,/class="dictionary-card"/)
