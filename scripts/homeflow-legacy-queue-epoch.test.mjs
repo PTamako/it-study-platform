@@ -45,6 +45,8 @@ for (const item of suites){
    setItem:(k,v)=>writes.push(['set',k,v]),
   }
   const state={
+   homeflowIdentityUser:{value:null},
+   scopedStorageKey:key=>key,
    legacyOperationGeneration:8,
    legacyWorkCurrent:g=>permitted&&g===state.legacyOperationGeneration,
    authenticated:{value:true},
@@ -97,7 +99,7 @@ test('three offline submission entry points are locked before creating a new pen
    'async function submitScenario() {','async function submitPracticeAnswer() {']){
   const idx=app.indexOf(start)
   assert.ok(idx>=0)
-  assert.match(app.slice(idx,idx+250),/if\s*\(!legacyWritesAllowed\(\)/)
+  assert.match(app.slice(idx,idx+250),/if\s*\(!studyAuthenticated\.value/)
  }
  assert.match(app,/function quarantineLegacyStudy\(userId:string\)\{\s*legacyOperationGeneration\+\+/)
  assert.match(app,/if\(mockTimer\)\{clearInterval\(mockTimer\);mockTimer=undefined\}/)
