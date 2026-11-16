@@ -1,0 +1,38 @@
+# One-time vetted release of UI-only PR #184.
+name: One-time Zhixue mobile menu logout production release
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/zhixue-mobile-menu-release-once-20261116.yml
+permissions:
+  contents: read
+  pull-requests: read
+  actions: write
+concurrency:
+  group: zhixue-mobile-menu-release-once
+  cancel-in-progress: false
+jobs:
+  dispatch-reviewed-release:
+    if: github.event.before == 'e2beb0dd5009a7a683c8454ab13302b1735978be'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify the exact merged PR and reviewed code
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          MERGED_SHA: 'e2beb0dd5009a7a683c8454ab13302b1735978be'
+        run: |
+          set -euo pipefail
+          test "${{ github.ref }}" = "refs/heads/main"
+          gh api "repos/$REPO/pulls/184" | jq -e --arg expected "$MERGED_SHA" \
+            '.merged == true and .merge_commit_sha == $expected'
+      - name: Invoke existing gated production deployment and all checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh workflow run deploy-cloudflare.yml -R "$REPO" --ref main \
+            -f release_confirmation=FOUR_APP_RELEASE_APPROVED
