@@ -58,6 +58,9 @@ function quarantineLegacyStudy(userId:string){
  scenarioSubmitting.value=false
  examHistorySyncing.value=false
  homeflowIdentityUser.value=userId
+ // The same original template must NEVER keep the previous password user's
+ // in-memory or queued data visible after an SSO account switch.
+ resetVisiblePersonalStudyState()
  if(!legacyRequiresPassword.value){
   legacyRequiresPassword.value=true
   try{localStorage.setItem(LEGACY_QUARANTINE,'1')}catch{/* fail closed in memory */}
@@ -80,6 +83,7 @@ function onHomeflowIdentityChanged(userId:string|null){
   legacyOperationGeneration++
   homeflowIdentityUser.value=null
   authenticated.value=false
+  resetVisiblePersonalStudyState()
   // Never auto-open the old owner cache after a member logs out.
   // The legacy password form remains available by explicit choice.
  }
@@ -2827,6 +2831,44 @@ function setDictionaryLanguage(language: 'auto' | 'ja' | 'en' | 'zh' | 'it') {
 watch(savedWords, value => {
   if(legacyWritesAllowed())localStorage.setItem('zhixue:saved-words', JSON.stringify(value))
 }, { deep: true })
+
+// Only volatile refs are cleared here. Never erase the original owner's old
+// localStorage: a later audited, owner-only import may still need those bytes.
+// All signed-user reloads must come from server-verified actor-scoped endpoints.
+function resetVisiblePersonalStudyState(){
+  ++legacyOperationGeneration
+  ++dailyHydrationRun; ++masterySyncGeneration; ++dailyWordHydrationRun
+  ++practiceLoadRequestId; ++practiceAnswerRequestId
+  ++questionProgressRequestId; ++scenarioLoadRequestId; ++scenarioSubmissionId
+  ++languageCardsLoadGeneration; ++vocabularyLoadId; ++dictionaryRequestId
+  if(mockTimer){clearInterval(mockTimer);mockTimer=undefined}
+  languageCardsAbort?.abort()
+  dictionaryFetchController?.abort()
+  dictionaryOnlineCache.clear()
+  dailyTaskSaveQueues.clear(); dailyTaskSaveRequestIds.clear()
+  pendingDailyTasks.clear(); dailyCloudStates.clear()
+  tasks.value=mergeDailyTaskTemplates(null,defaultTasks)
+  examRecords.value=[]
+  cloudDashboard.value=null;cloudDashboardError.value=''
+  questionProgressById.value={}
+  quizQuestions.value=[];quizIndex.value=0;selectedOption.value=''
+  quizSubmitted.value=false;quizFinished.value=false;quizCorrect.value=0
+  mockQuestions.value=[];mockAnswers.value={}
+  mockStarted.value=false;mockSubmitted.value=false;mockPendingSubmission.value=null
+  pendingScenarioAttempt.value=null;pendingPracticeAttempt.value=null
+  scenarios.value=[];selectedScenarioId.value='';scenarioResult.value=null
+  scenarioExplanationTranslations.value={}
+  questionExplanationTranslations.value={}
+  completedLanguageCards.value=[];languageReviews.value=[]
+  languageProgressReady.value=false;languageProgressHydrating.value=true
+  dailyWordProgress.value={};dailyWordPending.value={}
+  dailyWordConflicts.value={};dailyWordSelections.value={}
+  dailySceneAssignments.value={}
+  savedWords.value=[];savedDictionaryEntries.value=[];recentDictionaryEntries.value=[]
+  vocabularyPending.value=new Map();vocabularySyncReady.value=false
+  vocabularyHydrating.value=true;onlineEntries.value=[];dictionaryAiAnswers.value={}
+  activeModule.value='home';showMobileMenu.value=false
+}
 
 function navigate(id: ModuleId) {
   stopSpeech()
