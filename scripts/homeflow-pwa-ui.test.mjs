@@ -278,7 +278,7 @@ test('legacy cache remains unclaimed and invisible after HomeFlow identity switc
  assert.match(app,/A successful identity endpoint without an actor violates its contract/)
  assert.match(app,/if\(await probeHomeflowIdentity\(\)\)/)
  assert.match(app,/localStorage.removeItem\(LEGACY_QUARANTINE\)/)
- assert.match(app,/<section v-else-if="homeflowIdentityUser" class="homeflow-study-screen"/)
+ assert.match(app,/<template v-if="homeflowIdentityUser">/)
  assert.match(app,/旧知学密码空间与家庭账号分开保护/)
  assert.match(app,/<StudyHomeFlowAccess @identity-changed="onHomeflowIdentityChanged"/)
  assert.match(app,/@identity-changed="onHomeflowIdentityChanged"/)
@@ -362,10 +362,30 @@ test('production enables every signed-actor study module without granting legacy
   'HOMEFLOW_STUDY_MOCK_ENABLED','HOMEFLOW_STUDY_SENTENCES_ENABLED'
  ];
  for(const flag of flags)assert.ok(workerConfig.includes(flag+' = "true"'),flag+' not enabled');
- assert.match(app,/<section v-else-if="homeflowIdentityUser" class="homeflow-study-screen"/);
+ assert.match(app,/<template v-if="homeflowIdentityUser">/);
  assert.match(app,/<StudyHomeFlowAccess @identity-changed="onHomeflowIdentityChanged" \/>/);
- assert.match(app,/<section v-else-if="!authenticated" class="auth-screen"/);
+ assert.match(app,/<section v-else-if="!authenticated && !homeflowIdentityUser" class="auth-screen"/);
  assert.match(app,/旧知学密码空间与家庭账号分开保护/);
  assert.doesNotMatch(app,/authenticated\.value\s*=\s*!!homeflowIdentityUser/);
  assert.doesNotMatch(app,/旧版学习资料不会自动显示或归属其他家庭成员/);
+});
+
+test('HomeFlow SSO restores original Zhixue shell without rendering legacy actor data',()=>{
+ const start=app.indexOf('        <template v-if="homeflowIdentityUser">')
+ const end=app.indexOf('        <template v-else>\\n        <StudyHomeFlowAccess v-if="activeModule',start)
+ assert.ok(start>=0&&end>start,'signed-actor content must be a distinct view')
+ const signed=app.slice(start,end)
+ assert.match(app,/<div v-else class="app-shell">/)
+ assert.match(app,/class="sidebar"/)
+ assert.match(app,/class="mobile-nav"/)
+ assert.match(signed,/class="hero-panel"/)
+ assert.match(signed,/class="module-grid"/)
+ assert.match(signed,/<StudyHomeFlowAccess :active-module="activeModule"/)
+ assert.doesNotMatch(signed,/savedVocabularyEntries|examRecords|questionProgressById|dailyCloudStates/)
+ assert.match(ui,/defineProps<\\{activeModule\\?:StudyModule\\}>/)
+ for(const page of ['home','exam','practical','language','dictionary']){
+  assert.ok(ui.includes("activeModule === '"+page+"'"),'private route missing '+page)
+ }
+ assert.match(app,/v-if="!homeflowIdentityUser" class="auth-logout"/)
+ assert.doesNotMatch(app,/<section v-else-if="homeflowIdentityUser" class="homeflow-study-screen"/)
 });
