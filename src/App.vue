@@ -31,6 +31,12 @@ type ModuleId = 'home' | 'exam' | 'practical' | 'language' | 'dictionary'
 
 const authenticated = ref(false)
 const authReady = ref(false)
+// Only a current, verified HomeFlow session can access an actor-prefixed cache.
+// Legacy single-password keys are never renamed, removed, or auto-claimed.
+function scopedStorageKey(key:string){
+ const actor=homeflowIdentityUser.value
+ return actor?'zhixue:actor:'+actor+':'+key:key
+}
 // The old single-password PWA has unlabelled localStorage/queued work.
 // Never auto-claim any of it for a new HomeFlow user or silently show it
 // after switching HomeFlow accounts on a shared iPhone.
@@ -1122,8 +1128,10 @@ type PendingScenarioAttempt = {
 const pendingScenarioAttempt = ref<PendingScenarioAttempt | null>(readStored('zhixue:scenario-pending-v1', null))
 async function syncPendingScenarioAttempt() {
   const generation=legacyOperationGeneration
+  const actor=homeflowIdentityUser.value
+  const current=()=>actor?homeflowIdentityUser.value===actor:legacyWorkCurrent(generation)
   const pending = pendingScenarioAttempt.value
-  if (!pending || scenarioSubmitting.value || !legacyWorkCurrent(generation)) return
+  if (!pending || scenarioSubmitting.value || !current()) return
   const requestId = ++scenarioSubmissionId
   scenarioSubmitting.value = true
   scenariosError.value = ''
@@ -1136,13 +1144,13 @@ async function syncPendingScenarioAttempt() {
     const data = await response.json() as {
       attempt_id?: string; score?: number; best_option?: string; correct?: boolean; feedback?: string; error?: string
     }
-    if (!legacyWorkCurrent(generation)) return
+    if (!current()) return
     if (!response.ok || data.attempt_id !== pending.attempt_id) {
       throw new Error(data.error || '实战结果尚未保存。')
     }
     if (pendingScenarioAttempt.value?.attempt_id === pending.attempt_id) {
       pendingScenarioAttempt.value = null
-      try { localStorage.removeItem('zhixue:scenario-pending-v1') } catch { /* cloud result is durable */ }
+      try { localStorage.removeItem(scopedStorageKey('zhixue:scenario-pending-v1')) } catch { /* cloud result is durable */ }
     }
     if (requestId === scenarioSubmissionId && currentScenario.value?.id === pending.scenario_id) {
       const feedback = String(data.feedback || '')
@@ -1156,16 +1164,16 @@ async function syncPendingScenarioAttempt() {
     }
     void loadCloudDashboard()
   } catch (error) {
-    if (legacyWorkCurrent(generation) && requestId === scenarioSubmissionId) {
+    if (current() && requestId === scenarioSubmissionId) {
       scenariosError.value = (error instanceof Error ? error.message : '网络异常。') + ' 实战答题保存在本设备，请重试同步。'
     }
   } finally {
     // A previous actor's reply must not release a new actor's submission.
-    if(generation===legacyOperationGeneration)scenarioSubmitting.value = false
+    if(current())scenarioSubmitting.value = false
   }
 }
 async function submitScenario() {
-  if(!legacyWritesAllowed())return
+  if(!studyAuthenticated.value)return
   const scenario = currentScenario.value
   const selected = selectedScenarioOption.value
   if (!scenario || !selected || scenarioSubmitting.value || scenarioResult.value) return
@@ -1183,7 +1191,7 @@ async function submitScenario() {
     duration_seconds: 0,
   }
   pendingScenarioAttempt.value = pending
-  try { localStorage.setItem('zhixue:scenario-pending-v1', JSON.stringify(pending)) }
+  try { localStorage.setItem(scopedStorageKey('zhixue:scenario-pending-v1'), JSON.stringify(pending)) }
   catch { scenariosError.value = '本机无法保存待同步实战答题，请勿关闭页面。' }
   await syncPendingScenarioAttempt()
 }
@@ -1494,8 +1502,10 @@ const practiceSaving = ref(false)
 
 async function syncPendingPracticeAttempt() {
   const generation=legacyOperationGeneration
+  const actor=homeflowIdentityUser.value
+  const current=()=>actor?homeflowIdentityUser.value===actor:legacyWorkCurrent(generation)
   const pending = pendingPracticeAttempt.value
-  if (!pending || practiceSaving.value || !legacyWorkCurrent(generation)) return
+  if (!pending || practiceSaving.value || !current()) return
   practiceSaving.value = true
   try {
     const response = await fetch('/api/attempts', {
@@ -1504,26 +1514,26 @@ async function syncPendingPracticeAttempt() {
       body: JSON.stringify(pending),
     })
     const data = await response.json() as { error?: string; attempt_id?: string; progress?: QuestionReviewProgress }
-    if (!legacyWorkCurrent(generation)) return
+    if (!current()) return
     if (!response.ok || data.attempt_id !== pending.attempt_id) {
       throw new Error(data.error || '答题记录尚未同步。')
     }
     if (data.progress) questionProgressById.value[pending.question_id] = data.progress
     if (pendingPracticeAttempt.value?.attempt_id === pending.attempt_id) {
       pendingPracticeAttempt.value = null
-      try { localStorage.removeItem('zhixue:practice-pending-v1') } catch { /* cloud receipt is durable */ }
+      try { localStorage.removeItem(scopedStorageKey('zhixue:practice-pending-v1')) } catch { /* cloud receipt is durable */ }
     }
     quizError.value = ''
     void loadCloudDashboard()
   } catch (error) {
-    if(legacyWorkCurrent(generation))
+    if(current())
       quizError.value = (error instanceof Error ? error.message : '网络异常。') + ' 答题保存在本设备，请重新同步。'
   } finally {
-    if(generation===legacyOperationGeneration)practiceSaving.value = false
+    if(current())practiceSaving.value = false
   }
 }
 async function submitPracticeAnswer() {
-  if(!legacyWritesAllowed())return
+  if(!studyAuthenticated.value)return
   const question = currentQuestion.value
   if (!question || !selectedOption.value || practiceSaving.value) return
   if (quizSubmitted.value) {
@@ -1540,7 +1550,7 @@ async function submitPracticeAnswer() {
     duration_seconds: quizStartedAt.value ? Math.max(0, Math.floor((Date.now() - quizStartedAt.value) / 1000)) : 0,
   }
   pendingPracticeAttempt.value = pending
-  try { localStorage.setItem('zhixue:practice-pending-v1', JSON.stringify(pending)) }
+  try { localStorage.setItem(scopedStorageKey('zhixue:practice-pending-v1'), JSON.stringify(pending)) }
   catch { quizError.value = '本机无法保存待同步答题，请勿关闭页面，直到同步成功。' }
   quizSubmitted.value = true
   if (answer === question.answer) quizCorrect.value += 1
