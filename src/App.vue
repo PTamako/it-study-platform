@@ -58,6 +58,8 @@ function legacyWorkCurrent(generation:number){
  return generation===legacyOperationGeneration&&legacyWritesAllowed()
 }
 function quarantineLegacyStudy(userId:string){
+ // Same verified actor: refresh must not reset the original learner's current exam.
+ if(homeflowIdentityUser.value===userId&&!authenticated.value)return
  legacyOperationGeneration++
  // Disarm the old mock timer; do not submit another person's exam after SSO.
  if(mockTimer){clearInterval(mockTimer);mockTimer=undefined}
@@ -88,7 +90,10 @@ function legacyWritesAllowed(){
  return authenticated.value&&!legacyRequiresPassword.value&&!homeflowIdentityUser.value
 }
 function onHomeflowIdentityChanged(userId:string|null){
- if(userId){quarantineLegacyStudy(userId);void hydrateClassicActorData(userId);return}
+ if(userId){
+  if(userId===homeflowIdentityUser.value)return
+  quarantineLegacyStudy(userId);void hydrateClassicActorData(userId);return
+ }
  if(homeflowIdentityUser.value){
   legacyOperationGeneration++
   homeflowIdentityUser.value=null
