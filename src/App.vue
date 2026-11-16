@@ -3906,8 +3906,10 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
               </div>
             </section>
             <DailyGrammarLesson :language="studyLanguage" :study-date="todayKey" :authenticated="studyAuthenticated"
+              :user-id="homeflowIdentityUser||undefined" :request="fetch"
               @speak="(text, language) => speak(text, language, 'daily-grammar:' + studyLanguage)" />
             <DailyListeningPractice :language="studyLanguage" :study-date="todayKey" :authenticated="studyAuthenticated"
+              :user-id="homeflowIdentityUser||undefined" :request="fetch"
               :audio-status="speechStatus" :audio-status-target="speechStatusTarget"
               :audio-playing="speechPlaying" :audio-paused="speechPaused"
               @speak="(text, language, target) => speak(text, language, target)"
