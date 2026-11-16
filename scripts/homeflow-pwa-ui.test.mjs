@@ -278,8 +278,8 @@ test('legacy cache remains unclaimed and invisible after HomeFlow identity switc
  assert.match(app,/A successful identity endpoint without an actor violates its contract/)
  assert.match(app,/if\(await probeHomeflowIdentity\(\)\)/)
  assert.match(app,/localStorage.removeItem\(LEGACY_QUARANTINE\)/)
- assert.match(app,/v-if="homeflowIdentityUser" class="auth-card"/)
- assert.match(app,/旧版学习资料不会自动显示或归属其他家庭成员/)
+ assert.match(app,/<section v-else-if="homeflowIdentityUser" class="homeflow-study-screen"/)
+ assert.match(app,/旧知学密码空间与家庭账号分开保护/)
  assert.match(app,/<StudyHomeFlowAccess @identity-changed="onHomeflowIdentityChanged"/)
  assert.match(app,/@identity-changed="onHomeflowIdentityChanged"/)
  const body=app.slice(app.indexOf('function quarantineLegacyStudy('),
@@ -366,6 +366,6 @@ test('production enables every signed-actor study module without granting legacy
  assert.match(app,/<StudyHomeFlowAccess @identity-changed="onHomeflowIdentityChanged" \/>/);
  assert.match(app,/<section v-else-if="!authenticated" class="auth-screen"/);
  assert.match(app,/旧知学密码空间与家庭账号分开保护/);
- assert.doesNotMatch(app,/authenticated\.value\s*=\s*!!?homeflowIdentityUser/);
+ assert.doesNotMatch(app,/authenticated\.value\s*=\s*!!homeflowIdentityUser/);
  assert.doesNotMatch(app,/旧版学习资料不会自动显示或归属其他家庭成员/);
 });
