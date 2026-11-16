@@ -1349,6 +1349,21 @@ export default {
       return new Response(null, { status: 204, headers: { 'allow': 'GET, POST, DELETE, OPTIONS' } })
     }
 
+    // Browser compatibility requests carry the user ID captured BEFORE a
+    // potentially delayed operation. Never let a cookie change turn a former
+    // person's pending write/read into another person's operation.
+    // This header is an assertion to verify, NOT an authorization credential.
+    const expectedClassicActor=request.headers.get('x-zhixue-expected-actor')
+    if(expectedClassicActor &&
+       (url.pathname.startsWith('/api/homeflow-study/')||
+        url.pathname.startsWith('/api/homeflow-classic/'))){
+      if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(expectedClassicActor))
+        return json({code:'ACTOR_ASSERTION_INVALID'},403)
+      const actual=await verifiedStudyActor(request,env)
+      if(!actual||actual.user_id.toLowerCase()!==expectedClassicActor.toLowerCase())
+        return json({code:'ACTOR_CHANGED'},403)
+    }
+
     // Identity-only HomeFlow SSO is separated from all existing single-user
     // personal study APIs until every personal D1 key and PWA cache is scoped.
     if (url.pathname.startsWith('/api/homeflow-sso/'))
