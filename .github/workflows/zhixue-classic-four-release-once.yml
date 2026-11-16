@@ -1,0 +1,37 @@
+# One-time production release after user-approved restoration PR #181.
+# All compilation, full regression and local D1 migration checks passed.
+name: One-time Zhixue four classic modules production release
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/zhixue-classic-four-release-once.yml
+permissions:
+  contents: read
+  pull-requests: read
+  actions: write
+concurrency:
+  group: zhixue-four-classic-release-dispatch-once
+  cancel-in-progress: false
+jobs:
+  dispatch-reviewed-release:
+    if: github.event.before == '96117f04490d8f81ad549ac704f561e21d34b1f5'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify reviewed PR 181 merged at the exact tested commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          MERGED_SHA: '96117f04490d8f81ad549ac704f561e21d34b1f5'
+        run: |
+          set -euo pipefail
+          gh api "repos/$REPO/pulls/181" | jq -e --arg merge "$MERGED_SHA" \
+            '.merged == true and .merge_commit_sha == $merge'
+      - name: Dispatch original audited production release workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh workflow run deploy-cloudflare.yml -R "$REPO" --ref main \
+            -f release_confirmation=FOUR_APP_RELEASE_APPROVED
