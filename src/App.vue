@@ -774,7 +774,7 @@ const MOCK_REVIEW_KEY = 'zhixue:mock-review-v1'
 const mockStorageWarning = ref('')
 let mockTimer: ReturnType<typeof setInterval> | undefined
 function persistActiveMockExam() {
-  if(!legacyWritesAllowed()||!mockStarted.value)return
+  if(!studyAuthenticated.value||!mockStarted.value)return
   const snapshot: MockSnapshot<PracticeQuestion> = {
     track: selectedTrackId.value === 'exam-fe' ? 'exam-fe' : 'exam-sg',
     section: selectedTrackId.value === 'exam-fe' ? feMockSection.value : 'SG',
@@ -785,7 +785,7 @@ function persistActiveMockExam() {
     duration_minutes: mockDurationMinutes.value,
   }
   try {
-    localStorage.setItem(MOCK_ACTIVE_KEY, JSON.stringify(snapshot))
+    localStorage.setItem(scopedStorageKey(MOCK_ACTIVE_KEY), JSON.stringify(snapshot))
     mockStorageWarning.value = ''
   } catch {
     mockStorageWarning.value = '本机空间不足，模拟考试无法保存中途进度。请勿刷新页面。'
@@ -793,8 +793,8 @@ function persistActiveMockExam() {
 }
 watch([mockStarted, mockAnswers], persistActiveMockExam, { deep: true, flush: 'sync' })
 function restoreActiveMockExam() {
-  if (!authenticated.value || mockStarted.value || mockPendingSubmission.value) return
-  const raw = readStored<unknown>(MOCK_ACTIVE_KEY, null)
+  if (!studyAuthenticated.value || mockStarted.value || mockPendingSubmission.value) return
+  const raw = readStored<unknown>(scopedStorageKey(MOCK_ACTIVE_KEY), null)
   if (!raw) return
   const snapshot = parseMockSnapshot<PracticeQuestion>(raw)
   if (!snapshot) {
@@ -822,8 +822,8 @@ function restoreActiveMockExam() {
 // Keep a pending/graded review on the device when the browser reloads while
 // the server is saving an exam. No answer keys are cached before grading.
 function restoreMockReview() {
-  if (!authenticated.value || mockStarted.value || mockQuestions.value.length) return
-  const raw = readStored<unknown>(MOCK_REVIEW_KEY, null)
+  if (!studyAuthenticated.value || mockStarted.value || mockQuestions.value.length) return
+  const raw = readStored<unknown>(scopedStorageKey(MOCK_REVIEW_KEY), null)
   const snapshot = parseMockSnapshot<PracticeQuestion>(raw)
   if (!snapshot || (!mockPendingSubmission.value && !(raw as { graded?: boolean }).graded)) return
   selectedTrackId.value = snapshot.track
@@ -861,7 +861,7 @@ async function startMockExam() {
     if (!data.items || data.items.length !== required || (isFe ? data.section !== feMockSection.value || data.duration_minutes !== (feMockSection.value === 'A' ? 90 : 100) : data.section_counts?.A !== 48 || data.section_counts?.B !== 12)) {
       throw new Error('组卷结果不符合所选考试的题型、题数或时间要求，请稍后重试。')
     }
-    try { localStorage.removeItem(MOCK_REVIEW_KEY) } catch { /* best effort */ }
+    try { localStorage.removeItem(scopedStorageKey(MOCK_REVIEW_KEY)) } catch { /* best effort */ }
     mockQuestions.value = data.items
     mockAnswers.value = {}
     mockDurationMinutes.value = isFe ? (feMockSection.value === 'A' ? 90 : 100) : 120
@@ -894,8 +894,10 @@ const mockSyncing = ref(false)
 
 async function syncPendingMockSubmission() {
   const generation=legacyOperationGeneration
+  const actor=homeflowIdentityUser.value
+  const current=()=>actor?homeflowIdentityUser.value===actor:legacyWorkCurrent(generation)
   const pending = mockPendingSubmission.value
-  if (!pending || mockSyncing.value || !legacyWorkCurrent(generation)) return
+  if (!pending || mockSyncing.value || !current()) return
   mockSyncing.value = true
   try {
     const response = await fetch('/api/mock-exam/submit', {
@@ -906,7 +908,7 @@ async function syncPendingMockSubmission() {
       error?: string; submission_id?: string; correct_count?: number; total?: number; exam_name?: string; study_date?: string
       review?: Array<{ id: string; answer: string; explanation: string }>
     }
-    if (!legacyWorkCurrent(generation)) return
+    if (!current()) return
     if (!response.ok || data.submission_id !== pending.submission_id || !Number.isInteger(data.correct_count) || data.total !== pending.answers.length) {
       throw new Error(data.error || '交卷结果暂未成功同步。')
     }
@@ -921,27 +923,27 @@ async function syncPendingMockSubmission() {
       const review = reviewMap.get(question.id)
       return review ? { ...question, answer: review.answer, explanation: review.explanation } : question
     })
-    const snapshot = readStored<MockSnapshot<PracticeQuestion> | null>(MOCK_REVIEW_KEY, null)
+    const snapshot = readStored<MockSnapshot<PracticeQuestion> | null>(scopedStorageKey(MOCK_REVIEW_KEY), null)
     if (snapshot) {
-      try { localStorage.setItem(MOCK_REVIEW_KEY, JSON.stringify({ ...snapshot, questions: mockQuestions.value, graded: true })) }
+      try { localStorage.setItem(scopedStorageKey(MOCK_REVIEW_KEY), JSON.stringify({ ...snapshot, questions: mockQuestions.value, graded: true })) }
       catch { /* server has the immutable graded receipt */ }
     }
     const record: ExamRecord = { id: pending.submission_id, date: pending.study_date,
       correct: data.correct_count!, total: data.total!, exam: data.exam_name || pending.track }
     if (!examRecords.value.some(item => item.id === record.id)) examRecords.value.push(record)
     mockPendingSubmission.value = null
-    try { localStorage.removeItem('zhixue:mock-pending-v1') } catch { /* cloud receipt prevents duplicates */ }
+    try { localStorage.removeItem(scopedStorageKey('zhixue:mock-pending-v1')) } catch { /* cloud receipt prevents duplicates */ }
     mockError.value = ''
     void loadCloudDashboard()
   } catch (error) {
-    if(legacyWorkCurrent(generation))
+    if(current())
       mockError.value = (error instanceof Error ? error.message : '网络异常。') + ' 答卷已保留在本设备，可点击「重新同步」。'
   } finally {
-    if(generation===legacyOperationGeneration) mockSyncing.value = false
+    if(current())mockSyncing.value = false
   }
 }
 async function finishMockExam(autoSubmit = false) {
-  if (!legacyWritesAllowed() || !mockStarted.value || mockSubmitted.value) return
+  if (!studyAuthenticated.value || !mockStarted.value || mockSubmitted.value) return
   mockSubmitted.value = true
   mockStarted.value = false
   if (mockTimer) { clearInterval(mockTimer); mockTimer = undefined }
@@ -958,14 +960,14 @@ async function finishMockExam(autoSubmit = false) {
   }
   mockPendingSubmission.value = submission
   try {
-    localStorage.setItem(MOCK_REVIEW_KEY, JSON.stringify({
+    localStorage.setItem(scopedStorageKey(MOCK_REVIEW_KEY), JSON.stringify({
       track: selectedTrackId.value, section: submission.section,
       questions: mockQuestions.value, answers: mockAnswers.value,
       started_at: mockStartedAt.value, deadline: mockDeadline.value,
       duration_minutes: mockDurationMinutes.value, graded: false,
     }))
-    localStorage.setItem('zhixue:mock-pending-v1', JSON.stringify(submission))
-    localStorage.removeItem(MOCK_ACTIVE_KEY)
+    localStorage.setItem(scopedStorageKey('zhixue:mock-pending-v1'), JSON.stringify(submission))
+    localStorage.removeItem(scopedStorageKey(MOCK_ACTIVE_KEY))
   } catch {
     mockError.value += ' 浏览器本地保存失败；请勿关闭此页面直到同步完成。'
   }
@@ -977,7 +979,7 @@ function closeMockReview() {
   mockQuestions.value = []
   mockAnswers.value = {}
   mockError.value = ''
-  try { localStorage.removeItem(MOCK_REVIEW_KEY) } catch { /* optional local snapshot */ }
+  try { localStorage.removeItem(scopedStorageKey(MOCK_REVIEW_KEY)) } catch { /* optional local snapshot */ }
 }
 onUnmounted(() => { if (mockTimer) clearInterval(mockTimer); if (dailyRolloverTimer) clearInterval(dailyRolloverTimer); document.removeEventListener('visibilitychange', onDailyVisibilityChange); window.removeEventListener('online', onDailyNetworkOnline); window.removeEventListener('zhixue:update-available', onAppUpdateAvailable) })
 
@@ -2935,6 +2937,17 @@ async function hydrateClassicActorData(actor:string){
  const current=()=>homeflowIdentityUser.value===actor
  if(!current())return
  todayKey.value=tokyoDate()
+ // Only records already keyed to this verified actor can be resumed.
+ pendingPracticeAttempt.value=readStored<PendingPracticeAttempt|null>(
+  scopedStorageKey('zhixue:practice-pending-v1'),null)
+ pendingScenarioAttempt.value=readStored<PendingScenarioAttempt|null>(
+  scopedStorageKey('zhixue:scenario-pending-v1'),null)
+ mockPendingSubmission.value=readStored<PendingMockSubmission|null>(
+  scopedStorageKey('zhixue:mock-pending-v1'),null)
+ if(mockPendingSubmission.value)void syncPendingMockSubmission()
+ if(pendingPracticeAttempt.value)void syncPendingPracticeAttempt()
+ if(pendingScenarioAttempt.value)void syncPendingScenarioAttempt()
+ restoreMockReview();restoreActiveMockExam()
  await Promise.allSettled([
   loadExamTracks(),loadLanguageCards(),loadCloudDashboard(),
   refreshDailyTasks(todayKey.value),syncExamHistory(),hydrateVocabulary(),
