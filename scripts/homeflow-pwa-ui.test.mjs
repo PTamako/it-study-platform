@@ -22,7 +22,7 @@ test('HomeFlow PWA entry remains feature gated and cannot authenticate legacy st
  assert.match(app,/<StudyHomeFlowAccess @identity-changed="onHomeflowIdentityChanged" \/>/)
  assert.match(app,/<StudyHomeFlowAccess v-if="activeModule==='home'"/)
  assert.doesNotMatch(ui,/authenticated\.value\s*=\s*true/)
- assert.match(ui,/每日任务、语法、听力、单词、语言卡、练习错题、成绩与 SG\/FE 模拟考试使用独立身份接口/)
+ assert.match(ui,/考试、日语、英语与生词进度只属于当前账号/)
 })
 
 test('Safari-to-installed-PWA resume uses only short-lived one-time proof, not bearer token',()=>{
