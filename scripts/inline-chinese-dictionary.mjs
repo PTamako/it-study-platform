@@ -5,7 +5,8 @@ import { readFileSync } from 'node:fs'
 // relative imports resolve without network access or special TS loaders.
 const moduleSource = readFileSync(new URL('../worker/chinese-word-dictionary.ts', import.meta.url), 'utf8')
 const providerImport = "import { eligibleChineseWord, fetchChineseWordMetadata } from './chinese-word-dictionary'"
-const studyIdentityImport = "import { homeflowStudyIdentity } from './homeflow-identity'"
+const studyIdentityImport = "import { homeflowStudyIdentity, verifiedStudyActor } from './homeflow-identity'"
+const studyClassicImport = "import { homeflowClassicPersonal } from './homeflow-classic-personal'"
 const studyVocabularyImport = "import { homeflowVocabulary } from './homeflow-vocabulary'"
 const studyDailyImport = "import { homeflowDailyTasks } from './homeflow-daily-tasks'"
 const studyGrammarImport = "import { homeflowGrammar } from './homeflow-grammar'"
@@ -25,7 +26,9 @@ export function inlineChineseDictionary(workerSource) {
   const withProvider = workerSource.replace(providerImport, moduleSource)
   return withProvider
     .replace(studyIdentityImport,
-      "const homeflowStudyIdentity = async () => new Response('SSO disabled', {status:503})")
+      "const homeflowStudyIdentity = async () => new Response('SSO disabled', {status:503});const verifiedStudyActor = async()=>null")
+    .replace(studyClassicImport,
+      "const homeflowClassicPersonal = async () => new Response('private classic disabled', {status:503})")
     .replace(studyVocabularyImport,
       "const homeflowVocabulary = async () => new Response('per-user vocabulary disabled', {status:503})")
     .replace(studyDailyImport,
