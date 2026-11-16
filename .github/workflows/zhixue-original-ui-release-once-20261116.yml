@@ -1,0 +1,39 @@
+# One-time, auditable production release dispatcher for user-approved PR #183.
+# Existing deploy-cloudflare.yml retains all checks and production migration gates.
+name: One-time Zhixue original UI production release
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/zhixue-original-ui-release-once-20261116.yml
+permissions:
+  contents: read
+  pull-requests: read
+  actions: write
+concurrency:
+  group: zhixue-original-ui-release-dispatch-once
+  cancel-in-progress: false
+jobs:
+  release-original-ui:
+    if: github.event.before == 'fc968f08e97c9fc0cd0f1e60b598102a80de7d5d'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify tested PR 183 merged into main exactly
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EXPECTED: 'fc968f08e97c9fc0cd0f1e60b598102a80de7d5d'
+        run: |
+          set -euo pipefail
+          test "${{ github.ref }}" = "refs/heads/main"
+          gh api "repos/$REPO/pulls/183" | jq -e --arg expected "$EXPECTED" \
+            '.merged == true and .merge_commit_sha == $expected'
+      - name: Dispatch the existing approved Cloudflare production release workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh workflow run deploy-cloudflare.yml -R "$REPO" --ref main \
+            -f release_confirmation=FOUR_APP_RELEASE_APPROVED
