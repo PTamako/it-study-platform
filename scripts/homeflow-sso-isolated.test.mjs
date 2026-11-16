@@ -96,6 +96,9 @@ function sqliteEnv(){
   id TEXT PRIMARY KEY, language TEXT NOT NULL, content_type TEXT NOT NULL,
   category TEXT NOT NULL DEFAULT '', term TEXT NOT NULL DEFAULT '',
   reading TEXT NOT NULL DEFAULT '', meaning_zh TEXT NOT NULL DEFAULT '',
+  explanation TEXT NOT NULL DEFAULT '', source_url TEXT,
+  vocabulary_expansion_json TEXT NOT NULL DEFAULT '[]',
+  grammar_expansion_json TEXT NOT NULL DEFAULT '[]',
   example TEXT NOT NULL DEFAULT '', example_meaning_zh TEXT NOT NULL DEFAULT '');
  CREATE TABLE language_card_progress(
   card_id TEXT PRIMARY KEY REFERENCES language_cards(id), mastered INTEGER,
