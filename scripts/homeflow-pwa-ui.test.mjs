@@ -20,7 +20,7 @@ test('HomeFlow PWA entry remains feature gated and cannot authenticate legacy st
  assert.match(ui,/<section v-if="enabled"/)
  assert.match(app,/import StudyHomeFlowAccess from '.\/StudyHomeFlowAccess.vue'/)
  assert.match(app,/<StudyHomeFlowAccess @identity-changed="onHomeflowIdentityChanged" \/>/)
- assert.match(app,/<StudyHomeFlowAccess v-if="activeModule==='home'"/)
+ assert.match(app,/<StudyHomeFlowAccess v-if="homeflowIdentityUser" account-only/)
  assert.doesNotMatch(ui,/authenticated\.value\s*=\s*true/)
  assert.match(ui,/考试、日语、英语与生词进度只属于当前账号/)
 })
@@ -278,8 +278,8 @@ test('legacy cache remains unclaimed and invisible after HomeFlow identity switc
  assert.match(app,/A successful identity endpoint without an actor violates its contract/)
  assert.match(app,/if\(await probeHomeflowIdentity\(\)\)/)
  assert.match(app,/localStorage.removeItem\(LEGACY_QUARANTINE\)/)
- assert.match(app,/<template v-if="homeflowIdentityUser">/)
- assert.match(app,/旧知学密码空间与家庭账号分开保护/)
+ assert.doesNotMatch(app,/<template v-if="homeflowIdentityUser">/)
+ assert.match(app,/function resetVisiblePersonalStudyState\(\)/)
  assert.match(app,/<StudyHomeFlowAccess @identity-changed="onHomeflowIdentityChanged"/)
  assert.match(app,/@identity-changed="onHomeflowIdentityChanged"/)
  const body=app.slice(app.indexOf('function quarantineLegacyStudy('),
@@ -298,7 +298,8 @@ test('legacy cache remains unclaimed and invisible after HomeFlow identity switc
 test('legacy daily rollover and localStorage progress writers never run for HomeFlow users',()=>{
  assert.match(app,/function legacyWritesAllowed\(\)\{/)
  assert.match(app,/return authenticated.value&&!legacyRequiresPassword.value&&!homeflowIdentityUser.value/)
- assert.match(app,/function rolloverDailyTasks\(\)\s*\{\s*if\(!legacyWritesAllowed\(\)\)return/)
+ assert.match(app,/function rolloverDailyTasks\(\)\s*\{\s*if\(homeflowIdentityUser\.value\)/)
+ assert.match(app,/function rolloverDailyTasks\(\)[\s\S]*?if\(!legacyWritesAllowed\(\)\)return/)
  assert.match(app,/watch\(tasks, value => \{[\s\S]*?if\(!legacyWritesAllowed\(\)\)return[\s\S]*?localStorage.setItem\('zhixue:tasks:/)
  assert.match(app,/watch\(examRecords, value => \{[\s\S]*?if\(legacyWritesAllowed\(\)\)localStorage.setItem\('zhixue:exam-records'/)
  assert.match(app,/void probeHomeflowIdentity\(\).then\(active=>\{[\s\S]*?if\(!active&&legacyWritesAllowed\(\)\)\{[\s\S]*?rolloverDailyTasks\(\)/)
@@ -362,30 +363,29 @@ test('production enables every signed-actor study module without granting legacy
   'HOMEFLOW_STUDY_MOCK_ENABLED','HOMEFLOW_STUDY_SENTENCES_ENABLED'
  ];
  for(const flag of flags)assert.ok(workerConfig.includes(flag+' = "true"'),flag+' not enabled');
- assert.match(app,/<template v-if="homeflowIdentityUser">/);
- assert.match(app,/<StudyHomeFlowAccess @identity-changed="onHomeflowIdentityChanged" \/>/);
+ assert.doesNotMatch(app,/<template v-if="homeflowIdentityUser">/);
+ assert.match(app,/<StudyHomeFlowAccess v-if="homeflowIdentityUser" account-only/);
  assert.match(app,/<section v-else-if="!authenticated && !homeflowIdentityUser" class="auth-screen"/);
- assert.match(app,/旧知学密码空间与家庭账号分开保护/);
+ assert.match(app,/const LEGACY_QUARANTINE='zhixue:legacy-cache-quarantine-v1'/);
  assert.doesNotMatch(app,/authenticated\.value\s*=\s*!!homeflowIdentityUser/);
  assert.doesNotMatch(app,/旧版学习资料不会自动显示或归属其他家庭成员/);
 });
 
-test('HomeFlow SSO restores original Zhixue shell without rendering legacy actor data',()=>{
- const start=app.indexOf('        <template v-if="homeflowIdentityUser">')
- const end=app.indexOf('        <template v-else>\n        <StudyHomeFlowAccess v-if="activeModule',start)
- assert.ok(start>=0&&end>start,'signed-actor content must be a distinct view')
- const signed=app.slice(start,end)
+test('HomeFlow SSO and legacy password reuse ONE original four-module template',()=>{
  assert.match(app,/<div v-else class="app-shell">/)
  assert.match(app,/class="sidebar"/)
  assert.match(app,/class="mobile-nav"/)
- assert.match(signed,/class="hero-panel"/)
- assert.match(signed,/class="module-grid"/)
- assert.match(signed,/<StudyHomeFlowAccess :active-module="activeModule"/)
- assert.doesNotMatch(signed,/savedVocabularyEntries|examRecords|questionProgressById|dailyCloudStates/)
- assert.match(ui,/defineProps<\{activeModule\?:StudyModule\}>/)
- for(const page of ['home','exam','practical','language','dictionary']){
-  assert.ok(ui.includes("activeModule === '"+page+"'"),'private route missing '+page)
+ assert.match(app,/class="hero-panel"/)
+ assert.match(app,/class="module-grid"/)
+ for(const name of ['exam','practical','language']){
+  assert.ok(app.includes("activeModule === '"+name+"'"),'original module absent: '+name)
  }
+ assert.match(app,/dictionaryView === 'saved'/)
+ assert.match(app,/function resetVisiblePersonalStudyState\(\)/)
+ assert.match(app,/const classicStudyTransport=createClassicStudyFetch/)
+ assert.match(app,/<StudyHomeFlowAccess v-if="homeflowIdentityUser" account-only/)
+ assert.match(ui,/accountOnly\?:boolean/)
+ assert.doesNotMatch(app,/<template v-if="homeflowIdentityUser">/)
+ assert.doesNotMatch(app,/<StudyHomeFlowAccess :active-module="activeModule"/)
  assert.match(app,/v-if="!homeflowIdentityUser" class="auth-logout"/)
- assert.doesNotMatch(app,/<section v-else-if="homeflowIdentityUser" class="homeflow-study-screen"/)
-});
+})
