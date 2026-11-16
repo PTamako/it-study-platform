@@ -9,6 +9,8 @@ import StudyHomeFlowExams from './StudyHomeFlowExams.vue'
 import StudyHomeFlowMock from './StudyHomeFlowMock.vue'
 import StudyHomeFlowSentences from './StudyHomeFlowSentences.vue'
 import StudyHomeFlowVocabulary from './StudyHomeFlowVocabulary.vue'
+import StudyHomeFlowDictionary from './StudyHomeFlowDictionary.vue'
+import StudyHomeFlowPractical from './StudyHomeFlowPractical.vue'
 import {validateStudyHomeflowAuthorizationUrl} from './homeflow-authorization-url.mjs'
 
 type Identity={user_id:string;household_id:string;role:'owner'|'member';display_name:string}
@@ -160,7 +162,7 @@ onUnmounted(()=>{
 </script>
 
 <template>
- <section v-if="enabled" class="hf-study-card" aria-label="HomeFlow 统一账号">
+ <section v-if="enabled" class="hf-study-card" :class="{'hf-account-compact':activeModule!=='home'}" aria-label="HomeFlow 统一账号">
   <div class="hf-title"><strong>HomeFlow 统一账号</strong>
    <span v-if="identity" class="hf-linked">已关联</span>
   </div>
@@ -168,7 +170,7 @@ onUnmounted(()=>{
    {{ identity.display_name }} · {{ identity.role==='owner'?'家庭管理员':'家庭成员' }}
   </p>
   <p v-else class="hf-description">使用已有 HomeFlow 账号授权，不需要新建知学密码。</p>
-  <p v-if="identity" class="hf-note">每日任务、语法、听力、单词、语言卡、练习错题、成绩与 SG/FE 模拟考试使用独立身份接口；原本机队列仍待隔离。</p>
+  <p v-if="identity && activeModule==='home'" class="hf-note">考试、日语、英语与生词进度只属于当前账号。</p>
   <p v-else-if="pending" class="hf-note">在 Safari 完成授权后，返回此 PWA 点击「完成登录」。</p>
   <p v-if="error" class="hf-error" role="alert">{{ error }}</p>
   <div class="hf-actions">
@@ -214,12 +216,21 @@ onUnmounted(()=>{
    :user-id="identity.user_id" :role="identity.role" />
   </template>
   <template v-if="!activeModule || activeModule === 'practical'">
+  <StudyHomeFlowPractical v-if="identity" :key="'practical:'+identity.user_id"
+   :user-id="identity.user_id" :role="identity.role" />
+  </template>
+  <template v-if="!activeModule || activeModule === 'language'">
   <StudyHomeFlowSentences v-if="identity" :key="'sentences:'+identity.user_id"
    :user-id="identity.user_id" />
   </template>
   <template v-if="!activeModule || activeModule === 'dictionary'">
-  <StudyHomeFlowVocabulary v-if="identity" :key="'vocabulary:'+identity.user_id"
-   :user-id="identity.user_id" :role="identity.role" />
+  <StudyHomeFlowDictionary v-if="identity" :key="'dictionary:'+identity.user_id"
+   :user-id="identity.user_id" />
+  <details class="hf-advanced-vocabulary">
+    <summary>手动录入其他生词</summary>
+    <StudyHomeFlowVocabulary v-if="identity" :key="'vocabulary:'+identity.user_id"
+      :user-id="identity.user_id" :role="identity.role" />
+  </details>
   </template>
  </div>
 </template>
@@ -227,6 +238,16 @@ onUnmounted(()=>{
 <style scoped>
 .hf-study-panels{display:grid;gap:16px;width:100%;min-width:0}
 .hf-study-panels > *{min-width:0}
+.hf-study-card.hf-account-compact{display:flex;flex-wrap:wrap;align-items:center;max-width:none;
+ gap:8px 18px;padding:12px 16px;background:#f7f8ff;border-color:#e5e7f8}
+.hf-study-card.hf-account-compact .hf-note{display:none}
+.hf-study-card.hf-account-compact .hf-title{margin:0}
+.hf-study-card.hf-account-compact .hf-actions{margin-left:auto}
+.hf-study-card.hf-account-compact .hf-description{margin:0}
+.hf-advanced-vocabulary{margin-top:14px;border:1px solid #eceef5;border-radius:14px;
+ background:white;padding:12px 15px}
+.hf-advanced-vocabulary summary{cursor:pointer;color:#5968df;font-size:13px;font-weight:600}
+
 .hf-study-card{box-sizing:border-box;width:100%;min-width:0;max-width:none;
  padding:14px;border:1px solid var(--border-color,#dce5e0);
  border-radius:16px;background:var(--surface,#fff);display:grid;gap:8px}
