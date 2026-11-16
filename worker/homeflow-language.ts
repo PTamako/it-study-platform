@@ -56,7 +56,8 @@ async function catalog(env:Env,url:URL,actor:Actor){
   return json({code:'INVALID_LIMIT'},400)
  const rs=await env.DB.prepare(
   'SELECT c.id,c.language,c.category,c.term,c.reading,c.meaning_zh,'+
-  'c.example,c.example_meaning_zh,'+
+  'c.explanation,c.example,c.example_meaning_zh,c.source_url,'+
+  'c.vocabulary_expansion_json,c.grammar_expansion_json,'+
   'COALESCE(m.mastered,0) AS mastered,COALESCE(m.version,0) AS mastery_version,'+
   'COALESCE(r.review_count,0) AS review_count,COALESCE(r.correct_streak,0) AS correct_streak,'+
   'r.last_grade,r.next_review_at,COALESCE(r.version,0) AS review_version '+
@@ -69,8 +70,10 @@ async function catalog(env:Env,url:URL,actor:Actor){
  const rows=rs.results||[],part=rows.slice(0,limit)
  return json({ok:true,scope:'user',language:lang,items:part.map(r=>({
   id:r.id,language:r.language,category:r.category,term:r.term,
-  reading:r.reading,meaning_zh:r.meaning_zh,
+  reading:r.reading,meaning_zh:r.meaning_zh,explanation:r.explanation,
   example:r.example,example_meaning_zh:r.example_meaning_zh,
+  source_url:r.source_url,vocabulary_expansion_json:r.vocabulary_expansion_json,
+  grammar_expansion_json:r.grammar_expansion_json,
   mastered:r.mastered===1,mastery_version:r.mastery_version,
   review_count:r.review_count,correct_streak:r.correct_streak,
   last_grade:r.last_grade,next_review_at:r.next_review_at,
