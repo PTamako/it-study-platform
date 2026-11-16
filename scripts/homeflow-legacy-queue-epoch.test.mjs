@@ -101,7 +101,8 @@ test('three offline submission entry points are locked before creating a new pen
   assert.ok(idx>=0)
   assert.match(app.slice(idx,idx+250),/if\s*\(!studyAuthenticated\.value/)
  }
- assert.match(app,/function quarantineLegacyStudy\(userId:string\)\{\s*legacyOperationGeneration\+\+/)
+ assert.match(app,/function quarantineLegacyStudy\(userId:string\)\{[\s\S]*?legacyOperationGeneration\+\+/)
+ assert.match(app,/if\(homeflowIdentityUser\.value===userId&&!authenticated\.value\)return/)
  assert.match(app,/if\(mockTimer\)\{clearInterval\(mockTimer\);mockTimer=undefined\}/)
  assert.match(app,/function legacyWorkCurrent\(generation:number\)/)
  assert.match(app,/generation===legacyOperationGeneration&&legacyWritesAllowed\(\)/)
