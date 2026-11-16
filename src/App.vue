@@ -35,6 +35,7 @@ const authReady = ref(false)
 // after switching HomeFlow accounts on a shared iPhone.
 const LEGACY_QUARANTINE='zhixue:legacy-cache-quarantine-v1'
 const homeflowIdentityUser=ref<string|null>(null)
+const studyAuthenticated=computed(()=>authenticated.value||Boolean(homeflowIdentityUser.value))
 const legacyRequiresPassword=ref((()=>{
  try{return localStorage.getItem(LEGACY_QUARANTINE)==='1'}
  catch{return false}
@@ -3143,6 +3144,8 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
         <div class="breadcrumb"><span>我的空间</span><ChevronRight :size="14" /><strong>{{ activeModule === 'home' ? '学习首页' : currentInfo.title }}</strong></div>
         <div class="top-actions">
           <button v-if="!homeflowIdentityUser" class="auth-logout" type="button" :disabled="authLoading" @click="logout" aria-label="退出登录">退出登录</button>
+          <StudyHomeFlowAccess v-if="homeflowIdentityUser" account-only
+            @identity-changed="onHomeflowIdentityChanged" />
           <button class="icon-button mobile-menu-button" @click="showMobileMenu = !showMobileMenu" :aria-label="showMobileMenu ? '关闭菜单' : '打开菜单'" :aria-expanded="showMobileMenu" aria-controls="mobile-nav-list"><X v-if="showMobileMenu" :size="19" /><Menu v-else :size="19" /></button>
         </div>
       </header>
@@ -3154,55 +3157,6 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
       </nav>
 
       <div class="content-wrap">
-        <!-- Keep the original Zhixue app shell and navigation for both login methods.
-             All signed-actor content below comes only from /api/homeflow-study.
-             Never mount the unscoped legacy lessons or device cache for an SSO actor. -->
-        <template v-if="homeflowIdentityUser">
-          <section class="welcome-row">
-            <div>
-              <h1>{{ currentInfo.title }}</h1>
-              <p class="welcome-subtitle">每天学一点，进步看得见。学习记录仅属于当前 HomeFlow 账号。</p>
-            </div>
-          </section>
-          <template v-if="activeModule === 'home'">
-          <section class="hero-panel">
-            <div class="hero-content">
-
-              <h2>每天学一点，<br /><span>进步看得见。</span></h2>
-
-              <button class="primary-button" @click="navigate('exam')">开始练习 <ArrowRight :size="17" /></button>
-
-            </div>
-            <div class="hero-art" aria-hidden="true">
-              <div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div>
-              <div class="art-sun"></div>
-              <div class="art-book"><div class="book-page page-left"></div><div class="book-page page-right"></div><div class="book-spine"></div><span class="book-star">✳</span></div>
-
-              <span class="art-spark spark-a">✦</span><span class="art-spark spark-b">✳</span><span class="art-dot dot-a"></span><span class="art-dot dot-b"></span>
-            </div>
-          </section>
-
-          <section class="section-block">
-            <div class="section-heading"><div><h2>选择学习模块</h2></div></div>
-            <div class="module-grid">
-              <button v-for="item in modules" :key="item.id" class="module-card" @click="navigate(item.id)">
-                <div class="module-card-top"><span class="module-icon" :class="item.tone"><component :is="item.icon" :size="22" /></span><span class="card-arrow"><ArrowRight :size="17" /></span></div>
-                <h3>{{ item.title }}</h3><p>{{ item.desc }}</p>
-                <div class="module-card-foot"><span>{{ item.count }}</span><ChevronRight :size="15" /></div>
-              </button>
-            </div>
-          </section>
-
-          </template>
-          <section class="section-block homeflow-personal-panel">
-            <StudyHomeFlowAccess :active-module="activeModule"
-              @identity-changed="onHomeflowIdentityChanged" />
-          </section>
-          <p class="homeflow-study-legacy-note">旧知学密码空间与家庭账号分开保护。旧学习记录须经本人明确确认导入，不会自动显示给其他家庭成员。</p>
-        </template>
-        <template v-else>
-        <StudyHomeFlowAccess v-if="activeModule==='home'"
-          @identity-changed="onHomeflowIdentityChanged" />
         <section class="welcome-row">
           <div>
             
@@ -3734,9 +3688,9 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                 </article>
               </div>
             </section>
-            <DailyGrammarLesson :language="studyLanguage" :study-date="todayKey" :authenticated="authenticated"
+            <DailyGrammarLesson :language="studyLanguage" :study-date="todayKey" :authenticated="studyAuthenticated"
               @speak="(text, language) => speak(text, language, 'daily-grammar:' + studyLanguage)" />
-            <DailyListeningPractice :language="studyLanguage" :study-date="todayKey" :authenticated="authenticated"
+            <DailyListeningPractice :language="studyLanguage" :study-date="todayKey" :authenticated="studyAuthenticated"
               :audio-status="speechStatus" :audio-status-target="speechStatusTarget"
               :audio-playing="speechPlaying" :audio-paused="speechPaused"
               @speak="(text, language, target) => speak(text, language, target)"
@@ -3975,7 +3929,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                         {{ dictionaryAiBusy && dictionaryAiActiveKey === dictionaryAiKey(entry) ? 'AI 解释中…'
                           : (!entry.zh || (!entry.en && !entry.englishTerm) || !entry.translationJa) ? 'AI 补充释义' : 'AI 语境解析' }}
                       </button>
-                      <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次' : 'AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small><button v-if="authenticated && dictionaryAiRemaining === null" type="button" class="text-link" @click="loadDictionaryAiQuota">查看剩余</button>
+                      <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次' : 'AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small><button v-if="studyAuthenticated && dictionaryAiRemaining === null" type="button" class="text-link" @click="loadDictionaryAiQuota">查看剩余</button>
                     </div>
                     <div v-if="dictionaryAiAnswers[dictionaryAiKey(entry)]" class="dictionary-ai-result">
                       <strong>AI 辅助解析</strong>
@@ -3998,7 +3952,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   :disabled="dictionaryAiBusy" @click="supplementDictionaryWithAi(null)">
                   {{ dictionaryAiBusy && dictionaryAiActiveKey === dictionaryAiKey(null) ? 'AI 解释中…' : 'AI 辅助解释' }}
                 </button>
-                <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次' : 'AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small><button v-if="authenticated && dictionaryAiRemaining === null" type="button" class="text-link" @click="loadDictionaryAiQuota">查看剩余</button>
+                <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次' : 'AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small><button v-if="studyAuthenticated && dictionaryAiRemaining === null" type="button" class="text-link" @click="loadDictionaryAiQuota">查看剩余</button>
                 <div v-if="dictionaryAiAnswers[dictionaryAiKey(null)]" class="dictionary-ai-result">
                   <strong>AI 辅助解析</strong><p>{{ dictionaryAiAnswers[dictionaryAiKey(null)] }}</p>
                   <small>AI 仅供参考，并非权威词典释义。</small>
@@ -4046,7 +4000,6 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
           </section>
         </template>
 
-        </template>
         <footer class="footer"><span>知学</span></footer>
       </div>
     </main>
