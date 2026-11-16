@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 
 const ui=readFileSync(new URL('../src/StudyHomeFlowAccess.vue',import.meta.url),'utf8')
+const workerConfig=readFileSync(new URL('../wrangler.toml',import.meta.url),'utf8')
 const app=readFileSync(new URL('../src/App.vue',import.meta.url),'utf8')
 const daily=readFileSync(new URL('../src/StudyHomeFlowDailyTasks.vue',import.meta.url),'utf8')
 const grammar=readFileSync(new URL('../src/StudyHomeFlowGrammar.vue',import.meta.url),'utf8')
@@ -351,3 +352,20 @@ test('Stage E personal vocabulary UI has verified origin and no old shared cache
  assert.match(word,/onUnmounted\(\(\)=>\{/)
  assert.doesNotMatch(word,/localStorage\.|sessionStorage\.|indexedDB\./)
 })
+
+test('production enables every signed-actor study module without granting legacy auth',()=>{
+ const flags=[
+  'HOMEFLOW_STUDY_SSO_ENABLED','HOMEFLOW_STUDY_VOCAB_ENABLED',
+  'HOMEFLOW_STUDY_DAILY_PROGRESS_ENABLED','HOMEFLOW_STUDY_DAILY_WORDS_ENABLED',
+  'HOMEFLOW_STUDY_GRAMMAR_ENABLED','HOMEFLOW_STUDY_LISTENING_ENABLED',
+  'HOMEFLOW_STUDY_LANGUAGE_ENABLED','HOMEFLOW_STUDY_EXAMS_ENABLED',
+  'HOMEFLOW_STUDY_MOCK_ENABLED','HOMEFLOW_STUDY_SENTENCES_ENABLED'
+ ];
+ for(const flag of flags)assert.ok(workerConfig.includes(flag+' = "true"'),flag+' not enabled');
+ assert.match(app,/<section v-else-if="homeflowIdentityUser" class="homeflow-study-screen"/);
+ assert.match(app,/<StudyHomeFlowAccess @identity-changed="onHomeflowIdentityChanged" \/>/);
+ assert.match(app,/<section v-else-if="!authenticated" class="auth-screen"/);
+ assert.match(app,/旧知学密码空间与家庭账号分开保护/);
+ assert.doesNotMatch(app,/authenticated\.value\s*=\s*!!?homeflowIdentityUser/);
+ assert.doesNotMatch(app,/旧版学习资料不会自动显示或归属其他家庭成员/);
+});
