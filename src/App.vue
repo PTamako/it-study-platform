@@ -3099,20 +3099,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
 <section v-if="!authReady" class="auth-screen" aria-live="polite">
     <div class="auth-card"><div class="auth-mark"><BookOpen :size="28" /></div><h1>知学</h1><p>正在确认登录状态…</p></div>
   </section>
-  <section v-else-if="homeflowIdentityUser" class="homeflow-study-screen" aria-label="知学统一账号学习空间">
-    <header class="homeflow-study-welcome">
-      <div class="homeflow-study-wordmark"><span class="brand-mark"><BookOpen :size="23" /></span><strong>知学</strong></div>
-      <h1>我的学习空间</h1>
-      <p>HomeFlow 统一账号已登录。下面的学习记录按本人身份单独保存。</p>
-    </header>
-    <main class="homeflow-study-main">
-      <StudyHomeFlowAccess @identity-changed="onHomeflowIdentityChanged" />
-      <p class="homeflow-study-legacy-note">
-        旧知学密码空间与家庭账号分开保护。你的旧学习记录可以通过各学习模块提供的本人确认导入功能逐步关联，不会自动共享给其他家庭成员。
-      </p>
-    </main>
-  </section>
-  <section v-else-if="!authenticated" class="auth-screen">
+  <section v-else-if="!authenticated && !homeflowIdentityUser" class="auth-screen">
     <form class="auth-card" @submit.prevent="login">
       <div class="auth-mark"><ShieldCheck :size="28" /></div>
           <h1>欢迎回来</h1>
@@ -3155,7 +3142,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
         <button class="mobile-brand" @click="navigate('home')"><span class="brand-mark"><BookOpen :size="20" /></span><strong>知学</strong></button>
         <div class="breadcrumb"><span>我的空间</span><ChevronRight :size="14" /><strong>{{ activeModule === 'home' ? '学习首页' : currentInfo.title }}</strong></div>
         <div class="top-actions">
-          <button class="auth-logout" type="button" :disabled="authLoading" @click="logout" aria-label="退出登录">退出登录</button>
+          <button v-if="!homeflowIdentityUser" class="auth-logout" type="button" :disabled="authLoading" @click="logout" aria-label="退出登录">退出登录</button>
           <button class="icon-button mobile-menu-button" @click="showMobileMenu = !showMobileMenu" :aria-label="showMobileMenu ? '关闭菜单' : '打开菜单'" :aria-expanded="showMobileMenu" aria-controls="mobile-nav-list"><X v-if="showMobileMenu" :size="19" /><Menu v-else :size="19" /></button>
         </div>
       </header>
@@ -3167,6 +3154,53 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
       </nav>
 
       <div class="content-wrap">
+        <!-- Keep the original Zhixue app shell and navigation for both login methods.
+             All signed-actor content below comes only from /api/homeflow-study.
+             Never mount the unscoped legacy lessons or device cache for an SSO actor. -->
+        <template v-if="homeflowIdentityUser">
+          <section class="welcome-row">
+            <div>
+              <h1>{{ currentInfo.title }}</h1>
+              <p class="welcome-subtitle">每天学一点，进步看得见。学习记录仅属于当前 HomeFlow 账号。</p>
+            </div>
+          </section>
+          <template v-if="activeModule === 'home'">
+          <section class="hero-panel">
+            <div class="hero-content">
+
+              <h2>每天学一点，<br /><span>进步看得见。</span></h2>
+
+              <button class="primary-button" @click="navigate('exam')">开始练习 <ArrowRight :size="17" /></button>
+
+            </div>
+            <div class="hero-art" aria-hidden="true">
+              <div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div>
+              <div class="art-sun"></div>
+              <div class="art-book"><div class="book-page page-left"></div><div class="book-page page-right"></div><div class="book-spine"></div><span class="book-star">✳</span></div>
+
+              <span class="art-spark spark-a">✦</span><span class="art-spark spark-b">✳</span><span class="art-dot dot-a"></span><span class="art-dot dot-b"></span>
+            </div>
+          </section>
+
+          <section class="section-block">
+            <div class="section-heading"><div><h2>选择学习模块</h2></div></div>
+            <div class="module-grid">
+              <button v-for="item in modules" :key="item.id" class="module-card" @click="navigate(item.id)">
+                <div class="module-card-top"><span class="module-icon" :class="item.tone"><component :is="item.icon" :size="22" /></span><span class="card-arrow"><ArrowRight :size="17" /></span></div>
+                <h3>{{ item.title }}</h3><p>{{ item.desc }}</p>
+                <div class="module-card-foot"><span>{{ item.count }}</span><ChevronRight :size="15" /></div>
+              </button>
+            </div>
+          </section>
+
+          </template>
+          <section class="section-block homeflow-personal-panel">
+            <StudyHomeFlowAccess :active-module="activeModule"
+              @identity-changed="onHomeflowIdentityChanged" />
+          </section>
+          <p class="homeflow-study-legacy-note">旧知学密码空间与家庭账号分开保护。旧学习记录须经本人明确确认导入，不会自动显示给其他家庭成员。</p>
+        </template>
+        <template v-else>
         <StudyHomeFlowAccess v-if="activeModule==='home'"
           @identity-changed="onHomeflowIdentityChanged" />
         <section class="welcome-row">
@@ -4012,6 +4046,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
           </section>
         </template>
 
+        </template>
         <footer class="footer"><span>知学</span></footer>
       </div>
     </main>
