@@ -1,0 +1,48 @@
+# Read-only, one-time production verification following the UI hotfix.
+name: Zhixue UI hotfix production static smoke
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/zhixue-static-smoke-once.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Inspect actual published manifest, static assets and health
+        env:
+          BASE_URL: https://it-study-platform.yupan6706.workers.dev
+          EXPECTED_RELEASE: 65a9d8fb868ab379d1c66b9176761abf3a316b5a
+        run: |
+          node --input-type=module <<'NODE'
+          const base=process.env.BASE_URL;
+          const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+          async function get(path) {
+            const response=await fetch(base+path+(path.includes('?')?'&':'?')+'verify='+Date.now(),{cache:'no-store'});
+            const ct=response.headers.get('content-type')||'';
+            if(!response.ok||!ct.includes('application/json'))throw new Error(path+' status='+response.status+' ct='+ct);
+            return response.json();
+          }
+          for(let n=1;n<=12;n++){
+            try{
+              const version=await get('/version.json');
+              const m=await get('/language-cards/manifest.json');
+              if(version.version!==process.env.EXPECTED_RELEASE)throw new Error('stale version '+version.version);
+              for(const lang of ['ja','en']){
+                const path=m[lang];
+                if(!new RegExp('^/language-cards/'+lang+'\\.[0-9a-f]{16}\\.json$').test(path))throw new Error('invalid '+lang+' path '+path);
+                const payload=await get(path);
+                if(!Array.isArray(payload.items)||payload.items.length!==5000)throw new Error('bad '+lang+' count');
+                console.log(lang+' resource ready: '+path+' (5000 cards)');
+              }
+              const health=await fetch(base+'/api/health',{cache:'no-store'});
+              if(!health.ok)throw new Error('health '+health.status);
+              console.log('PASS: released version '+version.version+' served all assets; /api/health 200');
+              process.exit(0);
+            }catch(e){console.error('check '+n+': '+e.message);if(n<12)await pause(12000)}
+          }
+          process.exit(1);
+          NODE
