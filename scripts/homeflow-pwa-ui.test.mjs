@@ -388,5 +388,21 @@ test('HomeFlow SSO and legacy password reuse ONE original four-module template',
  assert.match(ui,/accountOnly\?:boolean/)
  assert.doesNotMatch(app,/<template v-if="homeflowIdentityUser">/)
  assert.doesNotMatch(app,/<StudyHomeFlowAccess :active-module="activeModule"/)
- assert.match(app,/v-if="!homeflowIdentityUser" class="auth-logout"/)
+ assert.match(app,/v-if="!isMobileViewport && !homeflowIdentityUser" class="auth-logout"/)
+})
+
+test('mobile HomeFlow sign-out stays inside the existing navigation drawer, not the title bar',()=>{
+ const source=app
+ const header=source.slice(source.indexOf('<div class="top-actions">'),source.indexOf('</header>',source.indexOf('<div class="top-actions">')))
+ const drawer=source.slice(source.indexOf('<nav v-show="showMobileMenu"'),source.indexOf('</nav>',source.indexOf('<nav v-show="showMobileMenu"')))
+ assert.match(header,/v-if="!isMobileViewport && homeflowIdentityUser" account-only/)
+ assert.doesNotMatch(header,/v-if="homeflowIdentityUser" account-only/)
+ assert.match(drawer,/class="mobile-nav-account"/)
+ assert.match(drawer,/<StudyHomeFlowAccess v-if="homeflowIdentityUser" account-only/)
+ assert.match(drawer,/class="mobile-nav-logout"/)
+ assert.match(source,/mobileViewportQuery = window\.matchMedia\('\(max-width: 760px\)'\)/)
+ assert.match(source,/mobileViewportQuery\.removeEventListener\('change',updateMobileViewport\)/)
+ const style=readFileSync(new URL('../src/style.css',import.meta.url),'utf8')
+ assert.match(style,/\.mobile-nav-account \.hf-actions \.hf-secondary/)
+ assert.match(style,/\.mobile-nav-account \.hf-study-card\.hf-account-compact\.hf-account-only/)
 })
