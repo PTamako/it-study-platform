@@ -206,7 +206,7 @@ test('practical retry uses an immutable snapshot and ignores late responses afte
   assert.match(handlers, /requestId === scenarioSubmissionId && currentScenario\.value\?\.id === pending\.scenario_id/)
   assert.match(handlers, /translateScenarioExplanation\(pending\.scenario_id, feedback\)/)
   assert.match(handlers, /scenarioSubmissionId \+= 1/)
-  assert.match(handlers, /if \(!pending \|\| scenarioSubmitting\.value \|\| !authenticated\.value\) return/)
+  assert.match(handlers, /if \(!pending \|\| scenarioSubmitting\.value \|\| !legacyWorkCurrent\(generation\)\) return/)
   assert.match(handlers, /scenarioSubmitting\.value = false/)
 })
 

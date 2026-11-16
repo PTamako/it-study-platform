@@ -10,6 +10,7 @@ import { pathToFileURL } from 'node:url'
 const dir = await mkdtemp(join(tmpdir(), 'vocab-auth-'))
 const worker = (await readFile(new URL('../worker/index.ts', import.meta.url), 'utf8'))
   .replace("from './auth'", "from './auth.mts'")
+  .replace("import { homeflowStudyIdentity } from './homeflow-identity'", 'const homeflowStudyIdentity = async () => new Response("SSO disabled", {status:503})')
   .replace("import { feSeeds, seedUrl } from './fe-question-bank'", "const feSeeds = []; const seedUrl = () => ''")
 await writeFile(join(dir, 'index.mts'), inlineChineseDictionary(worker))
 await writeFile(join(dir, 'auth.mts'), await readFile(new URL('../worker/auth.ts', import.meta.url), 'utf8'))

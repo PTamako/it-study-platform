@@ -1,4 +1,15 @@
 import { checkWriteRateLimit, handleAuthRequest, requireAuth } from './auth'
+import { homeflowStudyIdentity } from './homeflow-identity'
+
+import { homeflowVocabulary } from './homeflow-vocabulary'
+import { homeflowDailyTasks } from './homeflow-daily-tasks'
+import { homeflowGrammar } from './homeflow-grammar'
+import { homeflowListening } from './homeflow-listening'
+import { homeflowDailyWords } from './homeflow-daily-words'
+import { homeflowLanguage } from './homeflow-language'
+import { homeflowExams } from './homeflow-exams'
+import { homeflowMockExam } from './homeflow-mock'
+import { homeflowMockReceipts } from './homeflow-mock-receipts'
 import { feSeeds, seedUrl } from './fe-question-bank'
 import { eligibleChineseWord, fetchChineseWordMetadata } from './chinese-word-dictionary'
 
@@ -45,6 +56,22 @@ export interface Env {
   JPDA_BRIDGE_STUDY_ACTOR_ID?: string
   AUTH_PASSWORD?: string
   AUTH_SESSION_SECRET?: string
+  HOMEFLOW_STUDY_SSO_ENABLED?: string
+  HOMEFLOW_STUDY_VOCAB_ENABLED?: string
+  HOMEFLOW_STUDY_DAILY_PROGRESS_ENABLED?: string
+  HOMEFLOW_STUDY_LANGUAGE_ENABLED?: string
+  HOMEFLOW_STUDY_EXAMS_ENABLED?: string
+  HOMEFLOW_STUDY_MOCK_ENABLED?: string
+  STUDY_PUBLIC_ORIGIN?: string
+  HOMEFLOW_OAUTH_ORIGIN?: string
+  STUDY_SSO_ENCRYPTION_KEY?: string
+  HOMEFLOW_STUDY_SERVICE?: Fetcher
+  DOCUMENT_STUDY_EXECUTION_ENABLED?: string
+  DOCUMENT_STUDY_EXECUTION_SECRET?: string
+  DOCUMENT_STUDY_PROOF_SECRET?: string
+  DOCUMENT_STUDY_SOURCE_SECRET?: string
+  DOCUMENT_STUDY_HOMEFLOW_SERVICE?: Fetcher
+  DOCUMENT_STUDY_SOURCE_SERVICE?: Fetcher
   // Owner-deployed Google Apps Script Web App. Optional; keep its URL and token server-side.
   GAS_TRANSLATOR_URL?: string
   GAS_TRANSLATOR_TOKEN?: string
@@ -1307,6 +1334,12 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
 
+    if (url.pathname === '/api/internal/document-study/execute' ||
+        url.pathname === '/api/internal/document-study/receipt') {
+      // Lazy import avoids resolution for old worker tests and unrelated routes.
+      const {documentStudyExecution}=await import('./document-study-execution')
+      return documentStudyExecution(request, env)
+    }
     if (url.pathname === '/api/bridge/document-assistant') return documentAssistantBridge(request, env)
     if (url.pathname === '/api/bridge/document-assistant/translate') return documentAssistantTranslateBridge(request, env)
 
@@ -1314,6 +1347,68 @@ export default {
       return new Response(null, { status: 204, headers: { 'allow': 'GET, POST, DELETE, OPTIONS' } })
     }
 
+    // Identity-only HomeFlow SSO is separated from all existing single-user
+    // personal study APIs until every personal D1 key and PWA cache is scoped.
+    if (url.pathname.startsWith('/api/homeflow-sso/'))
+      return homeflowStudyIdentity(request, env)
+    if (url.pathname === '/api/homeflow-study/sentences' ||
+        url.pathname === '/api/homeflow-study/sentences/status') {
+      // Load only for this new opt-in route; old legacy-worker test sandboxes
+      // and unrelated requests never need to resolve private sentence code.
+      const { homeflowSentences } = await import('./homeflow-sentences')
+      return homeflowSentences(request, env)
+    }
+    // New, strictly scoped per-user vocabulary API; legacy personal endpoints
+    // still require the old session and are never unlocked by the HF cookie.
+    if (url.pathname === '/api/homeflow-study/vocabulary' ||
+        url.pathname === '/api/homeflow-study/vocabulary/legacy/adopt')
+      return homeflowVocabulary(request, env)
+    // A separate per-person daily progress namespace; never let the new HF
+    // cookie authorize legacy /api/daily-tasks until all old caches isolate.
+    if (url.pathname === '/api/homeflow-study/daily-tasks' ||
+        url.pathname === '/api/homeflow-study/daily-tasks/status' ||
+        url.pathname === '/api/homeflow-study/daily-tasks/legacy/adopt')
+      return homeflowDailyTasks(request, env)
+    // Personal grammar answers must not inherit the single-user legacy session
+    // or its shared browser cache. Feature is OFF until release approval.
+    if (url.pathname === '/api/homeflow-study/grammar' ||
+        url.pathname === '/api/homeflow-study/grammar/status' ||
+        url.pathname === '/api/homeflow-study/grammar/legacy/adopt')
+      return homeflowGrammar(request, env)
+    // Listening is a new person-scoped namespace, not legacy /api/listening-progress.
+    if (url.pathname === '/api/homeflow-study/listening' ||
+        url.pathname === '/api/homeflow-study/listening/status' ||
+        url.pathname === '/api/homeflow-study/listening/legacy/adopt')
+      return homeflowListening(request, env)
+    // Personal word recall is always derived from the verified HomeFlow actor.
+    if (url.pathname === '/api/homeflow-study/daily-words' ||
+        url.pathname === '/api/homeflow-study/daily-words/status' ||
+        url.pathname === '/api/homeflow-study/daily-words/legacy/adopt')
+      return homeflowDailyWords(request, env)
+    // HomeFlow accounts have their own language mastery/review tables;
+    // never accept this session as the old single-user study session.
+    if (url.pathname === '/api/homeflow-study/language/status' ||
+        url.pathname === '/api/homeflow-study/language/cards' ||
+        url.pathname === '/api/homeflow-study/language/mastery' ||
+        url.pathname === '/api/homeflow-study/language/review' ||
+        url.pathname === '/api/homeflow-study/language/legacy/adopt')
+      return homeflowLanguage(request, env)
+    // No new HomeFlow exam identity may authorize old single-user attempts.
+    if (url.pathname === '/api/homeflow-study/exams/status' ||
+        url.pathname === '/api/homeflow-study/exams/questions' ||
+        url.pathname === '/api/homeflow-study/exams/attempts' ||
+        url.pathname === '/api/homeflow-study/exams/wrong' ||
+        url.pathname === '/api/homeflow-study/exams/history' ||
+        url.pathname === '/api/homeflow-study/exams/legacy/adopt')
+      return homeflowExams(request, env)
+    if (url.pathname === '/api/homeflow-study/exams/mock/status' ||
+        url.pathname === '/api/homeflow-study/exams/mock/questions' ||
+        url.pathname === '/api/homeflow-study/exams/mock/submit')
+      return homeflowMockExam(request, env)
+    if (url.pathname === '/api/homeflow-study/exams/mock/receipts' ||
+        url.pathname === '/api/homeflow-study/exams/mock/receipt' ||
+        url.pathname === '/api/homeflow-study/exams/mock/legacy/adopt')
+      return homeflowMockReceipts(request, env)
     const authResponse = await handleAuthRequest(request, env)
     if (authResponse) return authResponse
 
