@@ -3099,12 +3099,21 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
 <section v-if="!authReady" class="auth-screen" aria-live="polite">
     <div class="auth-card"><div class="auth-mark"><BookOpen :size="28" /></div><h1>知学</h1><p>正在确认登录状态…</p></div>
   </section>
+  <section v-else-if="homeflowIdentityUser" class="homeflow-study-screen" aria-label="知学统一账号学习空间">
+    <header class="homeflow-study-welcome">
+      <div class="homeflow-study-wordmark"><span class="brand-mark"><BookOpen :size="23" /></span><strong>知学</strong></div>
+      <h1>我的学习空间</h1>
+      <p>HomeFlow 统一账号已登录。下面的学习记录按本人身份单独保存。</p>
+    </header>
+    <main class="homeflow-study-main">
+      <StudyHomeFlowAccess @identity-changed="onHomeflowIdentityChanged" />
+      <p class="homeflow-study-legacy-note">
+        旧知学密码空间与家庭账号分开保护。你的旧学习记录可以通过各学习模块提供的本人确认导入功能逐步关联，不会自动共享给其他家庭成员。
+      </p>
+    </main>
+  </section>
   <section v-else-if="!authenticated" class="auth-screen">
-    <p v-if="homeflowIdentityUser" class="auth-card" role="status">
-      当前已连接 HomeFlow，旧版学习资料不会自动显示或归属其他家庭成员。
-      如需进入旧学习空间，请先退出 HomeFlow，再用原密码登录。
-    </p>
-    <form v-else class="auth-card" @submit.prevent="login">
+    <form class="auth-card" @submit.prevent="login">
       <div class="auth-mark"><ShieldCheck :size="28" /></div>
           <h1>欢迎回来</h1>
 
