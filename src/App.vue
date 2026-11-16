@@ -20,6 +20,7 @@ import ExamScratchTools from './ExamScratchTools.vue'
 import DailyGrammarLesson from './DailyGrammarLesson.vue'
 import DailyListeningPractice from './DailyListeningPractice.vue'
 import StudyHomeFlowAccess from './StudyHomeFlowAccess.vue'
+import {createClassicStudyFetch} from './homeflow-classic-fetch'
 import {
   BookOpen, Languages, Search, GraduationCap,
   ChevronRight, ChevronDown, Sparkles, Clock3, Flame, Bookmark, Volume2, ArrowRight,
@@ -35,6 +36,8 @@ const authReady = ref(false)
 // after switching HomeFlow accounts on a shared iPhone.
 const LEGACY_QUARANTINE='zhixue:legacy-cache-quarantine-v1'
 const homeflowIdentityUser=ref<string|null>(null)
+const classicStudyTransport=createClassicStudyFetch(()=>homeflowIdentityUser.value)
+const fetch=classicStudyTransport.request
 const studyAuthenticated=computed(()=>authenticated.value||Boolean(homeflowIdentityUser.value))
 const legacyRequiresPassword=ref((()=>{
  try{return localStorage.getItem(LEGACY_QUARANTINE)==='1'}
@@ -58,6 +61,7 @@ function quarantineLegacyStudy(userId:string){
  scenarioSubmitting.value=false
  examHistorySyncing.value=false
  homeflowIdentityUser.value=userId
+ classicStudyTransport.clear()
  // The same original template must NEVER keep the previous password user's
  // in-memory or queued data visible after an SSO account switch.
  resetVisiblePersonalStudyState()
@@ -82,6 +86,7 @@ function onHomeflowIdentityChanged(userId:string|null){
  if(homeflowIdentityUser.value){
   legacyOperationGeneration++
   homeflowIdentityUser.value=null
+  classicStudyTransport.clear()
   authenticated.value=false
   resetVisiblePersonalStudyState()
   // Never auto-open the old owner cache after a member logs out.
@@ -2248,6 +2253,9 @@ onMounted(async () => {
     // Speech playback will report its own browser/device error when requested.
   }
   await checkAuth()
+  if (homeflowIdentityUser.value) {
+    void hydrateClassicActorData(homeflowIdentityUser.value)
+  }
   if (legacyWritesAllowed()) {
    rolloverDailyTasks()
    restoreMockReview(); restoreActiveMockExam(); void syncExamHistory(); void hydrateCloudProgress(); void hydrateDailyWordProgress(); void refreshDailyTasks(todayKey.value); void reconcilePriorDailyTasks(); void syncPendingMockSubmission(); void syncPendingPracticeAttempt(); void syncPendingScenarioAttempt()
