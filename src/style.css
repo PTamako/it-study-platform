@@ -1573,3 +1573,53 @@ button[aria-disabled="true"] {
  .app-shell .homeflow-personal-panel .dictionary-card .dict-actions{flex-direction:row;flex-wrap:wrap}
  .app-shell .homeflow-personal-panel .hf-study-card.hf-account-compact{align-items:flex-start}
 }
+
+
+/* The original iPhone navigation drawer owns the sign-out control.
+   Keep the HomeFlow session control out of the narrow title bar. */
+@media (max-width:760px){
+ .mobile-nav-account{
+  min-width:0;
+  margin-top:7px;
+  padding-top:11px;
+  border-top:1px solid var(--line);
+ }
+ .mobile-nav-account .hf-study-card.hf-account-compact.hf-account-only{
+  display:block;
+  width:100%;
+  min-width:0;
+  max-width:none;
+  padding:0;
+  margin:0;
+  border:0;
+  background:transparent;
+  box-shadow:none;
+ }
+ .mobile-nav-account .hf-study-card.hf-account-only .hf-actions{
+  display:block;
+  margin:0;
+  width:100%;
+ }
+ .mobile-nav-account .hf-actions .hf-secondary,
+ .mobile-nav-account .mobile-nav-logout{
+  display:block;
+  width:100%;
+  min-height:46px;
+  margin:0;
+  padding:12px 14px;
+  border:1px solid #e7e9f1;
+  border-radius:10px;
+  background:#fafaff;
+  color:#626780;
+  font-size:13px;
+  font-weight:600;
+  text-align:left;
+  white-space:normal;
+  box-shadow:none;
+ }
+ .mobile-nav-account .hf-error{
+  font-size:12px;
+  overflow-wrap:anywhere;
+  margin:0 0 8px;
+ }
+}
