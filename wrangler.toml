@@ -37,6 +37,9 @@ service = "jp-document-assistant"
 binding = "AI"
 
 [vars]
+HOMEFLOW_STUDY_SSO_ENABLED = "true"
+DOCUMENT_STUDY_EXECUTION_ENABLED = "true"
+
 APP_ENV = "production"
 HOMEFLOW_OAUTH_ORIGIN = "https://homeflow.yupan6706.workers.dev"
 STUDY_PUBLIC_ORIGIN = "https://it-study-platform.yupan6706.workers.dev"
