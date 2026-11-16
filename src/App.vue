@@ -20,6 +20,7 @@ import ExamScratchTools from './ExamScratchTools.vue'
 import DailyGrammarLesson from './DailyGrammarLesson.vue'
 import DailyListeningPractice from './DailyListeningPractice.vue'
 import StudyHomeFlowAccess from './StudyHomeFlowAccess.vue'
+import {createClassicStudyFetch} from './homeflow-classic-fetch'
 import {
   BookOpen, Languages, Search, GraduationCap,
   ChevronRight, ChevronDown, Sparkles, Clock3, Flame, Bookmark, Volume2, ArrowRight,
@@ -30,11 +31,20 @@ type ModuleId = 'home' | 'exam' | 'practical' | 'language' | 'dictionary'
 
 const authenticated = ref(false)
 const authReady = ref(false)
+// Only a current, verified HomeFlow session can access an actor-prefixed cache.
+// Legacy single-password keys are never renamed, removed, or auto-claimed.
+function scopedStorageKey(key:string){
+ const actor=homeflowIdentityUser.value
+ return actor?'zhixue:actor:'+actor+':'+key:key
+}
 // The old single-password PWA has unlabelled localStorage/queued work.
 // Never auto-claim any of it for a new HomeFlow user or silently show it
 // after switching HomeFlow accounts on a shared iPhone.
 const LEGACY_QUARANTINE='zhixue:legacy-cache-quarantine-v1'
 const homeflowIdentityUser=ref<string|null>(null)
+const classicStudyTransport=createClassicStudyFetch(()=>homeflowIdentityUser.value)
+const fetch=classicStudyTransport.request
+const studyAuthenticated=computed(()=>authenticated.value||Boolean(homeflowIdentityUser.value))
 const legacyRequiresPassword=ref((()=>{
  try{return localStorage.getItem(LEGACY_QUARANTINE)==='1'}
  catch{return false}
@@ -48,6 +58,8 @@ function legacyWorkCurrent(generation:number){
  return generation===legacyOperationGeneration&&legacyWritesAllowed()
 }
 function quarantineLegacyStudy(userId:string){
+ // Same verified actor: refresh must not reset the original learner's current exam.
+ if(homeflowIdentityUser.value===userId&&!authenticated.value)return
  legacyOperationGeneration++
  // Disarm the old mock timer; do not submit another person's exam after SSO.
  if(mockTimer){clearInterval(mockTimer);mockTimer=undefined}
@@ -57,6 +69,10 @@ function quarantineLegacyStudy(userId:string){
  scenarioSubmitting.value=false
  examHistorySyncing.value=false
  homeflowIdentityUser.value=userId
+ classicStudyTransport.clear()
+ // The same original template must NEVER keep the previous password user's
+ // in-memory or queued data visible after an SSO account switch.
+ resetVisiblePersonalStudyState()
  if(!legacyRequiresPassword.value){
   legacyRequiresPassword.value=true
   try{localStorage.setItem(LEGACY_QUARANTINE,'1')}catch{/* fail closed in memory */}
@@ -74,11 +90,16 @@ function legacyWritesAllowed(){
  return authenticated.value&&!legacyRequiresPassword.value&&!homeflowIdentityUser.value
 }
 function onHomeflowIdentityChanged(userId:string|null){
- if(userId){quarantineLegacyStudy(userId);return}
+ if(userId){
+  if(userId===homeflowIdentityUser.value)return
+  quarantineLegacyStudy(userId);void hydrateClassicActorData(userId);return
+ }
  if(homeflowIdentityUser.value){
   legacyOperationGeneration++
   homeflowIdentityUser.value=null
+  classicStudyTransport.clear()
   authenticated.value=false
+  resetVisiblePersonalStudyState()
   // Never auto-open the old owner cache after a member logs out.
   // The legacy password form remains available by explicit choice.
  }
@@ -253,16 +274,19 @@ const cloudDashboard = ref<CloudDashboard | null>(null)
 const cloudDashboardError = ref('')
 async function loadCloudDashboard() {
   const actorGeneration=legacyOperationGeneration
-  if(!legacyWorkCurrent(actorGeneration))return
+  const signedActor=homeflowIdentityUser.value
+  const current=()=>signedActor?homeflowIdentityUser.value===signedActor:
+   legacyWorkCurrent(actorGeneration)
+  if(!current())return
   try {
     const response = await fetch('/api/dashboard')
     const data = await response.json() as CloudDashboard & { error?: string }
-    if(!legacyWorkCurrent(actorGeneration))return
+    if(!current())return
     if (!response.ok) throw new Error(data.error || '云端学习统计暂不可用')
     cloudDashboard.value = data
     cloudDashboardError.value = ''
   } catch (error) {
-    if(legacyWorkCurrent(actorGeneration))
+    if(current())
       cloudDashboardError.value = error instanceof Error ? error.message : '云端学习统计暂不可用'
   }
 }
@@ -292,6 +316,26 @@ function persistDailyPending() {
   catch { cloudDashboardError.value = '本设备存储不可用，待同步任务可能无法保留。' }
 }
 async function saveDailyTask(task: StudyTask, previousDone: boolean, replay?: PendingDailyTask) {
+  const signedActor=homeflowIdentityUser.value
+  if(signedActor){
+    const date=replay?.date||todayKey.value
+    const requested=task.done
+    try{
+      const response=await fetch('/api/daily-tasks',{method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({task_id:task.id,study_date:date,completed:requested})})
+      if(!response.ok)throw Error('个人每日任务尚未保存')
+      if(homeflowIdentityUser.value===signedActor) {
+        cloudDashboardError.value=''
+        void loadCloudDashboard()
+      }
+    }catch{
+      if(homeflowIdentityUser.value===signedActor)
+        cloudDashboardError.value='个人任务同步失败。请检查网络后重新点击该任务。'
+    }
+    if(homeflowIdentityUser.value===signedActor)void refreshDailyTasks(date)
+    return
+  }
   const actorGeneration=legacyOperationGeneration
   if(!legacyWorkCurrent(actorGeneration))return
   const taskId = task.id
@@ -341,6 +385,15 @@ async function saveDailyTask(task: StudyTask, previousDone: boolean, replay?: Pe
 }
 let dailyHydrationRun = 0
 function rolloverDailyTasks() {
+  if(homeflowIdentityUser.value){
+    const next=tokyoDate()
+    if(next!==todayKey.value){
+      todayKey.value=next
+      tasks.value=mergeDailyTaskTemplates(null,defaultTasks)
+      void refreshDailyTasks(next)
+    }
+    return
+  }
   if(!legacyWritesAllowed())return
   const next = tokyoDate()
   if (next === todayKey.value) return
@@ -380,6 +433,23 @@ function toggleDailyTask(id: string, checked: boolean) {
   void saveDailyTask(task, previousDone)
 }
 async function refreshDailyTasks(date: string) {
+  const signedActor=homeflowIdentityUser.value
+  if(signedActor){
+    const run=++dailyHydrationRun
+    try{
+      const response=await fetch('/api/daily-tasks?date='+encodeURIComponent(date))
+      if(!response.ok)throw Error('个人每日任务读取失败')
+      const data=await response.json() as {items?:Array<{task_id:string;completed:number}>}
+      if(!Array.isArray(data.items))throw Error('个人任务数据无效')
+      if(homeflowIdentityUser.value!==signedActor||run!==dailyHydrationRun||
+        todayKey.value!==date)return
+      tasks.value=mergeDailyTaskStates(tasks.value,data.items,()=>true)
+    }catch{
+      if(homeflowIdentityUser.value===signedActor&&run===dailyHydrationRun)
+        cloudDashboardError.value='个人任务暂时无法同步'
+    }
+    return
+  }
   const run = ++dailyHydrationRun
   const initial = tasks.value.map(task => ({ ...task }))
   const revisions = new Map(initial.map(task => [task.id, dailyTaskSaveRequestIds.get(date + ':' + task.id) || 0]))
@@ -423,7 +493,7 @@ function retryPendingDailyTask(intent: PendingDailyTask) {
   void saveDailyTask({ id: intent.taskId, done: intent.completed } as StudyTask, intent.base, intent)
 }
 let dailyRolloverTimer: ReturnType<typeof setInterval> | undefined
-function onDailyNetworkOnline() { if (authenticated.value) void hydrateDailyWordProgress() }
+function onDailyNetworkOnline() { if(homeflowIdentityUser.value)void hydrateClassicActorDailyWords(homeflowIdentityUser.value);else if(authenticated.value)void hydrateDailyWordProgress() }
 function onDailyVisibilityChange() {
   if (document.visibilityState === 'visible') {
     // A Safari account switch may occur while this installed PWA is asleep.
@@ -473,6 +543,18 @@ watch(examRecords, value => {
 // 将旧版本保存在浏览器的手动成绩记录迁移到 D1。先上传，再读取云端；每条记录带稳定 ID，失败时保留本地副本。
 let examHistorySyncGeneration: number | null = null
 async function syncExamHistory() {
+  const signedActor=homeflowIdentityUser.value
+  if(signedActor){
+    try{
+      const response=await fetch('/api/exam-history',{cache:'no-store'})
+      if(!response.ok)throw Error('个人历史记录读取失败')
+      const data=await response.json() as {items?:ExamRecord[]}
+      if(!Array.isArray(data.items))throw Error('个人考试历史格式异常')
+      if(homeflowIdentityUser.value===signedActor)examRecords.value=data.items
+    }catch{if(homeflowIdentityUser.value===signedActor)
+      cloudDashboardError.value='考试历史同步失败'}
+    return
+  }
   const generation=legacyOperationGeneration
   if(!legacyWorkCurrent(generation)||examHistorySyncGeneration===generation)return
   examHistorySyncGeneration=generation
@@ -536,6 +618,21 @@ async function syncExamHistory() {
   }
 }
 async function saveExamRecord(record: ExamRecord) {
+  const signedActor=homeflowIdentityUser.value
+  if(signedActor){
+    const saved={...record,id:record.id||crypto.randomUUID()}
+    try{
+      const response=await fetch('/api/exam-history',{method:'POST',
+        headers:{'content-type':'application/json'},body:JSON.stringify(saved)})
+      if(!response.ok)throw Error('个人成绩保存失败')
+      if(homeflowIdentityUser.value===signedActor){
+        examRecords.value=[...examRecords.value,saved]
+        void loadCloudDashboard()
+      }
+    }catch{if(homeflowIdentityUser.value===signedActor)
+      cloudDashboardError.value='个人成绩保存失败，请重试'}
+    return
+  }
   const generation=legacyOperationGeneration
   if(!legacyWorkCurrent(generation))return
   const savedRecord = { ...record, id: record.id || crypto.randomUUID() }
@@ -558,7 +655,7 @@ async function saveExamRecord(record: ExamRecord) {
   }
 }
 function addExamRecord() {
-  if(!legacyWritesAllowed())return
+  if(!studyAuthenticated.value)return
   const generation=legacyOperationGeneration
   const exam = window.prompt('记录哪项考试？例如 SG', 'SG')
   if (!exam?.trim()) return
@@ -682,7 +779,7 @@ const MOCK_REVIEW_KEY = 'zhixue:mock-review-v1'
 const mockStorageWarning = ref('')
 let mockTimer: ReturnType<typeof setInterval> | undefined
 function persistActiveMockExam() {
-  if(!legacyWritesAllowed()||!mockStarted.value)return
+  if(!studyAuthenticated.value||!mockStarted.value)return
   const snapshot: MockSnapshot<PracticeQuestion> = {
     track: selectedTrackId.value === 'exam-fe' ? 'exam-fe' : 'exam-sg',
     section: selectedTrackId.value === 'exam-fe' ? feMockSection.value : 'SG',
@@ -693,7 +790,7 @@ function persistActiveMockExam() {
     duration_minutes: mockDurationMinutes.value,
   }
   try {
-    localStorage.setItem(MOCK_ACTIVE_KEY, JSON.stringify(snapshot))
+    localStorage.setItem(scopedStorageKey(MOCK_ACTIVE_KEY), JSON.stringify(snapshot))
     mockStorageWarning.value = ''
   } catch {
     mockStorageWarning.value = '本机空间不足，模拟考试无法保存中途进度。请勿刷新页面。'
@@ -701,8 +798,8 @@ function persistActiveMockExam() {
 }
 watch([mockStarted, mockAnswers], persistActiveMockExam, { deep: true, flush: 'sync' })
 function restoreActiveMockExam() {
-  if (!authenticated.value || mockStarted.value || mockPendingSubmission.value) return
-  const raw = readStored<unknown>(MOCK_ACTIVE_KEY, null)
+  if (!studyAuthenticated.value || mockStarted.value || mockPendingSubmission.value) return
+  const raw = readStored<unknown>(scopedStorageKey(MOCK_ACTIVE_KEY), null)
   if (!raw) return
   const snapshot = parseMockSnapshot<PracticeQuestion>(raw)
   if (!snapshot) {
@@ -730,8 +827,8 @@ function restoreActiveMockExam() {
 // Keep a pending/graded review on the device when the browser reloads while
 // the server is saving an exam. No answer keys are cached before grading.
 function restoreMockReview() {
-  if (!authenticated.value || mockStarted.value || mockQuestions.value.length) return
-  const raw = readStored<unknown>(MOCK_REVIEW_KEY, null)
+  if (!studyAuthenticated.value || mockStarted.value || mockQuestions.value.length) return
+  const raw = readStored<unknown>(scopedStorageKey(MOCK_REVIEW_KEY), null)
   const snapshot = parseMockSnapshot<PracticeQuestion>(raw)
   if (!snapshot || (!mockPendingSubmission.value && !(raw as { graded?: boolean }).graded)) return
   selectedTrackId.value = snapshot.track
@@ -769,7 +866,7 @@ async function startMockExam() {
     if (!data.items || data.items.length !== required || (isFe ? data.section !== feMockSection.value || data.duration_minutes !== (feMockSection.value === 'A' ? 90 : 100) : data.section_counts?.A !== 48 || data.section_counts?.B !== 12)) {
       throw new Error('组卷结果不符合所选考试的题型、题数或时间要求，请稍后重试。')
     }
-    try { localStorage.removeItem(MOCK_REVIEW_KEY) } catch { /* best effort */ }
+    try { localStorage.removeItem(scopedStorageKey(MOCK_REVIEW_KEY)) } catch { /* best effort */ }
     mockQuestions.value = data.items
     mockAnswers.value = {}
     mockDurationMinutes.value = isFe ? (feMockSection.value === 'A' ? 90 : 100) : 120
@@ -802,8 +899,10 @@ const mockSyncing = ref(false)
 
 async function syncPendingMockSubmission() {
   const generation=legacyOperationGeneration
+  const actor=homeflowIdentityUser.value
+  const current=()=>actor?homeflowIdentityUser.value===actor:legacyWorkCurrent(generation)
   const pending = mockPendingSubmission.value
-  if (!pending || mockSyncing.value || !legacyWorkCurrent(generation)) return
+  if (!pending || mockSyncing.value || !current()) return
   mockSyncing.value = true
   try {
     const response = await fetch('/api/mock-exam/submit', {
@@ -814,7 +913,7 @@ async function syncPendingMockSubmission() {
       error?: string; submission_id?: string; correct_count?: number; total?: number; exam_name?: string; study_date?: string
       review?: Array<{ id: string; answer: string; explanation: string }>
     }
-    if (!legacyWorkCurrent(generation)) return
+    if (!current()) return
     if (!response.ok || data.submission_id !== pending.submission_id || !Number.isInteger(data.correct_count) || data.total !== pending.answers.length) {
       throw new Error(data.error || '交卷结果暂未成功同步。')
     }
@@ -829,27 +928,27 @@ async function syncPendingMockSubmission() {
       const review = reviewMap.get(question.id)
       return review ? { ...question, answer: review.answer, explanation: review.explanation } : question
     })
-    const snapshot = readStored<MockSnapshot<PracticeQuestion> | null>(MOCK_REVIEW_KEY, null)
+    const snapshot = readStored<MockSnapshot<PracticeQuestion> | null>(scopedStorageKey(MOCK_REVIEW_KEY), null)
     if (snapshot) {
-      try { localStorage.setItem(MOCK_REVIEW_KEY, JSON.stringify({ ...snapshot, questions: mockQuestions.value, graded: true })) }
+      try { localStorage.setItem(scopedStorageKey(MOCK_REVIEW_KEY), JSON.stringify({ ...snapshot, questions: mockQuestions.value, graded: true })) }
       catch { /* server has the immutable graded receipt */ }
     }
     const record: ExamRecord = { id: pending.submission_id, date: pending.study_date,
       correct: data.correct_count!, total: data.total!, exam: data.exam_name || pending.track }
     if (!examRecords.value.some(item => item.id === record.id)) examRecords.value.push(record)
     mockPendingSubmission.value = null
-    try { localStorage.removeItem('zhixue:mock-pending-v1') } catch { /* cloud receipt prevents duplicates */ }
+    try { localStorage.removeItem(scopedStorageKey('zhixue:mock-pending-v1')) } catch { /* cloud receipt prevents duplicates */ }
     mockError.value = ''
     void loadCloudDashboard()
   } catch (error) {
-    if(legacyWorkCurrent(generation))
+    if(current())
       mockError.value = (error instanceof Error ? error.message : '网络异常。') + ' 答卷已保留在本设备，可点击「重新同步」。'
   } finally {
-    if(generation===legacyOperationGeneration) mockSyncing.value = false
+    if(current())mockSyncing.value = false
   }
 }
 async function finishMockExam(autoSubmit = false) {
-  if (!legacyWritesAllowed() || !mockStarted.value || mockSubmitted.value) return
+  if (!studyAuthenticated.value || !mockStarted.value || mockSubmitted.value) return
   mockSubmitted.value = true
   mockStarted.value = false
   if (mockTimer) { clearInterval(mockTimer); mockTimer = undefined }
@@ -866,14 +965,14 @@ async function finishMockExam(autoSubmit = false) {
   }
   mockPendingSubmission.value = submission
   try {
-    localStorage.setItem(MOCK_REVIEW_KEY, JSON.stringify({
+    localStorage.setItem(scopedStorageKey(MOCK_REVIEW_KEY), JSON.stringify({
       track: selectedTrackId.value, section: submission.section,
       questions: mockQuestions.value, answers: mockAnswers.value,
       started_at: mockStartedAt.value, deadline: mockDeadline.value,
       duration_minutes: mockDurationMinutes.value, graded: false,
     }))
-    localStorage.setItem('zhixue:mock-pending-v1', JSON.stringify(submission))
-    localStorage.removeItem(MOCK_ACTIVE_KEY)
+    localStorage.setItem(scopedStorageKey('zhixue:mock-pending-v1'), JSON.stringify(submission))
+    localStorage.removeItem(scopedStorageKey(MOCK_ACTIVE_KEY))
   } catch {
     mockError.value += ' 浏览器本地保存失败；请勿关闭此页面直到同步完成。'
   }
@@ -885,7 +984,7 @@ function closeMockReview() {
   mockQuestions.value = []
   mockAnswers.value = {}
   mockError.value = ''
-  try { localStorage.removeItem(MOCK_REVIEW_KEY) } catch { /* optional local snapshot */ }
+  try { localStorage.removeItem(scopedStorageKey(MOCK_REVIEW_KEY)) } catch { /* optional local snapshot */ }
 }
 onUnmounted(() => { if (mockTimer) clearInterval(mockTimer); if (dailyRolloverTimer) clearInterval(dailyRolloverTimer); document.removeEventListener('visibilitychange', onDailyVisibilityChange); window.removeEventListener('online', onDailyNetworkOnline); window.removeEventListener('zhixue:update-available', onAppUpdateAvailable) })
 
@@ -1036,8 +1135,10 @@ type PendingScenarioAttempt = {
 const pendingScenarioAttempt = ref<PendingScenarioAttempt | null>(readStored('zhixue:scenario-pending-v1', null))
 async function syncPendingScenarioAttempt() {
   const generation=legacyOperationGeneration
+  const actor=homeflowIdentityUser.value
+  const current=()=>actor?homeflowIdentityUser.value===actor:legacyWorkCurrent(generation)
   const pending = pendingScenarioAttempt.value
-  if (!pending || scenarioSubmitting.value || !legacyWorkCurrent(generation)) return
+  if (!pending || scenarioSubmitting.value || !current()) return
   const requestId = ++scenarioSubmissionId
   scenarioSubmitting.value = true
   scenariosError.value = ''
@@ -1050,13 +1151,13 @@ async function syncPendingScenarioAttempt() {
     const data = await response.json() as {
       attempt_id?: string; score?: number; best_option?: string; correct?: boolean; feedback?: string; error?: string
     }
-    if (!legacyWorkCurrent(generation)) return
+    if (!current()) return
     if (!response.ok || data.attempt_id !== pending.attempt_id) {
       throw new Error(data.error || '实战结果尚未保存。')
     }
     if (pendingScenarioAttempt.value?.attempt_id === pending.attempt_id) {
       pendingScenarioAttempt.value = null
-      try { localStorage.removeItem('zhixue:scenario-pending-v1') } catch { /* cloud result is durable */ }
+      try { localStorage.removeItem(scopedStorageKey('zhixue:scenario-pending-v1')) } catch { /* cloud result is durable */ }
     }
     if (requestId === scenarioSubmissionId && currentScenario.value?.id === pending.scenario_id) {
       const feedback = String(data.feedback || '')
@@ -1070,16 +1171,16 @@ async function syncPendingScenarioAttempt() {
     }
     void loadCloudDashboard()
   } catch (error) {
-    if (legacyWorkCurrent(generation) && requestId === scenarioSubmissionId) {
+    if (current() && requestId === scenarioSubmissionId) {
       scenariosError.value = (error instanceof Error ? error.message : '网络异常。') + ' 实战答题保存在本设备，请重试同步。'
     }
   } finally {
     // A previous actor's reply must not release a new actor's submission.
-    if(generation===legacyOperationGeneration)scenarioSubmitting.value = false
+    if(current())scenarioSubmitting.value = false
   }
 }
 async function submitScenario() {
-  if(!legacyWritesAllowed())return
+  if(!studyAuthenticated.value)return
   const scenario = currentScenario.value
   const selected = selectedScenarioOption.value
   if (!scenario || !selected || scenarioSubmitting.value || scenarioResult.value) return
@@ -1097,7 +1198,7 @@ async function submitScenario() {
     duration_seconds: 0,
   }
   pendingScenarioAttempt.value = pending
-  try { localStorage.setItem('zhixue:scenario-pending-v1', JSON.stringify(pending)) }
+  try { localStorage.setItem(scopedStorageKey('zhixue:scenario-pending-v1'), JSON.stringify(pending)) }
   catch { scenariosError.value = '本机无法保存待同步实战答题，请勿关闭页面。' }
   await syncPendingScenarioAttempt()
 }
@@ -1408,8 +1509,10 @@ const practiceSaving = ref(false)
 
 async function syncPendingPracticeAttempt() {
   const generation=legacyOperationGeneration
+  const actor=homeflowIdentityUser.value
+  const current=()=>actor?homeflowIdentityUser.value===actor:legacyWorkCurrent(generation)
   const pending = pendingPracticeAttempt.value
-  if (!pending || practiceSaving.value || !legacyWorkCurrent(generation)) return
+  if (!pending || practiceSaving.value || !current()) return
   practiceSaving.value = true
   try {
     const response = await fetch('/api/attempts', {
@@ -1418,26 +1521,26 @@ async function syncPendingPracticeAttempt() {
       body: JSON.stringify(pending),
     })
     const data = await response.json() as { error?: string; attempt_id?: string; progress?: QuestionReviewProgress }
-    if (!legacyWorkCurrent(generation)) return
+    if (!current()) return
     if (!response.ok || data.attempt_id !== pending.attempt_id) {
       throw new Error(data.error || '答题记录尚未同步。')
     }
     if (data.progress) questionProgressById.value[pending.question_id] = data.progress
     if (pendingPracticeAttempt.value?.attempt_id === pending.attempt_id) {
       pendingPracticeAttempt.value = null
-      try { localStorage.removeItem('zhixue:practice-pending-v1') } catch { /* cloud receipt is durable */ }
+      try { localStorage.removeItem(scopedStorageKey('zhixue:practice-pending-v1')) } catch { /* cloud receipt is durable */ }
     }
     quizError.value = ''
     void loadCloudDashboard()
   } catch (error) {
-    if(legacyWorkCurrent(generation))
+    if(current())
       quizError.value = (error instanceof Error ? error.message : '网络异常。') + ' 答题保存在本设备，请重新同步。'
   } finally {
-    if(generation===legacyOperationGeneration)practiceSaving.value = false
+    if(current())practiceSaving.value = false
   }
 }
 async function submitPracticeAnswer() {
-  if(!legacyWritesAllowed())return
+  if(!studyAuthenticated.value)return
   const question = currentQuestion.value
   if (!question || !selectedOption.value || practiceSaving.value) return
   if (quizSubmitted.value) {
@@ -1454,7 +1557,7 @@ async function submitPracticeAnswer() {
     duration_seconds: quizStartedAt.value ? Math.max(0, Math.floor((Date.now() - quizStartedAt.value) / 1000)) : 0,
   }
   pendingPracticeAttempt.value = pending
-  try { localStorage.setItem('zhixue:practice-pending-v1', JSON.stringify(pending)) }
+  try { localStorage.setItem(scopedStorageKey('zhixue:practice-pending-v1'), JSON.stringify(pending)) }
   catch { quizError.value = '本机无法保存待同步答题，请勿关闭页面，直到同步成功。' }
   quizSubmitted.value = true
   if (answer === question.answer) quizCorrect.value += 1
@@ -1593,6 +1696,8 @@ function dailyWordReviewAvailable(language: 'ja' | 'en', term: string): boolean 
 }
 function recordDailyWordReview(language: 'ja' | 'en', term: string, remembered: boolean) {
   if (dailyWordSyncState.value === 'loading' || !dailyWordReviewAvailable(language, term)) return
+  const actor=homeflowIdentityUser.value
+  if(actor){void gradeClassicActorDailyWord(actor,language,term,remembered);return}
   // Preserve the visible five words once the learner has actually started,
   // including when the server is temporarily unavailable.
   const todaysSelection = dailyWordSelectionKey(language)
@@ -2243,6 +2348,9 @@ onMounted(async () => {
     // Speech playback will report its own browser/device error when requested.
   }
   await checkAuth()
+  if (homeflowIdentityUser.value) {
+    void hydrateClassicActorData(homeflowIdentityUser.value)
+  }
   if (legacyWritesAllowed()) {
    rolloverDailyTasks()
    restoreMockReview(); restoreActiveMockExam(); void syncExamHistory(); void hydrateCloudProgress(); void hydrateDailyWordProgress(); void refreshDailyTasks(todayKey.value); void reconcilePriorDailyTasks(); void syncPendingMockSubmission(); void syncPendingPracticeAttempt(); void syncPendingScenarioAttempt()
@@ -2391,7 +2499,7 @@ async function hydrateVocabulary() {
   vocabularyStatus.value = ''
   try {
     const rows = await fetchVocabularySnapshot(fetch)
-    if (loadId !== vocabularyLoadId || !authenticated.value) return
+    if (loadId !== vocabularyLoadId || !studyAuthenticated.value) return
     const localWords = [...savedWords.value]
     const cloudRows = new Map(rows.map(row => [vocabularyKey(row.term,row.language),row]))
     const pending = new Map<string, 'deleted' | 'unknown'>()
@@ -2440,7 +2548,7 @@ async function restoreVocabulary(key: string) {
     const response = await fetch('/api/vocabulary/saved', { method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ term, language, entry, explicit: true }) })
     if (!response.ok) throw new Error('同步未成功，请稍后重试。')
-    if (sessionId !== vocabularyLoadId || !authenticated.value) return
+    if (sessionId !== vocabularyLoadId || !studyAuthenticated.value) return
     const pending = new Map(vocabularyPending.value); pending.delete(key); vocabularyPending.value = pending
     vocabularyStatus.value = ''
     void loadCloudDashboard()
@@ -2487,7 +2595,7 @@ async function toggleSaved(entry: DictionaryEntry) {
       })
       const data = await response.json().catch(() => ({})) as { error?: string }
       if (!response.ok) throw new Error(data.error || '云端生词删除失败；本地收藏状态未更改。')
-      if (sessionId !== vocabularyLoadId || !authenticated.value) return
+      if (sessionId !== vocabularyLoadId || !studyAuthenticated.value) return
       const pending = new Map(vocabularyPending.value); pending.delete(key); vocabularyPending.value = pending
       savedWords.value = savedWords.value.filter(word => word !== key)
       savedDictionaryEntries.value = savedDictionaryEntries.value.filter(entry => vocabularyKey(entry.term,entry.language||'auto')!==key)
@@ -2509,7 +2617,7 @@ async function toggleSaved(entry: DictionaryEntry) {
     })
     const data = await response.json().catch(() => ({})) as { error?: string }
     if (!response.ok) throw new Error(data.error || '生词未能保存到云端；本地收藏状态未更改。')
-    if (sessionId !== vocabularyLoadId || !authenticated.value) return
+    if (sessionId !== vocabularyLoadId || !studyAuthenticated.value) return
     savedWords.value = [...savedWords.value, key]
     if(!savedDictionaryEntries.value.some(item=>vocabularyKey(item.term,item.language||'auto')===key)){
       savedDictionaryEntries.value=[word,...savedDictionaryEntries.value]
@@ -2535,7 +2643,7 @@ function resetDictionaryAiDisplay() {
   dictionaryAiErrors.value = {}
 }
 async function loadDictionaryAiQuota() {
-  if (!authenticated.value) return
+  if (!studyAuthenticated.value) return
   try {
     const response = await fetch('/api/dictionary/ai/status')
     if (!response.ok) return
@@ -2544,7 +2652,7 @@ async function loadDictionaryAiQuota() {
   } catch { /* The ordinary dictionary is independent of the AI quota endpoint. */ }
 }
 async function supplementDictionaryWithAi(entry: DictionaryEntry | null) {
-  if (dictionaryAiBusy.value || !authenticated.value) return
+  if (dictionaryAiBusy.value || !studyAuthenticated.value) return
   const term = (entry?.term || searchText.value).normalize('NFKC').trim()
   if (!term || term.length > 100) return
   const key = dictionaryAiKey(entry)
@@ -2594,7 +2702,7 @@ async function supplementDictionaryWithAi(entry: DictionaryEntry | null) {
 // AI translation is deliberately opt-in, and shares the existing daily allowance
 // with AI explanations. Regular dictionary queries never call Workers AI.
 async function translateMissingDictionaryWithAi() {
-  if (dictionaryAiBusy.value || !authenticated.value || dictSourceLang.value === 'it') return
+  if (dictionaryAiBusy.value || !studyAuthenticated.value || dictSourceLang.value === 'it') return
   const term = searchText.value.normalize('NFKC').trim().replace(/\s+/g, ' ')
   if (!term || term.length > 100) return
   const key = dictionaryAiKey(null)
@@ -2752,7 +2860,7 @@ async function lookupDictionary() {
       + (staticWordChecked ? '&static_word_checked=1' : '')
     // Short-lived per-session cache: repeated online lookups avoid both Worker
     // requests and D1 quota writes. Never cache failures or no-result responses.
-    const key = [requestedLanguage, q, staticWordChecked ? 'static' : 'full', authenticated.value ? 'owner' : 'public'].join('|')
+    const key = [requestedLanguage, q, staticWordChecked ? 'static' : 'full', (homeflowIdentityUser.value|| (authenticated.value?'legacy-owner':'public'))].join('|')
     const data = await dictionaryOnlineCache.lookup(key, async () => {
       const response = await fetch(url, {
         signal: AbortSignal.any([controller.signal, AbortSignal.timeout(18000)]),
@@ -2826,6 +2934,144 @@ function setDictionaryLanguage(language: 'auto' | 'ja' | 'en' | 'zh' | 'it') {
 watch(savedWords, value => {
   if(legacyWritesAllowed())localStorage.setItem('zhixue:saved-words', JSON.stringify(value))
 }, { deep: true })
+
+// Original Vue state, hydrated ONLY from verified HomeFlow data; no legacy cache
+// import, no aliasing of spouse storage, no copying old owner data into a member.
+const scopedWordVersions=new Map<string,number>()
+async function hydrateClassicActorData(actor:string){
+ const current=()=>homeflowIdentityUser.value===actor
+ if(!current())return
+ todayKey.value=tokyoDate()
+ // Only records already keyed to this verified actor can be resumed.
+ pendingPracticeAttempt.value=readStored<PendingPracticeAttempt|null>(
+  scopedStorageKey('zhixue:practice-pending-v1'),null)
+ pendingScenarioAttempt.value=readStored<PendingScenarioAttempt|null>(
+  scopedStorageKey('zhixue:scenario-pending-v1'),null)
+ mockPendingSubmission.value=readStored<PendingMockSubmission|null>(
+  scopedStorageKey('zhixue:mock-pending-v1'),null)
+ if(mockPendingSubmission.value)void syncPendingMockSubmission()
+ if(pendingPracticeAttempt.value)void syncPendingPracticeAttempt()
+ if(pendingScenarioAttempt.value)void syncPendingScenarioAttempt()
+ restoreMockReview();restoreActiveMockExam()
+ await Promise.allSettled([
+  loadExamTracks(),loadLanguageCards(),loadCloudDashboard(),
+  refreshDailyTasks(todayKey.value),syncExamHistory(),hydrateVocabulary(),
+  hydrateClassicActorLanguage(actor),hydrateClassicActorDailyWords(actor)
+ ])
+}
+async function hydrateClassicActorLanguage(actor:string){
+ const current=()=>homeflowIdentityUser.value===actor
+ languageProgressReady.value=false;languageProgressHydrating.value=true
+ try{
+  const [a,b]=await Promise.all([fetch('/api/language-progress'),fetch('/api/language-review')])
+  if(!a.ok||!b.ok)throw Error('PRIVATE_LANGUAGE_UNAVAILABLE')
+  const m=await a.json() as {items?:Array<{card_id:string;mastered:number}>}
+  const r=await b.json() as {items?:LanguageReview[]}
+  if(!Array.isArray(m.items)||!Array.isArray(r.items))throw Error('INVALID_LANGUAGE_DATA')
+  if(!current())return
+  completedLanguageCards.value=m.items.filter(row=>row.mastered===1).map(row=>row.card_id)
+  languageReviews.value=r.items
+  languageProgressReady.value=true
+  languageSyncError.value=''
+ }catch{if(current())languageSyncError.value='个人语言进度暂不可用，未读取旧缓存。'}
+ finally{if(current()){languageProgressHydrating.value=false;dailyScenesReady.value=true}}
+}
+async function hydrateClassicActorDailyWords(actor:string){
+ const current=()=>homeflowIdentityUser.value===actor
+ dailyWordSyncState.value='loading'
+ try{
+  const all:Record<string,DailyWordReview>={}
+  let cursor=''
+  for(let page=0;page<100;page++){
+   const response=await fetch('/api/homeflow-study/daily-words'+
+    (cursor?'?after='+encodeURIComponent(cursor):''),{cache:'no-store'})
+   if(!response.ok)throw Error('WORD_READ_UNAVAILABLE')
+   const data=await response.json() as {scope?:string;
+    items?:Array<{word_key:string;streak:number;last_date:string;
+      next_date:string;version:number}>;next_cursor?:string|null}
+   if(!current())return
+   if(data.scope!=='user'||!Array.isArray(data.items))throw Error('WORD_SCOPE_INVALID')
+   for(const row of data.items){
+    const parsed=parseDailyWordCloud([row])
+    if(row.word_key in all)throw Error('DUPLICATE_WORD')
+    all[row.word_key]=parsed[row.word_key]
+    scopedWordVersions.set(actor+':'+row.word_key,row.version)
+   }
+   if(!data.next_cursor)break
+   if(page===99)throw Error('TOO_MANY_WORDS')
+   cursor=data.next_cursor
+  }
+  if(!current())return
+  dailyWordProgress.value=all;dailyWordPending.value={}
+  dailyWordSyncState.value='ready';dailyWordSyncError.value=''
+  dailyWordSyncRevision.value++
+ }catch{if(current()){
+  dailyWordSyncState.value='offline'
+  dailyWordSyncError.value='个人单词记录暂不可用，未载入其他账号缓存。'
+ }}
+}
+async function gradeClassicActorDailyWord(actor:string,language:'ja'|'en',
+ term:string,remembered:boolean){
+ const key=dailyWordKey(language,term)
+ const version=scopedWordVersions.get(actor+':'+key)||0
+ try{
+  const response=await fetch('/api/homeflow-study/daily-words',{method:'POST',
+   headers:{'content-type':'application/json'},
+   body:JSON.stringify({word_key:key,remembered,study_date:todayKey.value,
+    expected_user_id:actor,expected_version:version})})
+  if(!response.ok)throw Error('WORD_GRADE_UNAVAILABLE')
+  const data=await response.json() as {ok?:boolean;scope?:string;
+   item?:{word_key:string;streak:number;last_date:string;next_date:string;version:number}}
+  if(homeflowIdentityUser.value!==actor)return
+  if(data.ok!==true||data.scope!=='user'||data.item?.word_key!==key)
+   throw Error('WORD_RECEIPT_INVALID')
+  const row=data.item
+  scopedWordVersions.set(actor+':'+key,row.version)
+  dailyWordProgress.value={...dailyWordProgress.value,[key]:{
+   streak:row.streak,lastDate:row.last_date,nextDate:row.next_date}}
+  dailyWordSyncError.value='';dailyWordSyncRevision.value++
+ }catch{if(homeflowIdentityUser.value===actor)
+  dailyWordSyncError.value='单词复习未保存，请在网络恢复后重试。'}
+}
+
+// Only volatile refs are cleared here. Never erase the original owner's old
+// localStorage: a later audited, owner-only import may still need those bytes.
+// All signed-user reloads must come from server-verified actor-scoped endpoints.
+function resetVisiblePersonalStudyState(){
+  ++legacyOperationGeneration
+  ++dailyHydrationRun; ++masterySyncGeneration; ++dailyWordHydrationRun
+  ++practiceLoadRequestId; ++practiceAnswerRequestId
+  ++questionProgressRequestId; ++scenarioLoadRequestId; ++scenarioSubmissionId
+  ++languageCardsLoadGeneration; ++vocabularyLoadId; ++dictionaryRequestId
+  scopedWordVersions.clear()
+  if(mockTimer){clearInterval(mockTimer);mockTimer=undefined}
+  languageCardsAbort?.abort()
+  dictionaryFetchController?.abort()
+  dictionaryOnlineCache.clear()
+  dailyTaskSaveQueues.clear(); dailyTaskSaveRequestIds.clear()
+  pendingDailyTasks.clear(); dailyCloudStates.clear()
+  tasks.value=mergeDailyTaskTemplates(null,defaultTasks)
+  examRecords.value=[]
+  cloudDashboard.value=null;cloudDashboardError.value=''
+  questionProgressById.value={}
+  quizQuestions.value=[];quizIndex.value=0;selectedOption.value=''
+  quizSubmitted.value=false;quizFinished.value=false;quizCorrect.value=0
+  mockQuestions.value=[];mockAnswers.value={}
+  mockStarted.value=false;mockSubmitted.value=false;mockPendingSubmission.value=null
+  pendingScenarioAttempt.value=null;pendingPracticeAttempt.value=null
+  scenarios.value=[];selectedScenarioId.value='';scenarioResult.value=null
+  scenarioExplanationTranslations.value={}
+  questionExplanationTranslations.value={}
+  completedLanguageCards.value=[];languageReviews.value=[]
+  languageProgressReady.value=false;languageProgressHydrating.value=true
+  dailyWordProgress.value={};dailyWordPending.value={}
+  dailyWordConflicts.value={};dailyWordSelections.value={}
+  dailySceneAssignments.value={}
+  savedWords.value=[];savedDictionaryEntries.value=[];recentDictionaryEntries.value=[]
+  vocabularyPending.value=new Map();vocabularySyncReady.value=false
+  vocabularyHydrating.value=true;onlineEntries.value=[];dictionaryAiAnswers.value={}
+  activeModule.value='home';showMobileMenu.value=false
+}
 
 function navigate(id: ModuleId) {
   stopSpeech()
@@ -3143,6 +3389,8 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
         <div class="breadcrumb"><span>我的空间</span><ChevronRight :size="14" /><strong>{{ activeModule === 'home' ? '学习首页' : currentInfo.title }}</strong></div>
         <div class="top-actions">
           <button v-if="!homeflowIdentityUser" class="auth-logout" type="button" :disabled="authLoading" @click="logout" aria-label="退出登录">退出登录</button>
+          <StudyHomeFlowAccess v-if="homeflowIdentityUser" account-only
+            @identity-changed="onHomeflowIdentityChanged" />
           <button class="icon-button mobile-menu-button" @click="showMobileMenu = !showMobileMenu" :aria-label="showMobileMenu ? '关闭菜单' : '打开菜单'" :aria-expanded="showMobileMenu" aria-controls="mobile-nav-list"><X v-if="showMobileMenu" :size="19" /><Menu v-else :size="19" /></button>
         </div>
       </header>
@@ -3154,55 +3402,6 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
       </nav>
 
       <div class="content-wrap">
-        <!-- Keep the original Zhixue app shell and navigation for both login methods.
-             All signed-actor content below comes only from /api/homeflow-study.
-             Never mount the unscoped legacy lessons or device cache for an SSO actor. -->
-        <template v-if="homeflowIdentityUser">
-          <section class="welcome-row">
-            <div>
-              <h1>{{ currentInfo.title }}</h1>
-              <p class="welcome-subtitle">每天学一点，进步看得见。学习记录仅属于当前 HomeFlow 账号。</p>
-            </div>
-          </section>
-          <template v-if="activeModule === 'home'">
-          <section class="hero-panel">
-            <div class="hero-content">
-
-              <h2>每天学一点，<br /><span>进步看得见。</span></h2>
-
-              <button class="primary-button" @click="navigate('exam')">开始练习 <ArrowRight :size="17" /></button>
-
-            </div>
-            <div class="hero-art" aria-hidden="true">
-              <div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div>
-              <div class="art-sun"></div>
-              <div class="art-book"><div class="book-page page-left"></div><div class="book-page page-right"></div><div class="book-spine"></div><span class="book-star">✳</span></div>
-
-              <span class="art-spark spark-a">✦</span><span class="art-spark spark-b">✳</span><span class="art-dot dot-a"></span><span class="art-dot dot-b"></span>
-            </div>
-          </section>
-
-          <section class="section-block">
-            <div class="section-heading"><div><h2>选择学习模块</h2></div></div>
-            <div class="module-grid">
-              <button v-for="item in modules" :key="item.id" class="module-card" @click="navigate(item.id)">
-                <div class="module-card-top"><span class="module-icon" :class="item.tone"><component :is="item.icon" :size="22" /></span><span class="card-arrow"><ArrowRight :size="17" /></span></div>
-                <h3>{{ item.title }}</h3><p>{{ item.desc }}</p>
-                <div class="module-card-foot"><span>{{ item.count }}</span><ChevronRight :size="15" /></div>
-              </button>
-            </div>
-          </section>
-
-          </template>
-          <section class="section-block homeflow-personal-panel">
-            <StudyHomeFlowAccess :active-module="activeModule"
-              @identity-changed="onHomeflowIdentityChanged" />
-          </section>
-          <p class="homeflow-study-legacy-note">旧知学密码空间与家庭账号分开保护。旧学习记录须经本人明确确认导入，不会自动显示给其他家庭成员。</p>
-        </template>
-        <template v-else>
-        <StudyHomeFlowAccess v-if="activeModule==='home'"
-          @identity-changed="onHomeflowIdentityChanged" />
         <section class="welcome-row">
           <div>
             
@@ -3734,9 +3933,11 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                 </article>
               </div>
             </section>
-            <DailyGrammarLesson :language="studyLanguage" :study-date="todayKey" :authenticated="authenticated"
+            <DailyGrammarLesson :language="studyLanguage" :study-date="todayKey" :authenticated="studyAuthenticated"
+              :user-id="homeflowIdentityUser||undefined" :request="fetch"
               @speak="(text, language) => speak(text, language, 'daily-grammar:' + studyLanguage)" />
-            <DailyListeningPractice :language="studyLanguage" :study-date="todayKey" :authenticated="authenticated"
+            <DailyListeningPractice :language="studyLanguage" :study-date="todayKey" :authenticated="studyAuthenticated"
+              :user-id="homeflowIdentityUser||undefined" :request="fetch"
               :audio-status="speechStatus" :audio-status-target="speechStatusTarget"
               :audio-playing="speechPlaying" :audio-paused="speechPaused"
               @speak="(text, language, target) => speak(text, language, target)"
@@ -3975,7 +4176,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                         {{ dictionaryAiBusy && dictionaryAiActiveKey === dictionaryAiKey(entry) ? 'AI 解释中…'
                           : (!entry.zh || (!entry.en && !entry.englishTerm) || !entry.translationJa) ? 'AI 补充释义' : 'AI 语境解析' }}
                       </button>
-                      <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次' : 'AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small><button v-if="authenticated && dictionaryAiRemaining === null" type="button" class="text-link" @click="loadDictionaryAiQuota">查看剩余</button>
+                      <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次' : 'AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small><button v-if="studyAuthenticated && dictionaryAiRemaining === null" type="button" class="text-link" @click="loadDictionaryAiQuota">查看剩余</button>
                     </div>
                     <div v-if="dictionaryAiAnswers[dictionaryAiKey(entry)]" class="dictionary-ai-result">
                       <strong>AI 辅助解析</strong>
@@ -3998,7 +4199,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
                   :disabled="dictionaryAiBusy" @click="supplementDictionaryWithAi(null)">
                   {{ dictionaryAiBusy && dictionaryAiActiveKey === dictionaryAiKey(null) ? 'AI 解释中…' : 'AI 辅助解释' }}
                 </button>
-                <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次' : 'AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small><button v-if="authenticated && dictionaryAiRemaining === null" type="button" class="text-link" @click="loadDictionaryAiQuota">查看剩余</button>
+                <small>{{ dictionaryAiRemaining === null ? '每日最多 20 次' : 'AI 剩余 ' + dictionaryAiRemaining + ' 次' }}</small><button v-if="studyAuthenticated && dictionaryAiRemaining === null" type="button" class="text-link" @click="loadDictionaryAiQuota">查看剩余</button>
                 <div v-if="dictionaryAiAnswers[dictionaryAiKey(null)]" class="dictionary-ai-result">
                   <strong>AI 辅助解析</strong><p>{{ dictionaryAiAnswers[dictionaryAiKey(null)] }}</p>
                   <small>AI 仅供参考，并非权威词典释义。</small>
@@ -4046,7 +4247,6 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
           </section>
         </template>
 
-        </template>
         <footer class="footer"><span>知学</span></footer>
       </div>
     </main>

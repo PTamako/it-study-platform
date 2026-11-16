@@ -56,7 +56,9 @@ test('language page contains the offline course and reuses existing browser TTS'
   assert.match(css,/\.daily-grammar-options button\{[^}]*min-height:44px/)
   assert.doesNotMatch(source,/fetch\(|\.prepare\(|\/api\/language|\.run\(|AI\.run\(/)
   assert.match(component,/\/api\/grammar-progress/)
-  assert.match(app,/:authenticated="authenticated"/)
+  assert.match(app,/:authenticated="studyAuthenticated"/)
+   assert.match(app,/:user-id="homeflowIdentityUser/)
+   assert.match(app,/:request="fetch"/)
   assert.doesNotMatch(component,/\/api\/dictionary\/ai|\/api\/language-review/)
 })
 

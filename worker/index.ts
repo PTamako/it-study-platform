@@ -1,5 +1,6 @@
 import { checkWriteRateLimit, handleAuthRequest, requireAuth } from './auth'
-import { homeflowStudyIdentity } from './homeflow-identity'
+import { homeflowStudyIdentity, verifiedStudyActor } from './homeflow-identity'
+import { homeflowClassicPersonal } from './homeflow-classic-personal'
 
 import { homeflowVocabulary } from './homeflow-vocabulary'
 import { homeflowDailyTasks } from './homeflow-daily-tasks'
@@ -1348,6 +1349,21 @@ export default {
       return new Response(null, { status: 204, headers: { 'allow': 'GET, POST, DELETE, OPTIONS' } })
     }
 
+    // Browser compatibility requests carry the user ID captured BEFORE a
+    // potentially delayed operation. Never let a cookie change turn a former
+    // person's pending write/read into another person's operation.
+    // This header is an assertion to verify, NOT an authorization credential.
+    const expectedClassicActor=request.headers.get('x-zhixue-expected-actor')
+    if(expectedClassicActor &&
+       (url.pathname.startsWith('/api/homeflow-study/')||
+        url.pathname.startsWith('/api/homeflow-classic/'))){
+      if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(expectedClassicActor))
+        return json({code:'ACTOR_ASSERTION_INVALID'},403)
+      const actual=await verifiedStudyActor(request,env)
+      if(!actual||actual.user_id.toLowerCase()!==expectedClassicActor.toLowerCase())
+        return json({code:'ACTOR_CHANGED'},403)
+    }
+
     // Identity-only HomeFlow SSO is separated from all existing single-user
     // personal study APIs until every personal D1 key and PWA cache is scoped.
     if (url.pathname.startsWith('/api/homeflow-sso/'))
@@ -1415,12 +1431,35 @@ export default {
         url.pathname === '/api/homeflow-study/exams/mock/receipt' ||
         url.pathname === '/api/homeflow-study/exams/mock/legacy/adopt')
       return homeflowMockReceipts(request, env)
+    if (url.pathname.startsWith('/api/homeflow-classic/'))
+      return homeflowClassicPersonal(request, env)
     const authResponse = await handleAuthRequest(request, env)
     if (authResponse) return authResponse
 
     if (protectedPersonalPaths.has(url.pathname)) {
       const authFailure = await requireAuth(request, env)
-      if (authFailure) return authFailure
+      // These catalogues contain no user or device state. Keep legacy
+      // credential paths closed, but let a freshly verified HomeFlow actor
+      // use the exact original quiz/catalogue UI and filtering controls.
+      // Personal history, daily tasks, mastery and wrong-answer queries
+      // are NOT permitted through this exception.
+      const classicSharedReads = new Set([
+        '/api/tracks','/api/questions','/api/mock-exam-questions',
+        '/api/question-categories','/api/question-classification-stats',
+        '/api/question-sources','/api/fe-exemption-sittings',
+        '/api/scenarios','/api/language-cards'
+      ])
+      const classicSharedActions = new Set([
+        '/api/translate-explanation','/api/dictionary/ai',
+        '/api/dictionary/ai/status','/api/fe-question-bank/install'
+      ])
+      if(authFailure){
+        const candidate = (request.method==='GET' && classicSharedReads.has(url.pathname)) ||
+          classicSharedActions.has(url.pathname)
+        const actor = candidate ? await verifiedStudyActor(request, env) : null
+        if(!actor || (url.pathname==='/api/fe-question-bank/install' &&
+           actor.role!=='owner')) return authFailure
+      }
       if (request.method !== 'GET') {
         const origin = request.headers.get('origin')
         let originMatches = false

@@ -15,7 +15,7 @@ import {validateStudyHomeflowAuthorizationUrl} from './homeflow-authorization-ur
 
 type Identity={user_id:string;household_id:string;role:'owner'|'member';display_name:string}
 type StudyModule='home'|'exam'|'practical'|'language'|'dictionary'
-defineProps<{activeModule?:StudyModule}>()
+defineProps<{activeModule?:StudyModule;accountOnly?:boolean}>()
 const emit=defineEmits<{(event:'identity-changed',userId:string|null):void}>()
 type Pending={state:string;resume_secret:string;expires_at:number}
 const KEY='zhixue:homeflow-sso-pending-v1'
@@ -162,7 +162,7 @@ onUnmounted(()=>{
 </script>
 
 <template>
- <section v-if="enabled" class="hf-study-card" :class="{'hf-account-compact':activeModule!=='home'}" aria-label="HomeFlow 统一账号">
+ <section v-if="enabled" class="hf-study-card" :class="{'hf-account-compact':activeModule!=='home','hf-account-only':accountOnly}" aria-label="HomeFlow 统一账号">
   <div class="hf-title"><strong>HomeFlow 统一账号</strong>
    <span v-if="identity" class="hf-linked">已关联</span>
   </div>
@@ -170,7 +170,7 @@ onUnmounted(()=>{
    {{ identity.display_name }} · {{ identity.role==='owner'?'家庭管理员':'家庭成员' }}
   </p>
   <p v-else class="hf-description">使用已有 HomeFlow 账号授权，不需要新建知学密码。</p>
-  <p v-if="identity && activeModule==='home'" class="hf-note">考试、日语、英语与生词进度只属于当前账号。</p>
+  <p v-if="identity && !accountOnly && activeModule==='home'" class="hf-note">考试、日语、英语与生词进度只属于当前账号。</p>
   <p v-else-if="pending" class="hf-note">在 Safari 完成授权后，返回此 PWA 点击「完成登录」。</p>
   <p v-if="error" class="hf-error" role="alert">{{ error }}</p>
   <div class="hf-actions">
@@ -186,7 +186,7 @@ onUnmounted(()=>{
    </template>
   </div>
  </section>
- <div v-if="identity" class="hf-study-panels">
+ <div v-if="identity && !accountOnly" class="hf-study-panels">
   <template v-if="!activeModule || activeModule === 'home'">
   <StudyHomeFlowDailyTasks v-if="identity" :key="identity.user_id"
    :user-id="identity.user_id" :role="identity.role" />
@@ -236,6 +236,11 @@ onUnmounted(()=>{
 </template>
 
 <style scoped>
+.hf-account-only{display:flex;align-items:center;gap:8px;padding:0;background:none;border:0;box-shadow:none;width:auto;min-width:0}
+.hf-account-only .hf-title,.hf-account-only .hf-description,.hf-account-only .hf-note{display:none}
+.hf-account-only .hf-actions{margin:0}
+.hf-account-only .hf-secondary{padding:8px 10px;font-size:11px;min-height:32px;border-radius:8px}
+
 .hf-study-panels{display:grid;gap:16px;width:100%;min-width:0}
 .hf-study-panels > *{min-width:0}
 .hf-study-card.hf-account-compact{display:flex;flex-wrap:wrap;align-items:center;max-width:none;

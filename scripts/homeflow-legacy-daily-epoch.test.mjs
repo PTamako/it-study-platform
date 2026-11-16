@@ -25,6 +25,7 @@ function setup(){
  let refreshes=0
  const state={
   pendingDailyTasks:pending,dailyTaskSaveQueues,dailyTaskSaveRequestIds,
+  homeflowIdentityUser:{value:null},
   todayKey:{value:'2026-11-14'},cloudDashboard:{value:{old:true}},
   cloudDashboardError:{value:''},
   localStorage:{setItem:(k,v)=>records.push([k,v])},

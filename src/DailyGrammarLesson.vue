@@ -6,7 +6,7 @@ import {
   loadGrammarOffline, saveGrammarOffline,
 } from './offline-grammar-store'
 
-const props = defineProps<{ language: GrammarLanguage; studyDate: string; authenticated: boolean }>()
+const props = defineProps<{ language: GrammarLanguage; studyDate: string; authenticated: boolean; userId?:string; request?:typeof fetch }>()
 const emit = defineEmits<{ speak: [text: string, language: 'ja-JP' | 'en-US'] }>()
 const today = computed(() => dailyGrammarLesson(props.studyDate, props.language))
 const previous = computed(() => previousGrammarLesson(props.studyDate, props.language))
@@ -18,7 +18,7 @@ const questions = computed(() => [
     ...question, id: previous.value.id + ':review:' + index, label: '昨日复习',
   })),
 ])
-const storageKey = computed(() => 'zhixue:daily-grammar-v1:' + props.studyDate + ':' + props.language)
+const storageKey = computed(() => (props.userId?'zhixue:user:'+props.userId+':':'zhixue:') + 'daily-grammar-v1:' + props.studyDate + ':' + props.language)
 const answers = ref<Record<string, number>>({})
 const cloudAnswers = ref<Record<string, number>>({})
 const syncMessage = ref('本机离线保存')
@@ -41,7 +41,7 @@ async function syncCloud(run: number, readFirst: boolean) {
   syncMessage.value = '正在同步…'
   try {
     if (readFirst) {
-      const response = await fetch('/api/grammar-progress?date=' + encodeURIComponent(props.studyDate) +
+      const response = await (props.request||fetch)('/api/grammar-progress?date=' + encodeURIComponent(props.studyDate) +
         '&language=' + encodeURIComponent(props.language), { cache: 'no-store' })
       if (!response.ok) throw new Error('云端练习记录暂不可用。')
       const data = await response.json() as { items?: unknown }
@@ -52,7 +52,7 @@ async function syncCloud(run: number, readFirst: boolean) {
     }
     const pending = pendingGrammarAnswers(answers.value, cloudAnswers.value, questions.value)
     if (pending.length) {
-      const response = await fetch('/api/grammar-progress', {
+      const response = await (props.request||fetch)('/api/grammar-progress', {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ date: props.studyDate, language: props.language, answers: pending }),
       })

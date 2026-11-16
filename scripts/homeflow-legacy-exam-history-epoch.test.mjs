@@ -21,6 +21,7 @@ function env(){
  let allowed=true
  const events=[]
  const sandbox={
+  homeflowIdentityUser:{value:null},
   legacyOperationGeneration:7,
   legacyWorkCurrent:g=>allowed&&g===sandbox.legacyOperationGeneration,
   legacyWritesAllowed:()=>allowed,
@@ -82,7 +83,7 @@ test('legacy exam history calls are bound to the login epoch before writing',()=
  assert.match(src,/let examHistorySyncGeneration: number \| null = null/)
  assert.match(src,/for \(const record of missing\) \{\s*if\(!legacyWorkCurrent\(generation\)\)return/)
  assert.match(src,/if\(examHistorySyncGeneration===generation\)\{/)
- assert.match(src,/async function saveExamRecord\(record: ExamRecord\) \{\s*const generation=legacyOperationGeneration/)
+ assert.match(src,/async function saveExamRecord\(record: ExamRecord\) \{\s*const signedActor=homeflowIdentityUser\.value/)
  assert.match(src,/async function removeExamRecords\(\) \{\s*if\(!legacyWritesAllowed\(\)\)return/)
  assert.match(src,/if \(confirmation !== '清除'\|\|!legacyWorkCurrent\(generation\)\) return/)
 })

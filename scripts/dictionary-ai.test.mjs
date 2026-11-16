@@ -204,7 +204,7 @@ test('AI endpoint is guarded by authentication, CSRF origin check and durable wr
 test('UI provides contextual AI actions without altering saved word snapshots',async()=>{
   const app=await readFile(new URL('../src/App.vue',import.meta.url),'utf8')
   assert.match(app,/function dictionaryAiKey\(entry: DictionaryEntry \| null\)/)
-  assert.match(app,/if \(dictionaryAiBusy\.value \|\| !authenticated\.value\) return/)
+  assert.match(app,/if \(dictionaryAiBusy\.value \|\| !studyAuthenticated\.value\) return/)
   assert.match(app,/dictionaryAiRequestId/)
   assert.match(app,/dictionaryAiAnswers\.value/)
   assert.match(app,/supplementDictionaryWithAi\(entry\)/)

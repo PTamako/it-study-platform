@@ -14,6 +14,8 @@ const props = defineProps<{
   audioPlaying: boolean
   audioPaused: boolean
   authenticated: boolean
+  userId?:string
+  request?:typeof fetch
 }>()
 const emit = defineEmits<{
   speak: [text: string, lang: 'ja-JP' | 'en-US', target: string]
@@ -21,7 +23,7 @@ const emit = defineEmits<{
   stop: []
 }>()
 const scenes = computed(() => dailyListeningScenes(props.studyDate, props.language))
-const storageKey = computed(() => 'zhixue:daily-listening-v1:' + props.studyDate + ':' + props.language)
+const storageKey = computed(() => (props.userId?'zhixue:user:'+props.userId+':':'zhixue:') + 'daily-listening-v1:' + props.studyDate + ':' + props.language)
 const answers = ref<Record<string, number>>({})
 const cloudAnswers = ref<Record<string, number>>({})
 const revealed = ref<Record<string, boolean>>({})
@@ -46,7 +48,7 @@ async function syncCloud(run: number, readFirst: boolean) {
   syncMessage.value = '正在同步…'
   try {
     if (readFirst) {
-      const response = await fetch('/api/listening-progress?date=' + encodeURIComponent(props.studyDate) +
+      const response = await (props.request||fetch)('/api/listening-progress?date=' + encodeURIComponent(props.studyDate) +
         '&language=' + encodeURIComponent(props.language), { cache: 'no-store' })
       if (!response.ok) throw new Error('云端听力记录暂不可用。')
       const data = await response.json() as { items?: unknown }
@@ -57,7 +59,7 @@ async function syncCloud(run: number, readFirst: boolean) {
     }
     const pending = pendingListeningAnswers(answers.value, cloudAnswers.value, scenes.value)
     if (pending.length) {
-      const response = await fetch('/api/listening-progress', {
+      const response = await (props.request||fetch)('/api/listening-progress', {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ date: props.studyDate, language: props.language, answers: pending }),
       })

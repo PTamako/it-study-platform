@@ -22,6 +22,8 @@ test('active mock exam snapshot remains unchanged for HomeFlow member and unveri
  const writes=new Map(),access={allowed:false}
  const env={
   legacyWritesAllowed:()=>access.allowed,
+  studyAuthenticated:{get value(){return access.allowed}},
+  scopedStorageKey:key=>key,
   mockStarted:{value:true},selectedTrackId:{value:'exam-sg'},
   feMockSection:{value:'A'},mockQuestions:{value:[{id:'q-1'}]},
   mockAnswers:{value:{'q-1':'a'}},mockStartedAt:{value:1000},
