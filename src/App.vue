@@ -240,6 +240,15 @@ const studyLanguage = ref<'ja' | 'en'>(readStored('zhixue:study-language', 'ja')
 const selectedLanguageCategory = ref('全部')
 const completedLanguageCards = ref<string[]>(readStored('zhixue:completed-language-cards', []))
 const showMobileMenu = ref(false)
+// Keep a single HomeFlow account control mounted: header on desktop,
+// navigation drawer on iPhone. No duplicate identity probes or sign-outs.
+const mobileViewportQuery = window.matchMedia('(max-width: 760px)')
+const isMobileViewport = ref(mobileViewportQuery.matches)
+function updateMobileViewport(event: MediaQueryListEvent) {
+  isMobileViewport.value = event.matches
+}
+onMounted(() => mobileViewportQuery.addEventListener('change',updateMobileViewport))
+onUnmounted(() => mobileViewportQuery.removeEventListener('change',updateMobileViewport))
 const savedWords = ref<string[]>(readStored('zhixue:saved-words', []))
 
 type StudyTask = { id: string; title: string; detail: string; minutes: number; done: boolean }
@@ -3388,17 +3397,23 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
         <button class="mobile-brand" @click="navigate('home')"><span class="brand-mark"><BookOpen :size="20" /></span><strong>知学</strong></button>
         <div class="breadcrumb"><span>我的空间</span><ChevronRight :size="14" /><strong>{{ activeModule === 'home' ? '学习首页' : currentInfo.title }}</strong></div>
         <div class="top-actions">
-          <button v-if="!homeflowIdentityUser" class="auth-logout" type="button" :disabled="authLoading" @click="logout" aria-label="退出登录">退出登录</button>
-          <StudyHomeFlowAccess v-if="homeflowIdentityUser" account-only
+          <button v-if="!isMobileViewport && !homeflowIdentityUser" class="auth-logout" type="button" :disabled="authLoading" @click="logout" aria-label="退出登录">退出登录</button>
+          <StudyHomeFlowAccess v-if="!isMobileViewport && homeflowIdentityUser" account-only
             @identity-changed="onHomeflowIdentityChanged" />
           <button class="icon-button mobile-menu-button" @click="showMobileMenu = !showMobileMenu" :aria-label="showMobileMenu ? '关闭菜单' : '打开菜单'" :aria-expanded="showMobileMenu" aria-controls="mobile-nav-list"><X v-if="showMobileMenu" :size="19" /><Menu v-else :size="19" /></button>
         </div>
       </header>
 
       <p v-if="authError" class="auth-error" role="alert">{{ authError }}</p>
-      <nav v-if="showMobileMenu" id="mobile-nav-list" class="mobile-nav" aria-label="主导航">
+      <nav v-show="showMobileMenu" id="mobile-nav-list" class="mobile-nav" aria-label="主导航">
         <button type="button" :class="{ active: activeModule === 'home' }" :aria-current="activeModule === 'home' ? 'page' : undefined" @click="navigate('home')">首页</button>
         <button v-for="item in modules" :key="item.id" type="button" :class="{ active: activeModule === item.id }" :aria-current="activeModule === item.id ? 'page' : undefined" @click="navigate(item.id)">{{ item.title }}</button>
+        <div v-if="isMobileViewport" class="mobile-nav-account">
+          <StudyHomeFlowAccess v-if="homeflowIdentityUser" account-only
+            @identity-changed="onHomeflowIdentityChanged" />
+          <button v-else class="mobile-nav-logout" type="button" :disabled="authLoading"
+            @click="logout">退出登录</button>
+        </div>
       </nav>
 
       <div class="content-wrap">
