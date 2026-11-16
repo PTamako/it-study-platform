@@ -19,10 +19,6 @@ function bodyOf(init?:RequestInit):Dict|null{
 }
 export function createClassicStudyFetch(actorId:Actor){
  const versions=new Map<string,number>()
- const api=async(path:string,init?:RequestInit)=>globalThis.fetch(path,{
-  ...init,cache:'no-store',credentials:'same-origin'})
- const post=async(path:string,data:Dict)=>api(path,{method:'POST',
-  headers:{'content-type':'application/json'},body:JSON.stringify(data)})
  const checked=async(response:Response,actor:string)=>{
   // A stale PWA promise cannot update a new actor's original UI refs.
   if(actorId()!==actor)return err('ACCOUNT_CHANGED',409)
@@ -38,7 +34,22 @@ export function createClassicStudyFetch(actorId:Actor){
   return response
  }
  const oldToNew=async(url:URL,init:RequestInit|undefined,actor:string):Promise<Response>=>{
+  // Freeze the ORIGINAL actor into every actor-specific network request.
+  // A cookie switch between queued operations can never re-attribute writes.
+  const api=async(path:string,options?:RequestInit)=>{
+   const headers=new Headers(options?.headers)
+   headers.set('x-zhixue-expected-actor',actor)
+   return globalThis.fetch(path,{...options,headers,
+    cache:'no-store',credentials:'same-origin'})
+  }
+  const post=(path:string,data:Dict)=>api(path,{method:'POST',
+   headers:{'content-type':'application/json'},body:JSON.stringify(data)})
   const path=url.pathname,method=(init?.method||'GET').toUpperCase()
+  if(path.startsWith('/api/homeflow-sso/'))
+   return checked(await globalThis.fetch(url.pathname+url.search,{
+    ...init,cache:'no-store',credentials:'same-origin'}),actor)
+  if(path.startsWith('/api/homeflow-study/'))
+   return verified(await api(url.pathname+url.search,init),actor)
   const payload=bodyOf(init)
   const params=url.searchParams
   if(sharedReadOnly.has(path)&&method==='GET'||signedShared.has(path)){
