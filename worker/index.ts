@@ -10,6 +10,7 @@ import { homeflowLanguage } from './homeflow-language'
 import { homeflowExams } from './homeflow-exams'
 import { homeflowMockExam } from './homeflow-mock'
 import { homeflowMockReceipts } from './homeflow-mock-receipts'
+import { homeflowPractical } from './homeflow-practical'
 import { feSeeds, seedUrl } from './fe-question-bank'
 import { eligibleChineseWord, fetchChineseWordMetadata } from './chinese-word-dictionary'
 
@@ -1358,6 +1359,11 @@ export default {
       const { homeflowSentences } = await import('./homeflow-sentences')
       return homeflowSentences(request, env)
     }
+    // Classic practical scenario catalog and grading are private per HomeFlow actor.
+    // Neither route can authenticate the legacy single-password study APIs.
+    if (url.pathname === '/api/homeflow-study/scenarios' ||
+        url.pathname === '/api/homeflow-study/scenarios/status')
+      return homeflowPractical(request, env)
     // New, strictly scoped per-user vocabulary API; legacy personal endpoints
     // still require the old session and are never unlocked by the HF cookie.
     if (url.pathname === '/api/homeflow-study/vocabulary' ||
