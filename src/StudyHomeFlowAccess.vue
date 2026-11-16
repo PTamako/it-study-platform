@@ -12,6 +12,8 @@ import StudyHomeFlowVocabulary from './StudyHomeFlowVocabulary.vue'
 import {validateStudyHomeflowAuthorizationUrl} from './homeflow-authorization-url.mjs'
 
 type Identity={user_id:string;household_id:string;role:'owner'|'member';display_name:string}
+type StudyModule='home'|'exam'|'practical'|'language'|'dictionary'
+defineProps<{activeModule?:StudyModule}>()
 const emit=defineEmits<{(event:'identity-changed',userId:string|null):void}>()
 type Pending={state:string;resume_secret:string;expires_at:number}
 const KEY='zhixue:homeflow-sso-pending-v1'
@@ -181,29 +183,51 @@ onUnmounted(()=>{
     </button>
    </template>
   </div>
+ </section>
+ <div v-if="identity" class="hf-study-panels">
+  <template v-if="!activeModule || activeModule === 'home'">
   <StudyHomeFlowDailyTasks v-if="identity" :key="identity.user_id"
    :user-id="identity.user_id" :role="identity.role" />
+  </template>
+  <template v-if="!activeModule || activeModule === 'language'">
   <StudyHomeFlowGrammar v-if="identity" :key="'grammar:'+identity.user_id"
    :user-id="identity.user_id" :role="identity.role" />
+  </template>
+  <template v-if="!activeModule || activeModule === 'language'">
   <StudyHomeFlowListening v-if="identity" :key="'listening:'+identity.user_id"
    :user-id="identity.user_id" :role="identity.role" />
+  </template>
+  <template v-if="!activeModule || activeModule === 'language'">
   <StudyHomeFlowDailyWords v-if="identity" :key="'daily-words:'+identity.user_id"
    :user-id="identity.user_id" :role="identity.role" />
+  </template>
+  <template v-if="!activeModule || activeModule === 'language'">
   <StudyHomeFlowLanguage v-if="identity" :key="'language:'+identity.user_id"
    :user-id="identity.user_id" :role="identity.role" />
+  </template>
+  <template v-if="!activeModule || activeModule === 'exam'">
   <StudyHomeFlowExams v-if="identity" :key="'exams:'+identity.user_id"
    :user-id="identity.user_id" :role="identity.role" />
+  </template>
+  <template v-if="!activeModule || activeModule === 'exam'">
   <StudyHomeFlowMock v-if="identity" :key="'mock:'+identity.user_id"
    :user-id="identity.user_id" :role="identity.role" />
+  </template>
+  <template v-if="!activeModule || activeModule === 'practical'">
   <StudyHomeFlowSentences v-if="identity" :key="'sentences:'+identity.user_id"
    :user-id="identity.user_id" />
+  </template>
+  <template v-if="!activeModule || activeModule === 'dictionary'">
   <StudyHomeFlowVocabulary v-if="identity" :key="'vocabulary:'+identity.user_id"
    :user-id="identity.user_id" :role="identity.role" />
- </section>
+  </template>
+ </div>
 </template>
 
 <style scoped>
-.hf-study-card{box-sizing:border-box;width:100%;min-width:0;max-width:560px;
+.hf-study-panels{display:grid;gap:16px;width:100%;min-width:0}
+.hf-study-panels > *{min-width:0}
+.hf-study-card{box-sizing:border-box;width:100%;min-width:0;max-width:none;
  padding:14px;border:1px solid var(--border-color,#dce5e0);
  border-radius:16px;background:var(--surface,#fff);display:grid;gap:8px}
 .hf-title{display:flex;align-items:center;justify-content:space-between;
