@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
-import {GraduationCap,ShieldCheck,ChevronRight,Volume2,CheckCircle2} from 'lucide-vue-next'
+import {ShieldCheck,ChevronRight,Volume2,CheckCircle2} from 'lucide-vue-next'
 import ExamScratchTools from './ExamScratchTools.vue'
 type Track='exam-sg'|'exam-fe'
 type Option={id:string;text:string}
