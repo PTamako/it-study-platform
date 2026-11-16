@@ -330,7 +330,8 @@ test('legacy language, dictionary and offline cache writers require original pas
  assert.match(dailyPending,/if\(!legacyWritesAllowed\(\)\)return/)
  const mock=app.slice(app.indexOf('function persistActiveMockExam()'),
   app.indexOf('watch([mockStarted, mockAnswers]'))
- assert.match(mock,/if\(!legacyWritesAllowed\(\)\|\|!mockStarted.value\)return/)
+ assert.match(mock,/if\(!studyAuthenticated\.value\|\|!mockStarted.value\)return/)
+ assert.match(mock,/scopedStorageKey\(MOCK_ACTIVE_KEY\)/)
  const words=app.slice(app.indexOf('function persistDailyWordState()'),
   app.indexOf('function parseDailyWordCloud'))
  assert.match(words,/if\(!legacyWritesAllowed\(\)\)return/)
