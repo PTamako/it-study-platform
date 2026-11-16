@@ -19,7 +19,7 @@ test('all four original navigation modules remain present for SSO',()=>{
  assert.match(access,/StudyHomeFlowPractical/)
  assert.match(access,/StudyHomeFlowLanguage/)
  assert.match(access,/StudyHomeFlowDictionary/)
- assert.match(access,/:activeModule/)
+ assert.match(access,/defineProps<\\{activeModule\\?:StudyModule\\}>/)
  assert.match(app,/<template v-if="homeflowIdentityUser">/)
  assert.match(app,/<template v-else>\s*<StudyHomeFlowAccess v-if="activeModule==='home'"/)
 })
