@@ -82,7 +82,7 @@ function legacyWritesAllowed(){
  return authenticated.value&&!legacyRequiresPassword.value&&!homeflowIdentityUser.value
 }
 function onHomeflowIdentityChanged(userId:string|null){
- if(userId){quarantineLegacyStudy(userId);return}
+ if(userId){quarantineLegacyStudy(userId);void hydrateClassicActorData(userId);return}
  if(homeflowIdentityUser.value){
   legacyOperationGeneration++
   homeflowIdentityUser.value=null
@@ -1679,6 +1679,8 @@ function dailyWordReviewAvailable(language: 'ja' | 'en', term: string): boolean 
 }
 function recordDailyWordReview(language: 'ja' | 'en', term: string, remembered: boolean) {
   if (dailyWordSyncState.value === 'loading' || !dailyWordReviewAvailable(language, term)) return
+  const actor=homeflowIdentityUser.value
+  if(actor){void gradeClassicActorDailyWord(actor,language,term,remembered);return}
   // Preserve the visible five words once the learner has actually started,
   // including when the server is temporarily unavailable.
   const todaysSelection = dailyWordSelectionKey(language)
@@ -2480,7 +2482,7 @@ async function hydrateVocabulary() {
   vocabularyStatus.value = ''
   try {
     const rows = await fetchVocabularySnapshot(fetch)
-    if (loadId !== vocabularyLoadId || !authenticated.value) return
+    if (loadId !== vocabularyLoadId || !studyAuthenticated.value) return
     const localWords = [...savedWords.value]
     const cloudRows = new Map(rows.map(row => [vocabularyKey(row.term,row.language),row]))
     const pending = new Map<string, 'deleted' | 'unknown'>()
@@ -2916,6 +2918,94 @@ watch(savedWords, value => {
   if(legacyWritesAllowed())localStorage.setItem('zhixue:saved-words', JSON.stringify(value))
 }, { deep: true })
 
+// Original Vue state, hydrated ONLY from verified HomeFlow data; no legacy cache
+// import, no aliasing of spouse storage, no copying old owner data into a member.
+const scopedWordVersions=new Map<string,number>()
+async function hydrateClassicActorData(actor:string){
+ const current=()=>homeflowIdentityUser.value===actor
+ if(!current())return
+ todayKey.value=tokyoDate()
+ await Promise.allSettled([
+  loadExamTracks(),loadLanguageCards(),loadCloudDashboard(),
+  refreshDailyTasks(todayKey.value),syncExamHistory(),hydrateVocabulary(),
+  hydrateClassicActorLanguage(actor),hydrateClassicActorDailyWords(actor)
+ ])
+}
+async function hydrateClassicActorLanguage(actor:string){
+ const current=()=>homeflowIdentityUser.value===actor
+ languageProgressReady.value=false;languageProgressHydrating.value=true
+ try{
+  const [a,b]=await Promise.all([fetch('/api/language-progress'),fetch('/api/language-review')])
+  if(!a.ok||!b.ok)throw Error('PRIVATE_LANGUAGE_UNAVAILABLE')
+  const m=await a.json() as {items?:Array<{card_id:string;mastered:number}>}
+  const r=await b.json() as {items?:LanguageReview[]}
+  if(!Array.isArray(m.items)||!Array.isArray(r.items))throw Error('INVALID_LANGUAGE_DATA')
+  if(!current())return
+  completedLanguageCards.value=m.items.filter(row=>row.mastered===1).map(row=>row.card_id)
+  languageReviews.value=r.items
+  languageProgressReady.value=true
+  languageSyncError.value=''
+ }catch{if(current())languageSyncError.value='个人语言进度暂不可用，未读取旧缓存。'}
+ finally{if(current()){languageProgressHydrating.value=false;dailyScenesReady.value=true}}
+}
+async function hydrateClassicActorDailyWords(actor:string){
+ const current=()=>homeflowIdentityUser.value===actor
+ dailyWordSyncState.value='loading'
+ try{
+  const all:Record<string,DailyWordReview>={}
+  let cursor=''
+  for(let page=0;page<100;page++){
+   const response=await fetch('/api/homeflow-study/daily-words'+
+    (cursor?'?after='+encodeURIComponent(cursor):''),{cache:'no-store'})
+   if(!response.ok)throw Error('WORD_READ_UNAVAILABLE')
+   const data=await response.json() as {scope?:string;
+    items?:Array<{word_key:string;streak:number;last_date:string;
+      next_date:string;version:number}>;next_cursor?:string|null}
+   if(!current())return
+   if(data.scope!=='user'||!Array.isArray(data.items))throw Error('WORD_SCOPE_INVALID')
+   for(const row of data.items){
+    const parsed=parseDailyWordCloud([row])
+    if(row.word_key in all)throw Error('DUPLICATE_WORD')
+    all[row.word_key]=parsed[row.word_key]
+    scopedWordVersions.set(actor+':'+row.word_key,row.version)
+   }
+   if(!data.next_cursor)break
+   if(page===99)throw Error('TOO_MANY_WORDS')
+   cursor=data.next_cursor
+  }
+  if(!current())return
+  dailyWordProgress.value=all;dailyWordPending.value={}
+  dailyWordSyncState.value='ready';dailyWordSyncError.value=''
+  dailyWordSyncRevision.value++
+ }catch{if(current()){
+  dailyWordSyncState.value='offline'
+  dailyWordSyncError.value='个人单词记录暂不可用，未载入其他账号缓存。'
+ }}
+}
+async function gradeClassicActorDailyWord(actor:string,language:'ja'|'en',
+ term:string,remembered:boolean){
+ const key=dailyWordKey(language,term)
+ const version=scopedWordVersions.get(actor+':'+key)||0
+ try{
+  const response=await fetch('/api/homeflow-study/daily-words',{method:'POST',
+   headers:{'content-type':'application/json'},
+   body:JSON.stringify({word_key:key,remembered,study_date:todayKey.value,
+    expected_user_id:actor,expected_version:version})})
+  if(!response.ok)throw Error('WORD_GRADE_UNAVAILABLE')
+  const data=await response.json() as {ok?:boolean;scope?:string;
+   item?:{word_key:string;streak:number;last_date:string;next_date:string;version:number}}
+  if(homeflowIdentityUser.value!==actor)return
+  if(data.ok!==true||data.scope!=='user'||data.item?.word_key!==key)
+   throw Error('WORD_RECEIPT_INVALID')
+  const row=data.item
+  scopedWordVersions.set(actor+':'+key,row.version)
+  dailyWordProgress.value={...dailyWordProgress.value,[key]:{
+   streak:row.streak,lastDate:row.last_date,nextDate:row.next_date}}
+  dailyWordSyncError.value='';dailyWordSyncRevision.value++
+ }catch{if(homeflowIdentityUser.value===actor)
+  dailyWordSyncError.value='单词复习未保存，请在网络恢复后重试。'}
+}
+
 // Only volatile refs are cleared here. Never erase the original owner's old
 // localStorage: a later audited, owner-only import may still need those bytes.
 // All signed-user reloads must come from server-verified actor-scoped endpoints.
@@ -2925,6 +3015,7 @@ function resetVisiblePersonalStudyState(){
   ++practiceLoadRequestId; ++practiceAnswerRequestId
   ++questionProgressRequestId; ++scenarioLoadRequestId; ++scenarioSubmissionId
   ++languageCardsLoadGeneration; ++vocabularyLoadId; ++dictionaryRequestId
+  scopedWordVersions.clear()
   if(mockTimer){clearInterval(mockTimer);mockTimer=undefined}
   languageCardsAbort?.abort()
   dictionaryFetchController?.abort()
