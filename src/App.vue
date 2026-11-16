@@ -263,16 +263,19 @@ const cloudDashboard = ref<CloudDashboard | null>(null)
 const cloudDashboardError = ref('')
 async function loadCloudDashboard() {
   const actorGeneration=legacyOperationGeneration
-  if(!legacyWorkCurrent(actorGeneration))return
+  const signedActor=homeflowIdentityUser.value
+  const current=()=>signedActor?homeflowIdentityUser.value===signedActor:
+   legacyWorkCurrent(actorGeneration)
+  if(!current())return
   try {
     const response = await fetch('/api/dashboard')
     const data = await response.json() as CloudDashboard & { error?: string }
-    if(!legacyWorkCurrent(actorGeneration))return
+    if(!current())return
     if (!response.ok) throw new Error(data.error || '云端学习统计暂不可用')
     cloudDashboard.value = data
     cloudDashboardError.value = ''
   } catch (error) {
-    if(legacyWorkCurrent(actorGeneration))
+    if(current())
       cloudDashboardError.value = error instanceof Error ? error.message : '云端学习统计暂不可用'
   }
 }
@@ -302,6 +305,26 @@ function persistDailyPending() {
   catch { cloudDashboardError.value = '本设备存储不可用，待同步任务可能无法保留。' }
 }
 async function saveDailyTask(task: StudyTask, previousDone: boolean, replay?: PendingDailyTask) {
+  const signedActor=homeflowIdentityUser.value
+  if(signedActor){
+    const date=replay?.date||todayKey.value
+    const requested=task.done
+    try{
+      const response=await fetch('/api/daily-tasks',{method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({task_id:task.id,study_date:date,completed:requested})})
+      if(!response.ok)throw Error('个人每日任务尚未保存')
+      if(homeflowIdentityUser.value===signedActor) {
+        cloudDashboardError.value=''
+        void loadCloudDashboard()
+      }
+    }catch{
+      if(homeflowIdentityUser.value===signedActor)
+        cloudDashboardError.value='个人任务同步失败。请检查网络后重新点击该任务。'
+    }
+    if(homeflowIdentityUser.value===signedActor)void refreshDailyTasks(date)
+    return
+  }
   const actorGeneration=legacyOperationGeneration
   if(!legacyWorkCurrent(actorGeneration))return
   const taskId = task.id
@@ -351,6 +374,15 @@ async function saveDailyTask(task: StudyTask, previousDone: boolean, replay?: Pe
 }
 let dailyHydrationRun = 0
 function rolloverDailyTasks() {
+  if(homeflowIdentityUser.value){
+    const next=tokyoDate()
+    if(next!==todayKey.value){
+      todayKey.value=next
+      tasks.value=mergeDailyTaskTemplates(null,defaultTasks)
+      void refreshDailyTasks(next)
+    }
+    return
+  }
   if(!legacyWritesAllowed())return
   const next = tokyoDate()
   if (next === todayKey.value) return
@@ -390,6 +422,23 @@ function toggleDailyTask(id: string, checked: boolean) {
   void saveDailyTask(task, previousDone)
 }
 async function refreshDailyTasks(date: string) {
+  const signedActor=homeflowIdentityUser.value
+  if(signedActor){
+    const run=++dailyHydrationRun
+    try{
+      const response=await fetch('/api/daily-tasks?date='+encodeURIComponent(date))
+      if(!response.ok)throw Error('个人每日任务读取失败')
+      const data=await response.json() as {items?:Array<{task_id:string;completed:number}>}
+      if(!Array.isArray(data.items))throw Error('个人任务数据无效')
+      if(homeflowIdentityUser.value!==signedActor||run!==dailyHydrationRun||
+        todayKey.value!==date)return
+      tasks.value=mergeDailyTaskStates(tasks.value,data.items,()=>true)
+    }catch{
+      if(homeflowIdentityUser.value===signedActor&&run===dailyHydrationRun)
+        cloudDashboardError.value='个人任务暂时无法同步'
+    }
+    return
+  }
   const run = ++dailyHydrationRun
   const initial = tasks.value.map(task => ({ ...task }))
   const revisions = new Map(initial.map(task => [task.id, dailyTaskSaveRequestIds.get(date + ':' + task.id) || 0]))
@@ -483,6 +532,18 @@ watch(examRecords, value => {
 // 将旧版本保存在浏览器的手动成绩记录迁移到 D1。先上传，再读取云端；每条记录带稳定 ID，失败时保留本地副本。
 let examHistorySyncGeneration: number | null = null
 async function syncExamHistory() {
+  const signedActor=homeflowIdentityUser.value
+  if(signedActor){
+    try{
+      const response=await fetch('/api/exam-history',{cache:'no-store'})
+      if(!response.ok)throw Error('个人历史记录读取失败')
+      const data=await response.json() as {items?:ExamRecord[]}
+      if(!Array.isArray(data.items))throw Error('个人考试历史格式异常')
+      if(homeflowIdentityUser.value===signedActor)examRecords.value=data.items
+    }catch{if(homeflowIdentityUser.value===signedActor)
+      cloudDashboardError.value='考试历史同步失败'}
+    return
+  }
   const generation=legacyOperationGeneration
   if(!legacyWorkCurrent(generation)||examHistorySyncGeneration===generation)return
   examHistorySyncGeneration=generation
@@ -546,6 +607,21 @@ async function syncExamHistory() {
   }
 }
 async function saveExamRecord(record: ExamRecord) {
+  const signedActor=homeflowIdentityUser.value
+  if(signedActor){
+    const saved={...record,id:record.id||crypto.randomUUID()}
+    try{
+      const response=await fetch('/api/exam-history',{method:'POST',
+        headers:{'content-type':'application/json'},body:JSON.stringify(saved)})
+      if(!response.ok)throw Error('个人成绩保存失败')
+      if(homeflowIdentityUser.value===signedActor){
+        examRecords.value=[...examRecords.value,saved]
+        void loadCloudDashboard()
+      }
+    }catch{if(homeflowIdentityUser.value===signedActor)
+      cloudDashboardError.value='个人成绩保存失败，请重试'}
+    return
+  }
   const generation=legacyOperationGeneration
   if(!legacyWorkCurrent(generation))return
   const savedRecord = { ...record, id: record.id || crypto.randomUUID() }
@@ -568,7 +644,7 @@ async function saveExamRecord(record: ExamRecord) {
   }
 }
 function addExamRecord() {
-  if(!legacyWritesAllowed())return
+  if(!studyAuthenticated.value)return
   const generation=legacyOperationGeneration
   const exam = window.prompt('记录哪项考试？例如 SG', 'SG')
   if (!exam?.trim()) return
