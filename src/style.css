@@ -1438,3 +1438,138 @@ button[aria-disabled="true"] {
  border-radius:12px;border:1px solid #e1e7f0;background:#fff;color:#6a7487;font-size:12px;line-height:1.65}
 @media(max-width:520px){.homeflow-study-screen{padding-inline:12px;gap:16px}
  .homeflow-study-main .hf-study-card{padding:14px}}
+
+/* Four original Zhixue modules — HomeFlow actor-backed presentation.
+   These selectors apply ONLY to SSO, never to the original password workspace.
+   Keep the original sidebar, mobile nav and module-card visual language. */
+.app-shell .homeflow-personal-panel{margin-top:24px;min-width:0}
+.app-shell .homeflow-personal-panel .hf-study-panels{display:grid;gap:24px;min-width:0}
+.app-shell .homeflow-personal-panel .hf-study-card{box-shadow:none;max-width:none}
+.app-shell .homeflow-personal-panel .hf-exams,
+.app-shell .homeflow-personal-panel .hf-mock,
+.app-shell .homeflow-personal-panel .hf-grammar,
+.app-shell .homeflow-personal-panel .hf-listening,
+.app-shell .homeflow-personal-panel .hf-words{
+ width:100%;max-width:none;min-width:0;border:1px solid #eceef5;background:white;
+ border-radius:16px;padding:19px 20px;box-sizing:border-box;
+ color:var(--ink);
+}
+.app-shell .homeflow-personal-panel .hf-exams{background:transparent;border:0;padding:0}
+.app-shell .homeflow-personal-panel .hf-exams .section-heading{margin:20px 0 13px}
+.app-shell .homeflow-personal-panel .hf-exams .exam-list{display:grid;gap:11px}
+.app-shell .homeflow-personal-panel .hf-exams .exam-card{width:100%;color:var(--ink)}
+.app-shell .homeflow-personal-panel .hf-exams .exam-card-selected{border-color:#777fe4;background:#f8f8ff}
+.app-shell .homeflow-personal-panel .hf-exams .hf-tabs{display:flex;flex-wrap:wrap;gap:7px;margin:12px 0 16px}
+.app-shell .homeflow-personal-panel .hf-exams .hf-tabs button{
+ border:1px solid #e5e7f0;background:white;border-radius:9px;padding:9px 14px;
+ font-size:12px;color:#73788d;min-height:40px;
+}
+.app-shell .homeflow-personal-panel .hf-exams .hf-tabs button[aria-pressed=true]{
+ border-color:#b3b6f4;background:#eeefff;color:#535fca;font-weight:700;
+}
+.app-shell .homeflow-personal-panel .hf-exams .hf-list{display:grid;gap:12px}
+.app-shell .homeflow-personal-panel .hf-exams .hf-card,
+.app-shell .homeflow-personal-panel .hf-mock .hf-question{
+ display:grid;gap:13px;min-width:0;padding:20px;border:1px solid #eceef5;
+ border-radius:15px;background:white;
+}
+.app-shell .homeflow-personal-panel :is(.hf-exams,.hf-mock) .hf-card>strong,
+.app-shell .homeflow-personal-panel .hf-mock .hf-question>strong{
+ font-size:15px;line-height:1.9;letter-spacing:.01em;
+}
+.app-shell .homeflow-personal-panel :is(.hf-exams,.hf-mock) .hf-option{
+ display:flex;gap:12px;align-items:center;padding:14px 16px;line-height:1.7;
+ border:1px solid #e7e9f1;border-radius:12px;background:#fff;min-width:0;
+ font-size:13px;color:#303650;cursor:pointer;
+}
+.app-shell .homeflow-personal-panel :is(.hf-exams,.hf-mock) .hf-option:has(input:checked){
+ border-color:#9ca4ed;background:#f1f2ff;color:#4553b8;
+}
+.app-shell .homeflow-personal-panel :is(.hf-exams,.hf-mock) .hf-option input{accent-color:#5968df}
+.app-shell .homeflow-personal-panel :is(.hf-exams,.hf-mock) button:not(.exam-card):not(.hf-tabs button),
+.app-shell .homeflow-personal-panel :is(.hf-grammar,.hf-listening,.hf-words,.hf-language) button{
+ min-height:40px;border-radius:10px;padding:10px 13px;font-size:12px;
+}
+.app-shell .homeflow-personal-panel :is(.hf-exams,.hf-mock) .hf-card>button,
+.app-shell .homeflow-personal-panel .hf-mock .hf-start>button{
+ border:1px solid #5968df;background:#5968df;color:white;font-weight:700;
+}
+.app-shell .homeflow-personal-panel .hf-mock .hf-title{margin-bottom:10px}
+.app-shell .homeflow-personal-panel :is(.hf-grammar,.hf-listening,.hf-words) :is(.hf-question,.hf-scene,.hf-word){
+ background:#fff;border:1px solid #eceef5;border-radius:13px;padding:16px;
+ margin-top:12px;min-width:0;
+}
+.app-shell .homeflow-personal-panel :is(.hf-grammar,.hf-listening,.hf-words) :is(.hf-options,.hf-word-actions){
+ display:flex;gap:9px;flex-wrap:wrap;
+}
+.app-shell .homeflow-personal-panel :is(.hf-grammar,.hf-listening) .hf-options button{
+ text-align:left;flex:1 1 180px;background:#fff;border:1px solid #e7e9f1;color:#393e56;
+}
+.app-shell .homeflow-personal-panel :is(.hf-grammar,.hf-listening) .hf-options button.selected{
+ background:#f1f2ff;border-color:#8993e9;color:#4c5bbf;
+}
+.app-shell .homeflow-personal-panel .hf-language{border:0;background:transparent;padding:0;min-width:0}
+.app-shell .homeflow-personal-panel .hf-language .language-banner{margin:0 0 17px}
+.app-shell .homeflow-personal-panel .hf-language .language-choice{margin-bottom:20px}
+.app-shell .homeflow-personal-panel .hf-language .language-card-list{display:grid;gap:14px}
+.app-shell .homeflow-personal-panel .hf-language .language-study-card{
+ display:block;border:1px solid #eceef5;background:white;border-radius:15px;
+ padding:18px;min-width:0;
+}
+.app-shell .homeflow-personal-panel .hf-language .language-study-card summary{
+ cursor:pointer;display:flex;align-items:flex-start;justify-content:space-between;
+ gap:12px;list-style:none;line-height:1.7;
+}
+.app-shell .homeflow-personal-panel .hf-language .language-study-card summary::-webkit-details-marker{display:none}
+.app-shell .homeflow-personal-panel .hf-language .language-study-card summary>span:first-child{
+ display:grid;gap:8px;min-width:0;
+}
+.app-shell .homeflow-personal-panel .hf-language .language-study-card summary .language-sentence{
+ font-size:17px;font-weight:700;color:#2c3045;
+}
+.app-shell .homeflow-personal-panel .hf-language .language-study-card .hf-details{
+ display:grid;gap:10px;margin-top:15px;
+}
+.app-shell .homeflow-personal-panel .hf-language .language-study-card .hf-review{display:flex;gap:8px;flex-wrap:wrap}
+.app-shell .homeflow-personal-panel .hf-language .language-study-card .hf-master{
+ color:#fff;background:#5968df;border:1px solid #5968df;font-weight:700;
+}
+.app-shell .homeflow-personal-panel .hf-advanced-vocabulary{max-width:none}
+.app-shell .homeflow-personal-panel .hf-import,
+.app-shell .homeflow-personal-panel .hf-adopt{background:white;border:1px solid #eceef5;
+ border-radius:12px;padding:12px;margin-top:12px}
+.app-shell .homeflow-personal-panel .hf-import summary,
+.app-shell .homeflow-personal-panel .hf-adopt summary{cursor:pointer;font-size:12px;color:#747b9e}
+.app-shell .homeflow-personal-panel .dictionary-view-switch,
+.app-shell .homeflow-personal-panel .dictionary-language-switch{
+ display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;
+}
+.app-shell .homeflow-personal-panel .dictionary-view-switch button,
+.app-shell .homeflow-personal-panel .dictionary-language-switch button{
+ border:1px solid #e6e9f4;background:white;color:#687086;border-radius:10px;
+ padding:9px 13px;font-size:12px;min-height:39px;
+}
+.app-shell .homeflow-personal-panel :is(.dictionary-view-switch,.dictionary-language-switch) button.active{
+ background:#eff0ff;color:#5662d5;border-color:#b9c0f1;font-weight:700;
+}
+.app-shell .homeflow-personal-panel .dictionary-search{margin-bottom:16px}
+.app-shell .homeflow-personal-panel .dictionary-search .search-box{padding-right:5px}
+.app-shell .homeflow-personal-panel .dictionary-card{min-width:0;overflow-wrap:anywhere}
+.app-shell .homeflow-personal-panel .dictionary-card .round-action{
+ min-width:34px;width:auto;padding:5px;font-size:10px;min-height:35px;
+}
+.app-shell .homeflow-personal-panel .homeflow-study-legacy-note{font-size:11px}
+@media(max-width:760px){
+ .app-shell .homeflow-personal-panel{margin-top:15px}
+ .app-shell .homeflow-personal-panel :is(.hf-exams,.hf-mock,.hf-grammar,.hf-listening,.hf-words){
+  padding:14px 12px;border-radius:13px;
+ }
+ .app-shell .homeflow-personal-panel .hf-exams{padding:0}
+ .app-shell .homeflow-personal-panel .hf-exams .hf-card,
+ .app-shell .homeflow-personal-panel .hf-mock .hf-question{padding:15px 12px}
+ .app-shell .homeflow-personal-panel .hf-language .language-study-card{padding:14px}
+ .app-shell .homeflow-personal-panel .hf-language .language-study-card summary{flex-direction:column}
+ .app-shell .homeflow-personal-panel .dictionary-card{flex-direction:column;align-items:stretch}
+ .app-shell .homeflow-personal-panel .dictionary-card .dict-actions{flex-direction:row;flex-wrap:wrap}
+ .app-shell .homeflow-personal-panel .hf-study-card.hf-account-compact{align-items:flex-start}
+}

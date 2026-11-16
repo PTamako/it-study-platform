@@ -126,6 +126,13 @@ async function adopt(kind:Kind){
  }catch(e){error.value=(e as Error).message}
  finally{busy.value=false}
 }
+function selectTrack(next:Track){
+ if(busy.value||loading.value||pending.value||track.value===next)return
+ track.value=next;info.value=''
+ for(const key of Object.keys(selected))delete selected[key]
+ for(const key of Object.keys(graded))delete graded[key]
+ void load()
+}
 function changeView(next:typeof tab.value){tab.value=next;info.value='';void load()}
 function resume(){if(document.visibilityState==='visible'&&!busy.value)void check()}
 onMounted(()=>{void check();document.addEventListener('visibilitychange',resume)})
@@ -137,16 +144,20 @@ onUnmounted(()=>{
 
 <template>
  <section v-if="enabled" class="hf-exams" aria-label="HomeFlow 个人考试">
-  <div class="hf-title">
-   <strong>我的考试练习</strong>
-   <label v-if="tab!=='history'">科目
-    <select v-model="track" aria-label="考试科目" :disabled="busy||loading" @change="load()">
-     <option value="exam-sg">SG</option>
-     <option value="exam-fe">FE</option>
-    </select>
-   </label>
+  <div class="section-heading"><div><h2>选择要准备的考试</h2>
+   <p>沿用知学原来的考试训练布局，进度仅保存到当前账号。</p></div></div>
+  <div class="exam-list">
+   <button v-for="option in (['exam-sg','exam-fe'] as Track[])" :key="option"
+    class="exam-card" :class="{'exam-card-selected':track===option}"
+    :disabled="busy||loading||!!pending" @click="selectTrack(option)">
+    <span class="exam-code" :class="option==='exam-fe'?'blue':'purple'">{{option==='exam-fe'?'FE':'SG'}}</span>
+    <span class="exam-info"><strong>{{option==='exam-fe'?'基本信息技术者考试':'信息安全管理考试'}}</strong>
+     <small>{{option==='exam-fe'?'FE 科目 A / B · 历年题与模拟':'SG 历年题 · 错题练习与模拟考试'}}</small></span>
+    <span class="exam-progress">个人练习</span>
+   </button>
   </div>
-  <div class="hf-tabs" aria-label="考试记录分类">
+  <div class="section-heading practice-heading"><div><h2>练习题与学习记录</h2></div></div>
+  <div class="hf-tabs question-review-filters" aria-label="考试记录分类">
    <button type="button" :aria-pressed="tab==='practice'" :disabled="busy"
     @click="changeView('practice')">练习</button>
    <button type="button" :aria-pressed="tab==='wrong'" :disabled="busy"
@@ -155,7 +166,7 @@ onUnmounted(()=>{
     @click="changeView('history')">成绩</button>
   </div>
   <div v-if="tab==='practice'" class="hf-list">
-   <article v-for="q in questions" :key="q.id" class="hf-card">
+   <article v-for="q in questions" :key="q.id" class="hf-card panel question-card">
     <small>{{q.topic}} · {{q.id}}</small>
     <strong>{{q.prompt}}</strong>
     <label v-for="op in q.options" :key="op.id" class="hf-option">
@@ -172,7 +183,7 @@ onUnmounted(()=>{
    <small v-if="!questions.length&&!loading">暂无对应题目</small>
   </div>
   <div v-if="tab==='wrong'" class="hf-list">
-   <article v-for="q in wrong" :key="q.id" class="hf-card">
+   <article v-for="q in wrong" :key="q.id" class="hf-card panel question-card">
     <small>{{q.topic}} · 答错 {{q.wrong_count}} 次</small>
     <strong>{{q.prompt}}</strong>
     <p>正确答案：{{q.answer}}</p><p>{{q.explanation}}</p>
@@ -196,7 +207,7 @@ onUnmounted(()=>{
   </div>
   <button v-if="cursor" type="button" :disabled="busy||loading"
    @click="load(true)">加载更多</button>
-  <div v-if="role==='owner'" class="hf-adopt">
+  <details v-if="role==='owner'" class="hf-adopt"><summary>历史数据补充核验（高级）</summary>
    <strong>原账号历史迁移</strong>
    <div v-for="kind in importKinds" :key="kind">
     <button v-if="!adoption[kind].done" type="button" :disabled="busy||loading"
@@ -206,7 +217,7 @@ onUnmounted(()=>{
     <small v-if="adoption[kind].started">已复制 {{adoption[kind].total}} 条 ·
      {{adoption[kind].done?'已完成':'还可继续'}}</small>
    </div>
-  </div>
+  </details>
   <button v-if="pending" type="button" :disabled="busy" @click="send">
    重试上次答题（不重复计次）
   </button>
