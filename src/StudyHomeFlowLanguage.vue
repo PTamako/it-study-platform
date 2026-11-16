@@ -3,7 +3,8 @@ import {onMounted,onUnmounted,reactive,ref} from 'vue'
 
 type Card={
  id:string;language:'ja'|'en';category:string;term:string;reading:string;
- meaning_zh:string;example:string;example_meaning_zh:string;
+ meaning_zh:string;explanation?:string;example:string;example_meaning_zh:string;
+ source_url?:string;vocabulary_expansion_json?:string;grammar_expansion_json?:string;
  mastered:boolean;mastery_version:number;review_count:number;correct_streak:number;
  last_grade:string|null;next_review_at:string|null;review_version:number
 }
@@ -13,6 +14,21 @@ type ImportProgress={after:string;total:number;started:boolean;done:boolean}
 const props=defineProps<{userId:string;role:'owner'|'member'}>()
 const enabled=ref(false),loading=ref(false),busy=ref(false),error=ref('')
 const lang=ref<'ja'|'en'>('ja'),cards=ref<Card[]>([])
+type Expansion={term:string;meaning:string;explanation:string}
+function expansions(raw:string|undefined):Expansion[]{
+ try{return JSON.parse(raw||'[]') as Expansion[]}catch{return []}
+}
+function selectLang(next:'ja'|'en'){
+ if(busy.value||loading.value||pendingReview.value||lang.value===next)return
+ lang.value=next;void load(true)
+}
+function speak(card:Card){
+ if(!window.speechSynthesis)return
+ window.speechSynthesis.cancel()
+ const utterance=new SpeechSynthesisUtterance(card.term)
+ utterance.lang=card.language==='ja'?'ja-JP':'en-US'
+ utterance.rate=.88;window.speechSynthesis.speak(utterance)
+}
 const nextCursor=ref<string|null>(null)
 const adoption=reactive<Record<Kind,ImportProgress>>({
  mastery:{after:'',total:0,started:false,done:false},
@@ -154,27 +170,50 @@ onUnmounted(()=>{
 
 <template>
  <section v-if="enabled" class="hf-language" aria-label="HomeFlow 个人语言卡学习">
-  <div class="hf-heading">
-   <strong>我的语言课程</strong>
-   <label>语言
-    <select v-model="lang" aria-label="课程语言" :disabled="busy||loading" @change="load(true)">
-     <option value="ja">日本语</option>
-     <option value="en">English</option>
-    </select>
-   </label>
+  <section class="language-banner" :class="lang==='ja'?'japanese':'english'">
+    <div><span class="banner-tag">{{lang==='ja'?'日语学习':'英语学习'}}</span>
+      <h2>{{lang==='ja'?'练习实用日语':'练习实用英语'}}</h2>
+      <p>日常与职场表达 · 例句 · 发音</p>
+    </div>
+    <div class="banner-decoration" aria-hidden="true">✦</div>
+  </section>
+  <div class="language-choice" role="group" aria-label="选择学习语言">
+    <button :class="{chosen:lang==='ja'}" :disabled="busy||loading||!!pendingReview"
+      @click="selectLang('ja')"><span>日本語</span><small>日语学习</small></button>
+    <button :class="{chosen:lang==='en'}" :disabled="busy||loading||!!pendingReview"
+      @click="selectLang('en')"><span>English</span><small>英语学习</small></button>
   </div>
-  <p class="hf-desc">掌握状态和复习次数仅属于当前账号，不与家庭成员共用。</p>
-  <div class="hf-cards">
-   <details v-for="card in cards" :key="card.id" class="hf-card">
-    <summary>
-     <span><strong>{{card.term}}</strong><small>{{card.category}} · {{card.meaning_zh}}</small></span>
+  <div class="section-heading"><div><h2>日常与职场语言卡片</h2>
+    <p>学习与复习进度只保存到当前个人账号。</p></div></div>
+  <div class="hf-cards language-card-list">
+   <details v-for="card in cards" :key="card.id" class="hf-card language-study-card" open>
+    <summary class="language-card-top">
+     <span><span class="dict-tag">{{card.category}}</span>
+      <strong class="language-sentence">{{card.term}}</strong>
+      <small class="language-meaning">{{card.meaning_zh}}</small></span>
      <span class="hf-state">{{card.mastered?'已掌握':'学习中'}} · 复习 {{card.review_count}} 次</span>
     </summary>
     <div class="hf-details">
-     <p v-if="card.reading">发音：{{card.reading}}</p>
-     <p>{{card.example}}</p>
-     <p v-if="card.example_meaning_zh">{{card.example_meaning_zh}}</p>
-     <small v-if="card.next_review_at">下次复习：{{card.next_review_at}}</small>
+     <p v-if="card.reading" class="language-source">发音：{{card.reading}}</p>
+     <p v-if="card.explanation" class="language-explanation">{{card.explanation}}</p>
+     <p class="language-sentence">{{card.example}}</p>
+     <p v-if="card.example_meaning_zh" class="language-meaning">{{card.example_meaning_zh}}</p>
+     <section v-if="expansions(card.vocabulary_expansion_json).length" class="language-expansion">
+       <strong>重点词汇</strong>
+       <div v-for="(item,index) in expansions(card.vocabulary_expansion_json).slice(0,4)" :key="index">
+         <b>{{item.term}}</b><span>{{item.meaning}}</span><small>{{item.explanation}}</small>
+       </div>
+     </section>
+     <section v-if="expansions(card.grammar_expansion_json).length" class="language-expansion grammar">
+       <strong>语法与表达</strong>
+       <div v-for="(item,index) in expansions(card.grammar_expansion_json).slice(0,3)" :key="index">
+         <b>{{item.term}}</b><span>{{item.meaning}}</span><small>{{item.explanation}}</small>
+       </div>
+     </section>
+     <div class="language-speech-actions"><button type="button" class="play-button"
+       @click="speak(card)">播放原文</button>
+       <a v-if="card.source_url" class="language-source-link" :href="card.source_url"
+         target="_blank" rel="noopener noreferrer">查看来源</a></div>
      <button class="hf-master" type="button" :disabled="busy||loading||!!pendingReview"
       @click="setMastery(card)">{{card.mastered?'取消掌握':'标记掌握'}}</button>
      <div class="hf-review" aria-label="复习反馈">
@@ -187,7 +226,7 @@ onUnmounted(()=>{
   </div>
   <button v-if="nextCursor" type="button" :disabled="busy||loading"
    @click="load(false)">加载更多课程</button>
-  <div v-if="role==='owner'" class="hf-import">
+  <details v-if="role==='owner'" class="hf-import"><summary>历史学习记录复核（高级）</summary>
    <strong>迁移原有学习记录</strong>
    <div v-for="kind in importKinds" :key="kind">
     <button v-if="!adoption[kind].done" type="button" :disabled="busy||loading"
@@ -196,7 +235,7 @@ onUnmounted(()=>{
     </button>
     <small v-if="adoption[kind].started">{{adoption[kind].done?'已完成':'还可继续'}} · 已复制 {{adoption[kind].total}} 条</small>
    </div>
-  </div>
+  </details>
   <button v-if="pendingReview" type="button" :disabled="busy||loading"
    @click="submitGrade">重试上次复习（不重复计次）</button>
   <p v-if="error" class="hf-error" role="alert">{{error}}</p>
