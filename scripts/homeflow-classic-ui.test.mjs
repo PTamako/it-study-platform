@@ -32,7 +32,7 @@ test('original exam, language, practical and dictionary markup stays unchanged',
  assert.match(app,/class="language-banner"/)
  assert.match(app,/class="language-choice"/)
  assert.match(app,/class="language-study-card"/)
- assert.match(app,/class="question-card practical-scenario-card"/)
+ assert.match(app,/class="panel question-card practical-scenario-card"/)
  assert.match(app,/<ExamScratchTools/)
  assert.match(app,/class="dictionary-search"/)
  assert.match(app,/class="dictionary-card"/)
