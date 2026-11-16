@@ -372,7 +372,7 @@ test('production enables every signed-actor study module without granting legacy
 
 test('HomeFlow SSO restores original Zhixue shell without rendering legacy actor data',()=>{
  const start=app.indexOf('        <template v-if="homeflowIdentityUser">')
- const end=app.indexOf('        <template v-else>\\n        <StudyHomeFlowAccess v-if="activeModule',start)
+ const end=app.indexOf('        <template v-else>\n        <StudyHomeFlowAccess v-if="activeModule',start)
  assert.ok(start>=0&&end>start,'signed-actor content must be a distinct view')
  const signed=app.slice(start,end)
  assert.match(app,/<div v-else class="app-shell">/)
@@ -382,7 +382,7 @@ test('HomeFlow SSO restores original Zhixue shell without rendering legacy actor
  assert.match(signed,/class="module-grid"/)
  assert.match(signed,/<StudyHomeFlowAccess :active-module="activeModule"/)
  assert.doesNotMatch(signed,/savedVocabularyEntries|examRecords|questionProgressById|dailyCloudStates/)
- assert.match(ui,/defineProps<\\{activeModule\\?:StudyModule\\}>/)
+ assert.match(ui,/defineProps<\{activeModule\?:StudyModule\}>/)
  for(const page of ['home','exam','practical','language','dictionary']){
   assert.ok(ui.includes("activeModule === '"+page+"'"),'private route missing '+page)
  }
