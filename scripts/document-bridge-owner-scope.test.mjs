@@ -48,11 +48,12 @@ function fixture(){
  return {raw,env:{DB,HOMEFLOW_STUDY_SSO_ENABLED:'true',JPDA_BRIDGE_ENABLED:'true',
   JPDA_BRIDGE_SECRET:secret,JPDA_BRIDGE_STUDY_ACTOR_ID:owner}}
 }
-function request(actor,operation,suffix){
+function request(actor,operation,suffix,identitySource=false){
  const payload=operation==='sentence'
   ?{operation,language:'ja',sentence:'今日は進捗をご報告します。',meaning_zh:'今天报告进度',skip_existing:true,privacy_confirmed:true}
   :{operation,language:'ja',term:'進捗',reading:'しんちょく',meaning_zh:'进度',skip_existing:true}
  const packet={source:'jp-document-assistant',actor_user_id:actor,
+  ...(identitySource?{identity_source:'homeflow_sso'}:{}),
   idempotency_key:'jda:zhixue:'+suffix,payload}
  const raw=JSON.stringify(packet),stamp=String(Date.now())
  const sig=createHmac('sha256',secret).update(stamp+'\n'+raw).digest('hex')
@@ -98,5 +99,25 @@ test('owner document sentence has stable 32-char ID, rejects changed candidate a
   assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_personal_sentence_events').get().n,1)
   assert.equal((await bridge(request(member,'sentence','d'.repeat(32)),f.env)).status,403)
   assert.throws(()=>f.raw.prepare('DELETE FROM homeflow_personal_sentence_events').run(),/IMMUTABLE_SENTENCE_AUDIT/)
+ }finally{f.raw.close()}
+})
+
+test('verified member signs into own wordbook and sentence space without family review',async()=>{
+ const f=fixture()
+ try{
+  const word=await bridge(request(member,'vocabulary','f'.repeat(32),true),f.env)
+  assert.equal(word.status,200,await word.clone().text())
+  const sentence=await bridge(request(member,'sentence','g'.repeat(32),true),f.env)
+  assert.equal(sentence.status,200,await sentence.clone().text())
+  const repeated=await bridge(request(member,'sentence','g'.repeat(32),true),f.env)
+  assert.equal((await repeated.json()).reused,true)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_saved_vocabulary WHERE homeflow_user_id=?').get(member).n,1)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_personal_sentence_cards WHERE homeflow_user_id=?').get(member).n,1)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_saved_vocabulary WHERE homeflow_user_id=?').get(owner).n,0)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_personal_sentence_cards WHERE homeflow_user_id=?').get(owner).n,0)
+  // A signed SSO claim for a non-existent identity must not create any record.
+  const stranger='33333333-3333-4333-8333-333333333333'
+  assert.equal((await bridge(request(stranger,'vocabulary','h'.repeat(32),true),f.env)).status,403)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_saved_vocabulary').get().n,1)
  }finally{f.raw.close()}
 })
