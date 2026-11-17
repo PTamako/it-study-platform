@@ -26,7 +26,7 @@ jobs:
         run: |
           set -euo pipefail
           test "${{ github.ref }}" = "refs/heads/main"
-          gh api "repos/$REPO/pulls/PR_NUMBER_PLACEHOLDER" | jq -e --arg expected "$MERGED_SHA" \
+          gh api "repos/$REPO/pulls/188" | jq -e --arg expected "$MERGED_SHA" \
             '.merged == true and .base.ref == "main" and .merge_commit_sha == $expected'
       - name: Dispatch audited Cloudflare production workflow
         env:
