@@ -1,0 +1,38 @@
+# Single-use production dispatcher for the reviewed personal-study approval retirement PR.
+# It dispatches the EXISTING audited production workflow after this exact PR merges.
+name: One-time Zhixue personal study production release
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/zhixue-study-retirement-release-once-20261117.yml
+permissions:
+  contents: read
+  pull-requests: read
+  actions: write
+concurrency:
+  group: zhixue-study-retirement-release-once
+  cancel-in-progress: false
+jobs:
+  dispatch-reviewed-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Confirm current SHA is the reviewed and merged PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          MERGED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "${{ github.ref }}" = "refs/heads/main"
+          gh api "repos/$REPO/pulls/PR_NUMBER_PLACEHOLDER" | jq -e --arg expected "$MERGED_SHA" \
+            '.merged == true and .base.ref == "main" and .merge_commit_sha == $expected'
+      - name: Dispatch audited Cloudflare production workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh workflow run deploy-cloudflare.yml -R "$REPO" --ref main \
+            -f release_confirmation=FOUR_APP_RELEASE_APPROVED
