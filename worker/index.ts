@@ -92,6 +92,11 @@ async function verifyBridgeSignature(secret:string,text:string,signature:string)
   return diff===0
 }
 export async function documentAssistantBridge(request:Request,env:Env):Promise<Response>{
+  // The legacy one-user bridge writes an unscoped table. It is unsafe after
+  // HomeFlow SSO activation; all new document sync must use the approved
+  // /api/internal/document-study/execute path with actor + household checks.
+  if(env.HOMEFLOW_STUDY_SSO_ENABLED==='true')
+    return bridgeJson({ok:false,error:'legacy_document_bridge_retired'},410)
   if(env.JPDA_BRIDGE_ENABLED!=='true')return bridgeJson({ok:false,error:'bridge_disabled'},404)
   if(request.method!=='POST')return bridgeJson({ok:false,error:'method_not_allowed'},405)
   const secret=env.JPDA_BRIDGE_SECRET
@@ -1895,7 +1900,13 @@ export default {
       // Owner sessions already have HMAC authentication and do not need the
       // anonymous-IP D1 throttle. Keep the quota on all public requests.
       const ownerSession = !(await requireAuth(request, env))
-      if (!ownerSession) {
+      // Both HomeFlow users are authenticated learners; do not misclassify
+      // their dictionary traffic as anonymous or deny the configured GAS.
+      // Avoid SSO introspection for requests without the secure study cookie.
+      const homeflowActor = !ownerSession &&
+        (request.headers.get('cookie')||'').includes('__Host-study_hf=')
+        ? await verifiedStudyActor(request,env) : null
+      if (!ownerSession && !homeflowActor) {
         const quotaFailure = await checkPublicDictionaryQuota(request, env)
         if (quotaFailure) return quotaFailure
       }
@@ -1909,7 +1920,7 @@ export default {
       try {
         // Public lookups still use the free anonymous providers; only the logged-in
         // owner can consume Google Apps Script's daily LanguageApp.translate quota.
-        const authorizedForAppsScript = Boolean(ownerSession && env.GAS_TRANSLATOR_URL && env.GAS_TRANSLATOR_TOKEN)
+        const authorizedForAppsScript = Boolean((ownerSession || homeflowActor) && env.GAS_TRANSLATOR_URL && env.GAS_TRANSLATOR_TOKEN)
         const items = await lookupDictionary(query, requestedLanguage as 'auto' | 'ja' | 'en' | 'zh' | 'it', env.DB,
           authorizedForAppsScript ? env.GAS_TRANSLATOR_URL : undefined,
           authorizedForAppsScript ? env.GAS_TRANSLATOR_TOKEN : undefined,
