@@ -47,8 +47,10 @@ test('static known-word lookup avoids the Worker and D1, and only fetches one ca
     })
   }
   try {
-    const content = await readFile(new URL('../src/static-learner-dictionary.ts',import.meta.url),'utf8')
-    const js = ts.transpile(content,{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext})
+    const helper = await readFile(new URL('../src/published-study-assets.ts',import.meta.url),'utf8')
+    const content = (await readFile(new URL('../src/static-learner-dictionary.ts',import.meta.url),'utf8'))
+      .replace("import {fetchPublishedStudyItems} from './published-study-assets'",'')
+    const js = ts.transpile(helper+'\n'+content,{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext})
     const api = await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'))
     const first = await api.findStaticLearnerEntry('root cause','en')
     assert.equal(first.term,'root cause')
@@ -64,10 +66,10 @@ test('static known-word lookup avoids the Worker and D1, and only fetches one ca
     const japanese = await api.findStaticLearnerEntry('お手数ですが','auto')
     assert.match(japanese.zh,/麻烦/)
     assert.ok(japanese.exampleTranslationZh)
-    assert.equal(calls.length,fetched+1,'Japanese file is loaded only on demand')
+    assert.equal(calls.length,fetched+2,'Japanese manifest and file are loaded only on demand')
     assert.equal(await api.findStaticLearnerEntry('认证','zh'),null)
     assert.equal(await api.findStaticLearnerEntry('認証','auto'),null,'ambiguous kanji must not be guessed')
-    assert.equal(calls.length,fetched+1)
+    assert.equal(calls.length,fetched+2)
   } finally {
     globalThis.fetch = originalFetch
   }
