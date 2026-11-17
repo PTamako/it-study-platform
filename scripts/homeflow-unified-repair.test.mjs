@@ -61,8 +61,13 @@ test('GAS translator only runs for authenticated legacy or verified HomeFlow act
  assert.match(backend,/if \(!ownerSession && !homeflowActor\)/)
  assert.match(backend,/const authorizedForAppsScript = Boolean\(\(ownerSession \|\| homeflowActor\)/)
 })
-test('unscoped document bridge is closed when HomeFlow SSO is active',()=>{
- assert.match(backend,/if\(env\.HOMEFLOW_STUDY_SSO_ENABLED==='true'\)\s*return bridgeJson\(\{ok:false,error:'legacy_document_bridge_retired'\},410\)/)
+test('signed owner document bridge writes only to HomeFlow private tables',()=>{
+ assert.match(backend,/if\(env\.HOMEFLOW_STUDY_SSO_ENABLED==='true'\)\{/)
+ assert.match(backend,/role='owner' AND state='active'/)
+ assert.match(backend,/INSERT INTO homeflow_saved_vocabulary/)
+ assert.match(backend,/INSERT INTO homeflow_personal_sentence_cards/)
+ assert.match(backend,/INSERT INTO homeflow_vocabulary_events/)
+ assert.match(backend,/INSERT INTO homeflow_personal_sentence_events/)
  assert.match(backend,/\/api\/internal\/document-study\/execute/)
 })
 test('history purge has dual confirmation, scoped actor and immutable audit',()=>{
