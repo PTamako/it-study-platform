@@ -1,0 +1,39 @@
+# Single-use dispatcher. Launch the EXISTING audited production workflow only
+# after the source-validated PR #187 merge, never on a direct unreviewed push.
+name: One-time Zhixue iPhone static lessons production release
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/zhixue-ios-static-release-once-20261117.yml
+permissions:
+  contents: read
+  pull-requests: read
+  actions: write
+concurrency:
+  group: zhixue-ios-static-release-once
+  cancel-in-progress: false
+jobs:
+  dispatch-reviewed-release:
+    if: github.event.before == 'e0255236a10b3dd5a8bdc10b9114d581a7198122'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify PR 187 is the exact merged commit on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          MERGED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "${{ github.ref }}" = "refs/heads/main"
+          gh api "repos/$REPO/pulls/187" | jq -e --arg expected "$MERGED_SHA" \
+            '.merged == true and .base.ref == "main" and .merge_commit_sha == $expected'
+      - name: Dispatch the existing backed-up, tested production deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh workflow run deploy-cloudflare.yml -R "$REPO" --ref main \
+            -f release_confirmation=FOUR_APP_RELEASE_APPROVED

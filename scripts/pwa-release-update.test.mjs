@@ -18,6 +18,6 @@ test('release markers announce new builds without automatically dropping unfinis
   assert.doesNotMatch(main,/location\.reload\(/)
   assert.match(app,/v-if="updateAvailable"/)
   assert.match(app,/更新并刷新/)
-  assert.match(sw,/zhixue-app-v4/)
+  assert.match(sw,/zhixue-app-v5/)
   assert.match(sw,/url\.pathname\.startsWith\(API_PREFIX\)/)
 })

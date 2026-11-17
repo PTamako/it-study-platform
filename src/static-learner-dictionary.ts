@@ -20,8 +20,7 @@ type RawLexiconEntry = {
   example_review_status?: 'source-linked-unreviewed-sense'
   translation_ja?: string; translation_en?: string
 }
-type LexiconManifest = { version: number; ja: string; en: string }
-const ASSET_PATTERN = /^\/learner-lexicon\/(?:ja|en)\.[0-9a-f]{16}\.json$/
+import {fetchPublishedStudyItems} from './published-study-assets'
 const partLabels: Record<string, string> = {
   n: 'noun', v: 'verb', vi: 'verb', vt: 'verb',
   a: 'adjective', adj: 'adjective', ad: 'adverb', adv: 'adverb',
@@ -29,7 +28,6 @@ const partLabels: Record<string, string> = {
   int: 'interjection', interj: 'interjection',
 }
 const key = (value: string) => value.normalize('NFKC').trim().toLocaleLowerCase()
-let manifestRequest: Promise<LexiconManifest> | undefined
 const wordRequests = new Map<LexiconLanguage, Promise<Map<string, RawLexiconEntry>>>()
 
 function parseEnglishSenses(explanation: string): LexiconSense[] {
@@ -51,46 +49,24 @@ function parseEnglishSenses(explanation: string): LexiconSense[] {
   return result
 }
 
-async function manifest(): Promise<LexiconManifest> {
-  if (!manifestRequest) {
-    manifestRequest = fetch('/learner-lexicon/manifest.json', { cache: 'no-cache' })
-      .then(async response => {
-        if (!response.ok) throw new Error('Static learner lexicon manifest unavailable')
-        const data = await response.json() as LexiconManifest
-        if (data.version !== 1 || !ASSET_PATTERN.test(data.ja) || !ASSET_PATTERN.test(data.en))
-          throw new Error('Invalid static learner lexicon manifest')
-        return data
-      })
-      .catch(error => { manifestRequest = undefined; throw error })
-  }
-  return manifestRequest
-}
-
 async function words(language: LexiconLanguage): Promise<Map<string, RawLexiconEntry>> {
-  if (!wordRequests.has(language)) {
-    const request = (async () => {
-      const paths = await manifest()
-      const url = paths[language]
-      if (!url.startsWith('/learner-lexicon/' + language + '.'))
-        throw new Error('Mismatched lexicon asset language')
-      const response = await fetch(url, { cache: 'force-cache' })
-      if (!response.ok) throw new Error('Static learner lexicon unavailable')
-      const payload = await response.json() as { items?: RawLexiconEntry[] }
-      if (!Array.isArray(payload.items) || payload.items.length < 3000)
-        throw new Error('Incomplete static learner lexicon')
-      const index = new Map<string, RawLexiconEntry>()
-      for (const entry of payload.items) {
-        if (!entry || entry.language !== language || !entry.term || !entry.meaning_zh)
-          throw new Error('Invalid static learner dictionary item')
-        const normalized = key(entry.term)
-        if (index.has(normalized)) throw new Error('Duplicate static learner dictionary entry')
-        index.set(normalized, entry)
-      }
-      return index
-    })().catch(error => { wordRequests.delete(language); throw error })
-    wordRequests.set(language, request)
-  }
-  return wordRequests.get(language)!
+ if (!wordRequests.has(language)) {
+  const request = (async () => {
+   // A stale iPhone PWA can return SPA HTML in place of a missing old hash.
+   // Shared loader validates JSON and retries the published fresh manifest.
+   const entries=await fetchPublishedStudyItems<RawLexiconEntry>('learner-lexicon',language)
+   const index = new Map<string, RawLexiconEntry>()
+   for (const entry of entries) {
+    if (!entry || !entry.meaning_zh) throw new Error('Invalid static learner dictionary item')
+    const normalized = key(entry.term)
+    if (index.has(normalized)) throw new Error('Duplicate static learner dictionary entry')
+    index.set(normalized, entry)
+   }
+   return index
+  })().catch(error => { wordRequests.delete(language); throw error })
+  wordRequests.set(language, request)
+ }
+ return wordRequests.get(language)!
 }
 
 /** Purely conservative; ambiguous kanji is left to the explicit language choice or server. */

@@ -32,6 +32,8 @@ jobs:
           npx tsc --noEmit --target es2022 --module esnext --moduleResolution bundler --skipLibCheck --types @cloudflare/workers-types worker/document-study-apply.ts
       - name: Check identity, cache isolation and delayed requests
         run: node --test scripts/daily-task-runtime.test.mjs scripts/homeflow-pwa-ui.test.mjs scripts/homeflow-legacy-cache-runtime.test.mjs scripts/homeflow-legacy-queue-epoch.test.mjs scripts/homeflow-legacy-exam-history-epoch.test.mjs scripts/homeflow-legacy-daily-epoch.test.mjs scripts/homeflow-unified-repair.test.mjs scripts/document-bridge-owner-scope.test.mjs scripts/auth-security.test.mjs scripts/daily-word-cloud-sync.test.mjs scripts/production-cost-regression-20261113.test.mjs
+      - name: Reproduce iPhone stale HTML and verify course and lexicon recovery
+        run: node --test scripts/ios-static-recovery.test.mjs scripts/pwa-offline.test.mjs scripts/pwa-release-update.test.mjs
       - name: Type-check frontend
         run: npm run typecheck
 
