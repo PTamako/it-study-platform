@@ -107,9 +107,9 @@ test('verified member signs into own wordbook and sentence space without family 
  try{
   const word=await bridge(request(member,'vocabulary','f'.repeat(32),true),f.env)
   assert.equal(word.status,200,await word.clone().text())
-  const sentence=await bridge(request(member,'sentence','g'.repeat(32),true),f.env)
+  const sentence=await bridge(request(member,'sentence','1'.repeat(32),true),f.env)
   assert.equal(sentence.status,200,await sentence.clone().text())
-  const repeated=await bridge(request(member,'sentence','g'.repeat(32),true),f.env)
+  const repeated=await bridge(request(member,'sentence','1'.repeat(32),true),f.env)
   assert.equal((await repeated.json()).reused,true)
   assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_saved_vocabulary WHERE homeflow_user_id=?').get(member).n,1)
   assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_personal_sentence_cards WHERE homeflow_user_id=?').get(member).n,1)
@@ -117,7 +117,7 @@ test('verified member signs into own wordbook and sentence space without family 
   assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_personal_sentence_cards WHERE homeflow_user_id=?').get(owner).n,0)
   // A signed SSO claim for a non-existent identity must not create any record.
   const stranger='33333333-3333-4333-8333-333333333333'
-  assert.equal((await bridge(request(stranger,'vocabulary','h'.repeat(32),true),f.env)).status,403)
+  assert.equal((await bridge(request(stranger,'vocabulary','2'.repeat(32),true),f.env)).status,403)
   assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_saved_vocabulary').get().n,1)
  }finally{f.raw.close()}
 })
