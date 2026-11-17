@@ -29,8 +29,8 @@ test('dictionary anonymous limiter remains enabled but authenticated owner skips
   const end=code.indexOf("if (url.pathname === '/api/language-cards')",start)
   const handler=code.slice(start,end)
   assert.match(handler,/const ownerSession = !\(await requireAuth\(request, env\)\)/)
-  assert.match(handler,/if \(!ownerSession\) \{\s*const quotaFailure = await checkPublicDictionaryQuota/)
-  assert.match(handler,/ownerSession && env\.GAS_TRANSLATOR_URL && env\.GAS_TRANSLATOR_TOKEN/)
+  assert.match(handler,/if \(!ownerSession && !homeflowActor\) \{\s*const quotaFailure = await checkPublicDictionaryQuota/)
+  assert.match(handler,/\(ownerSession \|\| homeflowActor\) && env\.GAS_TRANSLATOR_URL && env\.GAS_TRANSLATOR_TOKEN/)
   assert.match(code,/RETURNING requests/)
 })
 
