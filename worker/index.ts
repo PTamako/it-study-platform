@@ -104,7 +104,12 @@ export async function documentAssistantBridge(request:Request,env:Env):Promise<R
   let body:Record<string,any>
   try{body=JSON.parse(raw)}catch{return bridgeJson({ok:false,error:'invalid_json'},400)}
   const id=body.actor_user_id
-  if(!env.JPDA_BRIDGE_STUDY_ACTOR_ID||id!==env.JPDA_BRIDGE_STUDY_ACTOR_ID)
+  const verifiedSsoActor=body.identity_source==='homeflow_sso'
+  // Historical owner aliases remain narrowly supported; direct member
+  // writes must use the exact signed HomeFlow user identity, never an alias.
+  if(!verifiedSsoActor&&(!env.JPDA_BRIDGE_STUDY_ACTOR_ID||id!==env.JPDA_BRIDGE_STUDY_ACTOR_ID))
+    return bridgeJson({ok:false,error:'study_account_not_linked'},403)
+  if(verifiedSsoActor&&(typeof id!=='string'||id.length<8||id.length>128))
     return bridgeJson({ok:false,error:'study_account_not_linked'},403)
   const kind=body.payload?.operation
   if(body.source!=='jp-document-assistant'||!['vocabulary','sentence'].includes(kind)||
@@ -123,20 +128,25 @@ export async function documentAssistantBridge(request:Request,env:Env):Promise<R
   const entry={term,language:'ja',reading:kind==='vocabulary'&&typeof p.reading==='string'?p.reading.slice(0,100):'',
     zh:p.meaning_zh.trim(),en:'',tag:kind==='sentence'?'文书例句':'文书',
     source:'jp-document-assistant',study_kind:kind}
-  // Owner-direct signed sync is permitted without HomeFlow approval, but it
-  // MUST be written to that owner's private SSO namespace, not the old
-  // single-password table. Members never enter this endpoint: their document
-  // sync requires the newer approval + source-proof executor.
+  // A signed direct sync writes only into the verified actor's personal
+  // vocabulary/sentence tables. Old owner aliases are resolved to the sole
+  // linked owner for compatibility, never to an arbitrary family member.
   if(env.HOMEFLOW_STUDY_SSO_ENABLED==='true'){
     try{
-      // The long-lived signed bridge's mapped ID may predate HomeFlow SSO.
-      // Resolve the ONLY active study owner, never reinterpret that old ID as
-      // an arbitrary member and never write to the legacy shared table.
-      const owners=await env.DB.prepare(
-        "SELECT homeflow_user_id FROM homeflow_identity_links WHERE role='owner' AND state='active' LIMIT 2"
-      ).all<{homeflow_user_id:string}>()
-      if(owners.results?.length!==1)return bridgeJson({ok:false,error:'study_owner_not_linked'},403)
-      const ownerId=owners.results[0].homeflow_user_id
+      let ownerId:string;
+      if(verifiedSsoActor){
+        const actorLink=await env.DB.prepare(
+          "SELECT homeflow_user_id FROM homeflow_identity_links WHERE homeflow_user_id=? AND role IN ('owner','member') AND state='active' LIMIT 1"
+        ).bind(id).first<{homeflow_user_id:string}>()
+        if(!actorLink)return bridgeJson({ok:false,error:'study_account_not_linked'},403)
+        ownerId=actorLink.homeflow_user_id
+      }else{
+        const owners=await env.DB.prepare(
+          "SELECT homeflow_user_id FROM homeflow_identity_links WHERE role='owner' AND state='active' LIMIT 2"
+        ).all<{homeflow_user_id:string}>()
+        if(owners.results?.length!==1)return bridgeJson({ok:false,error:'study_owner_not_linked'},403)
+        ownerId=owners.results[0].homeflow_user_id
+      }
       const stamp=new Date().toISOString()
       const eventId=crypto.randomUUID().replace(/-/g,'')
       if(kind==='sentence'){
@@ -182,6 +192,7 @@ export async function documentAssistantBridge(request:Request,env:Env):Promise<R
       return bridgeJson({ok:true,remote_id:'ja:'+term,reused:!created})
     }catch{return bridgeJson({ok:false,error:'study_private_write_unavailable'},503)}
   }
+  if(verifiedSsoActor)return bridgeJson({ok:false,error:'study_sso_not_ready'},503)
   try{
     const inserted=await env.DB.prepare(`INSERT OR IGNORE INTO saved_vocabulary_entries_v2
       (language,term,entry_json,saved_at) VALUES('ja',?1,?2,CURRENT_TIMESTAMP)`)
