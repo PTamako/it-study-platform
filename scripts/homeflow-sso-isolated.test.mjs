@@ -214,7 +214,7 @@ function sqliteEnv(){
    return Response.json({token_type:'Bearer',
     access_token:'e'.repeat(64),expires_in:180,
     session_assertion:active.user===owner?'d'.repeat(64):'c'.repeat(64),
-    session_assertion_expires_in:900})
+    session_assertion_expires_in:30*86400})
   }
   if(path==='/api/oauth/userinfo'){
    assert.equal(request.headers.get('authorization'),'Bearer '+'e'.repeat(64))
@@ -301,6 +301,10 @@ test('owner binds old data once, member receives empty identity-only space; wron
   assert.equal((await f.finish(first,{legacy:true,proof:'0'.repeat(64)})).status,403)
   const ownerResponse=await f.finish(first,{legacy:true})
   assert.equal(ownerResponse.status,200,await ownerResponse.clone().text())
+  assert.match(ownerResponse.headers.get('set-cookie'),/Max-Age=2592000/)
+  const linkedSession=f.raw.prepare('SELECT expires_at,created_at FROM homeflow_identity_sessions ORDER BY created_at DESC LIMIT 1').get()
+  assert.ok(linkedSession.expires_at-linkedSession.created_at>=29*86400000,
+   'SSO identity stays active for the HomeFlow source-session window')
   const ownerCookie=ownerResponse.headers.get('set-cookie').match(/__Host-study_hf=([0-9a-f]{64})/)[1]
   assert.equal((await f.finish(first,{legacy:true})).status,403)
   assert.equal((await (await f.call('me','GET',null,{secret:ownerCookie})).json()).study_access,false)
