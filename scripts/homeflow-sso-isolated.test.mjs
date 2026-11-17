@@ -214,7 +214,7 @@ function sqliteEnv(){
    return Response.json({token_type:'Bearer',
     access_token:'e'.repeat(64),expires_in:180,
     session_assertion:active.user===owner?'d'.repeat(64):'c'.repeat(64),
-    session_assertion_expires_in:900})
+    session_assertion_expires_in:30*86400})
   }
   if(path==='/api/oauth/userinfo'){
    assert.equal(request.headers.get('authorization'),'Bearer '+'e'.repeat(64))
