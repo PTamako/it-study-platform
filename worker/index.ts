@@ -129,10 +129,14 @@ export async function documentAssistantBridge(request:Request,env:Env):Promise<R
   // sync requires the newer approval + source-proof executor.
   if(env.HOMEFLOW_STUDY_SSO_ENABLED==='true'){
     try{
-      const owner=await env.DB.prepare(
-        "SELECT 1 FROM homeflow_identity_links WHERE homeflow_user_id=? AND role='owner' AND state='active'"
-      ).bind(id).first()
-      if(!owner)return bridgeJson({ok:false,error:'study_owner_not_linked'},403)
+      // The long-lived signed bridge's mapped ID may predate HomeFlow SSO.
+      // Resolve the ONLY active study owner, never reinterpret that old ID as
+      // an arbitrary member and never write to the legacy shared table.
+      const owners=await env.DB.prepare(
+        "SELECT homeflow_user_id FROM homeflow_identity_links WHERE role='owner' AND state='active' LIMIT 2"
+      ).all<{homeflow_user_id:string}>()
+      if(owners.results?.length!==1)return bridgeJson({ok:false,error:'study_owner_not_linked'},403)
+      const ownerId=owners.results[0].homeflow_user_id
       const stamp=new Date().toISOString()
       const eventId=crypto.randomUUID().replace(/-/g,'')
       if(kind==='sentence'){
@@ -140,7 +144,7 @@ export async function documentAssistantBridge(request:Request,env:Env):Promise<R
         // while a changed payload under the same key cannot be misreported.
         const cardId=(await dictionaryAiHash(String(body.idempotency_key))).slice(0,32)
         const existing=await env.DB.prepare('SELECT sentence_text,translation_zh FROM homeflow_personal_sentence_cards '+
-          'WHERE homeflow_user_id=? AND card_id=?').bind(id,cardId).first<{sentence_text:string;translation_zh:string}>()
+          'WHERE homeflow_user_id=? AND card_id=?').bind(ownerId,cardId).first<{sentence_text:string;translation_zh:string}>()
         if(existing&&(existing.sentence_text!==term||existing.translation_zh!==p.meaning_zh.trim()))
           return bridgeJson({ok:false,error:'study_idempotency_conflict'},409)
         const result=await env.DB.batch([
@@ -149,11 +153,11 @@ export async function documentAssistantBridge(request:Request,env:Env):Promise<R
             'is_deleted,version,updated_by_user_id,updated_at) '+
             "VALUES(?,?,'ja',?,?,'','document',0,1,?,?) "+
             'ON CONFLICT(homeflow_user_id,card_id) DO NOTHING')
-            .bind(id,cardId,term,p.meaning_zh.trim(),id,stamp),
+            .bind(ownerId,cardId,term,p.meaning_zh.trim(),ownerId,stamp),
           env.DB.prepare('INSERT INTO homeflow_personal_sentence_events '+
             "(event_id,actor_user_id,card_id,action,created_at) "+
             "SELECT ?,?,?,'saved',? WHERE changes()=1")
-            .bind(eventId,id,cardId,stamp)
+            .bind(eventId,ownerId,cardId,stamp)
         ])
         const created=result[0]?.meta?.changes
         if((created!==0&&created!==1)||result[1]?.meta?.changes!==(created?1:0))
@@ -166,11 +170,11 @@ export async function documentAssistantBridge(request:Request,env:Env):Promise<R
           '(homeflow_user_id,language,term,entry_json,is_deleted,updated_by_user_id,saved_at) '+
           "VALUES(?,'ja',?,?,0,?,?) "+
           'ON CONFLICT(homeflow_user_id,language,term) DO NOTHING')
-          .bind(id,term,JSON.stringify(entry),id,stamp),
+          .bind(ownerId,term,JSON.stringify(entry),ownerId,stamp),
         env.DB.prepare('INSERT INTO homeflow_vocabulary_events '+
           '(event_id,actor_user_id,action,term_sha256,affected_count,created_at) '+
           "SELECT ?,?,'saved',?,1,? WHERE changes()=1")
-          .bind(eventId,id,wordHash,stamp)
+          .bind(eventId,ownerId,wordHash,stamp)
       ])
       const created=result[0]?.meta?.changes
       if((created!==0&&created!==1)||result[1]?.meta?.changes!==(created?1:0))
