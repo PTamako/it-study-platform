@@ -34,7 +34,7 @@ async function cacheSuccessfulResponse(request, response) {
   // HTTP 200. That is not a valid lesson and must never poison the PWA cache.
   const path = new URL(request.url).pathname
   if (path.endsWith('.json') &&
-      !/\\bapplication\\/json\\b/i.test(response.headers.get('content-type') || '')) return
+      !/\bapplication\/json\b/i.test(response.headers.get('content-type') || '')) return
   const cache = await caches.open(CACHE_NAME)
   await cache.put(request, response.clone())
 }
@@ -74,7 +74,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith((async () => {
       try {
         const response=await fetch(request,{cache:'no-store'})
-        if (!response.ok || !/\\bapplication\\/json\\b/i.test(response.headers.get('content-type')||''))
+        if (!response.ok || !/\bapplication\/json\b/i.test(response.headers.get('content-type')||''))
           throw Error('not-a-static-manifest')
         event.waitUntil(cacheSuccessfulResponse(request,response.clone()).catch(()=>{}))
         return response
@@ -98,21 +98,11 @@ self.addEventListener('fetch', (event) => {
 
   // Cache-first for immutable JS and well-formed hashed lesson/lexicon JSON.
   if (url.pathname.startsWith('/assets/') ||
-      /^\\/(?:language-cards|learner-lexicon)\\/(?:ja|en)\\.[a-f0-9]{16}\\.json$/.test(url.pathname)) {
+      /^\/(?:language-cards|learner-lexicon)\/(?:ja|en)\.[a-f0-9]{16}\.json$/.test(url.pathname)) {
     event.respondWith((async () => {
       const cached = await caches.match(request)
       if (cached && (!url.pathname.endsWith('.json') ||
-        /\\bapplication\\/json\\b/i.test(cached.headers.get('content-type') || ''))) return cached
-      const response = await fetch(request)
-      if (response.ok) await cacheSuccessfulResponse(request, response.clone()).catch(() => {})
-      return response
-    })())
-    return
-  }
-
-  event.respondWith((async () => {
-      const cached = await caches.match(request)
-      if (cached) return cached
+        /\bapplication\/json\b/i.test(cached.headers.get('content-type') || ''))) return cached
       const response = await fetch(request)
       if (response.ok) await cacheSuccessfulResponse(request, response.clone()).catch(() => {})
       return response
