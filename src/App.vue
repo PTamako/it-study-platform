@@ -676,25 +676,33 @@ function addExamRecord() {
   if (correctRaw === null) return
   const correct = Number(correctRaw)
   if (!Number.isInteger(correct) || correct < 0 || correct > total) { window.alert('答对题数应为 0 到总题数之间的整数。'); return }
-  if(!legacyWorkCurrent(generation))return
+  if(homeflowIdentityUser.value ? !studyAuthenticated.value : !legacyWorkCurrent(generation))return
   void saveExamRecord({ date: tokyoDate(), correct, total, exam: exam.trim().toUpperCase() })
 }
 async function removeExamRecords() {
-  if(!legacyWritesAllowed())return
+  if(!studyAuthenticated.value)return
+  const actor=homeflowIdentityUser.value
   const generation=legacyOperationGeneration
-  if (!window.confirm('确定清除全部历史考试成绩吗？云端和本设备记录都会删除，且无法恢复。')) return
-  const confirmation = window.prompt('二次确认：此操作无法恢复。请输入「清除」以继续。')
-  if (confirmation !== '清除'||!legacyWorkCurrent(generation)) return
+  const current=()=>actor?homeflowIdentityUser.value===actor:
+    legacyWorkCurrent(generation)
+  if(!current())return
+  if (!window.confirm('确定清除当前账号的全部历史考试成绩吗？此操作无法恢复，但不会删除错题、答题进度或其他成员的成绩。')) return
+  const confirmation = window.prompt('二次确认：请输入「清除」，仅清除当前账号的考试成绩。')
+  if (confirmation !== '清除'||!current()) return
   try {
-    const response = await fetch('/api/exam-history', { method: 'DELETE', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ confirmation }) })
-    const data = await response.json().catch(() => ({})) as { error?: string }
-    if(!legacyWorkCurrent(generation))return
-    if (!response.ok) throw new Error(data.error || '云端记录清除失败。')
+    const response = await fetch('/api/exam-history', {
+      method: 'DELETE', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ confirmation }),
+    })
+    const data = await response.json().catch(() => ({})) as { error?: string;code?:string }
+    if(!current())return
+    if (!response.ok) throw new Error(data.error || data.code || '云端记录清除失败。')
     examRecords.value = []
-    localStorage.setItem('zhixue:exam-records', '[]')
+    if(!actor)localStorage.setItem('zhixue:exam-records', '[]')
     cloudDashboardError.value = ''
+    void loadCloudDashboard()
   } catch (error) {
-    if(legacyWorkCurrent(generation)){
+    if(current()){
       const message = error instanceof Error ? error.message : '记录清除失败，请检查网络后重试。'
       cloudDashboardError.value = message
       window.alert(message + ' 原有记录未从页面清除。')
@@ -1678,7 +1686,11 @@ const dailyWordSyncState = ref<'loading' | 'ready' | 'offline'>('loading')
 const dailyWordSyncRevision = ref(0)
 const dailyWordSelections = ref<Record<string, string[]>>(readStored('zhixue:daily-word-selections-v1', {}))
 function dailyWordKey(language: 'ja' | 'en', term: string): string { return language + ':' + term }
-function dailyWordSelectionKey(language: 'ja' | 'en', date = todayKey.value): string { return date + ':' + language }
+function dailyWordSelectionKey(language: 'ja' | 'en', date = todayKey.value): string {
+  // The original owner's unscoped daily selection must never appear as a spouse's.
+  const actor=homeflowIdentityUser.value
+  return (actor ? 'actor:'+actor+':' : '')+date+':'+language
+}
 function orderedDailyWordTerms(language: 'ja' | 'en', date: string): string[] {
   const rotated = language === 'ja' ? dailyJapaneseWordCandidates(date) : dailyBusinessWordCandidates(date)
   const pinned = dailyWordSelections.value[dailyWordSelectionKey(language, date)] || []
@@ -1699,7 +1711,7 @@ function dailyWordStatus(language: 'ja' | 'en', term: string): string {
   return review.nextDate <= todayKey.value ? '待复习' : '下次复习 ' + review.nextDate.slice(5)
 }
 function dailyWordReviewAvailable(language: 'ja' | 'en', term: string): boolean {
-  if (dailyWordSyncState.value === 'loading') return false
+  if (dailyWordSyncState.value === 'loading' || (homeflowIdentityUser.value && dailyWordSyncState.value !== 'ready')) return false
   const review = dailyWordProgress.value[dailyWordKey(language, term)]
   return !review?.lastDate || (review.lastDate !== todayKey.value && review.nextDate <= todayKey.value)
 }
@@ -1729,7 +1741,7 @@ async function loadDailyBusinessWords() {
   const run = ++dailyEnglishWordRun
   dailyEnglishWords.value = []
   dailyEnglishWordsError.value = ''
-  if (studyLanguage.value !== 'en' || dailyWordSyncState.value === 'loading' || !authenticated.value) return
+  if (studyLanguage.value !== 'en' || dailyWordSyncState.value === 'loading' || !studyAuthenticated.value) return
   try {
     // Static ECDICT manifest is cached once; lookups do not touch Workers/D1.
     const date = todayKey.value
@@ -1744,7 +1756,7 @@ async function loadDailyBusinessWords() {
     if (run === dailyEnglishWordRun) dailyEnglishWordsError.value = '本地英语词库暂不可用，请检查网络或缓存。'
   }
 }
-watch([studyLanguage, todayKey, dailyWordSyncState, dailyWordSyncRevision, authenticated], () => { void loadDailyBusinessWords() }, { immediate: true })
+watch([studyLanguage, todayKey, dailyWordSyncState, dailyWordSyncRevision, studyAuthenticated, homeflowIdentityUser], () => { void loadDailyBusinessWords() }, { immediate: true })
 
 const dailyJapaneseWords = ref<DictionaryEntry[]>([])
 const dailyJapaneseWordsError = ref('')
@@ -1753,7 +1765,7 @@ async function loadDailyJapaneseWords() {
   const run = ++dailyJapaneseWordRun
   dailyJapaneseWords.value = []
   dailyJapaneseWordsError.value = ''
-  if (studyLanguage.value !== 'ja' || dailyWordSyncState.value === 'loading' || !authenticated.value) return
+  if (studyLanguage.value !== 'ja' || dailyWordSyncState.value === 'loading' || !studyAuthenticated.value) return
   try {
     // Source-backed Japanese reading and meanings from immutable static assets.
     const date = todayKey.value
@@ -1771,7 +1783,7 @@ async function loadDailyJapaneseWords() {
     if (run === dailyJapaneseWordRun) dailyJapaneseWordsError.value = '日语学习词库暂不可用，请检查网络或本地缓存。'
   }
 }
-watch([studyLanguage, todayKey, dailyWordSyncState, dailyWordSyncRevision, authenticated], () => { void loadDailyJapaneseWords() }, { immediate: true })
+watch([studyLanguage, todayKey, dailyWordSyncState, dailyWordSyncRevision, studyAuthenticated, homeflowIdentityUser], () => { void loadDailyJapaneseWords() }, { immediate: true })
 
 type DailyWordCloudRow = { word_key: string; streak: number; next_date: string; last_date: string }
 const dailyWordPending = ref<Record<string, DailyWordReview>>(readStored('zhixue:daily-word-pending-v1', {}))
@@ -3897,7 +3909,7 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
             </section>
             <div v-if="dailyWordSyncError" class="daily-word-sync-alert" role="status">
               <span>{{ dailyWordSyncError }}{{ dailyWordSyncState === 'offline' ? ' · 当前使用本机记录，不会预先固定当天词汇。' : '' }}</span>
-              <button type="button" class="text-link" @click="hydrateDailyWordProgress">重新同步</button>
+              <button type="button" class="text-link" @click="homeflowIdentityUser ? hydrateClassicActorDailyWords(homeflowIdentityUser) : hydrateDailyWordProgress()">重新同步</button>
               <div v-for="(conflict, key) in dailyWordConflicts" :key="key" class="language-speech-actions">
                 <span>{{ key }}：本机记忆次数 {{ conflict.local.streak }}，云端 {{ conflict.cloud.streak }}；结果不同</span>
                 <button type="button" class="text-link" @click="resolveDailyWordConflict(key, true)">保留本机</button>
