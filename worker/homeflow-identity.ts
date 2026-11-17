@@ -15,7 +15,9 @@ type HFUser={user_id:string,household_id:string,role:'owner'|'member',
  nickname:string,assertion:string,assertionSeconds:number}
 const CLIENT='it-study-platform'
 const PENDING_MS=300000
-const SESSION_MS=900000
+// A backend-sealed proof may survive restarts while the ORIGINAL HomeFlow
+// session remains live; every scoped request still performs live introspection.
+const SESSION_MS=14*86400000
 const enc=new TextEncoder()
 const json=(body:unknown,status=200,headers:Record<string,string>={})=>
  new Response(JSON.stringify(body),{status,headers:{
@@ -130,7 +132,7 @@ async function homeflowUser(env:StudyEnv,code:string,verifier:string):Promise<HF
  if(token.token_type!=='Bearer'||!hex(token.access_token)||!hex(token.session_assertion)||
    !Number.isInteger(token.expires_in)||Number(token.expires_in)>180||
    Number(token.expires_in)<1||!Number.isInteger(token.session_assertion_expires_in)||
-   Number(token.session_assertion_expires_in)>900||
+   Number(token.session_assertion_expires_in)>SESSION_MS/1000||
    Number(token.session_assertion_expires_in)<1)return null
  const profile=new Request(new URL('/api/oauth/userinfo',env.HOMEFLOW_OAUTH_ORIGIN),{
   method:'GET',redirect:'manual',
@@ -226,7 +228,7 @@ async function finish(req:Request,env:StudyEnv,url:URL){
   return json({ok:true,user_id:user.user_id,household_id:user.household_id,
    role:user.role,display_name:user.nickname,study_access:false},200,{
    'Set-Cookie':'__Host-study_hf='+session+
-    '; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=900'})
+    '; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age='+SESSION_MS/1000})
  }catch{return fail('IDENTITY_WRITE_FAILED')}
 }
 async function me(req:Request,env:StudyEnv){
