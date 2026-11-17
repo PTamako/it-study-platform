@@ -1,6 +1,8 @@
 name = "it-study-platform"
 main = "worker/index.ts"
 compatibility_date = "2026-10-22"
+# Keep preview/version URLs disabled across every production Wrangler release.
+preview_urls = false
 
 # Build-only previews: no production database or secrets are bound.
 previews = {}
