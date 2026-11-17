@@ -20,7 +20,7 @@ const hashHelper=`async function dictionaryAiHash(value:string){
 const js=ts.transpileModule(hashHelper+src.slice(start,end),{
  compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS}
 }).outputText
-const bridge=(new Function('crypto',js+'\nreturn documentAssistantBridge;'))(globalThis.crypto)
+const bridge=(new Function('crypto','exports',js+'\nreturn documentAssistantBridge;'))(globalThis.crypto,{})
 function fixture(){
  const raw=new DatabaseSync(':memory:')
  raw.exec('PRAGMA foreign_keys=ON;')
