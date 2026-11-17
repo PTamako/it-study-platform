@@ -160,7 +160,7 @@ export async function documentAssistantBridge(request:Request,env:Env):Promise<R
           return bridgeJson({ok:false,error:'study_receipt_unconfirmed'},503)
         return bridgeJson({ok:true,remote_id:'ja:'+term,reused:!created})
       }
-      const wordHash=await dictionaryAiHash('ja\\0'+term)
+      const wordHash=await dictionaryAiHash('ja\u0000'+term)
       const result=await env.DB.batch([
         env.DB.prepare('INSERT INTO homeflow_saved_vocabulary '+
           '(homeflow_user_id,language,term,entry_json,is_deleted,updated_by_user_id,saved_at) '+
