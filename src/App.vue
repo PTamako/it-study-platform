@@ -3367,9 +3367,13 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
     <div class="auth-card"><div class="auth-mark"><BookOpen :size="28" /></div><h1>知学</h1><p>正在确认登录状态…</p></div>
   </section>
   <section v-else-if="!authenticated && !homeflowIdentityUser" class="auth-screen">
-    <form class="auth-card" @submit.prevent="login">
+    <div class="auth-choices">
+      <StudyHomeFlowAccess @identity-changed="onHomeflowIdentityChanged" />
+      <details class="legacy-recovery">
+        <summary>旧版离线记录恢复（需要原密码）</summary>
+        <form class="auth-card" @submit.prevent="login">
       <div class="auth-mark"><ShieldCheck :size="28" /></div>
-          <h1>欢迎回来</h1>
+          <h1>旧版学习空间</h1>
 
       <label class="auth-label" for="study-password">登录密码</label>
       <input id="study-password" v-model="authPassword" class="auth-input" type="password" autocomplete="current-password" required minlength="1" maxlength="256" placeholder="输入你设置的登录密码" :disabled="authLoading || !authConfigured" />
@@ -3379,8 +3383,9 @@ function speakDictionaryChinese(entry: DictionaryEntry) {
         {{ authLoading ? '正在登录…' : '登录学习平台' }}
       </button>
 
-    </form>
-    <StudyHomeFlowAccess @identity-changed="onHomeflowIdentityChanged" />
+        </form>
+      </details>
+    </div>
   </section>
   <div v-else class="app-shell">
     <aside class="sidebar">
