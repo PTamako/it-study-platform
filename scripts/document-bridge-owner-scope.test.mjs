@@ -32,7 +32,7 @@ function fixture(){
  add.run(member,'family','member','家庭成员',Date.now())
  const DB={
   prepare(sql){
-   return {bind(...args){return {
+   return {all:async()=>({results:raw.prepare(sql).all()}),bind(...args){return {
     first:async()=>raw.prepare(sql).get(...args)||null,
     all:async()=>({results:raw.prepare(sql).all(...args)}),
     run:async()=>({meta:{changes:raw.prepare(sql).run(...args).changes}}),
