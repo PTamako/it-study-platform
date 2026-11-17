@@ -9,7 +9,7 @@
 export type StudyStaticCollection='language-cards'|'learner-lexicon'
 export type StudyStaticLanguage='ja'|'en'
 type Manifest={version:number;ja:string;en:string}
-type Item={language:string;[key:string]:unknown}
+type Item={language:string;term:string}
 const RECOVERY_TAG='zhixue-ios-pwa-static-20261117-1'
 const validPath=/^\/(?:language-cards|learner-lexicon)\/(?:ja|en)\.[0-9a-f]{16}\.json$/
 
