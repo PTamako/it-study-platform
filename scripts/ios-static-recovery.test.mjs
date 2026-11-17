@@ -105,7 +105,7 @@ test('PWA v5 removes stale prior caches and only stores valid study JSON',()=>{
  assert.match(sw,/const CACHE_NAME = 'zhixue-app-v5'/)
  assert.match(sw,/key\.startsWith\('zhixue-'\) && key !== CACHE_NAME/)
  assert.match(sw,/path\.endsWith\('\.json'\)/)
- assert.match(sw,/application\\/json/)
+ assert.match(sw,/not-a-static-manifest/)
  assert.match(sw,/url\.pathname === '\/language-cards\/manifest\.json'/)
  assert.match(sw,/url\.pathname === '\/learner-lexicon\/manifest\.json'/)
  assert.match(sw,/cache:'no-store'/)
