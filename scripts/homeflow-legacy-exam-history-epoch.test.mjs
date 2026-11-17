@@ -87,8 +87,8 @@ test('HomeFlow history purge updates only current UI without writing old localSt
  x.sandbox.window={confirm:()=>true,prompt:()=> '清除',alert:()=>{throw Error('unexpected alert')}}
  x.sandbox.loadCloudDashboard=()=>calls.push('refresh')
  x.sandbox.fetch=async(url,options)=>{calls.push([url,options.method]);return {ok:true,json:async()=>({ok:true,scope:'user',deleted:2})}}
- const method=getFunction('async function removeExamRecords() {','\\ntype PracticeOption')
- vm.runInContext(method+'\\nthis.invoke=removeExamRecords',x.ctx)
+ const method=getFunction('async function removeExamRecords() {','\ntype PracticeOption')
+ vm.runInContext(method+'\nthis.invoke=removeExamRecords',x.ctx)
  await x.ctx.invoke()
  assert.equal(x.sandbox.examRecords.value.length,0)
  assert.deepEqual(calls,[['/api/exam-history','DELETE'],'refresh'])
