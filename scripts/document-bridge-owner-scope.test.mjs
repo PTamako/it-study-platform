@@ -34,6 +34,7 @@ function fixture(){
   prepare(sql){
    return {bind(...args){return {
     first:async()=>raw.prepare(sql).get(...args)||null,
+    all:async()=>({results:raw.prepare(sql).all(...args)}),
     run:async()=>({meta:{changes:raw.prepare(sql).run(...args).changes}}),
     runSync:()=>({meta:{changes:raw.prepare(sql).run(...args).changes}})
    }}}
@@ -75,6 +76,12 @@ test('signed owner word sync writes only their HomeFlow space and audits once',a
   assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_vocabulary_events').get().n,1)
   assert.equal((await bridge(request(member,'vocabulary','b'.repeat(32)),f.env)).status,403)
   assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_saved_vocabulary').get().n,1)
+  // The old approved bridge actor alias is not necessarily a HomeFlow UUID.
+  f.env.JPDA_BRIDGE_STUDY_ACTOR_ID='legacy-owner-actor'
+  const oldAlias=await bridge(request('legacy-owner-actor','vocabulary','e'.repeat(32)),f.env)
+  assert.equal(oldAlias.status,200,await oldAlias.clone().text())
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_saved_vocabulary WHERE homeflow_user_id=?').get(owner).n,1)
+
  }finally{f.raw.close()}
 })
 test('owner document sentence has stable 32-char ID, rejects changed candidate and isolates member',async()=>{
