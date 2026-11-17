@@ -22,6 +22,7 @@ function env(){
  const events=[]
  const sandbox={
   homeflowIdentityUser:{value:null},
+  studyAuthenticated:{value:true},
   legacyOperationGeneration:7,
   legacyWorkCurrent:g=>allowed&&g===sandbox.legacyOperationGeneration,
   legacyWritesAllowed:()=>allowed,
@@ -79,11 +80,26 @@ test('delayed exam deletion receipt cannot erase former user local records',asyn
  await x.ctx.invoke()
  assert.equal(calls.length,1,'logged-out user cannot initiate a new delete')
 })
+test('HomeFlow history purge updates only current UI without writing old localStorage',async()=>{
+ const x=env(),calls=[]
+ x.sandbox.homeflowIdentityUser.value='11111111-1111-4111-8111-111111111111'
+ x.sandbox.legacyWritesAllowed=()=>false
+ x.sandbox.window={confirm:()=>true,prompt:()=> '清除',alert:()=>{throw Error('unexpected alert')}}
+ x.sandbox.loadCloudDashboard=()=>calls.push('refresh')
+ x.sandbox.fetch=async(url,options)=>{calls.push([url,options.method]);return {ok:true,json:async()=>({ok:true,scope:'user',deleted:2})}}
+ const method=getFunction('async function removeExamRecords() {','\\ntype PracticeOption')
+ vm.runInContext(method+'\\nthis.invoke=removeExamRecords',x.ctx)
+ await x.ctx.invoke()
+ assert.equal(x.sandbox.examRecords.value.length,0)
+ assert.deepEqual(calls,[['/api/exam-history','DELETE'],'refresh'])
+ assert.deepEqual(x.events,[],'no legacy owner storage can be cleared from SSO')
+})
+
 test('legacy exam history calls are bound to the login epoch before writing',()=>{
  assert.match(src,/let examHistorySyncGeneration: number \| null = null/)
  assert.match(src,/for \(const record of missing\) \{\s*if\(!legacyWorkCurrent\(generation\)\)return/)
  assert.match(src,/if\(examHistorySyncGeneration===generation\)\{/)
  assert.match(src,/async function saveExamRecord\(record: ExamRecord\) \{\s*const signedActor=homeflowIdentityUser\.value/)
- assert.match(src,/async function removeExamRecords\(\) \{\s*if\(!legacyWritesAllowed\(\)\)return/)
- assert.match(src,/if \(confirmation !== '清除'\|\|!legacyWorkCurrent\(generation\)\) return/)
+ assert.match(src,/async function removeExamRecords\(\) \{\s*if\(!studyAuthenticated\.value\)return/)
+ assert.match(src,/if \(confirmation !== '清除'\|\|!current\(\)\) return/)
 })
