@@ -87,7 +87,7 @@ self.addEventListener('fetch', (event) => {
             const complete=await Promise.all(['ja','en'].map(lang=>
               typeof data[lang]==='string' &&
               data[lang].startsWith('/'+dir+'/'+lang+'.') ? caches.match(data[lang]) : null))
-            if (complete.every(Boolean)) return saved
+            if (complete.some(Boolean)) return saved
           } catch { /* stale or corrupted manifest: never serve */ }
         }
         return Response.error()
