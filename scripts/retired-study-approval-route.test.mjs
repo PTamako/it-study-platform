@@ -22,3 +22,8 @@ test('personal study remains on the HMAC signed, actor-scoped direct document br
   assert.match(router,/homeflow_identity_links WHERE homeflow_user_id=\? AND role IN \('owner','member'\)/)
   assert.match(router,/env\.HOMEFLOW_STUDY_SSO_ENABLED==='true'/)
 })
+
+test('production Wrangler releases never reopen Worker Preview URLs',()=>{
+  assert.match(config,/^preview_urls\s*=\s*false\s*$/m)
+  assert.doesNotMatch(config,/^preview_urls\s*=\s*true\s*$/m)
+})
