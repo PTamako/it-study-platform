@@ -17,7 +17,7 @@ const CLIENT='it-study-platform'
 const PENDING_MS=300000
 // A backend-sealed proof may survive restarts while the ORIGINAL HomeFlow
 // session remains live; every scoped request still performs live introspection.
-const SESSION_MS=14*86400000
+const SESSION_MS=30*86400000
 const enc=new TextEncoder()
 const json=(body:unknown,status=200,headers:Record<string,string>={})=>
  new Response(JSON.stringify(body),{status,headers:{
