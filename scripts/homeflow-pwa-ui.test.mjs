@@ -229,11 +229,11 @@ test('mock handoff rejects previous-account pending submissions even after Cooki
 test('practice and language member writes carry the originating actor and discard stale PWA replies',()=>{
  const examApi=readFileSync(new URL('../worker/homeflow-exams.ts',import.meta.url),'utf8')
  const languageApi=readFileSync(new URL('../worker/homeflow-language.ts',import.meta.url),'utf8')
- for(const worker of [examApi,languageApi]){
-  assert.equal((worker.match(/data.expected_user_id!==actor.user_id/g)||[]).length,3,
-   'three mutation routes must reject an old cookie after account switch')
-  assert.equal((worker.match(/code:'ACTOR_CHANGED'/g)||[]).length,3)
-  assert.equal((worker.match(/'expected_user_id'/g)||[]).length,3)
+ for(const [worker,expected] of [[examApi,4],[languageApi,3]]){
+  assert.equal((worker.match(/data.expected_user_id!==actor.user_id/g)||[]).length,expected,
+   'every mutation route must reject an old cookie after account switch')
+  assert.equal((worker.match(/code:'ACTOR_CHANGED'/g)||[]).length,expected)
+  assert.equal((worker.match(/'expected_user_id'/g)||[]).length,expected)
  }
  assert.match(exams,/type Pending=\{[^}]*expected_user_id:string\}/)
  assert.match(exams,/answer:selected\[question.id\],duration_seconds:0,expected_user_id:props.userId/)
