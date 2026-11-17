@@ -47,7 +47,8 @@ HOMEFLOW_STUDY_LANGUAGE_ENABLED = "true"
 HOMEFLOW_STUDY_EXAMS_ENABLED = "true"
 HOMEFLOW_STUDY_MOCK_ENABLED = "true"
 HOMEFLOW_STUDY_SENTENCES_ENABLED = "true"
-DOCUMENT_STUDY_EXECUTION_ENABLED = "true"
+# Legacy household-approval executor is retired; personal study sync is direct.
+DOCUMENT_STUDY_EXECUTION_ENABLED = "false"
 
 APP_ENV = "production"
 HOMEFLOW_OAUTH_ORIGIN = "https://homeflow.yupan6706.workers.dev"
