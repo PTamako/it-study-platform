@@ -45,12 +45,12 @@ test('recall D1 migration is additive, authenticated and conflict-safe', () => {
 
 test('daily word panel hydrates before fixing selection, shows offline state and permits manual retry', () => {
   assert.match(app, /const dailyWordSyncState = ref<'loading' \| 'ready' \| 'offline'>\('loading'\)/)
-  assert.match(app,/dailyWordSyncState\.value === 'loading' \|\| !authenticated\.value/)
+  assert.match(app,/dailyWordSyncState\.value === 'loading' \|\| !studyAuthenticated\.value/)
   assert.match(app,/dailyWordSyncState\.value === 'ready'\) pinDailyWords/)
   assert.match(app,/dailyWordSyncState\.value = 'ready'/)
   assert.match(app,/dailyWordSyncState\.value = 'offline'/)
   assert.match(app,/next_cursor/)
-  assert.match(app,/hydrateDailyWordProgress">重新同步/)
+  assert.match(app,/homeflowIdentityUser \? hydrateClassicActorDailyWords\(homeflowIdentityUser\) : hydrateDailyWordProgress\(\)/)
 })
 
 test('same-day grades with different outcomes trigger explicit conflict resolution',()=>{

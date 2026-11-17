@@ -123,6 +123,65 @@ export async function documentAssistantBridge(request:Request,env:Env):Promise<R
   const entry={term,language:'ja',reading:kind==='vocabulary'&&typeof p.reading==='string'?p.reading.slice(0,100):'',
     zh:p.meaning_zh.trim(),en:'',tag:kind==='sentence'?'文书例句':'文书',
     source:'jp-document-assistant',study_kind:kind}
+  // Owner-direct signed sync is permitted without HomeFlow approval, but it
+  // MUST be written to that owner's private SSO namespace, not the old
+  // single-password table. Members never enter this endpoint: their document
+  // sync requires the newer approval + source-proof executor.
+  if(env.HOMEFLOW_STUDY_SSO_ENABLED==='true'){
+    try{
+      // The long-lived signed bridge's mapped ID may predate HomeFlow SSO.
+      // Resolve the ONLY active study owner, never reinterpret that old ID as
+      // an arbitrary member and never write to the legacy shared table.
+      const owners=await env.DB.prepare(
+        "SELECT homeflow_user_id FROM homeflow_identity_links WHERE role='owner' AND state='active' LIMIT 2"
+      ).all<{homeflow_user_id:string}>()
+      if(owners.results?.length!==1)return bridgeJson({ok:false,error:'study_owner_not_linked'},403)
+      const ownerId=owners.results[0].homeflow_user_id
+      const stamp=new Date().toISOString()
+      const eventId=crypto.randomUUID().replace(/-/g,'')
+      if(kind==='sentence'){
+        // Stable 32-byte candidate hash. A second same-key request is safe,
+        // while a changed payload under the same key cannot be misreported.
+        const cardId=(await dictionaryAiHash(String(body.idempotency_key))).slice(0,32)
+        const existing=await env.DB.prepare('SELECT sentence_text,translation_zh FROM homeflow_personal_sentence_cards '+
+          'WHERE homeflow_user_id=? AND card_id=?').bind(ownerId,cardId).first<{sentence_text:string;translation_zh:string}>()
+        if(existing&&(existing.sentence_text!==term||existing.translation_zh!==p.meaning_zh.trim()))
+          return bridgeJson({ok:false,error:'study_idempotency_conflict'},409)
+        const result=await env.DB.batch([
+          env.DB.prepare('INSERT INTO homeflow_personal_sentence_cards '+
+            '(homeflow_user_id,card_id,language,sentence_text,translation_zh,notes,source_kind,'+
+            'is_deleted,version,updated_by_user_id,updated_at) '+
+            "VALUES(?,?,'ja',?,?,'','document',0,1,?,?) "+
+            'ON CONFLICT(homeflow_user_id,card_id) DO NOTHING')
+            .bind(ownerId,cardId,term,p.meaning_zh.trim(),ownerId,stamp),
+          env.DB.prepare('INSERT INTO homeflow_personal_sentence_events '+
+            "(event_id,actor_user_id,card_id,action,created_at) "+
+            "SELECT ?,?,?,'saved',? WHERE changes()=1")
+            .bind(eventId,ownerId,cardId,stamp)
+        ])
+        const created=result[0]?.meta?.changes
+        if((created!==0&&created!==1)||result[1]?.meta?.changes!==(created?1:0))
+          return bridgeJson({ok:false,error:'study_receipt_unconfirmed'},503)
+        return bridgeJson({ok:true,remote_id:'ja:'+term,reused:!created})
+      }
+      const wordHash=await dictionaryAiHash('ja\u0000'+term)
+      const result=await env.DB.batch([
+        env.DB.prepare('INSERT INTO homeflow_saved_vocabulary '+
+          '(homeflow_user_id,language,term,entry_json,is_deleted,updated_by_user_id,saved_at) '+
+          "VALUES(?,'ja',?,?,0,?,?) "+
+          'ON CONFLICT(homeflow_user_id,language,term) DO NOTHING')
+          .bind(ownerId,term,JSON.stringify(entry),ownerId,stamp),
+        env.DB.prepare('INSERT INTO homeflow_vocabulary_events '+
+          '(event_id,actor_user_id,action,term_sha256,affected_count,created_at) '+
+          "SELECT ?,?,'saved',?,1,? WHERE changes()=1")
+          .bind(eventId,ownerId,wordHash,stamp)
+      ])
+      const created=result[0]?.meta?.changes
+      if((created!==0&&created!==1)||result[1]?.meta?.changes!==(created?1:0))
+        return bridgeJson({ok:false,error:'study_receipt_unconfirmed'},503)
+      return bridgeJson({ok:true,remote_id:'ja:'+term,reused:!created})
+    }catch{return bridgeJson({ok:false,error:'study_private_write_unavailable'},503)}
+  }
   try{
     const inserted=await env.DB.prepare(`INSERT OR IGNORE INTO saved_vocabulary_entries_v2
       (language,term,entry_json,saved_at) VALUES('ja',?1,?2,CURRENT_TIMESTAMP)`)
@@ -1895,7 +1954,13 @@ export default {
       // Owner sessions already have HMAC authentication and do not need the
       // anonymous-IP D1 throttle. Keep the quota on all public requests.
       const ownerSession = !(await requireAuth(request, env))
-      if (!ownerSession) {
+      // Both HomeFlow users are authenticated learners; do not misclassify
+      // their dictionary traffic as anonymous or deny the configured GAS.
+      // Avoid SSO introspection for requests without the secure study cookie.
+      const homeflowActor = !ownerSession &&
+        (request.headers.get('cookie')||'').includes('__Host-study_hf=')
+        ? await verifiedStudyActor(request,env) : null
+      if (!ownerSession && !homeflowActor) {
         const quotaFailure = await checkPublicDictionaryQuota(request, env)
         if (quotaFailure) return quotaFailure
       }
@@ -1909,7 +1974,7 @@ export default {
       try {
         // Public lookups still use the free anonymous providers; only the logged-in
         // owner can consume Google Apps Script's daily LanguageApp.translate quota.
-        const authorizedForAppsScript = Boolean(ownerSession && env.GAS_TRANSLATOR_URL && env.GAS_TRANSLATOR_TOKEN)
+        const authorizedForAppsScript = Boolean((ownerSession || homeflowActor) && env.GAS_TRANSLATOR_URL && env.GAS_TRANSLATOR_TOKEN)
         const items = await lookupDictionary(query, requestedLanguage as 'auto' | 'ja' | 'en' | 'zh' | 'it', env.DB,
           authorizedForAppsScript ? env.GAS_TRANSLATOR_URL : undefined,
           authorizedForAppsScript ? env.GAS_TRANSLATOR_TOKEN : undefined,

@@ -197,8 +197,14 @@ export function createClassicStudyFetch(actorId:Actor){
    if(method==='POST'&&payload)
     return verified(await post('/api/homeflow-study/exams/history',{
      ...payload,expected_user_id:actor}),actor)
-   // Never turn an original UI delete-all request into a shared-table delete.
-   if(method==='DELETE')return err('SCOPED_HISTORY_DELETE_NOT_IMPLEMENTED',409)
+   // The original clear-history button is enabled only for the current verified
+   // HomeFlow actor. The legacy owner table and spouse's records remain intact.
+   if(method==='DELETE'&&payload?.confirmation==='清除'&&Object.keys(payload).length===1)
+    return verified(await api('/api/homeflow-study/exams/history',{
+     method:'DELETE',headers:{'content-type':'application/json'},
+     body:JSON.stringify({confirmation:'清除',expected_user_id:actor})
+    }),actor)
+   if(method==='DELETE')return err('SCOPED_HISTORY_CONFIRMATION_REQUIRED',403)
   }
   if(path==='/api/mock-exam-questions'&&method==='GET'){
    return checked(await api(url.pathname+url.search,init),actor)

@@ -235,6 +235,29 @@ async function addHistory(req:Request,env:Env,url:URL,actor:Actor){
  }
  return json({ok:true,replayed:false,id:data.id,scope:'user'},201)
 }
+// Explicit confirmation clears ONLY the verified actor's manual exam
+// history. The delete and immutable audit run in one D1 transaction.
+async function clearHistory(req:Request,env:Env,url:URL,actor:Actor){
+ const data=await body(req,url)
+ if(!data)return json({code:'BAD_ORIGIN_OR_BODY'},403)
+ if(data.expected_user_id!==actor.user_id)return json({code:'ACTOR_CHANGED'},403)
+ if(!keyOnly(data,['confirmation','expected_user_id'])||data.confirmation!=='清除')
+  return json({code:'CONFIRM_REQUIRED'},403)
+ try{
+  const results=await env.DB.batch([
+   env.DB.prepare('DELETE FROM homeflow_exam_history WHERE homeflow_user_id=?')
+    .bind(actor.user_id),
+   env.DB.prepare('INSERT INTO homeflow_exam_history_purges '+
+    '(purge_id,actor_user_id,affected_count,created_at) '+
+    'SELECT ?,?,changes(),? WHERE changes()>0')
+    .bind(id(),actor.user_id,new Date().toISOString())
+  ])
+  const deleted=results[0]?.meta?.changes??-1
+  if(deleted<0||results[1]?.meta?.changes!==(deleted>0?1:0))
+   return json({code:'HISTORY_PURGE_RECONCILE_REQUIRED'},503)
+  return json({ok:true,scope:'user',actor_user_id:actor.user_id,deleted})
+ }catch{return json({code:'HISTORY_PURGE_UNAVAILABLE'},503)}
+}
 // Adopt old *owner-only* rows, never delete or update the source tables.
 // JSON1 embeds precisely the prevalidated page snapshot; no ignored corrupt
 // source row can be silently omitted while advancing the cursor.
@@ -346,6 +369,7 @@ export async function homeflowExams(req:Request,env:Env):Promise<Response>{
   if(url.pathname==='/api/homeflow-study/exams/history'){
    if(req.method==='GET')return history(env,actor,url)
    if(req.method==='POST')return addHistory(req,env,url,actor)
+    if(req.method==='DELETE')return clearHistory(req,env,url,actor)
   }
   if(url.pathname==='/api/homeflow-study/exams/legacy/adopt'&&req.method==='POST')
    return adopt(req,env,url,actor)

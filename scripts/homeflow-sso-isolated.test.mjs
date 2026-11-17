@@ -128,6 +128,7 @@ function sqliteEnv(){
  question_count INTEGER NOT NULL,correct_count INTEGER NOT NULL,
  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);`)
  raw.exec(readFileSync(new URL('../migrations/0184_homeflow_exam_progress.sql',import.meta.url),'utf8'))
+ raw.exec(readFileSync(new URL('../migrations/0194_homeflow_exam_history_purges.sql',import.meta.url),'utf8'))
  raw.exec(readFileSync(new URL('../migrations/0185_homeflow_mock_exam_submissions.sql',import.meta.url),'utf8'))
  raw.exec(readFileSync(new URL('../migrations/0088_mock_exam_submissions.sql',import.meta.url),'utf8'))
  raw.exec(readFileSync(new URL('../migrations/0186_homeflow_mock_receipt_adoption.sql',import.meta.url),'utf8'))
@@ -961,14 +962,14 @@ test('Stage E language catalogue and legacy import have bounded cursors, gated a
 function scopedExams(f,cookie,path='',method='GET',data=null,origin=app){
  const headers={}
  if(cookie)headers.Cookie='__Host-study_hf='+cookie
- if(method==='POST'){
+ if(method==='POST'||method==='DELETE'){
   headers.Origin=origin
   headers['Content-Type']='application/json'
  }
- const typed=method==='POST'&&data&&f.homeflowActors?.get(cookie)
+ const typed=(method==='POST'||method==='DELETE')&&data&&f.homeflowActors?.get(cookie)
   ?{expected_user_id:f.homeflowActors.get(cookie),...data}:data
  return homeflowExams(new Request(app+'/api/homeflow-study/exams'+path,{
-  method,headers,body:method==='POST'?JSON.stringify(typed??{}):undefined
+  method,headers,body:(method==='POST'||method==='DELETE')?JSON.stringify(typed??{}):undefined
  }),f.env)
 }
 test('Stage E exams isolate practice, wrong answers and manual history between spouses',async()=>{
@@ -1091,6 +1092,41 @@ test('Stage E exam history stays personal, immutable on conflicting ID and retai
   assert.equal(ownerHistory[0].id,'legacy-history-001')
   assert.equal(f.raw.prepare("SELECT COUNT(*) n FROM homeflow_exam_events WHERE actor_user_id=? AND action='history_added'").get(member).n,1)
   assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM exam_history').get().n,1)
+ }finally{f.raw.close()}
+})
+
+test('Stage E history purge clears only the verified member and keeps immutable audit',async()=>{
+ const f=sqliteEnv()
+ try{
+  f.env.HOMEFLOW_STUDY_EXAMS_ENABLED='true'
+  const {ownerToken,memberToken}=await linkedDailyPair(f)
+  const item={id:'spouse-score-001',date:'2026-11-14',exam:'FE',total:20,correct:15}
+  assert.equal((await scopedExams(f,ownerToken,'/history','POST',item)).status,201)
+  assert.equal((await scopedExams(f,memberToken,'/history','POST',item)).status,201)
+  assert.equal((await scopedExams(f,memberToken,'/history','DELETE',{confirmation:'清除'},'https://evil.test')).status,403)
+  assert.equal((await scopedExams(f,memberToken,'/history','DELETE',{confirmation:'bad'})).status,403)
+  assert.equal((await scopedExams(f,memberToken,'/history','DELETE',{
+   confirmation:'清除',expected_user_id:owner})).status,403)
+  assert.equal((await scopedExams(f,memberToken,'/history','DELETE',{
+   confirmation:'清除',actor_user_id:owner})).status,403)
+  const cleared=await scopedExams(f,memberToken,'/history','DELETE',{confirmation:'清除'})
+  assert.equal(cleared.status,200,await cleared.clone().text())
+  const result=await cleared.json()
+  assert.equal(result.deleted,1)
+  assert.equal(result.scope,'user')
+  assert.equal(result.actor_user_id,member)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_exam_history WHERE homeflow_user_id=?').get(member).n,0)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_exam_history WHERE homeflow_user_id=?').get(owner).n,1)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM exam_history').get().n,1)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_study_attempts').get().n,0)
+  const audit=f.raw.prepare('SELECT actor_user_id,affected_count FROM homeflow_exam_history_purges').get()
+  assert.equal(audit.actor_user_id,member)
+  assert.equal(audit.affected_count,1)
+  assert.throws(()=>f.raw.prepare('DELETE FROM homeflow_exam_history_purges').run(),/IMMUTABLE_HISTORY_PURGE_AUDIT/)
+  assert.equal((await (await scopedExams(f,memberToken,'/history','DELETE',{confirmation:'清除'})).json()).deleted,0)
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_exam_history_purges').get().n,1)
+  f.active.valid=false
+  assert.equal((await scopedExams(f,ownerToken,'/history','DELETE',{confirmation:'清除'})).status,401)
  }finally{f.raw.close()}
 })
 

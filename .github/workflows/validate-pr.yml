@@ -25,13 +25,13 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Focused personal sentence cards with real HomeFlow actor and D1
-        run: node --test --test-name-pattern="Stage E personal sentence cards|Stage E .*vocabulary|legacy adoption rejects malformed JSON" scripts/homeflow-sso-isolated.test.mjs
+        run: node --test --test-name-pattern="Stage E personal sentence cards|Stage E .*vocabulary|Stage E history purge|legacy adoption rejects malformed JSON" scripts/homeflow-sso-isolated.test.mjs
       - name: Verify document-study persistence and worker types
         run: |
           node --test scripts/document-study-apply.test.mjs
           npx tsc --noEmit --target es2022 --module esnext --moduleResolution bundler --skipLibCheck --types @cloudflare/workers-types worker/document-study-apply.ts
       - name: Check identity, cache isolation and delayed requests
-        run: node --test scripts/daily-task-runtime.test.mjs scripts/homeflow-pwa-ui.test.mjs scripts/homeflow-legacy-cache-runtime.test.mjs scripts/homeflow-legacy-queue-epoch.test.mjs scripts/homeflow-legacy-exam-history-epoch.test.mjs scripts/homeflow-legacy-daily-epoch.test.mjs
+        run: node --test scripts/daily-task-runtime.test.mjs scripts/homeflow-pwa-ui.test.mjs scripts/homeflow-legacy-cache-runtime.test.mjs scripts/homeflow-legacy-queue-epoch.test.mjs scripts/homeflow-legacy-exam-history-epoch.test.mjs scripts/homeflow-legacy-daily-epoch.test.mjs scripts/homeflow-unified-repair.test.mjs scripts/document-bridge-owner-scope.test.mjs scripts/auth-security.test.mjs scripts/daily-word-cloud-sync.test.mjs scripts/production-cost-regression-20261113.test.mjs
       - name: Type-check frontend
         run: npm run typecheck
 
