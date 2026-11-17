@@ -1408,9 +1408,11 @@ export default {
 
     if (url.pathname === '/api/internal/document-study/execute' ||
         url.pathname === '/api/internal/document-study/receipt') {
-      // Lazy import avoids resolution for old worker tests and unrelated routes.
-      const {documentStudyExecution}=await import('./document-study-execution')
-      return documentStudyExecution(request, env)
+      // Retired: only family-ledger mutations need household approval.
+      // Personal study words and sentences use the existing signed direct bridge.
+      // Never re-enable the old approval executor just because its secret exists.
+      return bridgeJson({ok:false,code:'LEGACY_STUDY_APPROVAL_RETIRED',
+        error:'personal_study_sync_uses_signed_direct_bridge'},410)
     }
     if (url.pathname === '/api/bridge/document-assistant') return documentAssistantBridge(request, env)
     if (url.pathname === '/api/bridge/document-assistant/translate') return documentAssistantTranslateBridge(request, env)
