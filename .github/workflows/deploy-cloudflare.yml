@@ -279,6 +279,15 @@ jobs:
           echo "::error::Deployment completed but health endpoint did not return HTTP 200."
           exit 1
 
+      # Health alone cannot prove that the reviewed Git commit was served.
+      # An old Worker or SPA HTML fallback must fail the release instead of
+      # being reported as a successful production deployment.
+      - name: Attest exact production Git SHA after deployment
+        env:
+          BASE_URL: https://it-study-platform.yupan6706.workers.dev
+          EXPECTED_RELEASE_SHA: ${{ github.sha }}
+        run: node scripts/verify-production-version.mjs
+
       - name: Verify unauthenticated access is denied for personal APIs
         env:
           BASE_URL: https://it-study-platform.yupan6706.workers.dev
