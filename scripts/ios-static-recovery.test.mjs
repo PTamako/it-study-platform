@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import ts from 'typescript'
+import { runInNewContext } from 'node:vm'
 
 const source=readFileSync(new URL('../src/published-study-assets.ts',import.meta.url),'utf8')
 const compiled=ts.transpileModule(source,{
@@ -110,4 +111,24 @@ test('PWA v5 removes stale prior caches and only stores valid study JSON',()=>{
  assert.match(sw,/url\.pathname === '\/learner-lexicon\/manifest\.json'/)
  assert.match(sw,/cache:'no-store'/)
  assert.doesNotMatch(sw,/caches\.delete\('zhixue:actor/)
+})
+
+test('PWA does not intercept or persist timestamped version checks',()=> {
+ const handlers={}
+ runInNewContext(sw, {
+   self:{
+     location:{origin:'https://study.example'},
+     addEventListener(name,callback){handlers[name]=callback},
+   },
+   URL,Response,Request,
+ })
+ let intercepted=false
+ handlers.fetch({
+   request:new Request('https://study.example/version.json?ts=99999'),
+   respondWith(){intercepted=true},
+   waitUntil(){intercepted=true},
+ })
+ assert.equal(intercepted,false,'version queries must bypass the worker cache')
+ assert.match(sw,/cachedRequests\.filter\(request =>/)
+ assert.match(sw,/pathname === '\/version\.json'/)
 })

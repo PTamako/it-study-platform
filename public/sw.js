@@ -23,6 +23,12 @@ self.addEventListener('activate', (event) => {
     const keys = await caches.keys()
     await Promise.all(keys.filter((key) => key.startsWith('zhixue-') && key !== CACHE_NAME)
       .map((key) => caches.delete(key)))
+    // Remove stale timestamped version probes cached by older service workers.
+    const currentCache = await caches.open(CACHE_NAME)
+    const cachedRequests = await currentCache.keys()
+    await Promise.all(cachedRequests.filter(request =>
+      new URL(request.url).pathname === '/version.json')
+      .map(request => currentCache.delete(request)))
     await self.clients.claim()
   })())
 })
@@ -45,6 +51,9 @@ self.addEventListener('fetch', (event) => {
 
   // Never cache API responses, authenticated/personal data, writes, or third-party requests.
   if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith(API_PREFIX)) return
+  // version.json?ts=<timestamp> is fetched on every PWA resume. Never put those
+  // unbounded cache-busting URLs into Cache Storage; the caller uses no-store.
+  if (url.pathname === '/version.json') return
 
   if (request.mode === 'navigate') {
     // Prefer the newest app shell online; use the last cached shell when offline.
