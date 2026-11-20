@@ -1,0 +1,39 @@
+# Single-use production dispatch after the approved FE + observability PR merges.
+# The existing deployment workflow owns the backup, D1 migrations, tests and smoke checks.
+name: One-time Zhixue FE and operations production release
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/zhixue-fe-ops-release-once-20261120.yml
+permissions:
+  contents: read
+  pull-requests: read
+  actions: write
+concurrency:
+  group: zhixue-fe-ops-release-once-20261120
+  cancel-in-progress: false
+jobs:
+  dispatch-reviewed-release:
+    if: github.repository == 'PTamako/it-study-platform'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify exactly PR 192 merged into main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          MERGED_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "${{ github.ref }}" = "refs/heads/main"
+          gh api "repos/$REPO/pulls/192" | jq -e --arg expected "$MERGED_SHA" \
+            '.merged == true and .base.ref == "main" and .merge_commit_sha == $expected'
+      - name: Dispatch existing controlled Cloudflare release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh workflow run deploy-cloudflare.yml -R "$REPO" --ref main \
+            -f release_confirmation=FOUR_APP_RELEASE_APPROVED
