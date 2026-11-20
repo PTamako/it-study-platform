@@ -7,6 +7,22 @@ preview_urls = false
 # Build-only previews: no production database or secrets are bound.
 previews = {}
 
+# Production-only diagnostics: low-volume request sampling, no query strings.
+# Do not log learner names, submitted answers, tokens or request bodies.
+[observability]
+enabled = true
+head_sampling_rate = 0.1
+redact_query_string = true
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+head_sampling_rate = 0.1
+persist = true
+
+[observability.issues]
+enabled = true
+
 # 唯一主 Worker：前端静态资源与 API 共用该服务，避免 CLI 再创建 it-study-platform-api。
 [assets]
 directory = "./dist"
