@@ -172,6 +172,16 @@ export async function documentAssistantBridge(request:Request,env:Env):Promise<R
         const created=result[0]?.meta?.changes
         if((created!==0&&created!==1)||result[1]?.meta?.changes!==(created?1:0))
           return bridgeJson({ok:false,error:'study_receipt_unconfirmed'},503)
+        // A competing request can win between the initial SELECT and INSERT.
+        // Re-read the persisted payload on conflict; never acknowledge a
+        // different sentence under the same actor/candidate key as a replay.
+        if(created===0){
+          const persisted=await env.DB.prepare('SELECT sentence_text,translation_zh FROM homeflow_personal_sentence_cards '+
+            'WHERE homeflow_user_id=? AND card_id=?').bind(ownerId,cardId).first<{sentence_text:string;translation_zh:string}>()
+          if(!persisted)return bridgeJson({ok:false,error:'study_receipt_unconfirmed'},503)
+          if(persisted.sentence_text!==term||persisted.translation_zh!==p.meaning_zh.trim())
+            return bridgeJson({ok:false,error:'study_idempotency_conflict'},409)
+        }
         return bridgeJson({ok:true,remote_id:'ja:'+term,reused:!created})
       }
       const wordHash=await dictionaryAiHash('ja\u0000'+term)

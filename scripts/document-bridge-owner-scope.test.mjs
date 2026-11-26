@@ -48,9 +48,9 @@ function fixture(){
  return {raw,env:{DB,HOMEFLOW_STUDY_SSO_ENABLED:'true',JPDA_BRIDGE_ENABLED:'true',
   JPDA_BRIDGE_SECRET:secret,JPDA_BRIDGE_STUDY_ACTOR_ID:owner}}
 }
-function request(actor,operation,suffix,identitySource=false){
+function request(actor,operation,suffix,identitySource=false,sentenceText='今日は進捗をご報告します。'){
  const payload=operation==='sentence'
-  ?{operation,language:'ja',sentence:'今日は進捗をご報告します。',meaning_zh:'今天报告进度',skip_existing:true,privacy_confirmed:true}
+  ?{operation,language:'ja',sentence:sentenceText,meaning_zh:'今天报告进度',skip_existing:true,privacy_confirmed:true}
   :{operation,language:'ja',term:'進捗',reading:'しんちょく',meaning_zh:'进度',skip_existing:true}
  const packet={source:'jp-document-assistant',actor_user_id:actor,
   ...(identitySource?{identity_source:'homeflow_sso'}:{}),
@@ -119,5 +119,31 @@ test('verified member signs into own wordbook and sentence space without family 
   const stranger='33333333-3333-4333-8333-333333333333'
   assert.equal((await bridge(request(stranger,'vocabulary','2'.repeat(32),true),f.env)).status,403)
   assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_saved_vocabulary').get().n,1)
+ }finally{f.raw.close()}
+})
+
+test('concurrent sentence requests with the same key but different payloads cannot both succeed',async()=>{
+ const f=fixture()
+ try{
+  const key='3'.repeat(32)
+  const originalBatch=f.env.DB.batch.bind(f.env.DB)
+  let competingResponse
+  let inserted=false
+  f.env.DB.batch=async statements=>{
+   if(!inserted){
+    inserted=true
+    competingResponse=await bridge(request(owner,'sentence',key,true,'明日ご連絡します。'),f.env)
+   }
+   return originalBatch(statements)
+  }
+  const loser=await bridge(request(owner,'sentence',key,true),f.env)
+  assert.equal(competingResponse.status,200)
+  assert.equal(loser.status,409,await loser.clone().text())
+  assert.equal((await loser.json()).error,'study_idempotency_conflict')
+  assert.equal(f.raw.prepare('SELECT sentence_text FROM homeflow_personal_sentence_cards').get().sentence_text,'明日ご連絡します。')
+  assert.equal(f.raw.prepare('SELECT COUNT(*) n FROM homeflow_personal_sentence_events').get().n,1)
+  const replay=await bridge(request(owner,'sentence',key,true,'明日ご連絡します。'),f.env)
+  assert.equal(replay.status,200)
+  assert.equal((await replay.json()).reused,true)
  }finally{f.raw.close()}
 })
