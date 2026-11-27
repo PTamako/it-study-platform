@@ -38,9 +38,14 @@ for i, line in enumerate(lines, 1):
               'ja', 'A', 'explicit', 'standard', 'general']
     records.append('('+','.join(map(quote, values))+')')
 
-sql = ('-- Original FE practice questions; not IPA official questions. Append-only.\n'
-       'INSERT OR IGNORE INTO questions (id,track_id,topic,difficulty,question_type,prompt,options_json,answer_json,explanation,source_type,source_reference,language,exam_section,exam_section_method,question_kind,exam_origin) VALUES\n'
-       + ',\n'.join(records) + ';\n')
+header = ('INSERT OR IGNORE INTO questions (id,track_id,topic,difficulty,question_type,prompt,'
+          'options_json,answer_json,explanation,source_type,source_reference,language,exam_section,'
+          'exam_section_method,question_kind,exam_origin) VALUES\n')
+# D1 limits the size of an individual SQL statement. Keep each reviewed
+# batch comfortably below the limit even if individual explanations grow.
+chunks = [records[i:i+25] for i in range(0, len(records), 25)]
+sql = ('-- Original FE practice questions; not IPA official questions. Append-only.\n' +
+       ''.join(header + ',\n'.join(chunk) + ';\n' for chunk in chunks))
 target = ROOT / 'migrations/0223_fe_original_practice_20261127.sql'
 target.write_text(sql)
 print(f'{target}: {len(records)} new original questions')

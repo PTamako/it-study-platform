@@ -45,6 +45,8 @@ test('200 FE additions, official answers, references and existing attempts survi
     db.prepare('INSERT INTO study_attempts VALUES(?,?)').run('keep',existing[0][0])
     const sql1 = migration('0222_fe_exemption_20230122_curated.sql')
     const sql2 = migration('0223_fe_original_practice_20261127.sql')
+    assert.ok(sql2.split(';').every(statement => Buffer.byteLength(statement,'utf8') < 90_000),
+      'each original-question INSERT must fit D1 statement-size limits')
     db.exec(sql1); db.exec(sql2); db.exec(sql1); db.exec(sql2)
 
     const added = db.prepare("SELECT * FROM questions WHERE id LIKE 'fe-exempt-2022-20230122-q%' OR id LIKE 'fe-original-20261127-q%' ORDER BY id").all()
